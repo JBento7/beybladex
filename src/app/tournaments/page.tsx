@@ -7,17 +7,17 @@ import JoinButton from "./JoinButton";
 import type { TournamentFormat, TournamentStatus } from "@prisma/client";
 
 const FORMAT_LABELS: Record<TournamentFormat, string> = {
-  ROUND_ROBIN: "Round Robin",
-  GROUPS: "Groups",
-  SINGLE_ELIMINATION: "Single Elimination",
-  SWISS: "Swiss",
+  ROUND_ROBIN: "Pontos Corridos",
+  GROUPS: "Grupos",
+  SINGLE_ELIMINATION: "Eliminação Simples",
+  SWISS: "Suíço",
 };
 
 const STATUS_STYLES: Record<TournamentStatus, { label: string; style: string }> = {
-  DRAFT: { label: "Draft", style: "bg-gray-700 text-gray-400" },
-  REGISTRATION: { label: "Registration Open", style: "bg-amber-500/20 text-amber-400" },
-  IN_PROGRESS: { label: "In Progress", style: "bg-green-500/20 text-green-400" },
-  FINISHED: { label: "Finished", style: "bg-gray-700 text-gray-500" },
+  DRAFT: { label: "Rascunho", style: "bg-gray-700 text-gray-400" },
+  REGISTRATION: { label: "Inscrições Abertas", style: "bg-amber-500/20 text-amber-400" },
+  IN_PROGRESS: { label: "Em Andamento", style: "bg-green-500/20 text-green-400" },
+  FINISHED: { label: "Finalizado", style: "bg-gray-700 text-gray-500" },
 };
 
 export default async function TournamentsPage() {
@@ -47,15 +47,15 @@ export default async function TournamentsPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-black text-white">Tournaments</h1>
-            <p className="text-gray-400 mt-1">Find and join active championships</p>
+            <h1 className="text-3xl font-black text-white">Torneios</h1>
+            <p className="text-gray-400 mt-1">Encontre e participe de campeonatos ativos</p>
           </div>
           {session?.user.role === "ORGANIZER" && (
             <Link
               href="/tournaments/create"
               className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-5 py-2.5 rounded-xl transition-colors"
             >
-              + Create Tournament
+              + Criar Torneio
             </Link>
           )}
         </div>
@@ -63,14 +63,14 @@ export default async function TournamentsPage() {
         {tournaments.length === 0 ? (
           <div className="text-center py-24">
             <div className="text-6xl mb-4">🌀</div>
-            <h2 className="text-2xl font-bold text-white mb-2">No Tournaments Yet</h2>
-            <p className="text-gray-400 mb-6">Be the first to create a championship!</p>
+            <h2 className="text-2xl font-bold text-white mb-2">Nenhum Torneio Ainda</h2>
+            <p className="text-gray-400 mb-6">Seja o primeiro a criar um campeonato!</p>
             {session?.user.role === "ORGANIZER" && (
               <Link
                 href="/tournaments/create"
                 className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-3 rounded-xl transition-colors inline-block"
               >
-                Create First Tournament
+                Criar Primeiro Torneio
               </Link>
             )}
           </div>
@@ -127,11 +127,11 @@ export default async function TournamentsPage() {
                         href={`/tournaments/${t.id}`}
                         className="flex-1 text-center bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                       >
-                        View Details
+                        Ver Detalhes
                       </Link>
                       {isJoined ? (
                         <span className="flex-1 text-center bg-green-500/20 text-green-400 text-sm font-medium px-4 py-2 rounded-lg border border-green-500/30">
-                          ✓ Joined
+                          ✓ Inscrito
                         </span>
                       ) : canJoin ? (
                         <JoinButton tournamentId={t.id} />

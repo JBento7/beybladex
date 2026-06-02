@@ -91,10 +91,10 @@ export default async function ProfilePage() {
         {/* Stats Row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
-            { label: "Total Points", value: totalPoints, color: "text-amber-400", icon: "⭐" },
-            { label: "Win Rate", value: `${winRate}%`, color: "text-green-400", icon: "📈" },
-            { label: "Total Wins", value: totalWins, color: "text-green-400", icon: "🏆" },
-            { label: "Tournaments", value: participations.length, color: "text-blue-400", icon: "🌀" },
+            { label: "Pontos Totais", value: totalPoints, color: "text-amber-400", icon: "⭐" },
+            { label: "Taxa de Vitória", value: `${winRate}%`, color: "text-green-400", icon: "📈" },
+            { label: "Total de Vitórias", value: totalWins, color: "text-green-400", icon: "🏆" },
+            { label: "Torneios", value: participations.length, color: "text-blue-400", icon: "🌀" },
           ].map((stat) => (
             <div key={stat.label} className="bg-gray-900 border border-gray-800 rounded-xl p-5 text-center">
               <div className="text-2xl mb-2">{stat.icon}</div>
@@ -107,9 +107,9 @@ export default async function ProfilePage() {
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Finish Type Breakdown */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="text-lg font-bold text-white mb-5">Finish Type Breakdown</h2>
+            <h2 className="text-lg font-bold text-white mb-5">Tipos de Finish</h2>
             {allPoints.length === 0 ? (
-              <p className="text-gray-500 text-sm text-center py-8">No matches played yet</p>
+              <p className="text-gray-500 text-sm text-center py-8">Nenhuma partida jogada ainda</p>
             ) : (
               <div className="space-y-4">
                 {finishOrder.map((type) => {
@@ -135,7 +135,7 @@ export default async function ProfilePage() {
 
                 {/* Visual breakdown circles */}
                 <div className="mt-4 pt-4 border-t border-gray-800">
-                  <div className="text-xs text-gray-500 mb-3">Point Value Reference</div>
+                  <div className="text-xs text-gray-500 mb-3">Referência de Pontuação</div>
                   <div className="flex flex-wrap gap-2">
                     {finishOrder.map((type) => (
                       <div key={type} className="flex items-center gap-1.5 text-xs text-gray-400">
@@ -151,15 +151,15 @@ export default async function ProfilePage() {
 
           {/* Tournament History */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="text-lg font-bold text-white mb-5">Tournament History</h2>
+            <h2 className="text-lg font-bold text-white mb-5">Histórico de Torneios</h2>
             {participations.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500 text-sm mb-4">No tournaments yet</p>
+                <p className="text-gray-500 text-sm mb-4">Nenhum torneio ainda</p>
                 <Link
                   href="/tournaments"
                   className="text-amber-400 hover:text-amber-300 text-sm font-medium"
                 >
-                  Browse Tournaments →
+                  Ver Torneios →
                 </Link>
               </div>
             ) : (
@@ -190,7 +190,7 @@ export default async function ProfilePage() {
                       {p.placement && (
                         <>
                           <span className="text-gray-600">·</span>
-                          <span className="text-amber-300">#{p.placement} place</span>
+                          <span className="text-amber-300">#{p.placement}º lugar</span>
                         </>
                       )}
                     </div>

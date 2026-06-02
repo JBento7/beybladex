@@ -29,7 +29,7 @@ export default function ScoreModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!winnerId) {
-      alert("Please select a winner");
+      alert("Selecione um vencedor");
       return;
     }
     setLoading(true);
@@ -44,7 +44,7 @@ export default function ScoreModal({
       router.refresh();
     } else {
       const data = await res.json();
-      alert(data.error || "Failed to save score");
+      alert(data.error || "Erro ao salvar placar");
     }
   }
 
@@ -54,7 +54,7 @@ export default function ScoreModal({
         onClick={() => setOpen(true)}
         className="text-xs bg-amber-500 hover:bg-amber-400 text-black font-bold px-3 py-1.5 rounded-lg transition-colors"
       >
-        Score
+        Placar
       </button>
 
       {open && (
@@ -65,7 +65,7 @@ export default function ScoreModal({
           />
           <div className="relative bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-white">Enter Match Score</h3>
+              <h3 className="text-lg font-bold text-white">Registrar Placar</h3>
               <button
                 onClick={() => setOpen(false)}
                 className="text-gray-400 hover:text-white"
@@ -77,7 +77,7 @@ export default function ScoreModal({
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Winner selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Winner</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Vencedor</label>
                 <div className="grid grid-cols-2 gap-3">
                   {[player1, player2].map((player) => (
                     <button
@@ -98,7 +98,7 @@ export default function ScoreModal({
 
               {/* Finish type */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Finish Type</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Tipo de Finish</label>
                 <div className="space-y-2">
                   {FINISH_TYPES.map((type) => (
                     <button
@@ -132,7 +132,7 @@ export default function ScoreModal({
                 disabled={loading || !winnerId}
                 className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-black font-bold py-3 rounded-xl transition-colors"
               >
-                {loading ? "Saving..." : "Save Score"}
+                {loading ? "Salvando..." : "Salvar Placar"}
               </button>
             </form>
           </div>

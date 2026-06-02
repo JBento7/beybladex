@@ -17,7 +17,7 @@ export default function ClientJoinButton({ tournamentId }: { tournamentId: strin
       router.refresh();
     } else {
       const data = await res.json();
-      alert(data.error || "Failed to join tournament");
+      alert(data.error || "Erro ao se inscrever no torneio");
     }
   }
 
@@ -27,7 +27,7 @@ export default function ClientJoinButton({ tournamentId }: { tournamentId: strin
       disabled={loading}
       className="bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-black font-bold px-6 py-2.5 rounded-xl transition-colors"
     >
-      {loading ? "Joining..." : "Join Tournament"}
+      {loading ? "Inscrevendo..." : "Participar do Torneio"}
     </button>
   );
 }

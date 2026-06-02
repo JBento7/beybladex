@@ -8,7 +8,7 @@ export default function StartTournamentButton({ tournamentId }: { tournamentId: 
   const router = useRouter();
 
   async function handleStart() {
-    if (!confirm("Start the tournament? This will generate all matches.")) return;
+    if (!confirm("Iniciar o torneio? Isso vai gerar todas as partidas.")) return;
     setLoading(true);
     const res = await fetch(`/api/tournaments/${tournamentId}/start`, {
       method: "POST",
@@ -18,7 +18,7 @@ export default function StartTournamentButton({ tournamentId }: { tournamentId: 
       router.refresh();
     } else {
       const data = await res.json();
-      alert(data.error || "Failed to start tournament");
+      alert(data.error || "Erro ao iniciar torneio");
     }
   }
 
@@ -28,7 +28,7 @@ export default function StartTournamentButton({ tournamentId }: { tournamentId: 
       disabled={loading}
       className="bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white font-bold px-6 py-2.5 rounded-xl transition-colors"
     >
-      {loading ? "Starting..." : "🚀 Start Tournament"}
+      {loading ? "Iniciando..." : "🚀 Iniciar Torneio"}
     </button>
   );
 }

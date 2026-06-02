@@ -10,10 +10,17 @@ import ClientJoinButton from "./ClientJoinButton";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 
 const FORMAT_LABELS: Record<TournamentFormat, string> = {
-  ROUND_ROBIN: "Round Robin",
-  GROUPS: "Groups",
-  SINGLE_ELIMINATION: "Single Elimination",
-  SWISS: "Swiss",
+  ROUND_ROBIN: "Pontos Corridos",
+  GROUPS: "Grupos",
+  SINGLE_ELIMINATION: "Eliminação Simples",
+  SWISS: "Suíço",
+};
+
+const STATUS_LABELS: Record<TournamentStatus, string> = {
+  DRAFT: "Rascunho",
+  REGISTRATION: "Inscrições Abertas",
+  IN_PROGRESS: "Em Andamento",
+  FINISHED: "Finalizado",
 };
 
 const STATUS_STYLES: Record<TournamentStatus, string> = {
@@ -38,9 +45,9 @@ type MatchWithRelations = {
 function getRoundName(round: number, totalRounds: number): string {
   const roundsFromEnd = totalRounds - round;
   if (roundsFromEnd === 0) return "Final";
-  if (roundsFromEnd === 1) return "Semi-Finals";
-  if (roundsFromEnd === 2) return "Quarter-Finals";
-  return `Round ${round}`;
+  if (roundsFromEnd === 1) return "Semifinal";
+  if (roundsFromEnd === 2) return "Quartas de Final";
+  return `Rodada ${round}`;
 }
 
 function MatchCard({
@@ -118,10 +125,10 @@ function MatchCard({
           }`}
         >
           {match.status === "FINISHED"
-            ? "Done"
+            ? "Encerrada"
             : match.status === "IN_PROGRESS"
-            ? "Live"
-            : "Pending"}
+            ? "Ao Vivo"
+            : "Pendente"}
         </span>
         {isOrganizer && !isFinished && (
           <ScoreModal
@@ -221,7 +228,7 @@ export default async function TournamentDetailPage({
                 <span
                   className={`text-xs font-semibold px-3 py-1 rounded-full ${STATUS_STYLES[tournament.status]}`}
                 >
-                  {tournament.status.replace("_", " ")}
+                  {STATUS_LABELS[tournament.status]}
                 </span>
                 <span className="text-xs bg-gray-800 text-gray-400 px-3 py-1 rounded-full font-medium">
                   {FORMAT_LABELS[tournament.format]}
@@ -234,13 +241,13 @@ export default async function TournamentDetailPage({
                 <p className="text-gray-400">{tournament.description}</p>
               )}
               <div className="flex flex-wrap gap-4 mt-4 text-sm text-gray-500">
-                <span>👑 Organized by {tournament.organizer.name}</span>
+                <span>👑 Organizado por {tournament.organizer.name}</span>
                 <span>
                   👥 {tournament.participants.length}
                   {tournament.maxParticipants
                     ? ` / ${tournament.maxParticipants}`
                     : ""}{" "}
-                  participants
+                  participantes
                 </span>
                 {tournament.startDate && (
                   <span>
@@ -257,7 +264,7 @@ export default async function TournamentDetailPage({
               )}
               {isParticipant && tournament.status === "REGISTRATION" && (
                 <span className="text-sm bg-green-500/20 text-green-400 border border-green-500/30 px-4 py-2 rounded-lg font-medium text-center">
-                  ✓ You&apos;re registered
+                  ✓ Você está inscrito
                 </span>
               )}
               {isOrganizerOfThis &&
@@ -270,7 +277,7 @@ export default async function TournamentDetailPage({
                   href="/dashboard"
                   className="text-sm text-center text-gray-400 hover:text-white transition-colors"
                 >
-                  ← Back to Dashboard
+                  ← Voltar ao Painel
                 </Link>
               )}
             </div>
@@ -289,7 +296,7 @@ export default async function TournamentDetailPage({
                   <h2 className="text-lg font-bold text-white mb-4">
                     {tournament.format === "SINGLE_ELIMINATION"
                       ? getRoundName(round, sortedRounds.length)
-                      : `Round ${round}`}
+                      : `Rodada ${round}`}
                   </h2>
                   <div className="space-y-3">
                     {matches.map((match) => (
@@ -307,15 +314,14 @@ export default async function TournamentDetailPage({
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
                 <div className="text-4xl mb-3">⏳</div>
                 <h3 className="text-lg font-bold text-white mb-2">
-                  Waiting for Players
+                  Aguardando Jogadores
                 </h3>
                 <p className="text-gray-400 text-sm">
-                  Matches will be generated when the organizer starts the
-                  tournament.
+                  As partidas serão geradas quando o organizador iniciar o torneio.
                 </p>
                 {isOrganizerOfThis && (
                   <p className="text-amber-400 text-sm mt-2">
-                    You need at least 2 participants to start.
+                    Você precisa de pelo menos 2 participantes para iniciar.
                   </p>
                 )}
               </div>
@@ -330,10 +336,10 @@ export default async function TournamentDetailPage({
           {/* Sidebar: Standings */}
           <div className="space-y-6">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <h2 className="text-lg font-bold text-white mb-4">Standings</h2>
+              <h2 className="text-lg font-bold text-white mb-4">Classificação</h2>
               {tournament.participants.length === 0 ? (
                 <p className="text-gray-500 text-sm text-center py-4">
-                  No participants yet
+                  Nenhum participante ainda
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -386,7 +392,7 @@ export default async function TournamentDetailPage({
             {/* Groups (if applicable) */}
             {tournament.format === "GROUPS" && groupMap.size > 0 && (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                <h2 className="text-lg font-bold text-white mb-4">Groups</h2>
+                <h2 className="text-lg font-bold text-white mb-4">Grupos</h2>
                 <div className="space-y-4">
                   {Array.from(groupMap.values()).map(({ group, participants }) => (
                     <div key={group.id}>
@@ -422,12 +428,12 @@ export default async function TournamentDetailPage({
             {/* Participants list */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
               <h2 className="text-lg font-bold text-white mb-4">
-                Participants ({tournament.participants.length})
+                Participantes ({tournament.participants.length})
               </h2>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {tournament.participants.length === 0 ? (
                   <p className="text-gray-500 text-sm text-center py-2">
-                    No participants yet
+                    Nenhum participante ainda
                   </p>
                 ) : (
                   tournament.participants.map((p) => (

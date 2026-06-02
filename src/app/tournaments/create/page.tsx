@@ -7,27 +7,27 @@ import Navbar from "@/components/Navbar";
 const FORMATS = [
   {
     value: "ROUND_ROBIN",
-    label: "Round Robin",
+    label: "Pontos Corridos",
     icon: "🔄",
-    desc: "Every player faces each other once.",
+    desc: "Todos os jogadores se enfrentam uma vez.",
   },
   {
     value: "GROUPS",
-    label: "Groups",
+    label: "Grupos",
     icon: "👥",
-    desc: "Players divided into groups, top 2 advance.",
+    desc: "Jogadores divididos em grupos, os 2 melhores avançam.",
   },
   {
     value: "SINGLE_ELIMINATION",
-    label: "Single Elimination",
+    label: "Eliminação Simples",
     icon: "⚔️",
-    desc: "Lose once and you're out. Bracket style.",
+    desc: "Perdeu, saiu. Formato de chaveamento.",
   },
   {
     value: "SWISS",
-    label: "Swiss",
+    label: "Suíço",
     icon: "🇨🇭",
-    desc: "No elimination, pair by similar records.",
+    desc: "Sem eliminação, jogadores emparelhados por desempenho.",
   },
 ];
 
@@ -72,7 +72,7 @@ export default function CreateTournamentPage() {
 
     if (!res.ok) {
       const data = await res.json();
-      setError(data.error || "Failed to create tournament");
+      setError(data.error || "Erro ao criar torneio");
       return;
     }
 
@@ -85,8 +85,8 @@ export default function CreateTournamentPage() {
       <Navbar />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-black text-white">Create Tournament</h1>
-          <p className="text-gray-400 mt-1">Set up a new Beyblade championship</p>
+          <h1 className="text-3xl font-black text-white">Criar Torneio</h1>
+          <p className="text-gray-400 mt-1">Configure um novo campeonato de Beyblade</p>
         </div>
 
         {error && (
@@ -98,11 +98,11 @@ export default function CreateTournamentPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Tournament Name */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="text-base font-bold text-white mb-4">Basic Information</h2>
+            <h2 className="text-base font-bold text-white mb-4">Informações Básicas</h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Tournament Name <span className="text-red-400">*</span>
+                  Nome do Torneio <span className="text-red-400">*</span>
                 </label>
                 <input
                   name="name"
@@ -110,21 +110,21 @@ export default function CreateTournamentPage() {
                   value={form.name}
                   onChange={handleChange}
                   required
-                  placeholder="e.g. Spring Championship 2025"
+                  placeholder="ex: Campeonato Primavera 2025"
                   className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Description <span className="text-gray-500 font-normal">(optional)</span>
+                  Descrição <span className="text-gray-500 font-normal">(opcional)</span>
                 </label>
                 <textarea
                   name="description"
                   value={form.description}
                   onChange={handleChange}
                   rows={3}
-                  placeholder="Describe your tournament..."
+                  placeholder="Descreva seu torneio..."
                   className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors resize-none"
                 />
               </div>
@@ -132,7 +132,7 @@ export default function CreateTournamentPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    Max Participants <span className="text-gray-500 font-normal">(optional)</span>
+                    Máx. Participantes <span className="text-gray-500 font-normal">(opcional)</span>
                   </label>
                   <input
                     name="maxParticipants"
@@ -141,14 +141,14 @@ export default function CreateTournamentPage() {
                     max="256"
                     value={form.maxParticipants}
                     onChange={handleChange}
-                    placeholder="Unlimited"
+                    placeholder="Ilimitado"
                     className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    Start Date <span className="text-gray-500 font-normal">(optional)</span>
+                    Data de Início <span className="text-gray-500 font-normal">(opcional)</span>
                   </label>
                   <input
                     name="startDate"
@@ -164,7 +164,7 @@ export default function CreateTournamentPage() {
 
           {/* Format Selection */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="text-base font-bold text-white mb-4">Tournament Format <span className="text-red-400">*</span></h2>
+            <h2 className="text-base font-bold text-white mb-4">Formato do Torneio <span className="text-red-400">*</span></h2>
             <div className="grid sm:grid-cols-2 gap-3">
               {FORMATS.map((f) => (
                 <button
@@ -194,7 +194,7 @@ export default function CreateTournamentPage() {
             disabled={loading}
             className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-black font-black text-lg py-3.5 rounded-xl transition-colors"
           >
-            {loading ? "Creating..." : "🏆 Create Tournament"}
+            {loading ? "Criando..." : "🏆 Criar Torneio"}
           </button>
         </form>
       </main>
