@@ -1,0 +1,149 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import Navbar from "@/components/Navbar";
+import Link from "next/link";
+import JoinButton from "./JoinButton";
+import type { TournamentFormat, TournamentStatus } from "@prisma/client";
+
+const FORMAT_LABELS: Record<TournamentFormat, string> = {
+  ROUND_ROBIN: "Round Robin",
+  GROUPS: "Groups",
+  SINGLE_ELIMINATION: "Single Elimination",
+  SWISS: "Swiss",
+};
+
+const STATUS_STYLES: Record<TournamentStatus, { label: string; style: string }> = {
+  DRAFT: { label: "Draft", style: "bg-gray-700 text-gray-400" },
+  REGISTRATION: { label: "Registration Open", style: "bg-amber-500/20 text-amber-400" },
+  IN_PROGRESS: { label: "In Progress", style: "bg-green-500/20 text-green-400" },
+  FINISHED: { label: "Finished", style: "bg-gray-700 text-gray-500" },
+};
+
+export default async function TournamentsPage() {
+  const session = await getServerSession(authOptions);
+
+  const tournaments = await prisma.tournament.findMany({
+    include: {
+      organizer: { select: { id: true, name: true } },
+      _count: { select: { participants: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Get user's joined tournament IDs
+  let joinedIds = new Set<string>();
+  if (session) {
+    const participations = await prisma.tournamentParticipant.findMany({
+      where: { userId: session.user.id },
+      select: { tournamentId: true },
+    });
+    joinedIds = new Set(participations.map((p) => p.tournamentId));
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0a]">
+      <Navbar />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-black text-white">Tournaments</h1>
+            <p className="text-gray-400 mt-1">Find and join active championships</p>
+          </div>
+          {session?.user.role === "ORGANIZER" && (
+            <Link
+              href="/tournaments/create"
+              className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-5 py-2.5 rounded-xl transition-colors"
+            >
+              + Create Tournament
+            </Link>
+          )}
+        </div>
+
+        {tournaments.length === 0 ? (
+          <div className="text-center py-24">
+            <div className="text-6xl mb-4">🌀</div>
+            <h2 className="text-2xl font-bold text-white mb-2">No Tournaments Yet</h2>
+            <p className="text-gray-400 mb-6">Be the first to create a championship!</p>
+            {session?.user.role === "ORGANIZER" && (
+              <Link
+                href="/tournaments/create"
+                className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-3 rounded-xl transition-colors inline-block"
+              >
+                Create First Tournament
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {tournaments.map((t) => {
+              const status = STATUS_STYLES[t.status];
+              const isJoined = joinedIds.has(t.id);
+              const canJoin =
+                session &&
+                session.user.role === "PARTICIPANT" &&
+                t.status === "REGISTRATION" &&
+                !isJoined &&
+                (!t.maxParticipants || t._count.participants < t.maxParticipants);
+
+              return (
+                <div
+                  key={t.id}
+                  className="bg-gray-900 border border-gray-800 hover:border-amber-500/30 rounded-2xl p-6 transition-all flex flex-col"
+                >
+                  {/* Status badge */}
+                  <div className="flex items-center justify-between mb-4">
+                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${status.style}`}>
+                      {status.label}
+                    </span>
+                    <span className="text-xs text-gray-500 font-medium bg-gray-800 px-2.5 py-1 rounded-full">
+                      {FORMAT_LABELS[t.format]}
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-bold text-white mb-2">{t.name}</h3>
+
+                  {t.description && (
+                    <p className="text-sm text-gray-400 mb-4 line-clamp-2 flex-1">{t.description}</p>
+                  )}
+
+                  <div className="mt-auto">
+                    <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
+                      <span>
+                        👥 {t._count.participants}
+                        {t.maxParticipants && ` / ${t.maxParticipants}`}
+                      </span>
+                      <span>🎯 {t.organizer.name}</span>
+                    </div>
+
+                    {t.startDate && (
+                      <div className="text-xs text-gray-500 mb-4">
+                        📅 {new Date(t.startDate).toLocaleDateString()}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <Link
+                        href={`/tournaments/${t.id}`}
+                        className="flex-1 text-center bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                      >
+                        View Details
+                      </Link>
+                      {isJoined ? (
+                        <span className="flex-1 text-center bg-green-500/20 text-green-400 text-sm font-medium px-4 py-2 rounded-lg border border-green-500/30">
+                          ✓ Joined
+                        </span>
+                      ) : canJoin ? (
+                        <JoinButton tournamentId={t.id} />
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
