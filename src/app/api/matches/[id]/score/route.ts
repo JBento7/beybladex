@@ -14,14 +14,14 @@ export async function POST(
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const { winnerId, finishType } = await req.json();
+    const { winnerId, finishType, beybladeUsed } = await req.json();
 
     if (!winnerId || !finishType) {
       return NextResponse.json(
-        { error: "winnerId and finishType are required" },
+        { error: "winnerId e finishType são obrigatórios" },
         { status: 400 }
       );
     }
@@ -32,26 +32,26 @@ export async function POST(
     });
 
     if (!match) {
-      return NextResponse.json({ error: "Match not found" }, { status: 404 });
+      return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
     }
 
     if (match.tournament.organizerId !== session.user.id) {
       return NextResponse.json(
-        { error: "Only the organizer can enter scores" },
+        { error: "Apenas o organizador pode registrar pontuações" },
         { status: 403 }
       );
     }
 
     if (match.status === "FINISHED") {
       return NextResponse.json(
-        { error: "Match already finished" },
+        { error: "Partida já finalizada" },
         { status: 400 }
       );
     }
 
     if (winnerId !== match.player1Id && winnerId !== match.player2Id) {
       return NextResponse.json(
-        { error: "Winner must be one of the match players" },
+        { error: "O vencedor deve ser um dos jogadores da partida" },
         { status: 400 }
       );
     }
@@ -59,7 +59,7 @@ export async function POST(
     const points = FINISH_TYPE_POINTS[finishType as FinishType];
     if (!points) {
       return NextResponse.json(
-        { error: "Invalid finish type" },
+        { error: "Tipo de finalização inválido" },
         { status: 400 }
       );
     }
@@ -71,6 +71,7 @@ export async function POST(
         userId: winnerId,
         finishType: finishType as FinishType,
         points,
+        beybladeUsed: beybladeUsed || null,
       },
     });
 
@@ -93,13 +94,11 @@ export async function POST(
     if (tournament.format === "SINGLE_ELIMINATION") {
       await advanceSingleElimination(match.tournamentId, match.round);
     } else if (tournament.format === "SWISS") {
-      // Check if all matches in this round are done
       const roundMatches = await prisma.match.findMany({
         where: { tournamentId: match.tournamentId, round: match.round },
       });
       const allDone = roundMatches.every((m) => m.status === "FINISHED");
       if (allDone) {
-        // Check how many rounds have been played (Swiss typically runs log2(n) rounds)
         const participants = await prisma.tournamentParticipant.count({
           where: { tournamentId: match.tournamentId },
         });
@@ -114,7 +113,6 @@ export async function POST(
         }
       }
     } else if (tournament.format === "ROUND_ROBIN" || tournament.format === "GROUPS") {
-      // Check if all matches are done
       const allMatches = await prisma.match.findMany({
         where: { tournamentId: match.tournamentId },
       });
@@ -130,6 +128,6 @@ export async function POST(
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: "Erro no servidor" }, { status: 500 });
   }
 }

@@ -24,7 +24,7 @@ export default function Navbar() {
               href="/tournaments"
               className="text-gray-300 hover:text-amber-400 transition-colors font-medium"
             >
-              Tournaments
+              Torneios
             </Link>
             {session && (
               <>
@@ -32,20 +32,20 @@ export default function Navbar() {
                   href="/dashboard"
                   className="text-gray-300 hover:text-amber-400 transition-colors font-medium"
                 >
-                  Dashboard
+                  Painel
                 </Link>
                 <Link
                   href="/profile"
                   className="text-gray-300 hover:text-amber-400 transition-colors font-medium"
                 >
-                  Profile
+                  Perfil
                 </Link>
                 {session.user.role === "ORGANIZER" && (
                   <Link
                     href="/tournaments/create"
                     className="text-gray-300 hover:text-amber-400 transition-colors font-medium"
                   >
-                    Create
+                    Criar
                   </Link>
                 )}
               </>
@@ -68,7 +68,7 @@ export default function Navbar() {
                   onClick={() => signOut({ callbackUrl: "/" })}
                   className="text-sm bg-gray-700 hover:bg-gray-600 px-4 py-1.5 rounded-lg text-gray-200 transition-colors"
                 >
-                  Sign Out
+                  Sair
                 </button>
               </div>
             ) : (
@@ -77,13 +77,13 @@ export default function Navbar() {
                   href="/login"
                   className="text-sm text-gray-300 hover:text-amber-400 transition-colors font-medium"
                 >
-                  Login
+                  Entrar
                 </Link>
                 <Link
                   href="/register"
                   className="text-sm bg-amber-500 hover:bg-amber-400 text-black px-4 py-1.5 rounded-lg font-semibold transition-colors"
                 >
-                  Register
+                  Cadastrar
                 </Link>
               </>
             )}
@@ -112,27 +112,27 @@ export default function Navbar() {
               className="block px-3 py-2 text-gray-300 hover:text-amber-400 transition-colors"
               onClick={() => setMenuOpen(false)}
             >
-              Tournaments
+              Torneios
             </Link>
             {session && (
               <>
-                <Link href="/dashboard" className="block px-3 py-2 text-gray-300 hover:text-amber-400" onClick={() => setMenuOpen(false)}>Dashboard</Link>
-                <Link href="/profile" className="block px-3 py-2 text-gray-300 hover:text-amber-400" onClick={() => setMenuOpen(false)}>Profile</Link>
+                <Link href="/dashboard" className="block px-3 py-2 text-gray-300 hover:text-amber-400" onClick={() => setMenuOpen(false)}>Painel</Link>
+                <Link href="/profile" className="block px-3 py-2 text-gray-300 hover:text-amber-400" onClick={() => setMenuOpen(false)}>Perfil</Link>
                 {session.user.role === "ORGANIZER" && (
-                  <Link href="/tournaments/create" className="block px-3 py-2 text-gray-300 hover:text-amber-400" onClick={() => setMenuOpen(false)}>Create Tournament</Link>
+                  <Link href="/tournaments/create" className="block px-3 py-2 text-gray-300 hover:text-amber-400" onClick={() => setMenuOpen(false)}>Criar Torneio</Link>
                 )}
                 <button
                   onClick={() => { signOut({ callbackUrl: "/" }); setMenuOpen(false); }}
                   className="block w-full text-left px-3 py-2 text-red-400 hover:text-red-300"
                 >
-                  Sign Out
+                  Sair
                 </button>
               </>
             )}
             {!session && (
               <>
-                <Link href="/login" className="block px-3 py-2 text-gray-300 hover:text-amber-400" onClick={() => setMenuOpen(false)}>Login</Link>
-                <Link href="/register" className="block px-3 py-2 text-amber-400 font-semibold" onClick={() => setMenuOpen(false)}>Register</Link>
+                <Link href="/login" className="block px-3 py-2 text-gray-300 hover:text-amber-400" onClick={() => setMenuOpen(false)}>Entrar</Link>
+                <Link href="/register" className="block px-3 py-2 text-amber-400 font-semibold" onClick={() => setMenuOpen(false)}>Cadastrar</Link>
               </>
             )}
           </div>

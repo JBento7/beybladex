@@ -17,7 +17,7 @@ export async function GET() {
     return NextResponse.json(tournaments);
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: "Erro no servidor" }, { status: 500 });
   }
 }
 
@@ -25,15 +25,15 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session || session.user.role !== "ORGANIZER") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
     }
 
-    const { name, description, format, maxParticipants, startDate } =
+    const { name, description, format, maxParticipants, startDate, deckType } =
       await req.json();
 
     if (!name || !format) {
       return NextResponse.json(
-        { error: "Name and format are required" },
+        { error: "Nome e formato são obrigatórios" },
         { status: 400 }
       );
     }
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
         name,
         description: description || null,
         format,
+        deckType: deckType === "THREE_ON_THREE" ? "THREE_ON_THREE" : "SOLO",
         organizerId: session.user.id,
         maxParticipants: maxParticipants ? parseInt(maxParticipants) : null,
         startDate: startDate ? new Date(startDate) : null,
@@ -53,6 +54,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(tournament, { status: 201 });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: "Erro no servidor" }, { status: 500 });
   }
 }

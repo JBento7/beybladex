@@ -6,6 +6,14 @@ import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import { FINISH_TYPE_LABELS } from "@/lib/scoring";
 import type { FinishType } from "@prisma/client";
+import GenerateInviteButton from "./GenerateInviteButton";
+
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: "Rascunho",
+  REGISTRATION: "Inscrições",
+  IN_PROGRESS: "Em andamento",
+  FINISHED: "Finalizado",
+};
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -13,7 +21,6 @@ export default async function DashboardPage() {
 
   const userId = session.user.id;
 
-  // Fetch participant data
   const participations = await prisma.tournamentParticipant.findMany({
     where: { userId },
     include: {
@@ -22,7 +29,6 @@ export default async function DashboardPage() {
     orderBy: { createdAt: "desc" },
   });
 
-  // Fetch recent matches
   const recentMatches = await prisma.match.findMany({
     where: {
       status: "FINISHED",
@@ -39,7 +45,6 @@ export default async function DashboardPage() {
     take: 10,
   });
 
-  // Fetch upcoming matches
   const upcomingMatches = await prisma.match.findMany({
     where: {
       status: { in: ["PENDING", "IN_PROGRESS"] },
@@ -54,7 +59,6 @@ export default async function DashboardPage() {
     take: 5,
   });
 
-  // Aggregate stats
   const totalPoints = participations.reduce((sum, p) => sum + p.totalPoints, 0);
   const totalWins = participations.reduce((sum, p) => sum + p.wins, 0);
   const totalLosses = participations.reduce((sum, p) => sum + p.losses, 0);
@@ -62,7 +66,6 @@ export default async function DashboardPage() {
     (p) => p.tournament.status === "IN_PROGRESS" || p.tournament.status === "REGISTRATION"
   ).length;
 
-  // Organizer: tournaments they manage
   let organizedTournaments: { id: string; name: string; status: string; _count: { participants: number } }[] = [];
   if (session.user.role === "ORGANIZER") {
     organizedTournaments = await prisma.tournament.findMany({
@@ -79,22 +82,22 @@ export default async function DashboardPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-black text-white">
-            Welcome back, <span className="text-amber-400">{session.user.name}</span>!
+            Bem-vindo, <span className="text-amber-400">{session.user.name}</span>!
           </h1>
           <p className="text-gray-400 mt-1">
             {session.user.role === "ORGANIZER"
-              ? "Manage your tournaments and track standings."
-              : "Track your matches and climb the rankings."}
+              ? "Gerencie seus torneios e acompanhe a classificação."
+              : "Acompanhe suas partidas e suba no ranking."}
           </p>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
-            { label: "Total Points", value: totalPoints, icon: "⭐", color: "text-amber-400" },
-            { label: "Wins", value: totalWins, icon: "🏆", color: "text-green-400" },
-            { label: "Losses", value: totalLosses, icon: "💀", color: "text-red-400" },
-            { label: "Active Tournaments", value: activeTournaments, icon: "🌀", color: "text-blue-400" },
+            { label: "Total de Pontos", value: totalPoints, icon: "⭐", color: "text-amber-400" },
+            { label: "Vitórias", value: totalWins, icon: "🏆", color: "text-green-400" },
+            { label: "Derrotas", value: totalLosses, icon: "💀", color: "text-red-400" },
+            { label: "Torneios Ativos", value: activeTournaments, icon: "🌀", color: "text-blue-400" },
           ].map((stat) => (
             <div key={stat.label} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
               <div className="flex items-center justify-between mb-2">
@@ -109,9 +112,9 @@ export default async function DashboardPage() {
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Upcoming Matches */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="text-lg font-bold text-white mb-4">Upcoming Matches</h2>
+            <h2 className="text-lg font-bold text-white mb-4">Próximas Partidas</h2>
             {upcomingMatches.length === 0 ? (
-              <p className="text-gray-500 text-sm py-4 text-center">No upcoming matches</p>
+              <p className="text-gray-500 text-sm py-4 text-center">Nenhuma partida agendada</p>
             ) : (
               <div className="space-y-3">
                 {upcomingMatches.map((match) => {
@@ -125,14 +128,14 @@ export default async function DashboardPage() {
                     >
                       <div>
                         <div className="text-sm font-medium text-white">vs {opponent.name}</div>
-                        <div className="text-xs text-gray-400 mt-0.5">{match.tournament.name} · Round {match.round}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">{match.tournament.name} · Rodada {match.round}</div>
                       </div>
                       <span className={`text-xs px-2 py-1 rounded-full font-medium ${
                         match.status === "IN_PROGRESS"
                           ? "bg-green-500/20 text-green-400"
                           : "bg-gray-700 text-gray-400"
                       }`}>
-                        {match.status === "IN_PROGRESS" ? "In Progress" : "Pending"}
+                        {match.status === "IN_PROGRESS" ? "Em andamento" : "Pendente"}
                       </span>
                     </Link>
                   );
@@ -143,9 +146,9 @@ export default async function DashboardPage() {
 
           {/* Recent Match History */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="text-lg font-bold text-white mb-4">Recent Battles</h2>
+            <h2 className="text-lg font-bold text-white mb-4">Batalhas Recentes</h2>
             {recentMatches.length === 0 ? (
-              <p className="text-gray-500 text-sm py-4 text-center">No match history yet</p>
+              <p className="text-gray-500 text-sm py-4 text-center">Nenhum histórico de partidas ainda</p>
             ) : (
               <div className="space-y-3">
                 {recentMatches.map((match) => {
@@ -190,17 +193,20 @@ export default async function DashboardPage() {
         {/* Organizer Panel */}
         {session.user.role === "ORGANIZER" && (
           <div className="mt-6 bg-gray-900 border border-amber-500/30 rounded-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-white">Your Active Tournaments</h2>
-              <Link
-                href="/tournaments/create"
-                className="bg-amber-500 hover:bg-amber-400 text-black text-sm font-bold px-4 py-2 rounded-lg transition-colors"
-              >
-                + New Tournament
-              </Link>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <h2 className="text-lg font-bold text-white">Seus Torneios Ativos</h2>
+              <div className="flex items-center gap-3">
+                <GenerateInviteButton />
+                <Link
+                  href="/tournaments/create"
+                  className="bg-amber-500 hover:bg-amber-400 text-black text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+                >
+                  + Novo Torneio
+                </Link>
+              </div>
             </div>
             {organizedTournaments.length === 0 ? (
-              <p className="text-gray-500 text-sm py-4 text-center">No active tournaments. Create one to get started!</p>
+              <p className="text-gray-500 text-sm py-4 text-center">Nenhum torneio ativo. Crie um para começar!</p>
             ) : (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {organizedTournaments.map((t) => (
@@ -211,11 +217,11 @@ export default async function DashboardPage() {
                   >
                     <div className="font-semibold text-white mb-1">{t.name}</div>
                     <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <span>{t._count.participants} participants</span>
+                      <span>{t._count.participants} participantes</span>
                       <span>·</span>
                       <span className={`font-medium ${
                         t.status === "IN_PROGRESS" ? "text-green-400" : "text-amber-400"
-                      }`}>{t.status.replace("_", " ")}</span>
+                      }`}>{STATUS_LABELS[t.status] || t.status}</span>
                     </div>
                   </Link>
                 ))}
@@ -227,7 +233,7 @@ export default async function DashboardPage() {
         {/* My Tournaments */}
         {session.user.role === "PARTICIPANT" && participations.length > 0 && (
           <div className="mt-6 bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="text-lg font-bold text-white mb-4">My Tournaments</h2>
+            <h2 className="text-lg font-bold text-white mb-4">Meus Torneios</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {participations.map((p) => (
                 <Link
@@ -239,13 +245,13 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-amber-400 font-bold">{p.totalPoints} pts</span>
                     <span className="text-gray-500">·</span>
-                    <span className="text-green-400">{p.wins}W</span>
-                    <span className="text-red-400">{p.losses}L</span>
+                    <span className="text-green-400">{p.wins}V</span>
+                    <span className="text-red-400">{p.losses}D</span>
                   </div>
                   <div className={`mt-2 text-xs font-medium ${
                     p.tournament.status === "IN_PROGRESS" ? "text-green-400" : "text-gray-500"
                   }`}>
-                    {p.tournament.status.replace("_", " ")}
+                    {STATUS_LABELS[p.tournament.status] || p.tournament.status}
                   </div>
                 </Link>
               ))}
