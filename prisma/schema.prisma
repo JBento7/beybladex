@@ -44,6 +44,11 @@ enum DeckType {
   THREE_ON_THREE
 }
 
+enum SetStatus {
+  IN_PROGRESS
+  FINISHED
+}
+
 model User {
   id            String   @id @default(cuid())
   name          String
@@ -61,6 +66,7 @@ model User {
   matchPoints          MatchPoint[]
   createdInvites       OrganizerInvite[]      @relation("InviteCreator")
   beyblades            Beyblade[]
+  wonSets              MatchSet[]             @relation("SetWinner")
 }
 
 model OrganizerInvite {
@@ -143,6 +149,22 @@ model Match {
   winner     User?       @relation("WinnerMatches", fields: [winnerId], references: [id])
   group      Group?      @relation(fields: [groupId], references: [id])
   points     MatchPoint[]
+  sets       MatchSet[]
+}
+
+model MatchSet {
+  id            String    @id @default(cuid())
+  matchId       String
+  setNumber     Int
+  player1Points Int       @default(0)
+  player2Points Int       @default(0)
+  winnerId      String?
+  status        SetStatus @default(IN_PROGRESS)
+  createdAt     DateTime  @default(now())
+
+  match   Match        @relation(fields: [matchId], references: [id])
+  winner  User?        @relation("SetWinner", fields: [winnerId], references: [id])
+  points  MatchPoint[]
 }
 
 model MatchPoint {
@@ -153,11 +175,13 @@ model MatchPoint {
   points       Int
   beybladeUsed String?
   beybladeId   String?
+  setId        String?
   createdAt    DateTime   @default(now())
 
   match     Match     @relation(fields: [matchId], references: [id])
   user      User      @relation(fields: [userId], references: [id])
   beyblade  Beyblade? @relation(fields: [beybladeId], references: [id])
+  set       MatchSet? @relation(fields: [setId], references: [id])
 }
 
 model Beyblade {

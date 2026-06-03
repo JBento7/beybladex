@@ -42,21 +42,6 @@ export default function LandingPage() {
             <span>A liga oficial de Beyblade de Londrina</span>
           </div>
 
-          <div className="flex justify-center mb-8">
-            <div className="relative w-32 h-32">
-              <div className="absolute inset-0 animate-spin" style={{ animationDuration: "8s" }}>
-                <svg viewBox="0 0 100 100" className="w-full h-full">
-                  <circle cx="50" cy="50" r="48" fill="none" stroke="#c8102e" strokeWidth="1.5" strokeDasharray="8 4" />
-                  <circle cx="50" cy="50" r="35" fill="none" stroke="#f0a500" strokeWidth="2" strokeDasharray="4 4" opacity="0.6" />
-                  <polygon points="50,15 62,40 90,40 68,57 76,82 50,65 24,82 32,57 10,40 38,40" fill="#c8102e" opacity="0.15" />
-                  <polygon points="50,15 62,40 90,40 68,57 76,82 50,65 24,82 32,57 10,40 38,40" fill="none" stroke="#f0a500" strokeWidth="1.5" opacity="0.6" />
-                  <circle cx="50" cy="50" r="8" fill="#c8102e" opacity="0.9" />
-                  <circle cx="50" cy="50" r="4" fill="#fff" opacity="0.8" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-white mb-6 leading-tight">
             Liga{" "}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#c8102e] to-[#f0a500]">
