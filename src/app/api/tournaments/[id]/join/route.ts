@@ -63,39 +63,58 @@ export async function POST(
       );
     }
 
-    let body: { beyblade1?: string; beyblade2?: string; beyblade3?: string } = {};
+    let body: { beybladeIds?: string[] } = {};
     try {
       body = await req.json();
     } catch {
       // body optional
     }
 
-    const { beyblade1, beyblade2, beyblade3 } = body;
+    const beybladeIds = Array.isArray(body.beybladeIds)
+      ? body.beybladeIds.filter(Boolean)
+      : [];
 
-    // Validate required beyblades based on deckType
-    if (tournament.deckType === "THREE_ON_THREE") {
-      if (!beyblade1 || !beyblade2 || !beyblade3) {
-        return NextResponse.json(
-          { error: "Três Beyblades são necessárias para o formato 3 contra 3" },
-          { status: 400 }
-        );
-      }
-    } else {
-      if (!beyblade1) {
-        return NextResponse.json(
-          { error: "O nome da Beyblade é obrigatório" },
-          { status: 400 }
-        );
-      }
+    const required = tournament.deckType === "THREE_ON_THREE" ? 3 : 1;
+
+    if (beybladeIds.length !== required) {
+      return NextResponse.json(
+        {
+          error:
+            required === 3
+              ? "Selecione exatamente 3 combos do seu repertório para o formato 3 contra 3."
+              : "Selecione 1 combo do seu repertório para o formato solo.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // No duplicates
+    if (new Set(beybladeIds).size !== beybladeIds.length) {
+      return NextResponse.json(
+        { error: "Não é possível selecionar o mesmo combo mais de uma vez." },
+        { status: 400 }
+      );
+    }
+
+    // All selected beyblades must belong to the user
+    const owned = await prisma.beyblade.findMany({
+      where: { id: { in: beybladeIds }, userId: session.user.id },
+    });
+
+    if (owned.length !== beybladeIds.length) {
+      return NextResponse.json(
+        { error: "Você só pode selecionar combos cadastrados na sua conta." },
+        { status: 400 }
+      );
     }
 
     const participant = await prisma.tournamentParticipant.create({
       data: {
         tournamentId: params.id,
         userId: session.user.id,
-        beyblade1: beyblade1 || null,
-        beyblade2: beyblade2 || null,
-        beyblade3: beyblade3 || null,
+        beyblade1: beybladeIds[0] || null,
+        beyblade2: beybladeIds[1] || null,
+        beyblade3: beybladeIds[2] || null,
       },
     });
 

@@ -103,6 +103,22 @@ export async function GET() {
       name: "MatchPoint.beybladeUsed",
       sql: `ALTER TABLE "MatchPoint" ADD COLUMN IF NOT EXISTS "beybladeUsed" TEXT`,
     },
+    {
+      name: "User.deleted",
+      sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "deleted" BOOLEAN NOT NULL DEFAULT false`,
+    },
+    {
+      name: "Beyblade.blade",
+      sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "blade" TEXT`,
+    },
+    {
+      name: "Beyblade.ratchet",
+      sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "ratchet" TEXT`,
+    },
+    {
+      name: "Beyblade.bit",
+      sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "bit" TEXT`,
+    },
   ];
 
   for (const migration of migrations) {

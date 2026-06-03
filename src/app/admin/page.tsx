@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import AdminPanel from "./AdminPanel";
+import UserManager from "./UserManager";
 import type { TournamentFormat, TournamentStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -112,6 +113,9 @@ export default async function AdminPage() {
             </div>
           )}
         </div>
+
+        {/* User Management */}
+        <UserManager />
       </main>
     </div>
   );

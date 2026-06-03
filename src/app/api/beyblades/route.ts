@@ -24,17 +24,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  const { name, model } = await req.json();
+  const { name, blade, ratchet, bit } = await req.json();
 
-  if (!name) {
-    return NextResponse.json({ error: "Nome é obrigatório" }, { status: 400 });
+  if (!name || !name.trim()) {
+    return NextResponse.json({ error: "O apelido do combo é obrigatório" }, { status: 400 });
   }
 
   const beyblade = await prisma.beyblade.create({
     data: {
       userId: session.user.id,
-      name,
-      model: model || null,
+      name: name.trim(),
+      blade: blade?.trim() || null,
+      ratchet: ratchet?.trim() || null,
+      bit: bit?.trim() || null,
     },
   });
 
