@@ -44,6 +44,12 @@ export default function Navbar() {
               Torneios
             </Link>
             <Link
+              href="/community"
+              className="text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
+            >
+              Comunidade
+            </Link>
+            <Link
               href="/upcoming"
               className="text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
             >
@@ -164,6 +170,7 @@ export default function Navbar() {
             {session && (
               <>
                 <Link href="/dashboard" className="block px-3 py-2 text-gray-300 hover:text-[#f0a500]" onClick={() => setMenuOpen(false)}>Painel</Link>
+                <Link href="/community" className="block px-3 py-2 text-gray-300 hover:text-[#f0a500]" onClick={() => setMenuOpen(false)}>Comunidade</Link>
                 <Link href="/profile" className="block px-3 py-2 text-gray-300 hover:text-[#f0a500]" onClick={() => setMenuOpen(false)}>Perfil</Link>
                 <Link href="/tournaments/create" className="block px-3 py-2 text-gray-300 hover:text-[#f0a500]" onClick={() => setMenuOpen(false)}>Criar Torneio</Link>
                 {session.user.role === "ORGANIZER" && (
