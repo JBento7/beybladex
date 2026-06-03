@@ -73,30 +73,26 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
+    <div className="min-h-screen bg-[#0d0d0d]">
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-black text-white">
-            Bem-vindo, <span className="text-amber-400">{session.user.name}</span>!
+            Bem-vindo, <span className="text-[#f0a500]">{session.user.name}</span>!
           </h1>
-          <p className="text-gray-400 mt-1">
-            {session.user.role === "ORGANIZER"
-              ? "Gerencie seus torneios e acompanhe a classificação."
-              : "Acompanhe suas partidas e suba no ranking."}
-          </p>
+          <p className="text-gray-400 mt-1">Acompanhe suas partidas, torneios e suba no ranking.</p>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
-            { label: "Total de Pontos", value: totalPoints, icon: "⭐", color: "text-amber-400" },
+            { label: "Total de Pontos", value: totalPoints, icon: "⭐", color: "text-[#f0a500]" },
             { label: "Vitórias", value: totalWins, icon: "🏆", color: "text-green-400" },
             { label: "Derrotas", value: totalLosses, icon: "💀", color: "text-red-400" },
             { label: "Torneios Ativos", value: activeTournaments, icon: "🌀", color: "text-blue-400" },
           ].map((stat) => (
-            <div key={stat.label} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div key={stat.label} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-2xl">{stat.icon}</span>
               </div>
@@ -108,7 +104,7 @@ export default async function DashboardPage() {
 
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Upcoming Matches */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-4">Próximas Partidas</h2>
             {upcomingMatches.length === 0 ? (
               <p className="text-gray-500 text-sm py-4 text-center">Nenhuma partida agendada</p>
@@ -121,7 +117,7 @@ export default async function DashboardPage() {
                     <Link
                       key={match.id}
                       href={`/tournaments/${match.tournament.id}`}
-                      className="flex items-center justify-between p-3 bg-gray-800 hover:bg-gray-750 rounded-lg transition-colors"
+                      className="flex items-center justify-between p-3 bg-[#252525] hover:bg-gray-750 rounded-lg transition-colors"
                     >
                       <div>
                         <div className="text-sm font-medium text-white">vs {opponent.name}</div>
@@ -142,7 +138,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* Recent Match History */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-4">Batalhas Recentes</h2>
             {recentMatches.length === 0 ? (
               <p className="text-gray-500 text-sm py-4 text-center">Nenhum histórico de partidas ainda</p>
@@ -175,7 +171,7 @@ export default async function DashboardPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className={`text-sm font-bold ${isWinner ? "text-amber-400" : "text-gray-500"}`}>
+                        <div className={`text-sm font-bold ${isWinner ? "text-[#f0a500]" : "text-gray-500"}`}>
                           +{pointsEarned} pts
                         </div>
                       </div>
@@ -196,7 +192,7 @@ export default async function DashboardPage() {
                 <GenerateInviteButton />
                 <Link
                   href="/tournaments/create"
-                  className="bg-amber-500 hover:bg-amber-400 text-black text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+                  className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
                 >
                   + Novo Torneio
                 </Link>
@@ -210,14 +206,14 @@ export default async function DashboardPage() {
                   <Link
                     key={t.id}
                     href={`/tournaments/${t.id}`}
-                    className="bg-gray-800 hover:bg-gray-750 border border-gray-700 rounded-lg p-4 transition-colors"
+                    className="bg-[#252525] hover:bg-gray-750 border border-[#333] rounded-lg p-4 transition-colors"
                   >
                     <div className="font-semibold text-white mb-1">{t.name}</div>
                     <div className="flex items-center gap-2 text-xs text-gray-400">
                       <span>{t._count.participants} participantes</span>
                       <span>·</span>
                       <span className={`font-medium ${
-                        t.status === "IN_PROGRESS" ? "text-green-400" : "text-amber-400"
+                        t.status === "IN_PROGRESS" ? "text-green-400" : "text-[#f0a500]"
                       }`}>{STATUS_LABELS[t.status] || t.status}</span>
                     </div>
                   </Link>
@@ -228,19 +224,19 @@ export default async function DashboardPage() {
         )}
 
         {/* My Tournaments */}
-        {session.user.role === "PARTICIPANT" && participations.length > 0 && (
-          <div className="mt-6 bg-gray-900 border border-gray-800 rounded-xl p-6">
+        {participations.length > 0 && (
+          <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-4">Meus Torneios</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {participations.map((p) => (
                 <Link
                   key={p.id}
                   href={`/tournaments/${p.tournament.id}`}
-                  className="bg-gray-800 border border-gray-700 hover:border-amber-500/40 rounded-lg p-4 transition-colors"
+                  className="bg-[#252525] border border-[#333] hover:border-amber-500/40 rounded-lg p-4 transition-colors"
                 >
                   <div className="font-semibold text-white mb-2">{p.tournament.name}</div>
                   <div className="flex items-center gap-3 text-sm">
-                    <span className="text-amber-400 font-bold">{p.totalPoints} pts</span>
+                    <span className="text-[#f0a500] font-bold">{p.totalPoints} pts</span>
                     <span className="text-gray-500">·</span>
                     <span className="text-green-400">{p.wins}V</span>
                     <span className="text-red-400">{p.losses}D</span>

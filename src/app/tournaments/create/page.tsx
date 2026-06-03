@@ -39,6 +39,7 @@ export default function CreateTournamentPage() {
     format: "ROUND_ROBIN",
     maxParticipants: "",
     startDate: "",
+    prize: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -65,6 +66,7 @@ export default function CreateTournamentPage() {
           ? parseInt(form.maxParticipants)
           : undefined,
         startDate: form.startDate || undefined,
+        prize: form.prize || undefined,
       }),
     });
 
@@ -81,7 +83,7 @@ export default function CreateTournamentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
+    <div className="min-h-screen bg-[#0d0d0d]">
       <Navbar />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
@@ -97,7 +99,7 @@ export default function CreateTournamentPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Tournament Name */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
             <h2 className="text-base font-bold text-white mb-4">Informações Básicas</h2>
             <div className="space-y-4">
               <div>
@@ -111,7 +113,7 @@ export default function CreateTournamentPage() {
                   onChange={handleChange}
                   required
                   placeholder="ex: Campeonato Primavera 2025"
-                  className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                 />
               </div>
 
@@ -125,7 +127,21 @@ export default function CreateTournamentPage() {
                   onChange={handleChange}
                   rows={3}
                   placeholder="Descreva seu torneio..."
-                  className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors resize-none"
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Prêmio <span className="text-gray-500 font-normal">(opcional)</span>
+                </label>
+                <input
+                  name="prize"
+                  type="text"
+                  value={form.prize}
+                  onChange={handleChange}
+                  placeholder="ex: R$ 200,00 + Troféu"
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                 />
               </div>
 
@@ -142,7 +158,7 @@ export default function CreateTournamentPage() {
                     value={form.maxParticipants}
                     onChange={handleChange}
                     placeholder="Ilimitado"
-                    className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                    className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                   />
                 </div>
 
@@ -155,7 +171,7 @@ export default function CreateTournamentPage() {
                     type="datetime-local"
                     value={form.startDate}
                     onChange={handleChange}
-                    className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                    className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                   />
                 </div>
               </div>
@@ -163,7 +179,7 @@ export default function CreateTournamentPage() {
           </div>
 
           {/* Format Selection */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
             <h2 className="text-base font-bold text-white mb-4">Formato do Torneio <span className="text-red-400">*</span></h2>
             <div className="grid sm:grid-cols-2 gap-3">
               {FORMATS.map((f) => (
@@ -173,13 +189,13 @@ export default function CreateTournamentPage() {
                   onClick={() => setForm({ ...form, format: f.value })}
                   className={`text-left p-4 rounded-xl border transition-all ${
                     form.format === f.value
-                      ? "border-amber-500 bg-amber-500/10"
-                      : "border-gray-700 bg-gray-800 hover:border-gray-600"
+                      ? "border-[#f0a500] bg-[#f0a500]/10"
+                      : "border-[#333] bg-[#252525] hover:border-gray-600"
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xl">{f.icon}</span>
-                    <span className={`font-semibold text-sm ${form.format === f.value ? "text-amber-400" : "text-white"}`}>
+                    <span className={`font-semibold text-sm ${form.format === f.value ? "text-[#f0a500]" : "text-white"}`}>
                       {f.label}
                     </span>
                   </div>
@@ -192,7 +208,7 @@ export default function CreateTournamentPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-black font-black text-lg py-3.5 rounded-xl transition-colors"
+            className="w-full bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-60 text-white font-black text-lg py-3.5 rounded-xl transition-colors"
           >
             {loading ? "Criando..." : "🏆 Criar Torneio"}
           </button>
