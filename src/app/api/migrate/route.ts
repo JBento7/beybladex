@@ -108,6 +108,10 @@ export async function GET() {
       sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "deleted" BOOLEAN NOT NULL DEFAULT false`,
     },
     {
+      name: "User.avatarUrl",
+      sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "avatarUrl" TEXT`,
+    },
+    {
       name: "Beyblade.blade",
       sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "blade" TEXT`,
     },

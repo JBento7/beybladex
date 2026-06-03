@@ -2,11 +2,23 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function Navbar() {
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (session) {
+      fetch("/api/profile/me")
+        .then((r) => r.json())
+        .then((d) => setAvatarUrl(d.avatarUrl ?? null))
+        .catch(() => {});
+    } else {
+      setAvatarUrl(null);
+    }
+  }, [session]);
 
   return (
     <nav className="bg-[#1a1a1a] border-b border-[#2a2a2a] sticky top-0 z-50">
@@ -73,14 +85,25 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-3">
             {session ? (
               <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-400">
-                  {session.user.name}
-                  {session.user.role === "ORGANIZER" && (
-                    <span className="ml-1 text-xs bg-[#f0a500] text-black px-1.5 py-0.5 rounded font-semibold">
-                      ADMIN
-                    </span>
-                  )}
-                </span>
+                <Link href="/profile" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                  <div className="w-8 h-8 rounded-full overflow-hidden border border-[#f0a500]/50 flex-shrink-0">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={session.user.name ?? ""} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center text-sm">
+                        🌀
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-sm text-gray-400">
+                    {session.user.name}
+                    {session.user.role === "ORGANIZER" && (
+                      <span className="ml-1 text-xs bg-[#f0a500] text-black px-1.5 py-0.5 rounded font-semibold">
+                        ADMIN
+                      </span>
+                    )}
+                  </span>
+                </Link>
                 <button
                   onClick={() => signOut({ callbackUrl: "/" })}
                   className="text-sm bg-gray-700 hover:bg-gray-600 px-4 py-1.5 rounded-lg text-gray-200 transition-colors"

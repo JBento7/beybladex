@@ -7,6 +7,7 @@ import Link from "next/link";
 import { FINISH_TYPE_LABELS, FINISH_TYPE_POINTS } from "@/lib/scoring";
 import type { FinishType } from "@prisma/client";
 import BeybladeManager from "./BeybladeManager";
+import AvatarUpload from "./AvatarUpload";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export default async function ProfilePage() {
   const [user, participations, allPoints, beyblades] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, email: true, role: true, createdAt: true },
+      select: { id: true, name: true, email: true, role: true, avatarUrl: true, createdAt: true },
     }),
     prisma.tournamentParticipant.findMany({
       where: { userId },
@@ -90,9 +91,7 @@ export default async function ProfilePage() {
         {/* Profile Header */}
         <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-            <div className="w-20 h-20 bg-[#f0a500]/20 border-2 border-[#f0a500]/50 rounded-full flex items-center justify-center text-4xl">
-              🌀
-            </div>
+            <AvatarUpload currentAvatar={user.avatarUrl ?? null} userName={user.name} />
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-2xl font-black text-white">{user.name}</h1>
