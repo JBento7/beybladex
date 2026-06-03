@@ -60,6 +60,7 @@ model User {
   wonMatches           Match[]                @relation("WinnerMatches")
   matchPoints          MatchPoint[]
   createdInvites       OrganizerInvite[]      @relation("InviteCreator")
+  beyblades            Beyblade[]
 }
 
 model OrganizerInvite {
@@ -84,6 +85,7 @@ model Tournament {
   maxParticipants Int?
   startDate       DateTime?
   deckType        DeckType         @default(SOLO)
+  prize           String?
   createdAt       DateTime         @default(now())
 
   organizer    User                   @relation("OrganizerTournaments", fields: [organizerId], references: [id])
@@ -150,8 +152,23 @@ model MatchPoint {
   finishType   FinishType
   points       Int
   beybladeUsed String?
+  beybladeId   String?
   createdAt    DateTime   @default(now())
 
-  match Match @relation(fields: [matchId], references: [id])
-  user  User  @relation(fields: [userId], references: [id])
+  match     Match     @relation(fields: [matchId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+  beyblade  Beyblade? @relation(fields: [beybladeId], references: [id])
+}
+
+model Beyblade {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  model       String?
+  wins        Int      @default(0)
+  losses      Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  user        User         @relation(fields: [userId], references: [id])
+  matchPoints MatchPoint[]
 }

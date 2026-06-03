@@ -24,11 +24,11 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== "ORGANIZER") {
+    if (!session) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
     }
 
-    const { name, description, format, maxParticipants, startDate, deckType } =
+    const { name, description, format, maxParticipants, startDate, deckType, prize } =
       await req.json();
 
     if (!name || !format) {
@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
         organizerId: session.user.id,
         maxParticipants: maxParticipants ? parseInt(maxParticipants) : null,
         startDate: startDate ? new Date(startDate) : null,
+        prize: prize || null,
         status: "REGISTRATION",
       },
     });

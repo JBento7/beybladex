@@ -66,14 +66,11 @@ export default async function DashboardPage() {
     (p) => p.tournament.status === "IN_PROGRESS" || p.tournament.status === "REGISTRATION"
   ).length;
 
-  let organizedTournaments: { id: string; name: string; status: string; _count: { participants: number } }[] = [];
-  if (session.user.role === "ORGANIZER") {
-    organizedTournaments = await prisma.tournament.findMany({
-      where: { organizerId: userId, status: { not: "FINISHED" } },
-      include: { _count: { select: { participants: true } } },
-      orderBy: { createdAt: "desc" },
-    }) as typeof organizedTournaments;
-  }
+  const organizedTournaments = await prisma.tournament.findMany({
+    where: { organizerId: userId, status: { not: "FINISHED" } },
+    include: { _count: { select: { participants: true } } },
+    orderBy: { createdAt: "desc" },
+  });
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -191,8 +188,8 @@ export default async function DashboardPage() {
         </div>
 
         {/* Organizer Panel */}
-        {session.user.role === "ORGANIZER" && (
-          <div className="mt-6 bg-gray-900 border border-amber-500/30 rounded-xl p-6">
+        {organizedTournaments.length > 0 && (
+          <div className="mt-6 bg-[#1a1a1a] border border-[#f0a500]/30 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <h2 className="text-lg font-bold text-white">Seus Torneios Ativos</h2>
               <div className="flex items-center gap-3">

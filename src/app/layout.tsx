@@ -3,8 +3,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 
 export const metadata: Metadata = {
-  title: "BeybladeX — Championship Management",
-  description: "The ultimate Beyblade tournament management platform",
+  title: "LBL - Liga Beyblade Londrina",
+  description: "A liga oficial de Beyblade de Londrina",
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-[#0a0a0a] text-gray-100 min-h-screen">
+      <body className="bg-[#0d0d0d] text-gray-100 min-h-screen">
         <Providers>{children}</Providers>
       </body>
     </html>
