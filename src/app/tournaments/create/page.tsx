@@ -37,6 +37,7 @@ export default function CreateTournamentPage() {
     name: "",
     description: "",
     format: "ROUND_ROBIN",
+    deckType: "SOLO",
     maxParticipants: "",
     startDate: "",
     prize: "",
@@ -62,6 +63,7 @@ export default function CreateTournamentPage() {
         name: form.name,
         description: form.description || undefined,
         format: form.format,
+        deckType: form.deckType,
         maxParticipants: form.maxParticipants
           ? parseInt(form.maxParticipants)
           : undefined,
@@ -175,6 +177,46 @@ export default function CreateTournamentPage() {
                   />
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Deck Type */}
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+            <h2 className="text-base font-bold text-white mb-4">Tipo de Deck <span className="text-red-400">*</span></h2>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                {
+                  value: "SOLO",
+                  label: "Solo",
+                  icon: "🌀",
+                  desc: "Cada jogador usa 1 Beyblade.",
+                },
+                {
+                  value: "THREE_ON_THREE",
+                  label: "3 contra 3",
+                  icon: "⚡",
+                  desc: "Cada jogador usa um deck de 3 Beyblades.",
+                },
+              ].map((d) => (
+                <button
+                  key={d.value}
+                  type="button"
+                  onClick={() => setForm({ ...form, deckType: d.value })}
+                  className={`text-left p-4 rounded-xl border transition-all ${
+                    form.deckType === d.value
+                      ? "border-[#c8102e] bg-[#c8102e]/10"
+                      : "border-[#333] bg-[#252525] hover:border-gray-600"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xl">{d.icon}</span>
+                    <span className={`font-semibold text-sm ${form.deckType === d.value ? "text-[#c8102e]" : "text-white"}`}>
+                      {d.label}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-400">{d.desc}</div>
+                </button>
+              ))}
             </div>
           </div>
 

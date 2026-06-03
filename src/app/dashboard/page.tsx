@@ -218,7 +218,7 @@ export default async function DashboardPage() {
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <h2 className="text-lg font-bold text-white">Seus Torneios Ativos</h2>
               <div className="flex items-center gap-3">
-                <GenerateInviteButton />
+                {session.user.role === "ORGANIZER" && <GenerateInviteButton />}
                 <Link
                   href="/tournaments/create"
                   className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"

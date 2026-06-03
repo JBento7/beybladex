@@ -14,11 +14,8 @@ export async function POST(
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    if (session.user.role !== "PARTICIPANT") {
-      return NextResponse.json(
-        { error: "Apenas participantes podem se inscrever em torneios" },
-        { status: 403 }
-      );
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
     const tournament = await prisma.tournament.findUnique({
