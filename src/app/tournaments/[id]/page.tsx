@@ -154,6 +154,7 @@ export default async function TournamentDetailPage({
 }: {
   params: { id: string };
 }) {
+  try {
   const session = await getServerSession(authOptions);
 
   const tournament = await prisma.tournament.findUnique({
@@ -162,7 +163,7 @@ export default async function TournamentDetailPage({
       organizer: { select: { id: true, name: true } },
       participants: {
         include: {
-          user: { select: { id: true, name: true, beyblade: true } },
+          user: { select: { id: true, name: true } },
           group: true,
         },
         orderBy: { totalPoints: "desc" },
@@ -375,9 +376,9 @@ export default async function TournamentDetailPage({
                         <div className="text-sm font-semibold text-white truncate">
                           {p.user.name}
                         </div>
-                        {p.user.beyblade && (
+                        {p.beyblade1 && (
                           <div className="text-xs text-gray-500 truncate">
-                            {p.user.beyblade}
+                            {p.beyblade1}
                           </div>
                         )}
                       </div>
@@ -454,9 +455,9 @@ export default async function TournamentDetailPage({
                         <div className="text-sm font-medium text-white">
                           {p.user.name}
                         </div>
-                        {p.user.beyblade && (
+                        {p.beyblade1 && (
                           <div className="text-xs text-gray-500">
-                            {p.user.beyblade}
+                            {p.beyblade1}
                           </div>
                         )}
                       </div>
@@ -470,4 +471,14 @@ export default async function TournamentDetailPage({
       </main>
     </div>
   );
+  } catch (e) {
+    return (
+      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center p-8">
+        <div className="bg-[#1a1a1a] border border-red-700 rounded-2xl p-8 max-w-2xl w-full">
+          <h2 className="text-xl font-bold text-red-400 mb-4">Erro ao carregar torneio</h2>
+          <pre className="text-sm text-gray-300 bg-[#252525] rounded-lg p-4 overflow-auto whitespace-pre-wrap break-all">{String(e)}</pre>
+        </div>
+      </div>
+    );
+  }
 }
