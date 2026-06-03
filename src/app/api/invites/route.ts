@@ -8,7 +8,7 @@ import { headers } from "next/headers";
 export async function POST(_req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== "ORGANIZER") {
+    if (!session) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
     }
 
