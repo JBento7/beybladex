@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import AdminPanel from "./AdminPanel";
 import UserManager from "./UserManager";
+import ResetTokenManager from "./ResetTokenManager";
 import type { TournamentFormat, TournamentStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -116,6 +117,9 @@ export default async function AdminPage() {
 
         {/* User Management */}
         <UserManager />
+
+        {/* Reset Token Management */}
+        <ResetTokenManager />
       </main>
     </div>
   );

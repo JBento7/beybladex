@@ -8,6 +8,7 @@ import { FINISH_TYPE_LABELS, FINISH_TYPE_POINTS } from "@/lib/scoring";
 import type { FinishType } from "@prisma/client";
 import BeybladeManager from "./BeybladeManager";
 import AvatarUpload from "./AvatarUpload";
+import ProfileEditor from "./ProfileEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -96,18 +97,15 @@ export default async function ProfilePage() {
         <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
             <AvatarUpload currentAvatar={user.avatarUrl ?? null} userName={user.name} />
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-2xl font-black text-white">{user.name}</h1>
-                <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
-                  user.role === "ORGANIZER"
-                    ? "bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30"
-                    : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                }`}>
-                  {user.role === "ORGANIZER" ? "Admin" : "Jogador"}
-                </span>
-              </div>
-              <p className="text-gray-400 text-sm">{user.email}</p>
+            <div className="flex-1 flex items-start gap-3">
+              <ProfileEditor initialName={user.name} initialEmail={user.email} />
+              <span className={`mt-1 text-xs px-2 py-1 rounded-full font-semibold shrink-0 ${
+                user.role === "ORGANIZER"
+                  ? "bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30"
+                  : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+              }`}>
+                {user.role === "ORGANIZER" ? "Admin" : "Jogador"}
+              </span>
             </div>
           </div>
         </div>
