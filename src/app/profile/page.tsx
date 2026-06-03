@@ -31,11 +31,16 @@ export default async function ProfilePage() {
 
   const userId = session.user.id;
 
-  const [user, participations, allPoints, beyblades] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, email: true, role: true, avatarUrl: true, createdAt: true },
-    }),
+  const userRows = await prisma.$queryRaw<
+    { id: string; name: string; email: string; role: string; avatarUrl: string | null; createdAt: Date }[]
+  >`SELECT id, name, email, role, "createdAt",
+      CASE WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='User' AND column_name='avatarUrl'
+      ) THEN "avatarUrl" ELSE NULL END AS "avatarUrl"
+    FROM "User" WHERE id = ${userId} LIMIT 1`;
+
+  const [participations, allPoints, beyblades] = await Promise.all([
     prisma.tournamentParticipant.findMany({
       where: { userId },
       include: { tournament: true },
@@ -56,6 +61,7 @@ export default async function ProfilePage() {
     }),
   ]);
 
+  const user = userRows[0] ?? null;
   if (!user) redirect("/login");
 
   // Global finish breakdown
