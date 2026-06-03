@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, id: user.id, email: user.email });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Erro no servidor" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
