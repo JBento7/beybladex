@@ -139,6 +139,25 @@ export async function GET() {
       name: "PasswordResetToken.userId FK",
       sql: `DO $$ BEGIN ALTER TABLE "PasswordResetToken" ADD CONSTRAINT "PasswordResetToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
     },
+    {
+      name: "User.emailVerified",
+      sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailVerified" BOOLEAN NOT NULL DEFAULT false`,
+    },
+    {
+      name: "EmailVerifyToken table",
+      sql: `CREATE TABLE IF NOT EXISTS "EmailVerifyToken" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "token" TEXT NOT NULL UNIQUE,
+        "expiresAt" TIMESTAMP(3) NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "EmailVerifyToken_pkey" PRIMARY KEY ("id")
+      )`,
+    },
+    {
+      name: "EmailVerifyToken.userId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "EmailVerifyToken" ADD CONSTRAINT "EmailVerifyToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
   ];
 
   for (const migration of migrations) {

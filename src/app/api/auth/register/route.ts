@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { sendVerificationEmail, isEmailConfigured } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
         password: hashed,
         role,
         beyblade: beyblade || null,
+        emailVerified: false,
       },
     });
 
@@ -64,8 +66,22 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Send verification email if SMTP is configured
+    if (await isEmailConfigured()) {
+      try {
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const verifyRecord = await prisma.emailVerifyToken.create({
+          data: { userId: user.id, expiresAt },
+        });
+        await sendVerificationEmail(email, name, verifyRecord.token);
+      } catch (emailErr) {
+        console.error("Failed to send verification email:", emailErr);
+        // Don't fail registration if email fails
+      }
+    }
+
     return NextResponse.json(
-      { id: user.id, name: user.name, email: user.email, role: user.role },
+      { id: user.id, name: user.name, email: user.email, role: user.role, emailSent: await isEmailConfigured() },
       { status: 201 }
     );
   } catch (err) {

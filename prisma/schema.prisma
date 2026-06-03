@@ -70,6 +70,8 @@ model User {
   beyblades            Beyblade[]
   wonSets              MatchSet[]             @relation("SetWinner")
   resetTokens          PasswordResetToken[]
+  emailVerifyTokens    EmailVerifyToken[]
+  emailVerified        Boolean  @default(false)
 }
 
 model PasswordResetToken {
@@ -212,4 +214,14 @@ model Beyblade {
 
   user        User         @relation(fields: [userId], references: [id])
   matchPoints MatchPoint[]
+}
+
+model EmailVerifyToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique @default(cuid())
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

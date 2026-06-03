@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const registered = searchParams.get("registered");
+  const verified = searchParams.get("verified");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -35,7 +39,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4">
-      {/* Logo */}
       <Link href="/" className="flex items-center gap-2 mb-8">
         <span className="text-3xl">🌀</span>
         <span className="text-2xl font-black text-amber-400">BeybladeX</span>
@@ -43,19 +46,29 @@ export default function LoginPage() {
 
       <div className="w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl">
         <h1 className="text-2xl font-bold text-white mb-2 text-center">Bem-vindo de volta</h1>
-        <p className="text-gray-400 text-center mb-8 text-sm">Entre na sua conta do campeonato</p>
+        <p className="text-gray-400 text-center mb-6 text-sm">Entre na sua conta do campeonato</p>
+
+        {registered && (
+          <div className="bg-green-900/30 border border-green-700 text-green-400 text-sm px-4 py-3 rounded-lg mb-4">
+            ✅ Conta criada! Verifique seu e-mail para confirmar o cadastro, depois faça login.
+          </div>
+        )}
+
+        {verified && (
+          <div className="bg-[#f0a500]/10 border border-[#f0a500]/40 text-[#f0a500] text-sm px-4 py-3 rounded-lg mb-4">
+            🌀 E-mail confirmado! Faça login para entrar.
+          </div>
+        )}
 
         {error && (
-          <div className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-4 py-3 rounded-lg mb-6">
+          <div className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-4 py-3 rounded-lg mb-4">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
-              E-mail
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">E-mail</label>
             <input
               type="email"
               value={email}
@@ -68,9 +81,7 @@ export default function LoginPage() {
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="block text-sm font-medium text-gray-300">
-                Senha
-              </label>
+              <label className="block text-sm font-medium text-gray-300">Senha</label>
               <Link href="/forgot-password" className="text-xs text-gray-500 hover:text-gray-400 transition-colors">
                 Esqueceu sua senha?
               </Link>
@@ -102,5 +113,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
