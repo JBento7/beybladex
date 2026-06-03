@@ -21,56 +21,85 @@ export default async function DashboardPage() {
 
   const userId = session.user.id;
 
-  const participations = await prisma.tournamentParticipant.findMany({
-    where: { userId },
-    include: {
-      tournament: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let participations: any[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let recentMatches: any[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let upcomingMatches: any[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let organizedTournaments: any[] = [];
+  let dbError: string | null = null;
 
-  const recentMatches = await prisma.match.findMany({
-    where: {
-      status: "FINISHED",
-      OR: [{ player1Id: userId }, { player2Id: userId }],
-    },
-    include: {
-      player1: { select: { id: true, name: true } },
-      player2: { select: { id: true, name: true } },
-      winner: { select: { id: true, name: true } },
-      tournament: { select: { id: true, name: true } },
-      points: { where: { userId } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
+  try {
+    [participations, recentMatches, upcomingMatches, organizedTournaments] =
+      await Promise.all([
+        prisma.tournamentParticipant.findMany({
+          where: { userId },
+          include: { tournament: true },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.match.findMany({
+          where: {
+            status: "FINISHED",
+            OR: [{ player1Id: userId }, { player2Id: userId }],
+          },
+          include: {
+            player1: { select: { id: true, name: true } },
+            player2: { select: { id: true, name: true } },
+            winner: { select: { id: true, name: true } },
+            tournament: { select: { id: true, name: true } },
+            points: { where: { userId } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        }),
+        prisma.match.findMany({
+          where: {
+            status: { in: ["PENDING", "IN_PROGRESS"] },
+            OR: [{ player1Id: userId }, { player2Id: userId }],
+          },
+          include: {
+            player1: { select: { id: true, name: true } },
+            player2: { select: { id: true, name: true } },
+            tournament: { select: { id: true, name: true } },
+          },
+          orderBy: { createdAt: "asc" },
+          take: 5,
+        }),
+        prisma.tournament.findMany({
+          where: { organizerId: userId, status: { not: "FINISHED" } },
+          include: { _count: { select: { participants: true } } },
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
+  } catch (e) {
+    dbError = String(e);
+  }
 
-  const upcomingMatches = await prisma.match.findMany({
-    where: {
-      status: { in: ["PENDING", "IN_PROGRESS"] },
-      OR: [{ player1Id: userId }, { player2Id: userId }],
-    },
-    include: {
-      player1: { select: { id: true, name: true } },
-      player2: { select: { id: true, name: true } },
-      tournament: { select: { id: true, name: true } },
-    },
-    orderBy: { createdAt: "asc" },
-    take: 5,
-  });
+  if (dbError) {
+    return (
+      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center p-8">
+        <div className="bg-[#1a1a1a] border border-red-700 rounded-2xl p-8 max-w-2xl w-full">
+          <h2 className="text-xl font-bold text-red-400 mb-4">Erro no Dashboard</h2>
+          <pre className="text-sm text-gray-300 bg-[#252525] rounded-lg p-4 overflow-auto whitespace-pre-wrap break-all">
+            {dbError}
+          </pre>
+          <p className="text-gray-500 text-xs mt-3">
+            Usuário: {session.user.email} | ID: {userId}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  const totalPoints = participations.reduce((sum, p) => sum + p.totalPoints, 0);
-  const totalWins = participations.reduce((sum, p) => sum + p.wins, 0);
-  const totalLosses = participations.reduce((sum, p) => sum + p.losses, 0);
+  const totalPoints = participations.reduce((sum: number, p: { totalPoints: number }) => sum + p.totalPoints, 0);
+  const totalWins = participations.reduce((sum: number, p: { wins: number }) => sum + p.wins, 0);
+  const totalLosses = participations.reduce((sum: number, p: { losses: number }) => sum + p.losses, 0);
   const activeTournaments = participations.filter(
-    (p) => p.tournament.status === "IN_PROGRESS" || p.tournament.status === "REGISTRATION"
+    (p: { tournament: { status: string } }) =>
+      p.tournament.status === "IN_PROGRESS" || p.tournament.status === "REGISTRATION"
   ).length;
-
-  const organizedTournaments = await prisma.tournament.findMany({
-    where: { organizerId: userId, status: { not: "FINISHED" } },
-    include: { _count: { select: { participants: true } } },
-    orderBy: { createdAt: "desc" },
-  });
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
@@ -110,7 +139,7 @@ export default async function DashboardPage() {
               <p className="text-gray-500 text-sm py-4 text-center">Nenhuma partida agendada</p>
             ) : (
               <div className="space-y-3">
-                {upcomingMatches.map((match) => {
+                {upcomingMatches.map((match: { id: string; player1Id: string; player2: { name: string }; player1: { name: string }; tournament: { id: string; name: string }; round: number; status: string }) => {
                   const opponent =
                     match.player1Id === userId ? match.player2 : match.player1;
                   return (
@@ -144,13 +173,13 @@ export default async function DashboardPage() {
               <p className="text-gray-500 text-sm py-4 text-center">Nenhum histórico de partidas ainda</p>
             ) : (
               <div className="space-y-3">
-                {recentMatches.map((match) => {
+                {recentMatches.map((match: { id: string; player1Id: string; winnerId: string | null; player2: { name: string }; player1: { name: string }; tournament: { name: string }; points: { points: number; finishType: string }[] }) => {
                   const isWinner = match.winnerId === userId;
                   const opponent =
                     match.player1Id === userId ? match.player2 : match.player1;
                   const matchPoints = match.points;
-                  const pointsEarned = matchPoints.reduce((sum, p) => sum + p.points, 0);
-                  const finishTypes = matchPoints.map((p) => FINISH_TYPE_LABELS[p.finishType as FinishType]);
+                  const pointsEarned = matchPoints.reduce((sum: number, p: { points: number }) => sum + p.points, 0);
+                  const finishTypes = matchPoints.map((p: { finishType: string }) => FINISH_TYPE_LABELS[p.finishType as FinishType]);
 
                   return (
                     <div
@@ -198,28 +227,43 @@ export default async function DashboardPage() {
                 </Link>
               </div>
             </div>
-            {organizedTournaments.length === 0 ? (
-              <p className="text-gray-500 text-sm py-4 text-center">Nenhum torneio ativo. Crie um para começar!</p>
-            ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {organizedTournaments.map((t) => (
-                  <Link
-                    key={t.id}
-                    href={`/tournaments/${t.id}`}
-                    className="bg-[#252525] hover:bg-gray-750 border border-[#333] rounded-lg p-4 transition-colors"
-                  >
-                    <div className="font-semibold text-white mb-1">{t.name}</div>
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <span>{t._count.participants} participantes</span>
-                      <span>·</span>
-                      <span className={`font-medium ${
-                        t.status === "IN_PROGRESS" ? "text-green-400" : "text-[#f0a500]"
-                      }`}>{STATUS_LABELS[t.status] || t.status}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {organizedTournaments.map((t: { id: string; name: string; status: string; _count: { participants: number } }) => (
+                <Link
+                  key={t.id}
+                  href={`/tournaments/${t.id}`}
+                  className="bg-[#252525] hover:bg-gray-750 border border-[#333] rounded-lg p-4 transition-colors"
+                >
+                  <div className="font-semibold text-white mb-1">{t.name}</div>
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <span>{t._count.participants} participantes</span>
+                    <span>·</span>
+                    <span className={`font-medium ${
+                      t.status === "IN_PROGRESS" ? "text-green-400" : "text-[#f0a500]"
+                    }`}>{STATUS_LABELS[t.status] || t.status}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Create Tournament CTA if no organized tournaments */}
+        {organizedTournaments.length === 0 && (
+          <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-white">Organizar um Torneio</h2>
+              <p className="text-gray-500 text-sm mt-1">Crie e gerencie seu próprio campeonato de Beyblade.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <GenerateInviteButton />
+              <Link
+                href="/tournaments/create"
+                className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+              >
+                + Novo Torneio
+              </Link>
+            </div>
           </div>
         )}
 
@@ -228,7 +272,7 @@ export default async function DashboardPage() {
           <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-4">Meus Torneios</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {participations.map((p) => (
+              {participations.map((p: { id: string; totalPoints: number; wins: number; losses: number; tournament: { id: string; name: string; status: string } }) => (
                 <Link
                   key={p.id}
                   href={`/tournaments/${p.tournament.id}`}
