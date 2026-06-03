@@ -10,20 +10,29 @@ interface AvatarUploadProps {
 export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadProps) {
   const [avatar, setAvatar] = useState<string | null>(currentAvatar);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(file: File) {
     if (!file.type.startsWith("image/")) return;
     setUploading(true);
+    setError(null);
 
-    const resized = await resizeImage(file, 200, 200);
     try {
+      const resized = await resizeImage(file, 200, 200);
       const res = await fetch("/api/profile/avatar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ avatarUrl: resized }),
       });
-      if (res.ok) setAvatar(resized);
+      const data = await res.json();
+      if (res.ok) {
+        setAvatar(resized);
+      } else {
+        setError(data.error ?? "Erro ao salvar foto.");
+      }
+    } catch {
+      setError("Erro de conexão.");
     } finally {
       setUploading(false);
     }
@@ -31,6 +40,7 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
 
   async function handleRemove() {
     setUploading(true);
+    setError(null);
     try {
       const res = await fetch("/api/profile/avatar", {
         method: "POST",
@@ -44,32 +54,37 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
   }
 
   return (
-    <div className="relative group">
-      <div
-        className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#f0a500]/50 cursor-pointer"
-        onClick={() => inputRef.current?.click()}
-      >
-        {avatar ? (
-          <img src={avatar} alt={userName} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center text-4xl">
-            🌀
-          </div>
-        )}
-        <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <span className="text-white text-xs font-semibold">
-            {uploading ? "..." : "Alterar"}
-          </span>
-        </div>
-      </div>
-      {avatar && !uploading && (
-        <button
-          onClick={handleRemove}
-          className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 rounded-full text-white text-xs flex items-center justify-center hover:bg-red-500"
-          title="Remover foto"
+    <div className="flex flex-col items-start gap-2">
+      <div className="relative group">
+        <div
+          className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#f0a500]/50 cursor-pointer"
+          onClick={() => !uploading && inputRef.current?.click()}
         >
-          ×
-        </button>
+          {avatar ? (
+            <img src={avatar} alt={userName} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center text-4xl">
+              🌀
+            </div>
+          )}
+          <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-white text-xs font-semibold">
+              {uploading ? "Salvando..." : "Alterar"}
+            </span>
+          </div>
+        </div>
+        {avatar && !uploading && (
+          <button
+            onClick={handleRemove}
+            className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 rounded-full text-white text-xs flex items-center justify-center hover:bg-red-500"
+            title="Remover foto"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {error && (
+        <p className="text-xs text-red-400 max-w-[200px]">{error}</p>
       )}
       <input
         ref={inputRef}

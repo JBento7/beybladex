@@ -10,12 +10,10 @@ export async function POST(req: NextRequest) {
 
   const { avatarUrl } = await req.json();
 
-  // Allow clearing avatar (null) or setting a base64 data URL
   if (avatarUrl !== null && typeof avatarUrl !== "string") {
     return NextResponse.json({ error: "avatarUrl inválido" }, { status: 400 });
   }
 
-  // Limit size: base64 of a 200x200 JPEG is ~20KB, allow up to 500KB
   if (avatarUrl && avatarUrl.length > 600_000) {
     return NextResponse.json({ error: "Imagem muito grande. Máximo 400KB." }, { status: 400 });
   }
@@ -24,10 +22,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Formato de imagem inválido." }, { status: 400 });
   }
 
-  await prisma.user.update({
-    where: { id: session.user.id },
-    data: { avatarUrl: avatarUrl ?? null },
-  });
+  try {
+    await prisma.$executeRawUnsafe(
+      `UPDATE "User" SET "avatarUrl" = $1 WHERE id = $2`,
+      avatarUrl ?? null,
+      session.user.id
+    );
+  } catch (e: unknown) {
+    const msg = String(e);
+    if (msg.includes("avatarUrl") || msg.includes("column")) {
+      return NextResponse.json({ error: "Execute /api/migrate primeiro para habilitar fotos de perfil." }, { status: 503 });
+    }
+    throw e;
+  }
 
   return NextResponse.json({ ok: true });
 }
