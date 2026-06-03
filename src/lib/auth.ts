@@ -16,10 +16,18 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
+        // Use raw query to avoid issues if schema columns don't exist yet in DB
+        const users = await prisma.$queryRaw<
+          { id: string; name: string; email: string; password: string; role: string }[]
+        >`
+          SELECT id, name, email, password, role
+          FROM "User"
+          WHERE email = ${credentials.email}
+            AND (deleted IS NULL OR deleted = false)
+          LIMIT 1
+        `;
 
+        const user = users[0];
         if (!user) return null;
 
         const passwordValid = await bcrypt.compare(
