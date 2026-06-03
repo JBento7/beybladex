@@ -42,7 +42,13 @@ type MatchWithRelations = {
   points: { id: string; userId: string; finishType: string; points: number }[];
 };
 
-function getRoundName(round: number, totalRounds: number): string {
+function getRoundName(round: number, totalRounds: number, format?: string): string {
+  // Pontos Corridos (ROUND_ROBIN): round 1 = fase de grupos, round 2 = semifinais, round 3 = final
+  if (format === "ROUND_ROBIN") {
+    if (round === 1) return "Fase de Pontos Corridos";
+    if (round === 2) return "Semifinais";
+    if (round === 3) return "Final";
+  }
   const roundsFromEnd = totalRounds - round;
   if (roundsFromEnd === 0) return "Final";
   if (roundsFromEnd === 1) return "Semifinal";
@@ -294,8 +300,8 @@ export default async function TournamentDetailPage({
                   className="bg-gray-900 border border-gray-800 rounded-xl p-6"
                 >
                   <h2 className="text-lg font-bold text-white mb-4">
-                    {tournament.format === "SINGLE_ELIMINATION"
-                      ? getRoundName(round, sortedRounds.length)
+                    {(tournament.format === "SINGLE_ELIMINATION" || tournament.format === "ROUND_ROBIN")
+                      ? getRoundName(round, sortedRounds.length, tournament.format)
                       : `Rodada ${round}`}
                   </h2>
                   <div className="space-y-3">

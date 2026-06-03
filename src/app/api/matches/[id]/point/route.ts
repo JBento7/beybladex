@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
-import { recalculateStandings, advanceSingleElimination, generateSwissRound } from "@/lib/tournament-engine";
+import { recalculateStandings, advanceSingleElimination, generateSwissRound, advanceRoundRobinPlayoffs } from "@/lib/tournament-engine";
 import type { FinishType } from "@prisma/client";
 
 const POINTS_TO_WIN_SET = 4;
@@ -118,7 +118,9 @@ export async function POST(
         await recalculateStandings(match.tournamentId, match.player2Id);
 
         // Format-specific post-match
-        if (match.tournament.format === "SINGLE_ELIMINATION") {
+        if (match.tournament.format === "ROUND_ROBIN") {
+          await advanceRoundRobinPlayoffs(match.tournamentId, match.round);
+        } else if (match.tournament.format === "SINGLE_ELIMINATION") {
           await advanceSingleElimination(match.tournamentId, match.round);
         } else if (match.tournament.format === "SWISS") {
           const roundMatches = await prisma.match.findMany({

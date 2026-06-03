@@ -9,7 +9,7 @@ const FORMATS = [
     value: "ROUND_ROBIN",
     label: "Pontos Corridos",
     icon: "🔄",
-    desc: "Todos os jogadores se enfrentam uma vez.",
+    desc: "Todos se enfrentam. Top 4 → semifinais → final.",
   },
   {
     value: "GROUPS",

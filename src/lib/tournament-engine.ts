@@ -30,6 +30,102 @@ export async function generateRoundRobin(tournamentId: string) {
   await prisma.match.createMany({ data: matches });
 }
 
+// Called after each match finishes in a ROUND_ROBIN (Pontos Corridos) tournament.
+// When all round-1 matches are done: top 4 → semis (round 2).
+// When semis done: top 2 → final + 3rd place match (round 3).
+export async function advanceRoundRobinPlayoffs(
+  tournamentId: string,
+  completedRound: number
+) {
+  const roundMatches = await prisma.match.findMany({
+    where: { tournamentId, round: completedRound },
+  });
+
+  const allFinished = roundMatches.every((m) => m.status === "FINISHED");
+  if (!allFinished) return;
+
+  if (completedRound === 1) {
+    // Sort participants by wins desc, then totalPoints desc
+    const standings = await prisma.tournamentParticipant.findMany({
+      where: { tournamentId },
+      orderBy: [{ wins: "desc" }, { totalPoints: "desc" }],
+    });
+
+    if (standings.length < 4) {
+      // Fewer than 4 players — skip straight to final
+      await prisma.match.createMany({
+        data: [
+          {
+            tournamentId,
+            player1Id: standings[0].userId,
+            player2Id: standings[1].userId,
+            round: 3,
+            bracketPos: 1,
+          },
+        ],
+      });
+      return;
+    }
+
+    // Semis: 1st vs 4th, 2nd vs 3rd
+    await prisma.match.createMany({
+      data: [
+        {
+          tournamentId,
+          player1Id: standings[0].userId,
+          player2Id: standings[3].userId,
+          round: 2,
+          bracketPos: 1,
+        },
+        {
+          tournamentId,
+          player1Id: standings[1].userId,
+          player2Id: standings[2].userId,
+          round: 2,
+          bracketPos: 2,
+        },
+      ],
+    });
+  } else if (completedRound === 2) {
+    // Build final and 3rd-place match from semi results
+    const semi1 = roundMatches.find((m) => m.bracketPos === 1)!;
+    const semi2 = roundMatches.find((m) => m.bracketPos === 2)!;
+
+    const finalWinner1 = semi1.winnerId!;
+    const finalWinner2 = semi2.winnerId!;
+    const thirdPlace1 =
+      semi1.player1Id === finalWinner1 ? semi1.player2Id : semi1.player1Id;
+    const thirdPlace2 =
+      semi2.player1Id === finalWinner2 ? semi2.player2Id : semi2.player1Id;
+
+    await prisma.match.createMany({
+      data: [
+        // Final
+        {
+          tournamentId,
+          player1Id: finalWinner1,
+          player2Id: finalWinner2,
+          round: 3,
+          bracketPos: 1,
+        },
+        // 3rd place
+        {
+          tournamentId,
+          player1Id: thirdPlace1,
+          player2Id: thirdPlace2,
+          round: 3,
+          bracketPos: 2,
+        },
+      ],
+    });
+  } else if (completedRound === 3) {
+    await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { status: "FINISHED" },
+    });
+  }
+}
+
 export async function generateGroups(tournamentId: string) {
   const participants = shuffle(
     await prisma.tournamentParticipant.findMany({ where: { tournamentId } })
