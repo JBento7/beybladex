@@ -99,6 +99,10 @@ export async function GET() {
       name: "User.beyblade",
       sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "beyblade" TEXT`,
     },
+    {
+      name: "MatchPoint.beybladeUsed",
+      sql: `ALTER TABLE "MatchPoint" ADD COLUMN IF NOT EXISTS "beybladeUsed" TEXT`,
+    },
   ];
 
   for (const migration of migrations) {
