@@ -31,14 +31,12 @@ export default async function ProfilePage() {
 
   const userId = session.user.id;
 
-  const userRows = await prisma.$queryRaw<
-    { id: string; name: string; email: string; role: string; avatarUrl: string | null; createdAt: Date }[]
-  >`SELECT id, name, email, role, "createdAt",
-      CASE WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name='User' AND column_name='avatarUrl'
-      ) THEN "avatarUrl" ELSE NULL END AS "avatarUrl"
-    FROM "User" WHERE id = ${userId} LIMIT 1`;
+  let userRows: { id: string; name: string; email: string; role: string; avatarUrl: string | null; createdAt: Date }[] = [];
+  try {
+    userRows = await prisma.$queryRaw`SELECT id, name, email, role, "createdAt", "avatarUrl" FROM "User" WHERE id = ${userId} LIMIT 1`;
+  } catch {
+    userRows = await prisma.$queryRaw`SELECT id, name, email, role, "createdAt", NULL AS "avatarUrl" FROM "User" WHERE id = ${userId} LIMIT 1`;
+  }
 
   const [participations, allPoints, beyblades] = await Promise.all([
     prisma.tournamentParticipant.findMany({
