@@ -10,6 +10,7 @@ const POINTS_TO_WIN_SET = 4;
 const SETS_TO_WIN = 2;
 
 type Player = { id: string; name: string };
+type BeybladeInfo = { id: string; name: string; blade: string | null; ratchet: string | null; bit: string | null };
 
 type SetData = {
   id: string;
@@ -29,21 +30,34 @@ type MatchState = {
   winnerId: string | null;
 };
 
+function comboParts(b: BeybladeInfo) {
+  return [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
+}
+
 export default function ScoreModal({
   matchId,
   player1,
   player2,
   tournamentId,
+  player1Beyblades = [],
+  player2Beyblades = [],
 }: {
   matchId: string;
   player1: Player;
   player2: Player;
   tournamentId: string;
+  player1Beyblades?: BeybladeInfo[];
+  player2Beyblades?: BeybladeInfo[];
 }) {
   const [open, setOpen] = useState(false);
   const [finishType, setFinishType] = useState<FinishType>("SPIN_FINISH");
   const [loading, setLoading] = useState(false);
   const [state, setState] = useState<MatchState | null>(null);
+
+  // Track selected beyblade for each player (auto-select if only 1)
+  const [p1BeybladeId, setP1BeybladeId] = useState<string>(player1Beyblades[0]?.id ?? "");
+  const [p2BeybladeId, setP2BeybladeId] = useState<string>(player2Beyblades[0]?.id ?? "");
+
   const router = useRouter();
 
   const fetchState = useCallback(async () => {
@@ -58,21 +72,26 @@ export default function ScoreModal({
     if (open) fetchState();
   }, [open, fetchState]);
 
+  // Auto-select first beyblade when beyblades load
+  useEffect(() => {
+    if (!p1BeybladeId && player1Beyblades.length > 0) setP1BeybladeId(player1Beyblades[0].id);
+    if (!p2BeybladeId && player2Beyblades.length > 0) setP2BeybladeId(player2Beyblades[0].id);
+  }, [player1Beyblades, player2Beyblades, p1BeybladeId, p2BeybladeId]);
+
   async function addPoint(scorerId: string) {
     if (loading || state?.matchFinished) return;
+    const beybladeId = scorerId === player1.id ? p1BeybladeId : p2BeybladeId;
     setLoading(true);
     const res = await fetch(`/api/matches/${matchId}/point`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scorerId, finishType }),
+      body: JSON.stringify({ scorerId, finishType, beybladeId: beybladeId || undefined }),
     });
     setLoading(false);
     if (res.ok) {
       await fetchState();
       const data = await res.json();
-      if (data.matchFinished) {
-        router.refresh();
-      }
+      if (data.matchFinished) router.refresh();
     } else {
       const data = await res.json();
       alert(data.error || "Erro ao registrar ponto");
@@ -89,6 +108,47 @@ export default function ScoreModal({
   const cur = state?.currentSet;
   const p1Pts = cur?.player1Points ?? 0;
   const p2Pts = cur?.player2Points ?? 0;
+
+  function BeybladeSelector({
+    beyblades,
+    selected,
+    onSelect,
+    color,
+  }: {
+    beyblades: BeybladeInfo[];
+    selected: string;
+    onSelect: (id: string) => void;
+    color: string;
+  }) {
+    if (beyblades.length === 0) return null;
+    if (beyblades.length === 1) {
+      const b = beyblades[0];
+      return (
+        <div className="text-xs text-gray-500 mt-1">
+          🌀 <span className="font-medium text-gray-400">{b.name}</span>
+          {comboParts(b) && <span className="text-gray-600"> · {comboParts(b)}</span>}
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {beyblades.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => onSelect(b.id)}
+            className={`text-xs px-2 py-1 rounded-lg border transition-all ${
+              selected === b.id
+                ? `border-${color} bg-${color}/10 font-bold text-white`
+                : "border-[#444] text-gray-500 hover:border-gray-500"
+            }`}
+          >
+            {b.name}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <>
@@ -112,14 +172,11 @@ export default function ScoreModal({
             <div className="bg-[#252525] rounded-xl p-4 mb-5">
               <div className="text-xs text-gray-500 text-center mb-3 font-medium">SETS (melhor de 3 — primeiro a {SETS_TO_WIN} sets vence)</div>
               <div className="flex items-center justify-between gap-3">
-                {/* Player 1 */}
                 <div className="flex-1 text-center">
                   <div className="text-sm font-bold text-white mb-1 truncate">{player1.name}</div>
                   <div className={`text-4xl font-black ${p1Sets >= SETS_TO_WIN ? "text-[#f0a500]" : "text-white"}`}>{p1Sets}</div>
                   <div className="text-xs text-gray-500 mt-1">sets</div>
                 </div>
-
-                {/* Sets visual */}
                 <div className="flex flex-col items-center gap-1">
                   {Array.from({ length: 3 }).map((_, i) => {
                     const s = state?.sets[i];
@@ -135,8 +192,6 @@ export default function ScoreModal({
                     );
                   })}
                 </div>
-
-                {/* Player 2 */}
                 <div className="flex-1 text-center">
                   <div className="text-sm font-bold text-white mb-1 truncate">{player2.name}</div>
                   <div className={`text-4xl font-black ${p2Sets >= SETS_TO_WIN ? "text-[#f0a500]" : "text-white"}`}>{p2Sets}</div>
@@ -158,7 +213,6 @@ export default function ScoreModal({
               </div>
             ) : (
               <>
-                {/* Current set score */}
                 {cur && (
                   <div className="bg-[#252525] rounded-xl p-4 mb-5">
                     <div className="text-xs text-gray-500 text-center mb-3 font-medium">
@@ -175,7 +229,6 @@ export default function ScoreModal({
                         <div className={`text-5xl font-black ${p2Pts >= POINTS_TO_WIN_SET ? "text-[#f0a500]" : "text-white"}`}>{p2Pts}</div>
                       </div>
                     </div>
-                    {/* Point bars */}
                     <div className="mt-3 space-y-1.5">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500 w-16 truncate">{player1.name}</span>
@@ -195,7 +248,7 @@ export default function ScoreModal({
                   </div>
                 )}
 
-                {/* Finish type selector */}
+                {/* Finish type */}
                 <div className="mb-4">
                   <div className="text-xs text-gray-500 font-medium mb-2">TIPO DE FINISH</div>
                   <div className="grid grid-cols-2 gap-2">
@@ -221,25 +274,86 @@ export default function ScoreModal({
                   </div>
                 </div>
 
-                {/* Point buttons */}
+                {/* Point buttons with beyblade selector */}
                 <div className="text-xs text-gray-500 font-medium mb-2">QUEM MARCOU O PONTO?</div>
                 <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => addPoint(player1.id)}
-                    disabled={loading}
-                    className="p-4 rounded-xl bg-[#f0a500]/10 border-2 border-[#f0a500] hover:bg-[#f0a500]/20 disabled:opacity-50 transition-all"
-                  >
-                    <div className="text-sm font-black text-[#f0a500] truncate">{player1.name}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">+ ponto</div>
-                  </button>
-                  <button
-                    onClick={() => addPoint(player2.id)}
-                    disabled={loading}
-                    className="p-4 rounded-xl bg-[#c8102e]/10 border-2 border-[#c8102e] hover:bg-[#c8102e]/20 disabled:opacity-50 transition-all"
-                  >
-                    <div className="text-sm font-black text-[#c8102e] truncate">{player2.name}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">+ ponto</div>
-                  </button>
+                  <div className="flex flex-col gap-1">
+                    <button
+                      onClick={() => addPoint(player1.id)}
+                      disabled={loading}
+                      className="p-4 rounded-xl bg-[#f0a500]/10 border-2 border-[#f0a500] hover:bg-[#f0a500]/20 disabled:opacity-50 transition-all"
+                    >
+                      <div className="text-sm font-black text-[#f0a500] truncate">{player1.name}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">+ ponto</div>
+                    </button>
+                    {player1Beyblades.length > 1 && (
+                      <div className="px-1">
+                        <div className="text-xs text-gray-600 mb-1">Beyblade usada:</div>
+                        <div className="flex flex-col gap-1">
+                          {player1Beyblades.map((b) => (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => setP1BeybladeId(b.id)}
+                              className={`text-xs px-2 py-1 rounded-lg border text-left transition-all ${
+                                p1BeybladeId === b.id
+                                  ? "border-[#f0a500] bg-[#f0a500]/10 text-[#f0a500] font-bold"
+                                  : "border-[#333] text-gray-500 hover:border-gray-500"
+                              }`}
+                            >
+                              {b.name}
+                              {comboParts(b) && <span className="text-gray-600 font-normal"> · {comboParts(b)}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {player1Beyblades.length === 1 && (
+                      <div className="px-1 text-xs text-gray-600">
+                        🌀 {player1Beyblades[0].name}
+                        {comboParts(player1Beyblades[0]) && ` · ${comboParts(player1Beyblades[0])}`}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <button
+                      onClick={() => addPoint(player2.id)}
+                      disabled={loading}
+                      className="p-4 rounded-xl bg-[#c8102e]/10 border-2 border-[#c8102e] hover:bg-[#c8102e]/20 disabled:opacity-50 transition-all"
+                    >
+                      <div className="text-sm font-black text-[#c8102e] truncate">{player2.name}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">+ ponto</div>
+                    </button>
+                    {player2Beyblades.length > 1 && (
+                      <div className="px-1">
+                        <div className="text-xs text-gray-600 mb-1">Beyblade usada:</div>
+                        <div className="flex flex-col gap-1">
+                          {player2Beyblades.map((b) => (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => setP2BeybladeId(b.id)}
+                              className={`text-xs px-2 py-1 rounded-lg border text-left transition-all ${
+                                p2BeybladeId === b.id
+                                  ? "border-[#c8102e] bg-[#c8102e]/10 text-[#c8102e] font-bold"
+                                  : "border-[#333] text-gray-500 hover:border-gray-500"
+                              }`}
+                            >
+                              {b.name}
+                              {comboParts(b) && <span className="text-gray-600 font-normal"> · {comboParts(b)}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {player2Beyblades.length === 1 && (
+                      <div className="px-1 text-xs text-gray-600">
+                        🌀 {player2Beyblades[0].name}
+                        {comboParts(player2Beyblades[0]) && ` · ${comboParts(player2Beyblades[0])}`}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {loading && (

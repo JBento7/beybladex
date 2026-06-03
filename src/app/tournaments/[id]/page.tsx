@@ -56,14 +56,19 @@ function getRoundName(round: number, totalRounds: number, format?: string): stri
   return `Rodada ${round}`;
 }
 
+type BeybladeInfo = { id: string; name: string; blade: string | null; ratchet: string | null; bit: string | null };
+type ParticipantBeyblades = { userId: string; beyblades: BeybladeInfo[] };
+
 function MatchCard({
   match,
   isOrganizer,
   tournamentId,
+  participantBeyblades,
 }: {
   match: MatchWithRelations;
   isOrganizer: boolean;
   tournamentId: string;
+  participantBeyblades: ParticipantBeyblades[];
 }) {
   const isFinished = match.status === "FINISHED";
   const p1Points = match.points
@@ -142,6 +147,8 @@ function MatchCard({
             player1={match.player1}
             player2={match.player2}
             tournamentId={tournamentId}
+            player1Beyblades={participantBeyblades.find(p => p.userId === match.player1.id)?.beyblades ?? []}
+            player2Beyblades={participantBeyblades.find(p => p.userId === match.player2.id)?.beyblades ?? []}
           />
         )}
       </div>
@@ -183,6 +190,26 @@ export default async function TournamentDetailPage({
   });
 
   if (!tournament) notFound();
+
+  // Collect all beyblade IDs registered by participants
+  const allBeybladeIds = tournament.participants.flatMap((p) =>
+    [p.beyblade1, p.beyblade2, p.beyblade3].filter(Boolean) as string[]
+  );
+  const beybladeDetails = allBeybladeIds.length > 0
+    ? await prisma.beyblade.findMany({
+        where: { id: { in: allBeybladeIds } },
+        select: { id: true, name: true, blade: true, ratchet: true, bit: true },
+      })
+    : [];
+  const beybladeMap = new Map(beybladeDetails.map((b) => [b.id, b]));
+
+  const participantBeyblades: ParticipantBeyblades[] = tournament.participants.map((p) => ({
+    userId: p.userId,
+    beyblades: [p.beyblade1, p.beyblade2, p.beyblade3]
+      .filter(Boolean)
+      .map((id) => beybladeMap.get(id!))
+      .filter(Boolean) as BeybladeInfo[],
+  }));
 
   const isOrganizerOfThis = session?.user.id === tournament.organizerId;
   const isParticipant = tournament.participants.some(
@@ -311,6 +338,7 @@ export default async function TournamentDetailPage({
                         match={match}
                         isOrganizer={isOrganizerOfThis}
                         tournamentId={tournament.id}
+                        participantBeyblades={participantBeyblades}
                       />
                     ))}
                   </div>

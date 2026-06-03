@@ -357,3 +357,47 @@ export async function recalculateStandings(
     },
   });
 }
+
+// Update Beyblade wins/losses when a match finishes.
+// For each player: the beyblade that scored the most points in this match gets the win/loss.
+export async function updateBeybladeStats(
+  matchId: string,
+  winnerId: string,
+  loserId: string
+) {
+  const points = await prisma.matchPoint.findMany({
+    where: { matchId, beybladeId: { not: null } },
+    select: { userId: true, beybladeId: true },
+  });
+
+  // Find most-used beyblade per player
+  function topBeyblade(userId: string): string | null {
+    const counts: Record<string, number> = {};
+    for (const p of points) {
+      if (p.userId === userId && p.beybladeId) {
+        counts[p.beybladeId] = (counts[p.beybladeId] || 0) + 1;
+      }
+    }
+    const entries = Object.entries(counts);
+    if (entries.length === 0) return null;
+    return entries.sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  const winnerBeyblade = topBeyblade(winnerId);
+  const loserBeyblade = topBeyblade(loserId);
+
+  await Promise.all([
+    winnerBeyblade
+      ? prisma.beyblade.update({
+          where: { id: winnerBeyblade },
+          data: { wins: { increment: 1 } },
+        })
+      : Promise.resolve(),
+    loserBeyblade
+      ? prisma.beyblade.update({
+          where: { id: loserBeyblade },
+          data: { losses: { increment: 1 } },
+        })
+      : Promise.resolve(),
+  ]);
+}

@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
-import { recalculateStandings, advanceSingleElimination, generateSwissRound, advanceRoundRobinPlayoffs } from "@/lib/tournament-engine";
+import { recalculateStandings, advanceSingleElimination, generateSwissRound, advanceRoundRobinPlayoffs, updateBeybladeStats } from "@/lib/tournament-engine";
 import type { FinishType } from "@prisma/client";
 
 const POINTS_TO_WIN_SET = 4;
@@ -18,7 +18,7 @@ export async function POST(
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-    const { scorerId, finishType } = await req.json();
+    const { scorerId, finishType, beybladeId } = await req.json();
     if (!scorerId || !finishType) {
       return NextResponse.json({ error: "scorerId e finishType são obrigatórios" }, { status: 400 });
     }
@@ -74,6 +74,7 @@ export async function POST(
         finishType: finishType as FinishType,
         points,
         setId: currentSet.id,
+        beybladeId: beybladeId || null,
       },
     });
 
@@ -116,6 +117,10 @@ export async function POST(
 
         await recalculateStandings(match.tournamentId, match.player1Id);
         await recalculateStandings(match.tournamentId, match.player2Id);
+
+        // Update beyblade win/loss stats
+        const matchLoserId = matchWinnerId === match.player1Id ? match.player2Id : match.player1Id;
+        await updateBeybladeStats(params.id, matchWinnerId, matchLoserId);
 
         // Format-specific post-match
         if (match.tournament.format === "ROUND_ROBIN") {
