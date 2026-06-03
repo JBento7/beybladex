@@ -95,6 +95,10 @@ export async function GET() {
       name: "TournamentParticipant.placement",
       sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "placement" INTEGER`,
     },
+    {
+      name: "User.beyblade",
+      sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "beyblade" TEXT`,
+    },
   ];
 
   for (const migration of migrations) {
