@@ -190,7 +190,6 @@ export default async function TournamentDetailPage({
   );
   const canJoin =
     session &&
-    session.user.role === "PARTICIPANT" &&
     tournament.status === "REGISTRATION" &&
     !isParticipant &&
     (!tournament.maxParticipants ||
