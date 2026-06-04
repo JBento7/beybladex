@@ -15,7 +15,7 @@ export default function Navbar() {
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
   const linkClass = (href: string) =>
-    `transition-colors font-medium ${
+    `transition-colors font-medium text-base ${
       isActive(href) ? "text-[#f0a500]" : "text-gray-300 hover:text-[#f0a500]"
     }`;
   const mobileLinkClass = (href: string) =>
@@ -37,10 +37,10 @@ export default function Navbar() {
   return (
     <nav className="bg-[#1a1a1a] border-b border-[#2a2a2a] sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
+        <div className="flex items-center justify-between" style={{ height: "100px" }}>
           {/* Logo */}
           <Link href="/">
-            <img src="/lblnovo.png" alt="Liga Beyblade Londrina" className="h-20 w-auto" />
+            <img src="/lblnovo.png" alt="Liga Beyblade Londrina" style={{ height: "100px" }} className="w-auto" />
           </Link>
 
           {/* Desktop nav */}
@@ -79,19 +79,19 @@ export default function Navbar() {
             {session ? (
               <div className="flex items-center gap-3">
                 <Link href="/profile" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                  <div className="w-8 h-8 rounded-full overflow-hidden border border-[#f0a500]/50 flex-shrink-0">
+                  <div className="w-11 h-11 rounded-full overflow-hidden border border-[#f0a500]/50 flex-shrink-0">
                     {avatarUrl ? (
                       <img src={avatarUrl} alt={session.user.name ?? ""} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center">
-                        <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
+                        <img src="/bey-removebg-preview.png" alt="" className="w-6 h-6 object-contain" />
                       </div>
                     )}
                   </div>
-                  <span className="text-sm text-gray-400">
+                  <span className="text-base text-gray-400">
                     {session.user.name}
                     {session.user.role === "ORGANIZER" && (
-                      <span className="ml-1 text-xs bg-[#f0a500] text-black px-1.5 py-0.5 rounded font-semibold">
+                      <span className="ml-1 text-sm bg-[#f0a500] text-black px-1.5 py-0.5 rounded font-semibold">
                         ADMIN
                       </span>
                     )}
@@ -99,7 +99,7 @@ export default function Navbar() {
                 </Link>
                 <button
                   onClick={() => signOut({ callbackUrl: "/" })}
-                  className="text-sm bg-gray-700 hover:bg-gray-600 px-4 py-1.5 rounded-lg text-gray-200 transition-colors"
+                  className="text-base bg-gray-700 hover:bg-gray-600 px-5 py-2 rounded-lg text-gray-200 transition-colors"
                 >
                   Sair
                 </button>
@@ -108,13 +108,13 @@ export default function Navbar() {
               <>
                 <Link
                   href="/login"
-                  className="text-sm text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
+                  className="text-base text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
                 >
                   Entrar
                 </Link>
                 <Link
                   href="/register"
-                  className="text-sm bg-[#c8102e] hover:bg-[#a00d24] text-white px-4 py-1.5 rounded-lg font-semibold transition-colors"
+                  className="text-base bg-[#c8102e] hover:bg-[#a00d24] text-white px-5 py-2 rounded-lg font-semibold transition-colors"
                 >
                   Cadastrar
                 </Link>
