@@ -9,6 +9,7 @@ import type { FinishType } from "@prisma/client";
 import BeybladeManager from "./BeybladeManager";
 import AvatarUpload from "./AvatarUpload";
 import ProfileEditor from "./ProfileEditor";
+import { getComboStats } from "@/lib/beyblade-stats";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export default async function ProfilePage() {
     userRows = await prisma.$queryRaw`SELECT id, name, email, role, "createdAt", NULL AS "avatarUrl" FROM "User" WHERE id = ${userId} LIMIT 1`;
   }
 
-  const [participations, allPoints, beyblades] = await Promise.all([
+  const [participations, allPoints, comboStats] = await Promise.all([
     prisma.tournamentParticipant.findMany({
       where: { userId },
       include: { tournament: true },
@@ -49,15 +50,7 @@ export default async function ProfilePage() {
       where: { userId },
       select: { finishType: true, points: true, beybladeId: true },
     }),
-    prisma.beyblade.findMany({
-      where: { userId },
-      include: {
-        matchPoints: {
-          select: { finishType: true, points: true, matchId: true },
-        },
-      },
-      orderBy: { wins: "desc" },
-    }),
+    getComboStats(userId),
   ]);
 
   const user = userRows[0] ?? null;
@@ -76,18 +69,6 @@ export default async function ProfilePage() {
   const totalLosses = participations.reduce((sum, p) => sum + p.losses, 0);
   const totalMatches = totalWins + totalLosses;
   const winRate = totalMatches > 0 ? Math.round((totalWins / totalMatches) * 100) : 0;
-
-  // Per-combo stats
-  const comboStats = beyblades.map((b) => {
-    const total = b.wins + b.losses;
-    const wr = total > 0 ? Math.round((b.wins / total) * 100) : 0;
-    const byFinish: Record<string, number> = {};
-    for (const mp of b.matchPoints) {
-      byFinish[mp.finishType] = (byFinish[mp.finishType] || 0) + 1;
-    }
-    const parts = [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
-    return { ...b, total, wr, byFinish, parts };
-  });
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
@@ -223,13 +204,27 @@ export default async function ProfilePage() {
         {/* Per-Combo Stats */}
         {comboStats.length > 0 && (
           <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
-            <h2 className="text-lg font-bold text-white mb-5">Estatísticas por Combo</h2>
+            <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
+              <h2 className="text-lg font-bold text-white">Estatísticas por Combo</h2>
+              <Link href="/profile/stats" className="text-xs font-semibold text-[#f0a500] hover:underline">
+                Ver gráficos detalhados →
+              </Link>
+            </div>
             <div className="grid sm:grid-cols-2 gap-4">
               {comboStats.map((b) => (
                 <div key={b.id} className="bg-[#252525] border border-[#333] rounded-xl p-4">
-                  <div className="mb-3">
-                    <div className="font-bold text-white">{b.name}</div>
-                    {b.parts && <div className="text-xs text-gray-500 mt-0.5">{b.parts}</div>}
+                  <div className="flex items-start justify-between mb-3 gap-2">
+                    <div className="min-w-0">
+                      <div className="font-bold text-white truncate">{b.name}</div>
+                      {b.parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{b.parts}</div>}
+                    </div>
+                    <div className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                      b.pointDiff > 0 ? "bg-green-500/20 text-green-400"
+                      : b.pointDiff < 0 ? "bg-red-500/20 text-red-400"
+                      : "bg-gray-700 text-gray-400"
+                    }`}>
+                      {b.pointDiff > 0 ? "+" : ""}{b.pointDiff}
+                    </div>
                   </div>
 
                   {/* Win/Loss/Rate */}
@@ -247,7 +242,7 @@ export default async function ProfilePage() {
                       <div className="text-xs text-gray-500">Derrotas</div>
                     </div>
                     <div>
-                      <div className="text-base font-black text-[#f0a500]">{b.wr}%</div>
+                      <div className="text-base font-black text-[#f0a500]">{b.winRate}%</div>
                       <div className="text-xs text-gray-500">Taxa V.</div>
                     </div>
                   </div>
@@ -256,25 +251,50 @@ export default async function ProfilePage() {
                   <div className="h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden mb-3">
                     <div
                       className="h-full bg-[#f0a500] rounded-full"
-                      style={{ width: `${b.wr}%` }}
+                      style={{ width: `${b.winRate}%` }}
                     />
                   </div>
 
-                  {/* Finish type breakdown */}
-                  {Object.keys(b.byFinish).length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {finishOrder.map((type) => {
-                        const count = b.byFinish[type];
-                        if (!count) return null;
-                        return (
-                          <span
-                            key={type}
-                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${finishColors[type]}`}
-                          >
-                            {FINISH_TYPE_LABELS[type].replace(" Finish", "")} ×{count}
-                          </span>
-                        );
-                      })}
+                  {/* Points scored vs suffered */}
+                  <div className="flex items-center gap-3 text-xs mb-3">
+                    <span className="text-green-400 font-semibold">⚔️ {b.pointsScored} feitos</span>
+                    <span className="text-gray-600">·</span>
+                    <span className="text-red-400 font-semibold">🛡️ {b.pointsSuffered} sofridos</span>
+                  </div>
+
+                  {/* Finishes scored */}
+                  {Object.keys(b.finishesScored).length > 0 && (
+                    <div className="mb-2">
+                      <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Aplicados</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {finishOrder.map((type) => {
+                          const count = b.finishesScored[type];
+                          if (!count) return null;
+                          return (
+                            <span key={type} className={`text-xs px-2 py-0.5 rounded-full font-medium ${finishColors[type]}`}>
+                              {FINISH_TYPE_LABELS[type].replace(" Finish", "")} ×{count}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Finishes suffered */}
+                  {Object.keys(b.finishesSuffered).length > 0 && (
+                    <div>
+                      <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Sofridos</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {finishOrder.map((type) => {
+                          const count = b.finishesSuffered[type];
+                          if (!count) return null;
+                          return (
+                            <span key={type} className={`text-xs px-2 py-0.5 rounded-full font-medium ${finishColors[type]} opacity-70`}>
+                              {FINISH_TYPE_LABELS[type].replace(" Finish", "")} ×{count}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>
