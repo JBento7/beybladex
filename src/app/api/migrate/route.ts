@@ -162,6 +162,15 @@ export async function GET() {
       name: "User.isGuest",
       sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isGuest" BOOLEAN NOT NULL DEFAULT false`,
     },
+    {
+      // Clean up any orphan guest participants created while userId was nullable
+      name: "Delete null-userId participants",
+      sql: `DELETE FROM "TournamentParticipant" WHERE "userId" IS NULL`,
+    },
+    {
+      name: "Restore TournamentParticipant.userId NOT NULL",
+      sql: `ALTER TABLE "TournamentParticipant" ALTER COLUMN "userId" SET NOT NULL`,
+    },
   ];
 
   for (const migration of migrations) {
