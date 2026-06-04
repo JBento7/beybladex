@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import Navbar from "@/components/Navbar";
 
 interface QTMatch {
   id: string;
@@ -10,6 +11,7 @@ interface QTMatch {
   p2: string;
   winner: string | null;
   bracketPos: number;
+  label?: string; // "Semifinal 1", "Final", etc.
 }
 
 interface QTState {
@@ -93,6 +95,11 @@ function getRRStandings(participants: string[], matches: QTMatch[]) {
     .map((p) => ({ name: p, ...stats[p] }));
 }
 
+// Returns true if playoffs are applicable (>=4 players in RR)
+function hasPlayoffs(participants: string[]) {
+  return participants.length >= 4;
+}
+
 export default function QuickTournamentPage() {
   const [state, setState] = useState<QTState>({
     phase: "setup", title: "", format: "ROUND_ROBIN", participants: [], matches: [],
@@ -143,9 +150,43 @@ export default function QuickTournamentPage() {
         return;
       }
     } else {
-      if (matches.every((m) => m.winner !== null)) {
-        save({ ...state, matches, phase: "finished" });
-        return;
+      // Round-robin with optional playoffs
+      const rrMatches = matches.filter((m) => m.round === 1);
+      const rrDone = rrMatches.every((m) => m.winner !== null);
+
+      if (rrDone) {
+        const semis = matches.filter((m) => m.round === 2);
+        const final = matches.filter((m) => m.round === 3);
+
+        if (semis.length === 0) {
+          if (hasPlayoffs(state.participants)) {
+            // Generate semifinals: #1 vs #4, #2 vs #3
+            const standings = getRRStandings(state.participants, rrMatches);
+            const newSemis: QTMatch[] = [
+              { id: genId(), round: 2, p1: standings[0].name, p2: standings[3].name, winner: null, bracketPos: 0, label: "Semifinal 1" },
+              { id: genId(), round: 2, p1: standings[1].name, p2: standings[2].name, winner: null, bracketPos: 1, label: "Semifinal 2" },
+            ];
+            save({ ...state, matches: [...matches, ...newSemis] });
+            return;
+          } else {
+            save({ ...state, matches, phase: "finished" });
+            return;
+          }
+        }
+
+        if (semis.length === 2 && semis.every((m) => m.winner !== null) && final.length === 0) {
+          // Generate final
+          const newFinal: QTMatch = {
+            id: genId(), round: 3, p1: semis[0].winner!, p2: semis[1].winner!, winner: null, bracketPos: 0, label: "Final",
+          };
+          save({ ...state, matches: [...matches, newFinal] });
+          return;
+        }
+
+        if (final.length === 1 && final[0].winner) {
+          save({ ...state, matches, phase: "finished" });
+          return;
+        }
       }
     }
     save({ ...state, matches });
@@ -158,31 +199,50 @@ export default function QuickTournamentPage() {
     setNameInput("");
   }
 
+  // Derived state
+  const rrMatches = state.matches.filter((m) => m.round === 1 && m.p2 !== "__BYE__");
+  const playoffMatches = state.matches.filter((m) => m.round > 1 && m.p2 !== "__BYE__");
   const maxRound = state.matches.length > 0 ? Math.max(...state.matches.map((m) => m.round)) : 1;
-  const currentRoundMatches = state.matches.filter((m) => m.round === maxRound && m.p2 !== "__BYE__");
-  const pastMatches = state.matches.filter((m) => m.round < maxRound && m.p2 !== "__BYE__");
+
   const rrStandings = state.format === "ROUND_ROBIN" && state.matches.length > 0
-    ? getRRStandings(state.participants, state.matches)
+    ? getRRStandings(state.participants, rrMatches)
     : [];
+
   const elimChampion = state.format === "SINGLE_ELIMINATION" && state.phase === "finished"
     ? state.matches.filter((m) => m.round === maxRound)[0]?.winner
     : null;
 
+  // RR champion: final winner if playoffs happened, else #1 in standings
+  const rrChampion = state.format === "ROUND_ROBIN" && state.phase === "finished"
+    ? (state.matches.find((m) => m.round === 3)?.winner ?? rrStandings[0]?.name)
+    : null;
+
+  // Pending matches to display (only unplayed)
+  const pendingElim = state.format === "SINGLE_ELIMINATION"
+    ? state.matches.filter((m) => m.round === maxRound && !m.winner && m.p2 !== "__BYE__")
+    : [];
+  const pendingRR = state.format === "ROUND_ROBIN"
+    ? state.matches.filter((m) => !m.winner && m.p2 !== "__BYE__")
+    : [];
+
+  // Separate pending RR by stage
+  const pendingRRGroup = pendingRR.filter((m) => m.round === 1);
+  const pendingRRPlayoff = pendingRR.filter((m) => m.round > 1);
+
+  // Completed matches
+  const doneElim = state.format === "SINGLE_ELIMINATION"
+    ? state.matches.filter((m) => m.winner && m.p2 !== "__BYE__")
+    : [];
+  const doneRR = state.format === "ROUND_ROBIN"
+    ? state.matches.filter((m) => m.winner && m.p2 !== "__BYE__")
+    : [];
+
+  // Top 4 highlight for standings
+  const top4Names = new Set(rrStandings.slice(0, 4).map((p) => p.name));
+
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
-      <nav className="border-b border-[#2a2a2a] bg-[#1a1a1a]/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link href="/">
-            <img src="/liga.png" alt="Liga Beyblade Londrina" className="h-8 w-auto" />
-          </Link>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500 hidden sm:block">Torneio Rápido · sem cadastro</span>
-            <Link href="/register" className="text-xs bg-[#c8102e] hover:bg-[#a00d24] text-white font-bold px-3 py-1.5 rounded-lg transition-colors">
-              Criar Conta
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       <main className="max-w-2xl mx-auto px-4 py-8">
 
@@ -210,7 +270,7 @@ export default function QuickTournamentPage() {
                 <label className="block text-sm font-medium text-gray-300 mb-2">Formato</label>
                 <div className="grid grid-cols-2 gap-3">
                   {([
-                    { value: "ROUND_ROBIN", label: "Pontos Corridos", desc: "Todos se enfrentam. Mais vitórias vence." },
+                    { value: "ROUND_ROBIN", label: "Pontos Corridos", desc: "Todos se enfrentam. Top 4 disputam playoffs." },
                     { value: "SINGLE_ELIMINATION", label: "Eliminação Simples", desc: "Perdeu, saiu. Chaveamento aleatório." },
                   ] as const).map((f) => (
                     <button
@@ -293,12 +353,13 @@ export default function QuickTournamentPage() {
               </button>
             </div>
 
+            {/* Champion banner */}
             {state.phase === "finished" && (
               <div className="bg-[#f0a500]/10 border border-[#f0a500]/40 rounded-xl p-5 text-center">
                 <img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto mb-2" />
                 <div className="text-lg font-black text-[#f0a500] mb-1">Torneio Encerrado!</div>
                 <div className="text-white font-bold">
-                  🏆 Campeão: {elimChampion ?? rrStandings[0]?.name}
+                  🏆 Campeão: {elimChampion ?? rrChampion}
                 </div>
                 <button onClick={() => setShowSummary(true)} className="mt-3 text-xs text-[#f0a500] underline">
                   Ver resumo completo
@@ -309,32 +370,91 @@ export default function QuickTournamentPage() {
             {/* RR Standings */}
             {state.format === "ROUND_ROBIN" && rrStandings.length > 0 && (
               <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
-                <h2 className="text-sm font-bold text-white mb-3">Classificação</h2>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-bold text-white">Classificação</h2>
+                  {hasPlayoffs(state.participants) && (
+                    <span className="text-[10px] text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/30 px-2 py-0.5 rounded-full">Top 4 → Playoffs</span>
+                  )}
+                </div>
                 <div className="space-y-1.5">
-                  {rrStandings.map((p, i) => (
-                    <div key={p.name} className={`flex items-center justify-between rounded-lg px-3 py-2 ${i === 0 ? "bg-[#f0a500]/10 border border-[#f0a500]/30" : "bg-[#252525]"}`}>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold w-5 text-center ${i === 0 ? "text-[#f0a500]" : "text-gray-500"}`}>#{i + 1}</span>
-                        <span className="text-sm text-white">{p.name}</span>
+                  {rrStandings.map((p, i) => {
+                    const isTop4 = hasPlayoffs(state.participants) && i < 4;
+                    return (
+                      <div key={p.name} className={`flex items-center justify-between rounded-lg px-3 py-2 ${
+                        i === 0 ? "bg-[#f0a500]/10 border border-[#f0a500]/30"
+                        : isTop4 ? "bg-[#252525] border border-[#333]"
+                        : "bg-[#252525] opacity-50"
+                      }`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold w-5 text-center ${i === 0 ? "text-[#f0a500]" : isTop4 ? "text-gray-400" : "text-gray-600"}`}>#{i + 1}</span>
+                          <span className={`text-sm ${isTop4 ? "text-white" : "text-gray-500"}`}>{p.name}</span>
+                          {isTop4 && hasPlayoffs(state.participants) && playoffMatches.length === 0 && state.phase === "playing" && (
+                            <span className="text-[10px] text-[#f0a500] hidden sm:inline">playoffs</span>
+                          )}
+                        </div>
+                        <div className="flex gap-3 text-xs">
+                          <span className="text-green-400">{p.wins}V</span>
+                          <span className="text-red-400">{p.losses}D</span>
+                        </div>
                       </div>
-                      <div className="flex gap-3 text-xs">
-                        <span className="text-green-400">{p.wins}V</span>
-                        <span className="text-red-400">{p.losses}D</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Pending matches */}
-            {state.phase === "playing" && currentRoundMatches.filter((m) => !m.winner).length > 0 && (
+            {/* Playoffs section */}
+            {state.format === "ROUND_ROBIN" && playoffMatches.length > 0 && (
+              <div className="bg-[#1a1a1a] border border-[#f0a500]/30 rounded-xl p-5">
+                <h2 className="text-sm font-bold text-[#f0a500] mb-3">⚔️ Playoffs</h2>
+
+                {/* Pending playoff matches */}
+                {pendingRRPlayoff.length > 0 && (
+                  <div className="space-y-3 mb-4">
+                    {pendingRRPlayoff.map((match) => (
+                      <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
+                        {match.label && (
+                          <p className="text-xs font-bold text-[#f0a500] mb-2 text-center uppercase tracking-wide">{match.label}</p>
+                        )}
+                        <p className="text-xs text-gray-500 mb-2 text-center">Clique no vencedor</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {([match.p1, match.p2] as const).map((player) => (
+                            <button
+                              key={player}
+                              onClick={() => setWinner(match.id, player)}
+                              className="bg-[#1a1a1a] hover:bg-[#f0a500]/10 hover:border-[#f0a500] border border-[#333] text-white font-semibold text-sm py-3 px-4 rounded-xl transition-all"
+                            >
+                              {player}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Completed playoff matches */}
+                {playoffMatches.filter((m) => m.winner).length > 0 && (
+                  <div className="space-y-1.5">
+                    {playoffMatches.filter((m) => m.winner).map((match) => (
+                      <div key={match.id} className="bg-[#252525] rounded-lg px-3 py-2">
+                        {match.label && <span className="text-[10px] text-[#f0a500] font-bold uppercase mr-2">{match.label}:</span>}
+                        <span className="text-[#f0a500] font-bold text-sm">{match.winner}</span>
+                        <span className="text-gray-600 text-xs mx-2">def.</span>
+                        <span className="text-gray-500 line-through text-sm">{match.winner === match.p1 ? match.p2 : match.p1}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Pending RR group matches */}
+            {state.phase === "playing" && pendingRRGroup.length > 0 && (
               <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
-                <h2 className="text-sm font-bold text-white mb-3">
-                  {state.format === "SINGLE_ELIMINATION" ? `Rodada ${maxRound}` : "Partidas"} — Pendentes
-                </h2>
+                <h2 className="text-sm font-bold text-white mb-3">Partidas — Pendentes</h2>
                 <div className="space-y-3">
-                  {currentRoundMatches.filter((m) => !m.winner).map((match) => (
+                  {pendingRRGroup.map((match) => (
                     <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
                       <p className="text-xs text-gray-500 mb-2 text-center">Clique no vencedor</p>
                       <div className="grid grid-cols-2 gap-2">
@@ -354,12 +474,37 @@ export default function QuickTournamentPage() {
               </div>
             )}
 
-            {/* Completed matches */}
-            {[...pastMatches, ...currentRoundMatches.filter((m) => m.winner)].length > 0 && (
+            {/* Pending elim matches */}
+            {state.format === "SINGLE_ELIMINATION" && state.phase === "playing" && pendingElim.length > 0 && (
+              <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
+                <h2 className="text-sm font-bold text-white mb-3">Rodada {maxRound} — Pendentes</h2>
+                <div className="space-y-3">
+                  {pendingElim.map((match) => (
+                    <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
+                      <p className="text-xs text-gray-500 mb-2 text-center">Clique no vencedor</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {([match.p1, match.p2] as const).map((player) => (
+                          <button
+                            key={player}
+                            onClick={() => setWinner(match.id, player)}
+                            className="bg-[#1a1a1a] hover:bg-[#f0a500]/10 hover:border-[#f0a500] border border-[#333] text-white font-semibold text-sm py-3 px-4 rounded-xl transition-all"
+                          >
+                            {player}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Completed group/elim matches */}
+            {(state.format === "SINGLE_ELIMINATION" ? doneElim : doneRR.filter((m) => m.round === 1)).length > 0 && (
               <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
                 <h2 className="text-sm font-bold text-white mb-3">Partidas Concluídas</h2>
                 <div className="space-y-1.5">
-                  {[...pastMatches, ...currentRoundMatches.filter((m) => m.winner)].map((match) => (
+                  {(state.format === "SINGLE_ELIMINATION" ? doneElim : doneRR.filter((m) => m.round === 1)).map((match) => (
                     <div key={match.id} className="flex items-center justify-between bg-[#252525] rounded-lg px-3 py-2 text-sm">
                       <span className={match.winner === match.p1 ? "text-[#f0a500] font-bold" : "text-gray-500 line-through"}>{match.p1}</span>
                       <span className="text-gray-600 text-xs">vs</span>
@@ -386,14 +531,27 @@ export default function QuickTournamentPage() {
           <div className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-sm">
             <h3 className="font-bold text-white mb-4">Resumo — {state.title || "Torneio Rápido"}</h3>
             {state.format === "ROUND_ROBIN" ? (
-              <div className="space-y-1.5 mb-4">
-                {rrStandings.map((p, i) => (
-                  <div key={p.name} className="flex justify-between text-sm">
-                    <span className="text-gray-300">#{i + 1} {p.name}</span>
-                    <span className="text-gray-500">{p.wins}V / {p.losses}D</span>
+              <>
+                <div className="space-y-1.5 mb-4">
+                  {rrStandings.map((p, i) => (
+                    <div key={p.name} className="flex justify-between text-sm">
+                      <span className="text-gray-300">#{i + 1} {p.name}</span>
+                      <span className="text-gray-500">{p.wins}V / {p.losses}D</span>
+                    </div>
+                  ))}
+                </div>
+                {playoffMatches.length > 0 && (
+                  <div className="border-t border-[#333] pt-3 mb-4">
+                    <p className="text-xs font-bold text-[#f0a500] mb-2 uppercase">Playoffs</p>
+                    {playoffMatches.filter((m) => m.winner).map((m) => (
+                      <div key={m.id} className="text-xs text-gray-400 mb-1">
+                        <span className="text-[#f0a500] font-semibold">{m.label}: </span>
+                        <span className="text-white">{m.winner}</span> def. {m.winner === m.p1 ? m.p2 : m.p1}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             ) : (
               <p className="text-white font-bold mb-4">🏆 {elimChampion}</p>
             )}
