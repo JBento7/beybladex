@@ -15,36 +15,34 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const { userId, beybladeIds = [] } = await req.json();
   if (!userId) return NextResponse.json({ error: "userId é obrigatório" }, { status: 400 });
 
-  const tournament = await prisma.tournament.findUnique({
-    where: { id: params.id },
-    include: { _count: { select: { participants: true } } },
-  });
+  const ids = Array.isArray(beybladeIds) ? beybladeIds.filter(Boolean) : [];
+
+  // Run independent lookups in parallel to reduce DB round-trips
+  const [tournament, user, existing, owned] = await Promise.all([
+    prisma.tournament.findUnique({
+      where: { id: params.id },
+      include: { _count: { select: { participants: true } } },
+    }),
+    prisma.user.findUnique({ where: { id: userId, deleted: false } }),
+    prisma.tournamentParticipant.findUnique({
+      where: { tournamentId_userId: { tournamentId: params.id, userId } },
+    }),
+    ids.length > 0
+      ? prisma.beyblade.findMany({ where: { id: { in: ids }, userId } })
+      : Promise.resolve([]),
+  ]);
 
   if (!tournament) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
-
   if (tournament.status === "FINISHED") {
     return NextResponse.json({ error: "Torneio já finalizado" }, { status: 400 });
   }
-
   if (tournament.maxParticipants && tournament._count.participants >= tournament.maxParticipants) {
     return NextResponse.json({ error: "Torneio está cheio" }, { status: 400 });
   }
-
-  const user = await prisma.user.findUnique({ where: { id: userId, deleted: false } });
   if (!user) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
-
-  const existing = await prisma.tournamentParticipant.findUnique({
-    where: { tournamentId_userId: { tournamentId: params.id, userId } },
-  });
   if (existing) return NextResponse.json({ error: "Jogador já inscrito" }, { status: 409 });
-
-  // Validate beyblades if provided
-  const ids = Array.isArray(beybladeIds) ? beybladeIds.filter(Boolean) : [];
-  if (ids.length > 0) {
-    const owned = await prisma.beyblade.findMany({ where: { id: { in: ids }, userId } });
-    if (owned.length !== ids.length) {
-      return NextResponse.json({ error: "Algumas beyblades não pertencem ao jogador" }, { status: 400 });
-    }
+  if (ids.length > 0 && owned.length !== ids.length) {
+    return NextResponse.json({ error: "Algumas beyblades não pertencem ao jogador" }, { status: 400 });
   }
 
   const participant = await prisma.tournamentParticipant.create({

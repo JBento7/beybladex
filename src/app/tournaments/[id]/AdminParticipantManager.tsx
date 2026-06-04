@@ -31,7 +31,7 @@ export default function AdminParticipantManager({
   allPlayers,
 }: Props) {
   const router = useRouter();
-  const onRefresh = () => router.refresh();
+  const [localParticipants, setLocalParticipants] = useState<Participant[]>(participants);
   const [open, setOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedBeys, setSelectedBeys] = useState<string[]>([]);
@@ -42,7 +42,7 @@ export default function AdminParticipantManager({
 
   const required = deckType === "THREE_ON_THREE" ? 3 : 1;
 
-  const participantIds = new Set(participants.map((p) => p.userId));
+  const participantIds = new Set(localParticipants.map((p) => p.userId));
   const availablePlayers = allPlayers.filter((p) => !participantIds.has(p.id));
   const selectedPlayer = allPlayers.find((p) => p.id === selectedUserId);
 
@@ -63,11 +63,26 @@ export default function AdminParticipantManager({
     const data = await res.json();
     setSaving(false);
     if (res.ok) {
-      flash("ok", `${selectedPlayer?.name} adicionado ao torneio.`);
+      const added = selectedPlayer;
+      flash("ok", `${added?.name} adicionado ao torneio.`);
+      // Optimistic local update — instant UI, no full page reload
+      if (added) {
+        setLocalParticipants((prev) => [
+          ...prev,
+          {
+            userId: added.id,
+            user: { id: added.id, name: added.name },
+            beyblade1: selectedBeys[0] ?? null,
+            beyblade2: selectedBeys[1] ?? null,
+            beyblade3: selectedBeys[2] ?? null,
+          },
+        ]);
+      }
       setSelectedUserId("");
       setSelectedBeys([]);
       setOpen(false);
-      onRefresh();
+      // Refresh server data in the background (non-blocking)
+      router.refresh();
     } else {
       flash("err", data.error ?? "Erro ao adicionar jogador.");
     }
@@ -83,8 +98,13 @@ export default function AdminParticipantManager({
     });
     const data = await res.json();
     setRemoving(null);
-    if (res.ok) { flash("ok", `${name} removido.`); onRefresh(); }
-    else flash("err", data.error ?? "Erro ao remover.");
+    if (res.ok) {
+      flash("ok", `${name} removido.`);
+      setLocalParticipants((prev) => prev.filter((p) => p.userId !== userId));
+      router.refresh();
+    } else {
+      flash("err", data.error ?? "Erro ao remover.");
+    }
   }
 
   function toggleBey(id: string) {
@@ -177,7 +197,7 @@ export default function AdminParticipantManager({
 
       {/* Participants list with remove buttons */}
       <div className="space-y-2">
-        {participants.map((p, i) => (
+        {localParticipants.map((p, i) => (
           <div key={p.userId} className="flex items-center justify-between bg-[#252525] rounded-lg px-4 py-2.5">
             <div className="flex items-center gap-3">
               <span className="text-xs text-gray-600 w-5 text-right">{i + 1}.</span>
