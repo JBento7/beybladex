@@ -39,8 +39,9 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/">
-            <img src="/liga.png" alt="Liga Beyblade Londrina" className="h-10 w-auto" />
+          <Link href="/" className="flex items-center gap-2">
+            <img src="/lbl-logo.png" alt="LBL" className="h-10 w-auto" />
+            <img src="/liga.png" alt="Liga Beyblade Londrina" className="h-8 w-auto hidden sm:block" />
           </Link>
 
           {/* Desktop nav */}
