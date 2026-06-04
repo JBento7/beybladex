@@ -43,8 +43,8 @@ export default function Navbar() {
             <div className="flex items-center gap-2">
               <img src="/lbl-logo.png" alt="LBL" className="h-10 w-auto" />
               <div className="hidden sm:block">
-                <div className="text-lg font-black text-[#f0a500] leading-none">LBL</div>
-                <div className="text-xs text-[#c8102e] font-semibold leading-none">Liga Beyblade Londrina</div>
+                <div className="text-[#f0a500] font-black leading-none text-[11px] w-full" style={{ letterSpacing: "1.18em" }}>LBL</div>
+                <div className="text-[#c8102e] font-semibold leading-none text-[11px]">Liga Beyblade Londrina</div>
               </div>
             </div>
           </Link>
