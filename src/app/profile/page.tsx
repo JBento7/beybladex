@@ -33,11 +33,15 @@ export default async function ProfilePage() {
 
   const userId = session.user.id;
 
-  let userRows: { id: string; name: string; email: string; role: string; avatarUrl: string | null; createdAt: Date }[] = [];
+  let userRows: { id: string; name: string; email: string; role: string; avatarUrl: string | null; bladerName: string | null; createdAt: Date }[] = [];
   try {
-    userRows = await prisma.$queryRaw`SELECT id, name, email, role, "createdAt", "avatarUrl" FROM "User" WHERE id = ${userId} LIMIT 1`;
+    userRows = await prisma.$queryRaw`SELECT id, name, email, role, "createdAt", "avatarUrl", "bladerName" FROM "User" WHERE id = ${userId} LIMIT 1`;
   } catch {
-    userRows = await prisma.$queryRaw`SELECT id, name, email, role, "createdAt", NULL AS "avatarUrl" FROM "User" WHERE id = ${userId} LIMIT 1`;
+    try {
+      userRows = await prisma.$queryRaw`SELECT id, name, email, role, "createdAt", "avatarUrl", NULL AS "bladerName" FROM "User" WHERE id = ${userId} LIMIT 1`;
+    } catch {
+      userRows = await prisma.$queryRaw`SELECT id, name, email, role, "createdAt", NULL AS "avatarUrl", NULL AS "bladerName" FROM "User" WHERE id = ${userId} LIMIT 1`;
+    }
   }
 
   const [participations, allPoints, comboStats] = await Promise.all([
@@ -79,7 +83,7 @@ export default async function ProfilePage() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
             <AvatarUpload currentAvatar={user.avatarUrl ?? null} userName={user.name} />
             <div className="flex-1 flex items-start gap-3">
-              <ProfileEditor initialName={user.name} initialEmail={user.email} />
+              <ProfileEditor initialName={user.name} initialEmail={user.email} initialBladerName={user.bladerName ?? ""} />
               <span className={`mt-1 text-xs px-2 py-1 rounded-full font-semibold shrink-0 ${
                 user.role === "ORGANIZER"
                   ? "bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30"

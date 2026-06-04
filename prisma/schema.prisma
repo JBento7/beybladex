@@ -59,6 +59,7 @@ model User {
   avatarUrl     String?
   deleted       Boolean  @default(false)
   isGuest       Boolean  @default(false)
+  bladerName    String?
   createdAt     DateTime @default(now())
 
   organizedTournaments Tournament[]           @relation("OrganizerTournaments")

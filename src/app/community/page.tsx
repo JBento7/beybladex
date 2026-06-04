@@ -15,6 +15,7 @@ export default async function CommunityPage() {
     select: {
       id: true,
       name: true,
+      bladerName: true,
       role: true,
       avatarUrl: true,
       beyblades: {
@@ -75,7 +76,7 @@ export default async function CommunityPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-white truncate group-hover:text-[#f0a500] transition-colors">
-                        {player.name}
+                        {player.bladerName || player.name}
                       </span>
                       {player.role === "ORGANIZER" && (
                         <span className="text-xs bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30 px-1.5 py-0.5 rounded font-semibold flex-shrink-0">

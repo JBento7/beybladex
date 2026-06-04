@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const userId = session.user.id;
-  const { name, email, currentPassword, newPassword } = await req.json();
+  const { name, email, currentPassword, newPassword, bladerName } = await req.json();
 
   // Fetch current user
   const users = await prisma.$queryRaw<{ id: string; email: string; password: string }[]>`
@@ -44,6 +44,10 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "E-mail já em uso" }, { status: 400 });
     }
     updates.email = email.trim();
+  }
+
+  if (bladerName !== undefined) {
+    updates.bladerName = bladerName.trim() || null;
   }
 
   if (newPassword !== undefined) {

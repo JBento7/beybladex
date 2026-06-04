@@ -38,6 +38,7 @@ export default async function PlayerProfilePage({
     select: {
       id: true,
       name: true,
+      bladerName: true,
       role: true,
       avatarUrl: true,
       createdAt: true,
@@ -111,7 +112,7 @@ export default async function PlayerProfilePage({
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-1 flex-wrap">
-                <h1 className="text-2xl font-black text-white">{player.name}</h1>
+                <h1 className="text-2xl font-black text-white">{player.bladerName || player.name}</h1>
                 <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
                   player.role === "ORGANIZER"
                     ? "bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30"
@@ -227,7 +228,7 @@ export default async function PlayerProfilePage({
         {/* Beyblades */}
         <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
           <h2 className="text-lg font-bold text-white mb-5">
-            Beyblades de {player.name}
+            Beyblades de {player.bladerName || player.name}
             <span className="text-gray-500 text-sm font-normal ml-2">({player.beyblades.length})</span>
           </h2>
           {player.beyblades.length === 0 ? (

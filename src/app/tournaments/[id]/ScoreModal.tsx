@@ -9,7 +9,7 @@ const FINISH_TYPES: FinishType[] = ["SPIN_FINISH", "OVER_FINISH", "BURST_FINISH"
 const POINTS_TO_WIN_SET = 4;
 const SETS_TO_WIN = 2;
 
-type Player = { id: string; name: string };
+type Player = { id: string; name: string; bladerName?: string | null };
 type BeybladeInfo = { id: string; name: string; blade: string | null; ratchet: string | null; bit: string | null };
 
 type SetData = {
@@ -173,7 +173,7 @@ export default function ScoreModal({
               <div className="text-xs text-gray-500 text-center mb-3 font-medium">SETS (melhor de 3 — primeiro a {SETS_TO_WIN} sets vence)</div>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex-1 text-center">
-                  <div className="text-sm font-bold text-white mb-1 truncate">{player1.name}</div>
+                  <div className="text-sm font-bold text-white mb-1 truncate">{player1.bladerName || player1.name}</div>
                   <div className={`text-4xl font-black ${p1Sets >= SETS_TO_WIN ? "text-[#f0a500]" : "text-white"}`}>{p1Sets}</div>
                   <div className="text-xs text-gray-500 mt-1">sets</div>
                 </div>
@@ -193,7 +193,7 @@ export default function ScoreModal({
                   })}
                 </div>
                 <div className="flex-1 text-center">
-                  <div className="text-sm font-bold text-white mb-1 truncate">{player2.name}</div>
+                  <div className="text-sm font-bold text-white mb-1 truncate">{player2.bladerName || player2.name}</div>
                   <div className={`text-4xl font-black ${p2Sets >= SETS_TO_WIN ? "text-[#f0a500]" : "text-white"}`}>{p2Sets}</div>
                   <div className="text-xs text-gray-500 mt-1">sets</div>
                 </div>
@@ -220,25 +220,25 @@ export default function ScoreModal({
                     </div>
                     <div className="flex items-center justify-center gap-6">
                       <div className="text-center">
-                        <div className="text-xs text-gray-400 mb-1 truncate max-w-[80px]">{player1.name}</div>
+                        <div className="text-xs text-gray-400 mb-1 truncate max-w-[80px]">{player1.bladerName || player1.name}</div>
                         <div className={`text-5xl font-black ${p1Pts >= POINTS_TO_WIN_SET ? "text-[#f0a500]" : "text-white"}`}>{p1Pts}</div>
                       </div>
                       <div className="text-2xl text-gray-600 font-bold">×</div>
                       <div className="text-center">
-                        <div className="text-xs text-gray-400 mb-1 truncate max-w-[80px]">{player2.name}</div>
+                        <div className="text-xs text-gray-400 mb-1 truncate max-w-[80px]">{player2.bladerName || player2.name}</div>
                         <div className={`text-5xl font-black ${p2Pts >= POINTS_TO_WIN_SET ? "text-[#f0a500]" : "text-white"}`}>{p2Pts}</div>
                       </div>
                     </div>
                     <div className="mt-3 space-y-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 w-16 truncate">{player1.name}</span>
+                        <span className="text-xs text-gray-500 w-16 truncate">{player1.bladerName || player1.name}</span>
                         <div className="flex-1 h-2 bg-[#333] rounded-full overflow-hidden">
                           <div className="h-full bg-[#f0a500] rounded-full transition-all" style={{ width: `${(p1Pts / POINTS_TO_WIN_SET) * 100}%` }} />
                         </div>
                         <span className="text-xs text-[#f0a500] font-bold w-8 text-right">{p1Pts}/{POINTS_TO_WIN_SET}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 w-16 truncate">{player2.name}</span>
+                        <span className="text-xs text-gray-500 w-16 truncate">{player2.bladerName || player2.name}</span>
                         <div className="flex-1 h-2 bg-[#333] rounded-full overflow-hidden">
                           <div className="h-full bg-[#c8102e] rounded-full transition-all" style={{ width: `${(p2Pts / POINTS_TO_WIN_SET) * 100}%` }} />
                         </div>
@@ -283,7 +283,7 @@ export default function ScoreModal({
                       disabled={loading}
                       className="p-4 rounded-xl bg-[#f0a500]/10 border-2 border-[#f0a500] hover:bg-[#f0a500]/20 disabled:opacity-50 transition-all"
                     >
-                      <div className="text-sm font-black text-[#f0a500] truncate">{player1.name}</div>
+                      <div className="text-sm font-black text-[#f0a500] truncate">{player1.bladerName || player1.name}</div>
                       <div className="text-xs text-gray-400 mt-0.5">+ ponto</div>
                     </button>
                     {player1Beyblades.length > 1 && (
@@ -322,7 +322,7 @@ export default function ScoreModal({
                       disabled={loading}
                       className="p-4 rounded-xl bg-[#c8102e]/10 border-2 border-[#c8102e] hover:bg-[#c8102e]/20 disabled:opacity-50 transition-all"
                     >
-                      <div className="text-sm font-black text-[#c8102e] truncate">{player2.name}</div>
+                      <div className="text-sm font-black text-[#c8102e] truncate">{player2.bladerName || player2.name}</div>
                       <div className="text-xs text-gray-400 mt-0.5">+ ponto</div>
                     </button>
                     {player2Beyblades.length > 1 && (

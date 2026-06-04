@@ -6,13 +6,15 @@ import { useRouter } from "next/navigation";
 interface ProfileEditorProps {
   initialName: string;
   initialEmail: string;
+  initialBladerName: string;
 }
 
-export default function ProfileEditor({ initialName, initialEmail }: ProfileEditorProps) {
+export default function ProfileEditor({ initialName, initialEmail, initialBladerName }: ProfileEditorProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
+  const [bladerName, setBladerName] = useState(initialBladerName);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -35,7 +37,7 @@ export default function ProfileEditor({ initialName, initialEmail }: ProfileEdit
       return;
     }
 
-    const body: Record<string, string> = { name: name.trim(), email: email.trim() };
+    const body: Record<string, string> = { name: name.trim(), email: email.trim(), bladerName: bladerName.trim() };
     if (newPassword) {
       body.currentPassword = currentPassword;
       body.newPassword = newPassword;
@@ -65,7 +67,10 @@ export default function ProfileEditor({ initialName, initialEmail }: ProfileEdit
   return (
     <div className="flex-1">
       <div className="flex items-center gap-3 mb-1 flex-wrap">
-        <span className="text-2xl font-black text-white">{initialName}</span>
+        <div>
+          <span className="text-2xl font-black text-white">{initialBladerName || initialName}</span>
+          {initialBladerName && <span className="text-sm text-gray-500 ml-2">{initialName}</span>}
+        </div>
         <button
           onClick={() => { setOpen(!open); setError(""); setSuccess(""); }}
           className="text-xs px-3 py-1 bg-[#2a2a2a] hover:bg-[#333] text-gray-300 rounded-lg transition-colors border border-[#3a3a3a]"
@@ -86,6 +91,19 @@ export default function ProfileEditor({ initialName, initialEmail }: ProfileEdit
               {error}
             </div>
           )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Nome Blader <span className="text-[#f0a500] text-xs font-normal">(aparece nos torneios)</span>
+            </label>
+            <input
+              type="text"
+              value={bladerName}
+              onChange={(e) => setBladerName(e.target.value)}
+              placeholder="ex: DranSlayer, VoltKing..."
+              className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+            />
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Nome</label>
@@ -160,7 +178,7 @@ export default function ProfileEditor({ initialName, initialEmail }: ProfileEdit
             </button>
             <button
               type="button"
-              onClick={() => { setOpen(false); setError(""); setName(initialName); setEmail(initialEmail); }}
+              onClick={() => { setOpen(false); setError(""); setName(initialName); setEmail(initialEmail); setBladerName(initialBladerName); }}
               className="bg-[#2a2a2a] hover:bg-[#333] text-gray-300 px-5 py-2 rounded-lg transition-colors text-sm"
             >
               Cancelar

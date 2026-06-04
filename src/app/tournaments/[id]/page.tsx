@@ -36,9 +36,9 @@ type MatchWithRelations = {
   round: number;
   bracketPos: number | null;
   status: MatchStatus;
-  player1: { id: string; name: string };
-  player2: { id: string; name: string };
-  winner: { id: string; name: string } | null;
+  player1: { id: string; name: string; bladerName: string | null };
+  player2: { id: string; name: string; bladerName: string | null };
+  winner: { id: string; name: string; bladerName: string | null } | null;
   group: { id: string; name: string } | null;
   points: { userId: string; points: number }[];
 };
@@ -98,7 +98,7 @@ function MatchCard({
                 : "text-white"
             }`}
           >
-            {match.player1.name}
+            {match.player1.bladerName || match.player1.name}
           </span>
           {isFinished && (
             <span className="text-sm font-bold text-amber-400 flex-shrink-0">
@@ -116,7 +116,7 @@ function MatchCard({
                 : "text-white"
             }`}
           >
-            {match.player2.name}
+            {match.player2.bladerName || match.player2.name}
           </span>
           {isFinished && (
             <span className="text-sm font-bold text-amber-400 flex-shrink-0">
@@ -171,7 +171,7 @@ export default async function TournamentDetailPage({
       organizer: { select: { id: true, name: true } },
       participants: {
         include: {
-          user: { select: { id: true, name: true, isGuest: true } },
+          user: { select: { id: true, name: true, bladerName: true, isGuest: true } },
           group: true,
         },
         orderBy: { totalPoints: "desc" },
@@ -179,9 +179,9 @@ export default async function TournamentDetailPage({
       groups: true,
       matches: {
         include: {
-          player1: { select: { id: true, name: true } },
-          player2: { select: { id: true, name: true } },
-          winner: { select: { id: true, name: true } },
+          player1: { select: { id: true, name: true, bladerName: true } },
+          player2: { select: { id: true, name: true, bladerName: true } },
+          winner: { select: { id: true, name: true, bladerName: true } },
           points: { select: { userId: true, points: true } },
           group: true,
         },
@@ -429,7 +429,7 @@ export default async function TournamentDetailPage({
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-white truncate">
-                          {p.user.name}
+                          {p.user.bladerName || p.user.name}
                           {p.user.isGuest && <span className="ml-1.5 text-[10px] text-gray-500 font-normal">convidado</span>}
                         </div>
                         {p.beyblade1 && (
@@ -474,7 +474,7 @@ export default async function TournamentDetailPage({
                                 {idx + 1}.
                               </span>
                               <span className="text-gray-300 flex-1">
-                                {p.user.name}
+                                {p.user.bladerName || p.user.name}
                               </span>
                               <span className="text-amber-400 font-medium">
                                 {p.totalPoints}pts
@@ -519,11 +519,11 @@ export default async function TournamentDetailPage({
                         className="flex items-center gap-3 py-2 border-b border-gray-800 last:border-0"
                       >
                         <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-400">
-                          {p.user.name[0].toUpperCase()}
+                          {(p.user.bladerName || p.user.name)[0].toUpperCase()}
                         </div>
                         <div>
                           <div className="text-sm font-medium text-white">
-                            {p.user.name}
+                            {p.user.bladerName || p.user.name}
                             {p.user.isGuest && <span className="ml-1.5 text-[10px] text-gray-500">convidado</span>}
                           </div>
                           {p.beyblade1 && (

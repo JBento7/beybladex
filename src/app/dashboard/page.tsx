@@ -86,9 +86,9 @@ export default async function DashboardPage() {
   const rankingUserIds = ranking.map((r: { userId: string }) => r.userId);
   const rankingUsers = await prisma.user.findMany({
     where: { id: { in: rankingUserIds } },
-    select: { id: true, name: true, avatarUrl: true },
+    select: { id: true, name: true, bladerName: true, avatarUrl: true },
   });
-  const userMap = Object.fromEntries(rankingUsers.map((u: { id: string; name: string; avatarUrl: string | null }) => [u.id, u]));
+  const userMap = Object.fromEntries(rankingUsers.map((u: { id: string; name: string; bladerName: string | null; avatarUrl: string | null }) => [u.id, u]));
   const rankingList = ranking.map((r: { userId: string; _sum: { totalPoints: number | null; wins: number | null; losses: number | null } }) => ({
     ...userMap[r.userId],
     points: r._sum.totalPoints ?? 0,
@@ -253,7 +253,7 @@ export default async function DashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className={`text-xs font-semibold truncate ${player.isMe ? "text-[#f0a500]" : "text-white"}`}>
-                        {player.name}{player.isMe && " (você)"}
+                        {(player as { bladerName?: string | null }).bladerName || player.name}{player.isMe && " (você)"}
                       </div>
                       <div className="text-[10px] text-gray-500">{player.wins}V · {player.losses}D</div>
                     </div>
