@@ -185,16 +185,19 @@ export default async function ProfileStatsPage() {
                 {c.matchups.length > 0 && (
                   <div className="mt-6 pt-5 border-t border-[#2a2a2a]">
                     <h3 className="text-xs font-bold text-[#f0a500] uppercase tracking-wide mb-4">Desempenho contra cada oponente</h3>
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {c.matchups.slice(0, 10).map((mu) => {
                         const total = mu.wins + mu.losses;
                         const winPct = total > 0 ? Math.round((mu.wins / total) * 100) : 0;
                         const maxBar = Math.max(1, ...c.matchups.slice(0, 10).map((m) => m.wins + m.losses));
                         const rowPct = Math.round((total / maxBar) * 100);
+                        const scoredEntries = finishOrder.filter((t) => mu.finishesScored[t]);
+                        const sufferedEntries = finishOrder.filter((t) => mu.finishesSuffered[t]);
                         return (
-                          <div key={mu.opponentBey}>
-                            <div className="flex items-center justify-between text-xs mb-1.5">
-                              <span className="text-gray-300 truncate mr-2 flex items-center gap-1">
+                          <div key={mu.opponentBey} className="bg-[#252525] rounded-xl p-3">
+                            {/* Opponent name + win/loss */}
+                            <div className="flex items-center justify-between text-xs mb-2">
+                              <span className="text-gray-200 font-semibold truncate mr-2 flex items-center gap-1">
                                 <img src="/bey-removebg-preview.png" alt="" className="w-3 h-3 object-contain inline-block opacity-60" />
                                 {mu.opponentBey}
                               </span>
@@ -205,16 +208,44 @@ export default async function ProfileStatsPage() {
                                 <span className="text-gray-500 w-8 text-right">{winPct}%</span>
                               </span>
                             </div>
-                            <div className="h-2 bg-[#252525] rounded-full overflow-hidden flex" style={{ width: `${rowPct}%` }}>
-                              <div
-                                className="h-full bg-green-500 transition-all"
-                                style={{ width: total > 0 ? `${(mu.wins / total) * 100}%` : "0%" }}
-                              />
-                              <div
-                                className="h-full bg-[#c8102e] transition-all"
-                                style={{ width: total > 0 ? `${(mu.losses / total) * 100}%` : "0%" }}
-                              />
+                            {/* Stacked bar */}
+                            <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden flex mb-3" style={{ width: `${rowPct}%` }}>
+                              <div className="h-full bg-green-500" style={{ width: total > 0 ? `${(mu.wins / total) * 100}%` : "0%" }} />
+                              <div className="h-full bg-[#c8102e]" style={{ width: total > 0 ? `${(mu.losses / total) * 100}%` : "0%" }} />
                             </div>
+                            {/* Finish tags */}
+                            {(scoredEntries.length > 0 || sufferedEntries.length > 0) && (
+                              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                <div>
+                                  <span className="text-green-500 font-bold uppercase tracking-wide">Aplicados</span>
+                                  {scoredEntries.length === 0 ? (
+                                    <span className="text-gray-600 ml-1">—</span>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {scoredEntries.map((t) => (
+                                        <span key={t} className={`px-1.5 py-0.5 rounded font-semibold ${finishColors[t]}`}>
+                                          {FINISH_TYPE_LABELS[t]} ×{mu.finishesScored[t]}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <span className="text-red-400 font-bold uppercase tracking-wide">Sofridos</span>
+                                  {sufferedEntries.length === 0 ? (
+                                    <span className="text-gray-600 ml-1">—</span>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                      {sufferedEntries.map((t) => (
+                                        <span key={t} className={`px-1.5 py-0.5 rounded font-semibold ${finishColors[t]} opacity-80`}>
+                                          {FINISH_TYPE_LABELS[t]} ×{mu.finishesSuffered[t]}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}

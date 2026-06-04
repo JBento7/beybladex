@@ -5,6 +5,8 @@ export interface MatchupEntry {
   opponentBey: string;
   wins: number;
   losses: number;
+  finishesScored: Record<string, number>;
+  finishesSuffered: Record<string, number>;
 }
 
 export interface ComboStat {
@@ -96,8 +98,16 @@ export async function getComboStats(userId: string): Promise<ComboStat[]> {
 
     let pointsSuffered = 0;
     const finishesSuffered: Record<string, number> = {};
-    // matchup map: opponentBeyName → { wins, losses }
-    const matchupMap = new Map<string, { wins: number; losses: number }>();
+    // matchup map: opponentBeyName → { wins, losses, finishesScored, finishesSuffered }
+    const matchupMap = new Map<string, { wins: number; losses: number; finishesScored: Record<string, number>; finishesSuffered: Record<string, number> }>();
+
+    // Index this beyblade's own finishes per match for scored tracking
+    const myFinishesByMatch = new Map<string, Record<string, number>>();
+    for (const mp of b.matchPoints) {
+      const rec = myFinishesByMatch.get(mp.matchId) ?? {};
+      rec[mp.finishType] = (rec[mp.finishType] || 0) + 1;
+      myFinishesByMatch.set(mp.matchId, rec);
+    }
 
     for (const mid of usedMatches) {
       const opps = oppByMatch.get(mid) ?? [];
@@ -114,17 +124,28 @@ export async function getComboStats(userId: string): Promise<ComboStat[]> {
       const oppBeyName =
         opps.find((o) => o.beybladeUsed)?.beybladeUsed ?? "Desconhecido";
 
-      const entry = matchupMap.get(oppBeyName) ?? { wins: 0, losses: 0 };
+      const entry = matchupMap.get(oppBeyName) ?? { wins: 0, losses: 0, finishesScored: {}, finishesSuffered: {} };
+
       if (winner === userId) {
         entry.wins += 1;
       } else if (winner !== null) {
         entry.losses += 1;
       }
+
+      // Accumulate finishes scored (my finishes) vs suffered (opponent's finishes) for this matchup
+      const myFin = myFinishesByMatch.get(mid) ?? {};
+      for (const [ft, cnt] of Object.entries(myFin)) {
+        entry.finishesScored[ft] = (entry.finishesScored[ft] || 0) + cnt;
+      }
+      for (const op of opps) {
+        entry.finishesSuffered[op.finishType] = (entry.finishesSuffered[op.finishType] || 0) + 1;
+      }
+
       matchupMap.set(oppBeyName, entry);
     }
 
     const matchups: MatchupEntry[] = [...matchupMap.entries()]
-      .map(([opponentBey, { wins, losses }]) => ({ opponentBey, wins, losses }))
+      .map(([opponentBey, v]) => ({ opponentBey, ...v }))
       .sort((a, b) => (b.wins + b.losses) - (a.wins + a.losses));
 
     const parts = [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
