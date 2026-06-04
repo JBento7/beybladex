@@ -86,7 +86,7 @@ export default async function LandingPage() {
           <p className="text-gray-400 max-w-lg mx-auto">Escolha o formato ideal para o seu campeonato</p>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
           {[
             { icon: "🔄", name: "Pontos Corridos", desc: "Todos os jogadores enfrentam uns aos outros. O campeão é definido pela pontuação total.", badge: "Clássico" },
             { icon: "👥", name: "Grupos", desc: "Divididos em grupos para fase de pontos corridos. Os melhores de cada grupo avançam para a eliminatória.", badge: "Estratégico" },
