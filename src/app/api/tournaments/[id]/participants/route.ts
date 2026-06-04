@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         where: { id: params.id },
         include: { _count: { select: { participants: true } } },
       }),
-      prisma.user.findUnique({ where: { id: userId, deleted: false } }),
+      prisma.user.findFirst({ where: { id: userId, deleted: false } }),
       prisma.tournamentParticipant.findUnique({
         where: { tournamentId_userId: { tournamentId: params.id, userId } },
       }),
