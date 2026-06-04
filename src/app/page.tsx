@@ -11,13 +11,9 @@ export default async function LandingPage() {
     <div className="min-h-screen bg-[#0d0d0d]">
       <nav className="border-b border-[#2a2a2a] bg-[#1a1a1a]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
-            <img src="/lbl-logo.png" alt="LBL" className="h-10 w-auto" />
-            <div className="hidden sm:block">
-              <div className="text-lg font-black text-[#f0a500] leading-none">LBL</div>
-              <div className="text-xs text-[#c8102e] font-semibold leading-none">Liga Beyblade Londrina</div>
-            </div>
-          </div>
+          <Link href="/">
+            <img src="/liga.png" alt="Liga Beyblade Londrina" className="h-10 w-auto" />
+          </Link>
           <div className="flex items-center gap-4">
             <Link href="/tournaments" className="text-gray-300 hover:text-[#f0a500] transition-colors text-sm font-medium hidden sm:block">
               Torneios

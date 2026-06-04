@@ -171,9 +171,8 @@ export default function QuickTournamentPage() {
     <div className="min-h-screen bg-[#0d0d0d]">
       <nav className="border-b border-[#2a2a2a] bg-[#1a1a1a]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <img src="/lbl-logo.png" alt="LBL" className="h-8 w-auto" />
-            <span className="text-sm font-bold text-[#f0a500] hidden sm:block">Liga Beyblade Londrina</span>
+          <Link href="/">
+            <img src="/liga.png" alt="Liga Beyblade Londrina" className="h-8 w-auto" />
           </Link>
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500 hidden sm:block">Torneio Rápido · sem cadastro</span>
