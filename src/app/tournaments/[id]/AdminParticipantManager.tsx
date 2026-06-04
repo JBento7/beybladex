@@ -95,7 +95,7 @@ export default function AdminParticipantManager({
       // Refresh server data in the background (non-blocking)
       router.refresh();
     } else {
-      flash("err", (data.detail ?? data.error) ?? "Erro ao adicionar jogador.");
+      flash("err", data.error ?? "Erro ao adicionar jogador.");
     }
   }
 
