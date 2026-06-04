@@ -109,6 +109,7 @@ model Tournament {
   startDate       DateTime?
   deckType        DeckType         @default(SOLO)
   prize           String?
+  isOfficial      Boolean          @default(true)
   createdAt       DateTime         @default(now())
 
   organizer    User                   @relation("OrganizerTournaments", fields: [organizerId], references: [id])

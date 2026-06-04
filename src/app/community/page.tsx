@@ -21,6 +21,7 @@ export default async function CommunityPage() {
         select: { id: true, name: true, wins: true, losses: true },
       },
       participations: {
+        where: { tournament: { isOfficial: true } },
         select: { wins: true, losses: true, totalPoints: true },
       },
     },

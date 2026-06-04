@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import Navbar from "@/components/Navbar";
 
 const FORMATS = [
@@ -33,6 +34,7 @@ const FORMATS = [
 
 export default function CreateTournamentPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -44,6 +46,7 @@ export default function CreateTournamentPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [unofficialNotice, setUnofficialNotice] = useState<string | null>(null);
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -81,6 +84,10 @@ export default function CreateTournamentPage() {
     }
 
     const tournament = await res.json();
+    if (session?.user.role !== "ORGANIZER") {
+      setUnofficialNotice(tournament.id);
+      return;
+    }
     router.push(`/tournaments/${tournament.id}`);
   }
 
@@ -96,6 +103,19 @@ export default function CreateTournamentPage() {
         {error && (
           <div className="bg-red-900/30 border border-red-700 text-red-400 px-4 py-3 rounded-lg mb-6 text-sm">
             {error}
+          </div>
+        )}
+
+        {unofficialNotice && (
+          <div className="bg-yellow-900/30 border border-yellow-600/50 text-yellow-300 px-4 py-4 rounded-lg mb-6 text-sm">
+            <p className="font-bold mb-1">Torneio criado com sucesso!</p>
+            <p className="mb-3">Seu torneio foi criado como <strong>NÃO OFICIAL</strong>. Apenas as estatísticas dos beyblades serão contabilizadas. Pontos não contam no ranking da comunidade.</p>
+            <button
+              onClick={() => router.push(`/tournaments/${unofficialNotice}`)}
+              className="bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold px-4 py-2 rounded-lg transition-colors text-sm"
+            >
+              Ver Torneio →
+            </button>
           </div>
         )}
 

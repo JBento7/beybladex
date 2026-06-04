@@ -92,10 +92,17 @@ export default async function TournamentsPage() {
                   className="bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#f0a500]/30 rounded-2xl p-6 transition-all flex flex-col"
                 >
                   {/* Status badge */}
-                  <div className="flex items-center justify-between mb-4">
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${status.style}`}>
-                      {status.label}
-                    </span>
+                  <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${status.style}`}>
+                        {status.label}
+                      </span>
+                      {!t.isOfficial && (
+                        <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2.5 py-1 rounded-full font-semibold">
+                          Não-Oficial
+                        </span>
+                      )}
+                    </div>
                     <span className="text-xs text-gray-500 font-medium bg-[#252525] px-2.5 py-1 rounded-full">
                       {FORMAT_LABELS[t.format]}
                     </span>

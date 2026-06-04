@@ -171,6 +171,10 @@ export async function GET() {
       name: "Restore TournamentParticipant.userId NOT NULL",
       sql: `ALTER TABLE "TournamentParticipant" ALTER COLUMN "userId" SET NOT NULL`,
     },
+    {
+      name: "Tournament.isOfficial",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "isOfficial" BOOLEAN NOT NULL DEFAULT true`,
+    },
   ];
 
   for (const migration of migrations) {

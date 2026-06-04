@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import QuickTournamentBanner from "@/components/QuickTournamentBanner";
 
 export default async function LandingPage() {
   const session = await getServerSession(authOptions);
@@ -162,6 +163,24 @@ export default async function LandingPage() {
           ))}
         </div>
       </section>
+
+      <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-12 text-center">
+        <div className="bg-[#1a1a1a] border border-[#f0a500]/20 rounded-3xl p-10">
+          <div className="flex justify-center mb-4">
+            <img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain" />
+          </div>
+          <h2 className="text-2xl font-black text-white mb-2">Crie um Torneio Agora — Sem Cadastro</h2>
+          <p className="text-gray-400 mb-6">Monte um torneio rápido direto no navegador, sem precisar criar uma conta. Perfeito para eventos informais.</p>
+          <Link
+            href="/quick-tournament"
+            className="inline-block bg-[#f0a500] hover:bg-[#d4940a] text-black font-black px-8 py-3 rounded-xl transition-colors"
+          >
+            Criar Torneio Rápido →
+          </Link>
+        </div>
+      </section>
+
+      <QuickTournamentBanner />
 
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 text-center">
         <div className="bg-gradient-to-br from-[#c8102e]/10 to-[#f0a500]/5 border border-[#c8102e]/20 rounded-3xl p-12">

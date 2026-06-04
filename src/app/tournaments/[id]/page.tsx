@@ -284,7 +284,17 @@ export default async function TournamentDetailPage({
                 <span className="text-xs bg-gray-800 text-gray-400 px-3 py-1 rounded-full font-medium">
                   {FORMAT_LABELS[tournament.format]}
                 </span>
+                {!tournament.isOfficial && (
+                  <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 px-3 py-1 rounded-full font-semibold">
+                    Não-Oficial
+                  </span>
+                )}
               </div>
+              {!tournament.isOfficial && (
+                <div className="bg-yellow-900/20 border border-yellow-600/30 text-yellow-300 text-sm px-4 py-2.5 rounded-lg mb-3">
+                  Torneio Não-Oficial — Estatísticas de Beyblade são registradas, pontos não contam no ranking.
+                </div>
+              )}
               <h1 className="text-3xl font-black text-white mb-2">
                 {tournament.name}
               </h1>

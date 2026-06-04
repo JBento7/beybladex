@@ -26,7 +26,14 @@ export default async function DashboardPage() {
     await Promise.all([
       prisma.tournamentParticipant.findMany({
         where: { userId },
-        include: { tournament: true },
+        select: {
+          id: true,
+          totalPoints: true,
+          wins: true,
+          losses: true,
+          createdAt: true,
+          tournament: { select: { id: true, name: true, status: true, isOfficial: true } },
+        },
         orderBy: { createdAt: "desc" },
       }),
       prisma.match.findMany({
@@ -59,7 +66,7 @@ export default async function DashboardPage() {
       }),
       prisma.tournament.findMany({
         where: { organizerId: userId, status: { not: "FINISHED" } },
-        include: { _count: { select: { participants: true } } },
+        select: { id: true, name: true, status: true, isOfficial: true, _count: { select: { participants: true } } },
         orderBy: { createdAt: "desc" },
       }),
       prisma.beyblade.findMany({
@@ -204,13 +211,18 @@ export default async function DashboardPage() {
               </div>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {organizedTournaments.map((t: { id: string; name: string; status: string; _count: { participants: number } }) => (
+              {organizedTournaments.map((t: { id: string; name: string; status: string; isOfficial: boolean; _count: { participants: number } }) => (
                 <Link
                   key={t.id}
                   href={`/tournaments/${t.id}`}
                   className="bg-[#252525] hover:bg-[#2d2d2d] border border-[#333] rounded-lg p-4 transition-colors"
                 >
-                  <div className="font-semibold text-white mb-1">{t.name}</div>
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="font-semibold text-white">{t.name}</span>
+                    {!t.isOfficial && (
+                      <span className="text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded font-semibold">Não-Oficial</span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 text-xs text-gray-400">
                     <span>{t._count.participants} participantes</span>
                     <span>·</span>
@@ -296,13 +308,18 @@ export default async function DashboardPage() {
           <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-4">Meus Torneios</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {participations.map((p: { id: string; totalPoints: number; wins: number; losses: number; tournament: { id: string; name: string; status: string } }) => (
+              {participations.map((p: { id: string; totalPoints: number; wins: number; losses: number; tournament: { id: string; name: string; status: string; isOfficial: boolean } }) => (
                 <Link
                   key={p.id}
                   href={`/tournaments/${p.tournament.id}`}
                   className="bg-[#252525] border border-[#333] hover:border-amber-500/40 rounded-lg p-4 transition-colors"
                 >
-                  <div className="font-semibold text-white mb-2">{p.tournament.name}</div>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="font-semibold text-white">{p.tournament.name}</span>
+                    {!p.tournament.isOfficial && (
+                      <span className="text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded font-semibold">Não-Oficial</span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-[#f0a500] font-bold">{p.totalPoints} pts</span>
                     <span className="text-gray-500">·</span>

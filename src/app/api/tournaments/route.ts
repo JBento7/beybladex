@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
         startDate: startDate ? new Date(startDate) : null,
         prize: prize || null,
         status: "REGISTRATION",
+        isOfficial: session.user.role === "ORGANIZER",
       },
     });
 
