@@ -18,7 +18,7 @@ export default function GlobalError({
       <body style={{ background: "#0d0d0d", color: "#fff", fontFamily: "system-ui, sans-serif" }}>
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
           <div style={{ textAlign: "center", maxWidth: 400 }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>🌀</div>
+            <div style={{ marginBottom: 16, display: "flex", justifyContent: "center" }}><img src="/bey-removebg-preview.png" alt="" style={{ width: 48, height: 48, objectFit: "contain" }} /></div>
             <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Algo deu errado</h2>
             <p style={{ color: "#9ca3af", fontSize: 14, marginBottom: 24 }}>
               Ocorreu um erro inesperado. Tente novamente.

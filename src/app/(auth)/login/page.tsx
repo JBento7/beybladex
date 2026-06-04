@@ -40,7 +40,7 @@ function LoginForm() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4">
       <Link href="/" className="flex items-center gap-2 mb-8">
-        <span className="text-3xl">🌀</span>
+        <img src="/bey-removebg-preview.png" alt="" className="w-8 h-8 object-contain" />
         <span className="text-2xl font-black text-amber-400">BeybladeX</span>
       </Link>
 
@@ -56,7 +56,7 @@ function LoginForm() {
 
         {verified && (
           <div className="bg-[#f0a500]/10 border border-[#f0a500]/40 text-[#f0a500] text-sm px-4 py-3 rounded-lg mb-4">
-            🌀 E-mail confirmado! Faça login para entrar.
+            <img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />E-mail confirmado! Faça login para entrar.
           </div>
         )}
 

@@ -125,7 +125,7 @@ export default function ScoreModal({
       const b = beyblades[0];
       return (
         <div className="text-xs text-gray-500 mt-1">
-          🌀 <span className="font-medium text-gray-400">{b.name}</span>
+          <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" /><span className="font-medium text-gray-400">{b.name}</span>
           {comboParts(b) && <span className="text-gray-600"> · {comboParts(b)}</span>}
         </div>
       );
@@ -310,7 +310,7 @@ export default function ScoreModal({
                     )}
                     {player1Beyblades.length === 1 && (
                       <div className="px-1 text-xs text-gray-600">
-                        🌀 {player1Beyblades[0].name}
+                        <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" />{player1Beyblades[0].name}
                         {comboParts(player1Beyblades[0]) && ` · ${comboParts(player1Beyblades[0])}`}
                       </div>
                     )}
@@ -349,7 +349,7 @@ export default function ScoreModal({
                     )}
                     {player2Beyblades.length === 1 && (
                       <div className="px-1 text-xs text-gray-600">
-                        🌀 {player2Beyblades[0].name}
+                        <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" />{player2Beyblades[0].name}
                         {comboParts(player2Beyblades[0]) && ` · ${comboParts(player2Beyblades[0])}`}
                       </div>
                     )}

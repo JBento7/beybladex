@@ -97,10 +97,10 @@ export default async function ProfilePage() {
             { label: "Pontos Totais", value: totalPoints, color: "text-[#f0a500]", icon: "⭐" },
             { label: "Taxa de Vitória", value: `${winRate}%`, color: "text-green-400", icon: "📈" },
             { label: "Total de Vitórias", value: totalWins, color: "text-green-400", icon: "🏆" },
-            { label: "Torneios", value: participations.length, color: "text-blue-400", icon: "🌀" },
+            { label: "Torneios", value: participations.length, color: "text-blue-400", icon: "/bey-removebg-preview.png" },
           ].map((stat) => (
             <div key={stat.label} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 text-center">
-              <div className="text-2xl mb-2">{stat.icon}</div>
+              <div className="flex justify-center mb-2">{stat.icon.startsWith("/") ? <img src={stat.icon} alt="" className="w-6 h-6 object-contain" /> : <span className="text-2xl">{stat.icon}</span>}</div>
               <div className={`text-2xl font-black ${stat.color} mb-1`}>{stat.value}</div>
               <div className="text-xs text-gray-500">{stat.label}</div>
             </div>

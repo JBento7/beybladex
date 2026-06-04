@@ -248,7 +248,7 @@ export default function AdminParticipantManager({
                             : "bg-[#1a1a1a] text-gray-300 border-[#333] hover:border-[#f0a500]/50"
                         }`}
                       >
-                        🌀 {b.name}
+                        <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" />{b.name}
                       </button>
                     ))}
                   </div>

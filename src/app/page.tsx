@@ -168,7 +168,7 @@ export default async function LandingPage() {
           <h2 className="text-4xl font-black text-white mb-4">Pronto para se Tornar Campeão?</h2>
           <p className="text-gray-400 text-lg mb-8">Junte-se à Liga Beyblade Londrina hoje mesmo.</p>
           <Link href="/register" className="inline-block bg-[#c8102e] hover:bg-[#a00d24] text-white font-black text-xl px-10 py-4 rounded-xl transition-all transform hover:scale-105 shadow-2xl shadow-[#c8102e]/30">
-            🌀 LET IT RIP!
+            <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain inline-block mr-2" />LET IT RIP!
           </Link>
         </div>
       </section>

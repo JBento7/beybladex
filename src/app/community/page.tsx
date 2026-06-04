@@ -66,8 +66,8 @@ export default async function CommunityPage() {
                     {player.avatarUrl ? (
                       <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center text-2xl">
-                        🌀
+                      <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center">
+                        <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
                       </div>
                     )}
                   </div>
@@ -112,7 +112,7 @@ export default async function CommunityPage() {
                       const wr = t > 0 ? Math.round((bey.wins / t) * 100) : 0;
                       return (
                         <div key={bey.id} className="flex items-center justify-between text-xs bg-[#252525] rounded-lg px-3 py-2">
-                          <span className="text-gray-300 truncate mr-2">🌀 {bey.name}</span>
+                          <span className="text-gray-300 truncate mr-2 flex items-center gap-1"><img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />{bey.name}</span>
                           <span className="text-[#f0a500] font-semibold flex-shrink-0">{wr}% WR</span>
                         </div>
                       );

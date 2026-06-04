@@ -90,7 +90,7 @@ function RegisterForm() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="flex items-center gap-2 mb-8">
-        <span className="text-3xl">🌀</span>
+        <img src="/bey-removebg-preview.png" alt="" className="w-8 h-8 object-contain" />
         <span className="text-2xl font-black text-amber-400">BeybladeX</span>
       </Link>
 
@@ -120,7 +120,7 @@ function RegisterForm() {
 
         {!inviteToken && (
           <div className="bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs px-3 py-2 rounded-lg mb-4 text-center">
-            🌀 Você será cadastrado como Participante
+            <img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />Você será cadastrado como Participante
           </div>
         )}
 

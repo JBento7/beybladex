@@ -63,8 +63,8 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
           {avatar ? (
             <img src={avatar} alt={userName} className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center text-4xl">
-              🌀
+            <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center">
+              <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
             </div>
           )}
           <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">

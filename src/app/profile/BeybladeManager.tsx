@@ -187,7 +187,7 @@ export default function BeybladeManager() {
         </div>
       ) : beyblades.length === 0 ? (
         <div className="text-center py-8">
-          <div className="text-4xl mb-3">🌀</div>
+          <div className="mb-3"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
           <p className="text-gray-500 text-sm">Nenhum combo registrado ainda</p>
           <p className="text-gray-600 text-xs mt-1">Cadastre seus combos (Blade + Ratchet + Bit) para usá-los nos torneios</p>
         </div>

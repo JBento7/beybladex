@@ -379,7 +379,7 @@ export default async function TournamentDetailPage({
               </div>
             ) : (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-                <div className="text-4xl mb-3">🌀</div>
+                <div className="mb-3"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
                 <p className="text-gray-400">No matches yet.</p>
               </div>
             )}
@@ -538,7 +538,7 @@ export default async function TournamentDetailPage({
         <Navbar />
         <div className="flex items-center justify-center p-8">
           <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 max-w-md w-full text-center mt-16">
-            <div className="text-5xl mb-4">🌀</div>
+            <div className="mb-4"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
             <h2 className="text-xl font-bold text-white mb-2">Erro ao carregar torneio</h2>
             <p className="text-gray-400 text-sm mb-6">
               Não foi possível carregar este torneio. Tente novamente em instantes.

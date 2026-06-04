@@ -89,8 +89,8 @@ export default function Navbar() {
                     {avatarUrl ? (
                       <img src={avatarUrl} alt={session.user.name ?? ""} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center text-sm">
-                        🌀
+                      <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center">
+                        <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
                       </div>
                     )}
                   </div>

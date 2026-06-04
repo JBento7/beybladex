@@ -95,11 +95,11 @@ export default async function DashboardPage() {
             { label: "Total de Pontos", value: totalPoints, icon: "⭐", color: "text-[#f0a500]" },
             { label: "Vitórias", value: totalWins, icon: "🏆", color: "text-green-400" },
             { label: "Derrotas", value: totalLosses, icon: "💀", color: "text-red-400" },
-            { label: "Torneios Ativos", value: activeTournaments, icon: "🌀", color: "text-blue-400" },
+            { label: "Torneios Ativos", value: activeTournaments, icon: "/bey-removebg-preview.png", color: "text-blue-400" },
           ].map((stat) => (
             <div key={stat.label} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">{stat.icon}</span>
+                {stat.icon.startsWith("/") ? <img src={stat.icon} alt="" className="w-6 h-6 object-contain" /> : <span className="text-2xl">{stat.icon}</span>}
               </div>
               <div className={`text-3xl font-black ${stat.color} mb-1`}>{stat.value}</div>
               <div className="text-sm text-gray-500">{stat.label}</div>
@@ -262,7 +262,7 @@ export default async function DashboardPage() {
                   <div key={b.id} className="bg-[#252525] border border-[#333] rounded-xl p-4">
                     <div className="flex items-start justify-between mb-3 gap-2">
                       <div className="min-w-0">
-                        <div className="font-bold text-white truncate">🌀 {b.name}</div>
+                        <div className="font-bold text-white truncate flex items-center"><img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />{b.name}</div>
                         {parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{parts}</div>}
                       </div>
                       <div className="text-right flex-shrink-0">

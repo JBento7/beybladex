@@ -63,7 +63,7 @@ export default async function TournamentsPage() {
 
         {tournaments.length === 0 ? (
           <div className="text-center py-24">
-            <div className="text-6xl mb-4">🌀</div>
+            <div className="mb-4"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
             <h2 className="text-2xl font-bold text-white mb-2">Nenhum Torneio Ainda</h2>
             <p className="text-gray-400 mb-6">Seja o primeiro a criar um campeonato!</p>
             {session && (

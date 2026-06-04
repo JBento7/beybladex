@@ -103,8 +103,8 @@ export default async function PlayerProfilePage({
               {player.avatarUrl ? (
                 <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center text-4xl">
-                  🌀
+                <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center">
+                  <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
                 </div>
               )}
             </div>
@@ -132,10 +132,10 @@ export default async function PlayerProfilePage({
             { label: "Pontos Totais", value: totalPoints, color: "text-[#f0a500]", icon: "⭐" },
             { label: "Taxa de Vitória", value: `${winRate}%`, color: "text-green-400", icon: "📈" },
             { label: "Vitórias", value: totalWins, color: "text-green-400", icon: "🏆" },
-            { label: "Torneios", value: player.participations.length, color: "text-blue-400", icon: "🌀" },
+            { label: "Torneios", value: player.participations.length, color: "text-blue-400", icon: "/bey-removebg-preview.png" },
           ].map((stat) => (
             <div key={stat.label} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 text-center">
-              <div className="text-2xl mb-2">{stat.icon}</div>
+              <div className="flex justify-center mb-2">{stat.icon.startsWith("/") ? <img src={stat.icon} alt="" className="w-6 h-6 object-contain" /> : <span className="text-2xl">{stat.icon}</span>}</div>
               <div className={`text-2xl font-black ${stat.color} mb-1`}>{stat.value}</div>
               <div className="text-xs text-gray-500">{stat.label}</div>
             </div>
@@ -244,7 +244,7 @@ export default async function PlayerProfilePage({
                         <div className="font-bold text-white">{bey.name}</div>
                         {parts && <div className="text-xs text-gray-500 mt-0.5">{parts}</div>}
                       </div>
-                      <span className="text-xl flex-shrink-0">🌀</span>
+                      <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain flex-shrink-0" />
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center text-xs">
                       <div>

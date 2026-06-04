@@ -68,7 +68,7 @@ export default async function ProfileStatsPage() {
 
         {combos.length === 0 ? (
           <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-10 text-center">
-            <div className="text-4xl mb-3">🌀</div>
+            <div className="mb-3"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
             <p className="text-gray-500">Nenhum combo cadastrado ainda.</p>
             <Link href="/profile" className="text-[#f0a500] hover:underline text-sm mt-2 inline-block">Cadastrar combos →</Link>
           </div>
@@ -79,7 +79,7 @@ export default async function ProfileStatsPage() {
                 {/* Header */}
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
                   <div>
-                    <h2 className="text-xl font-black text-white">🌀 {c.name}</h2>
+                    <h2 className="text-xl font-black text-white flex items-center"><img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />{c.name}</h2>
                     {c.parts && <p className="text-xs text-gray-500 mt-0.5">{c.parts}</p>}
                   </div>
                   <div className={`text-sm font-bold px-3 py-1 rounded-full ${
