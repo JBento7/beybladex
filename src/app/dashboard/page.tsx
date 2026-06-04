@@ -83,6 +83,11 @@ export default async function DashboardPage() {
       }),
     ]);
 
+  const currentUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { bladerName: true },
+  });
+
   const rankingUserIds = ranking.map((r: { userId: string }) => r.userId);
   const rankingUsers = await prisma.user.findMany({
     where: { id: { in: rankingUserIds } },
@@ -112,7 +117,8 @@ export default async function DashboardPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-black text-white">
-            Bem-vindo, <span className="text-[#f0a500]">{session.user.name}</span>!
+            Bem-vindo, <span className="text-[#f0a500]">{currentUser?.bladerName || session.user.name}</span>
+            {currentUser?.bladerName && <span className="text-gray-500 text-xl font-normal ml-2">({session.user.name})</span>}!
           </h1>
           <p className="text-gray-400 mt-1">Acompanhe suas partidas, torneios e suba no ranking.</p>
         </div>
