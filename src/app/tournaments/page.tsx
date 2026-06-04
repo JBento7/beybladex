@@ -1,10 +1,12 @@
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
-import JoinButton from "./JoinButton";
 import type { TournamentFormat, TournamentStatus } from "@prisma/client";
+
+export const metadata: Metadata = { title: "Torneios" };
 
 const FORMAT_LABELS: Record<TournamentFormat, string> = {
   ROUND_ROBIN: "Pontos Corridos",
@@ -141,7 +143,12 @@ export default async function TournamentsPage() {
                           ✓ Inscrito
                         </span>
                       ) : canJoin ? (
-                        <JoinButton tournamentId={t.id} />
+                        <Link
+                          href={`/tournaments/${t.id}`}
+                          className="flex-1 text-center bg-[#f0a500] hover:bg-[#d4940a] text-black text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+                        >
+                          Participar
+                        </Link>
                       ) : null}
                     </div>
                   </div>

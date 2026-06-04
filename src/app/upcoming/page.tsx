@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import type { TournamentFormat, TournamentStatus } from "@prisma/client";
+
+export const metadata: Metadata = { title: "Próximos Torneios" };
 
 const FORMAT_LABELS: Record<TournamentFormat, string> = {
   ROUND_ROBIN: "Pontos Corridos",

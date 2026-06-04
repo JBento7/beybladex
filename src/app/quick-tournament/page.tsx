@@ -152,6 +152,7 @@ export default function QuickTournamentPage() {
   }
 
   function reset() {
+    if (!confirm("Reiniciar o torneio? Todo o progresso será perdido.")) return;
     const fresh: QTState = { phase: "setup", title: "", format: "ROUND_ROBIN", participants: [], matches: [] };
     save(fresh);
     setNameInput("");

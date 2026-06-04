@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface AvatarUploadProps {
   currentAvatar: string | null;
@@ -11,10 +11,32 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
   const [avatar, setAvatar] = useState<string | null>(currentAvatar);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (successTimer.current) clearTimeout(successTimer.current);
+    };
+  }, []);
+
+  function flashSuccess(msg: string) {
+    setSuccess(msg);
+    if (successTimer.current) clearTimeout(successTimer.current);
+    successTimer.current = setTimeout(() => setSuccess(null), 3000);
+  }
 
   async function handleFile(file: File) {
-    if (!file.type.startsWith("image/")) return;
+    setSuccess(null);
+    if (!file.type.startsWith("image/")) {
+      setError("Selecione um arquivo de imagem.");
+      return;
+    }
+    if (file.size > 8_000_000) {
+      setError("Imagem muito grande (máx 8MB).");
+      return;
+    }
     setUploading(true);
     setError(null);
 
@@ -28,6 +50,7 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
       const data = await res.json();
       if (res.ok) {
         setAvatar(resized);
+        flashSuccess("Foto atualizada!");
       } else {
         setError(data.error ?? "Erro ao salvar foto.");
       }
@@ -41,13 +64,22 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
   async function handleRemove() {
     setUploading(true);
     setError(null);
+    setSuccess(null);
     try {
       const res = await fetch("/api/profile/avatar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ avatarUrl: null }),
       });
-      if (res.ok) setAvatar(null);
+      if (res.ok) {
+        setAvatar(null);
+        flashSuccess("Foto atualizada!");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Erro ao remover foto.");
+      }
+    } catch {
+      setError("Erro de conexão.");
     } finally {
       setUploading(false);
     }
@@ -67,9 +99,9 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
               <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
             </div>
           )}
-          <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className={`absolute inset-0 bg-black/50 rounded-full flex items-center justify-center transition-opacity ${uploading ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
             <span className="text-white text-xs font-semibold">
-              {uploading ? "Salvando..." : "Alterar"}
+              {uploading ? "Enviando..." : "Alterar"}
             </span>
           </div>
         </div>
@@ -85,6 +117,9 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
       </div>
       {error && (
         <p className="text-xs text-red-400 max-w-[200px]">{error}</p>
+      )}
+      {success && !error && (
+        <p className="text-xs text-green-400 max-w-[200px]">{success}</p>
       )}
       <input
         ref={inputRef}

@@ -7,6 +7,16 @@ import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import { FINISH_TYPE_LABELS, FINISH_TYPE_POINTS } from "@/lib/scoring";
 import type { FinishType } from "@prisma/client";
+import type { Metadata } from "next";
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const p = await prisma.user.findUnique({
+    where: { id: params.id },
+    select: { name: true, bladerName: true },
+  });
+  const displayName = p?.bladerName || p?.name || "Jogador";
+  return { title: `${displayName} — Comunidade` };
+}
 
 const finishColors: Record<string, string> = {
   EXTREME_FINISH: "bg-[#f0a500] text-black",

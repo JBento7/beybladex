@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface Beyblade {
   id: string;
@@ -24,8 +24,26 @@ export default function BeybladeManager() {
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   const [loadError, setLoadError] = useState(false);
+
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flashSuccess = useCallback((msg: string) => {
+    setSuccess(msg);
+    if (successTimer.current) clearTimeout(successTimer.current);
+    successTimer.current = setTimeout(() => setSuccess(""), 3000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (successTimer.current) clearTimeout(successTimer.current);
+    };
+  }, []);
 
   const fetchBeyblades = useCallback(async () => {
     try {
@@ -82,6 +100,7 @@ export default function BeybladeManager() {
       setForm(EMPTY);
       setEditingId(null);
       setShowForm(false);
+      flashSuccess("Combo salvo!");
       fetchBeyblades();
     } else {
       const data = await res.json();
@@ -90,9 +109,22 @@ export default function BeybladeManager() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Remover este combo?")) return;
-    await fetch(`/api/beyblades/${id}`, { method: "DELETE" });
-    fetchBeyblades();
+    setDeletingId(id);
+    setDeleteError("");
+    try {
+      const res = await fetch(`/api/beyblades/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        setDeleteError("Erro ao remover combo. Tente novamente.");
+        return;
+      }
+      setConfirmingId(null);
+      flashSuccess("Combo removido!");
+      await fetchBeyblades();
+    } catch {
+      setDeleteError("Erro ao remover combo. Tente novamente.");
+    } finally {
+      setDeletingId(null);
+    }
   }
 
   function comboParts(b: Beyblade) {
@@ -110,6 +142,18 @@ export default function BeybladeManager() {
           {showForm ? "Cancelar" : "+ Adicionar Combo"}
         </button>
       </div>
+
+      {success && (
+        <div className="mb-4 text-green-400 text-sm bg-green-900/20 border border-green-700/30 px-3 py-2 rounded-lg">
+          {success}
+        </div>
+      )}
+
+      {deleteError && (
+        <div className="mb-4 text-red-400 text-sm bg-red-900/20 border border-red-700/30 px-3 py-2 rounded-lg">
+          {deleteError}
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleSave} className="mb-5 bg-[#252525] border border-[#333] rounded-xl p-4 space-y-3">
@@ -205,20 +249,50 @@ export default function BeybladeManager() {
                     {parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{parts}</div>}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                    <button
-                      onClick={() => openEdit(b)}
-                      className="text-gray-600 hover:text-[#f0a500] transition-colors text-xs"
-                      title="Editar"
-                    >
-                      ✎
-                    </button>
-                    <button
-                      onClick={() => handleDelete(b.id)}
-                      className="text-gray-600 hover:text-red-400 transition-colors text-xs"
-                      title="Remover"
-                    >
-                      ✕
-                    </button>
+                    {confirmingId === b.id ? (
+                      <div className="flex items-center gap-2 text-xs">
+                        {deletingId === b.id ? (
+                          <span className="text-gray-400">Removendo...</span>
+                        ) : (
+                          <>
+                            <span className="text-gray-400">Remover?</span>
+                            <button
+                              onClick={() => handleDelete(b.id)}
+                              className="text-red-400 hover:text-red-300 font-semibold transition-colors"
+                            >
+                              Sim
+                            </button>
+                            <button
+                              onClick={() => setConfirmingId(null)}
+                              className="text-gray-400 hover:text-gray-200 font-semibold transition-colors"
+                            >
+                              Não
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => openEdit(b)}
+                          disabled={deletingId === b.id}
+                          aria-label="Editar combo"
+                          className="text-gray-600 hover:text-[#f0a500] disabled:opacity-50 transition-colors text-xs"
+                          title="Editar"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => { setDeleteError(""); setConfirmingId(b.id); }}
+                          disabled={deletingId === b.id}
+                          aria-label="Remover combo"
+                          className="text-gray-600 hover:text-red-400 disabled:opacity-50 transition-colors text-xs"
+                          title="Remover"
+                        >
+                          ✕
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-4 gap-2 text-center">

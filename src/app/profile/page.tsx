@@ -10,8 +10,10 @@ import BeybladeManager from "./BeybladeManager";
 import AvatarUpload from "./AvatarUpload";
 import ProfileEditor from "./ProfileEditor";
 import { getComboStats } from "@/lib/beyblade-stats";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Meu Perfil" };
 
 const finishOrder: FinishType[] = ["EXTREME_FINISH", "BURST_FINISH", "OVER_FINISH", "SPIN_FINISH"];
 const finishColors: Record<string, string> = {

@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+
+export const metadata: Metadata = { title: "Painel" };
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import { FINISH_TYPE_LABELS } from "@/lib/scoring";
@@ -227,7 +230,7 @@ export default async function DashboardPage() {
           </div>{/* end left column */}
 
           {/* Right column — Ranking */}
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 lg:self-start lg:sticky lg:top-20">
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 lg:self-start lg:sticky lg:top-[116px]">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-white">Ranking Oficial</h2>
               <Link href="/community" className="text-xs text-[#f0a500] hover:underline">Ver tudo →</Link>
@@ -236,7 +239,7 @@ export default async function DashboardPage() {
               <p className="text-gray-500 text-sm text-center py-6">Nenhum dado ainda</p>
             ) : (
               <div className="space-y-2">
-                {rankingList.map((player: { id: string; name: string; avatarUrl: string | null; points: number; wins: number; losses: number; isMe: boolean }, i: number) => (
+                {rankingList.map((player: { id: string; name: string; bladerName: string | null; avatarUrl: string | null; points: number; wins: number; losses: number; isMe: boolean }, i: number) => (
                   <Link
                     key={player.id}
                     href={`/community/${player.id}`}
@@ -259,7 +262,7 @@ export default async function DashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className={`text-xs font-semibold truncate ${player.isMe ? "text-[#f0a500]" : "text-white"}`}>
-                        {(player as { bladerName?: string | null }).bladerName || player.name}{player.isMe && " (você)"}
+                        {player.bladerName || player.name}{player.isMe && " (você)"}
                       </div>
                       <div className="text-[10px] text-gray-500">{player.wins}V · {player.losses}D</div>
                     </div>

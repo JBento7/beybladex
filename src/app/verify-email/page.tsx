@@ -72,7 +72,7 @@ function VerifyEmailContent() {
 
 export default function VerifyEmailPage() {
   return (
-    <div className="min-h-screen bg-[#0d0d0d] flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-[#0d0d0d] flex flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="flex items-center gap-2 mb-8">
         <img src="/bey-removebg-preview.png" alt="" className="w-8 h-8 object-contain" />
         <span className="text-2xl font-black text-[#f0a500]">BeybladeX</span>

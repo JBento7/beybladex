@@ -17,6 +17,8 @@ function RegisterForm() {
     confirmPassword: "",
     beyblade: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [inviteValid, setInviteValid] = useState<boolean | null>(null);
@@ -62,39 +64,43 @@ function RegisterForm() {
 
     setLoading(true);
 
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.name,
-        email: form.email,
-        password: form.password,
-        inviteToken: inviteToken || undefined,
-        beyblade: form.beyblade || undefined,
-      }),
-    });
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          inviteToken: inviteToken || undefined,
+          beyblade: form.beyblade || undefined,
+        }),
+      });
 
-    setLoading(false);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Erro ao criar conta.");
+        return;
+      }
 
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Erro ao criar conta.");
-      return;
+      router.push("/login?registered=1");
+    } catch {
+      setError("Erro de conexão. Tente novamente.");
+    } finally {
+      setLoading(false);
     }
-
-    router.push("/login?registered=1");
   }
 
   const isOrganizer = inviteToken && inviteValid === true;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-[#0d0d0d] flex flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="flex items-center gap-2 mb-8">
         <img src="/bey-removebg-preview.png" alt="" className="w-8 h-8 object-contain" />
-        <span className="text-2xl font-black text-amber-400">BeybladeX</span>
+        <span className="text-2xl font-black text-[#f0a500]">BeybladeX</span>
       </Link>
 
-      <div className="w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl">
+      <div className="w-full max-w-md bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 shadow-2xl">
         <h1 className="text-2xl font-bold text-white mb-2 text-center">Criar Conta</h1>
         <p className="text-gray-400 text-center mb-4 text-sm">
           {isOrganizer
@@ -105,9 +111,9 @@ function RegisterForm() {
         {inviteToken && (
           <div className={`text-xs px-3 py-2 rounded-lg mb-4 text-center font-medium ${
             inviteChecking
-              ? "bg-gray-800 text-gray-400"
+              ? "bg-[#252525] text-gray-400"
               : inviteValid
-              ? "bg-amber-500/10 border border-amber-500/30 text-amber-400"
+              ? "bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500]"
               : "bg-red-900/30 border border-red-700 text-red-400"
           }`}>
             {inviteChecking
@@ -125,82 +131,112 @@ function RegisterForm() {
         )}
 
         {error && (
-          <div className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-4 py-3 rounded-lg mb-6">
+          <div role="alert" className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-4 py-3 rounded-lg mb-6">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Nome Completo</label>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1.5">Nome Completo</label>
             <input
+              id="name"
               name="name"
               type="text"
+              autoComplete="name"
+              autoFocus
               value={form.name}
               onChange={handleChange}
               required
               placeholder="Seu nome"
-              className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+              className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">E-mail</label>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1.5">E-mail</label>
             <input
+              id="email"
               name="email"
               type="email"
+              autoComplete="email"
               value={form.email}
               onChange={handleChange}
               required
               placeholder="voce@exemplo.com"
-              className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+              className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+            <label htmlFor="beyblade" className="block text-sm font-medium text-gray-300 mb-1.5">
               Nome da Beyblade <span className="text-gray-500 font-normal">(opcional)</span>
             </label>
             <input
+              id="beyblade"
               name="beyblade"
               type="text"
               value={form.beyblade}
               onChange={handleChange}
               placeholder="ex: Brave Valkyrie"
-              className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+              className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Senha</label>
-            <input
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={handleChange}
-              required
-              placeholder="Mínimo 6 caracteres"
-              className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
-            />
+            <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1.5">Senha</label>
+            <div className="relative">
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={form.password}
+                onChange={handleChange}
+                required
+                placeholder="Mínimo 6 caracteres"
+                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 pr-12 text-white placeholder-gray-500 outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-[#f0a500] transition-colors"
+              >
+                {showPassword ? "Ocultar" : "Mostrar"}
+              </button>
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Confirmar Senha</label>
-            <input
-              name="confirmPassword"
-              type="password"
-              value={form.confirmPassword}
-              onChange={handleChange}
-              required
-              placeholder="Repita a senha"
-              className="w-full bg-gray-800 border border-gray-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
-            />
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-1.5">Confirmar Senha</label>
+            <div className="relative">
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={form.confirmPassword}
+                onChange={handleChange}
+                required
+                placeholder="Repita a senha"
+                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 pr-12 text-white placeholder-gray-500 outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                aria-label={showConfirmPassword ? "Ocultar senha" : "Mostrar senha"}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-[#f0a500] transition-colors"
+              >
+                {showConfirmPassword ? "Ocultar" : "Mostrar"}
+              </button>
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading || (!!inviteToken && inviteChecking)}
-            className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold py-3 rounded-xl transition-colors text-base mt-2"
+            className="w-full bg-[#f0a500] hover:bg-[#d4940a] disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold py-3 rounded-xl transition-colors text-base mt-2"
           >
             {loading ? "Criando conta..." : "Criar Conta"}
           </button>
@@ -208,7 +244,7 @@ function RegisterForm() {
 
         <p className="text-center text-sm text-gray-400 mt-6">
           Já tem uma conta?{" "}
-          <Link href="/login" className="text-amber-400 hover:text-amber-300 font-medium">
+          <Link href="/login" className="text-[#f0a500] hover:text-[#d4940a] font-medium">
             Entrar
           </Link>
         </p>
@@ -219,7 +255,7 @@ function RegisterForm() {
 
 export default function RegisterPage() {
   return (
-    <Suspense>
+    <Suspense fallback={<div className="min-h-screen bg-[#0d0d0d]" />}>
       <RegisterForm />
     </Suspense>
   );

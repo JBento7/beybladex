@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 interface Player {
@@ -32,6 +32,7 @@ export default function AdminParticipantManager({
 }: Props) {
   const router = useRouter();
   const [localParticipants, setLocalParticipants] = useState<Participant[]>(participants);
+  useEffect(() => setLocalParticipants(participants), [participants]);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"registered" | "guest">("registered");
 

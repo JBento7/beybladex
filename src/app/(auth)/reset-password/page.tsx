@@ -10,6 +10,8 @@ function ResetPasswordForm() {
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,18 +26,23 @@ function ResetPasswordForm() {
     }
 
     setLoading(true);
-    const res = await fetch("/api/auth/reset-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, newPassword }),
-    });
-    const data = await res.json();
-    setLoading(false);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok || data.error) {
-      setError(data.error || "Erro ao redefinir senha.");
-    } else {
-      setSuccess(true);
+      if (!res.ok || data.error) {
+        setError(data.error || "Erro ao redefinir senha.");
+      } else {
+        setSuccess(true);
+      }
+    } catch {
+      setError("Erro de conexão. Tente novamente.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -46,7 +53,7 @@ function ResetPasswordForm() {
 
       {success ? (
         <div className="text-center space-y-4">
-          <div className="bg-green-900/30 border border-green-700 text-green-400 text-sm px-4 py-4 rounded-lg">
+          <div aria-live="polite" className="bg-green-900/30 border border-green-700 text-green-400 text-sm px-4 py-4 rounded-lg">
             Senha alterada! Faça login.
           </div>
           <Link href="/login" className="block text-[#f0a500] hover:text-[#d4940a] text-sm font-medium">
@@ -56,39 +63,64 @@ function ResetPasswordForm() {
       ) : (
         <form onSubmit={handleSubmit} className="space-y-5">
           {error && (
-            <div className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-4 py-3 rounded-lg">
+            <div role="alert" className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-4 py-3 rounded-lg">
               {error}
             </div>
           )}
 
           {!token && (
-            <div className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-4 py-3 rounded-lg">
+            <div role="alert" className="bg-red-900/30 border border-red-700 text-red-400 text-sm px-4 py-3 rounded-lg">
               Token inválido. Solicite um novo link de redefinição.
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Nova Senha</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-              placeholder="••••••••"
-              className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
-            />
+            <label htmlFor="newPassword" className="block text-sm font-medium text-gray-300 mb-1.5">Nova Senha</label>
+            <div className="relative">
+              <input
+                id="newPassword"
+                type={showNewPassword ? "text" : "password"}
+                autoComplete="new-password"
+                autoFocus
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 pr-12 text-white placeholder-gray-500 outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword((v) => !v)}
+                aria-label={showNewPassword ? "Ocultar senha" : "Mostrar senha"}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-[#f0a500] transition-colors"
+              >
+                {showNewPassword ? "Ocultar" : "Mostrar"}
+              </button>
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1.5">Confirmar Nova Senha</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              placeholder="••••••••"
-              className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
-            />
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-1.5">Confirmar Nova Senha</label>
+            <div className="relative">
+              <input
+                id="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 pr-12 text-white placeholder-gray-500 outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                aria-label={showConfirmPassword ? "Ocultar senha" : "Mostrar senha"}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-[#f0a500] transition-colors"
+              >
+                {showConfirmPassword ? "Ocultar" : "Mostrar"}
+              </button>
+            </div>
           </div>
 
           <button
@@ -112,7 +144,7 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <div className="min-h-screen bg-[#0d0d0d] flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-[#0d0d0d] flex flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="flex items-center gap-2 mb-8">
         <img src="/bey-removebg-preview.png" alt="" className="w-8 h-8 object-contain" />
         <span className="text-2xl font-black text-[#f0a500]">BeybladeX</span>

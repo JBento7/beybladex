@@ -1,9 +1,12 @@
 export const dynamic = "force-dynamic";
+import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
+
+export const metadata: Metadata = { title: "Comunidade" };
 import Link from "next/link";
 
 export default async function CommunityPage() {

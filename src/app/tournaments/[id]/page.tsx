@@ -9,6 +9,15 @@ import ScoreModal from "./ScoreModal";
 import ClientJoinButton from "./ClientJoinButton";
 import AdminParticipantManager from "./AdminParticipantManager";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
+import type { Metadata } from "next";
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const t = await prisma.tournament.findUnique({
+    where: { id: params.id },
+    select: { name: true },
+  });
+  return { title: t?.name ?? "Torneio" };
+}
 
 const FORMAT_LABELS: Record<TournamentFormat, string> = {
   ROUND_ROBIN: "Pontos Corridos",
@@ -192,7 +201,7 @@ export default async function TournamentDetailPage({
 
   if (!tournament) notFound();
 
-  const isOrganizerOfThis = session?.user.role === "ORGANIZER";
+  const isOrganizerOfThis = !!session && session.user.id === tournament.organizerId;
 
   // Collect all beyblade IDs registered by participants
   const allBeybladeIds = tournament.participants.flatMap((p) =>

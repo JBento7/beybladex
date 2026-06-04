@@ -37,10 +37,10 @@ export default function Navbar() {
   return (
     <nav className="bg-[#1a1a1a] border-b border-[#2a2a2a] sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between" style={{ height: "100px" }}>
+        <div className="flex items-center justify-between h-16 md:h-[100px]">
           {/* Logo */}
           <Link href="/">
-            <img src="/lblnovo.png" alt="Liga Beyblade Londrina" style={{ height: "100px" }} className="w-auto" />
+            <img src="/lblnovo.png" alt="Liga Beyblade Londrina" className="h-14 md:h-[100px] w-auto" />
           </Link>
 
           {/* Desktop nav */}

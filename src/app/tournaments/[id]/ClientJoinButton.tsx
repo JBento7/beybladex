@@ -23,6 +23,7 @@ export default function ClientJoinButton({
   const [beyblades, setBeyblades] = useState<Beyblade[]>([]);
   const [loadingBB, setLoadingBB] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [err, setErr] = useState<string | null>(null);
   const router = useRouter();
 
   const required = deckType === "THREE_ON_THREE" ? 3 : 1;
@@ -33,6 +34,7 @@ export default function ClientJoinButton({
     if (!showModal) return;
     setLoadingBB(true);
     setLoadError(false);
+    setErr(null);
     setSelected([]);
     fetch("/api/beyblades")
       .then((r) => {
@@ -54,9 +56,10 @@ export default function ClientJoinButton({
 
   async function handleJoin() {
     if (selected.length !== required) {
-      alert(`Selecione exatamente ${required} combo${required > 1 ? "s" : ""}.`);
+      setErr(`Selecione exatamente ${required} combo${required > 1 ? "s" : ""}.`);
       return;
     }
+    setErr(null);
     setLoading(true);
     const res = await fetch(`/api/tournaments/${tournamentId}/join`, {
       method: "POST",
@@ -69,7 +72,7 @@ export default function ClientJoinButton({
       router.refresh();
     } else {
       const data = await res.json();
-      alert(data.error || "Erro ao se inscrever no torneio");
+      setErr(data.error || "Erro ao se inscrever no torneio");
     }
   }
 
@@ -87,14 +90,28 @@ export default function ClientJoinButton({
       </button>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col"
+          >
             <h2 className="text-lg font-bold text-white mb-1">Inscrição no Torneio</h2>
             <p className="text-sm text-gray-400 mb-4">
               {required === 3
                 ? "Selecione exatamente 3 combos do seu repertório."
                 : "Selecione 1 combo do seu repertório."}
             </p>
+
+            {err && (
+              <div className="mb-4 text-sm px-4 py-2 rounded-lg bg-red-900/30 border border-red-700 text-red-400">
+                {err}
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto space-y-2 mb-4">
               {loadingBB ? (

@@ -53,6 +53,7 @@ export default function ScoreModal({
   const [finishType, setFinishType] = useState<FinishType>("SPIN_FINISH");
   const [loading, setLoading] = useState(false);
   const [state, setState] = useState<MatchState | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   // Track selected beyblade for each player (auto-select if only 1)
   const [p1BeybladeId, setP1BeybladeId] = useState<string>(player1Beyblades[0]?.id ?? "");
@@ -80,6 +81,7 @@ export default function ScoreModal({
 
   async function addPoint(scorerId: string) {
     if (loading || state?.matchFinished) return;
+    setErr(null);
     const beybladeId = scorerId === player1.id ? p1BeybladeId : p2BeybladeId;
     setLoading(true);
     const res = await fetch(`/api/matches/${matchId}/point`, {
@@ -94,7 +96,7 @@ export default function ScoreModal({
       if (data.matchFinished) router.refresh();
     } else {
       const data = await res.json();
-      alert(data.error || "Erro ao registrar ponto");
+      setErr(data.error || "Erro ao registrar ponto");
     }
   }
 
@@ -109,47 +111,6 @@ export default function ScoreModal({
   const p1Pts = cur?.player1Points ?? 0;
   const p2Pts = cur?.player2Points ?? 0;
 
-  function BeybladeSelector({
-    beyblades,
-    selected,
-    onSelect,
-    color,
-  }: {
-    beyblades: BeybladeInfo[];
-    selected: string;
-    onSelect: (id: string) => void;
-    color: string;
-  }) {
-    if (beyblades.length === 0) return null;
-    if (beyblades.length === 1) {
-      const b = beyblades[0];
-      return (
-        <div className="text-xs text-gray-500 mt-1">
-          <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" /><span className="font-medium text-gray-400">{b.name}</span>
-          {comboParts(b) && <span className="text-gray-600"> · {comboParts(b)}</span>}
-        </div>
-      );
-    }
-    return (
-      <div className="flex flex-wrap gap-1 mt-1">
-        {beyblades.map((b) => (
-          <button
-            key={b.id}
-            type="button"
-            onClick={() => onSelect(b.id)}
-            className={`text-xs px-2 py-1 rounded-lg border transition-all ${
-              selected === b.id
-                ? `border-${color} bg-${color}/10 font-bold text-white`
-                : "border-[#444] text-gray-500 hover:border-gray-500"
-            }`}
-          >
-            {b.name}
-          </button>
-        ))}
-      </div>
-    );
-  }
-
   return (
     <>
       <button
@@ -162,11 +123,17 @@ export default function ScoreModal({
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handleClose} />
-          <div className="relative bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div role="dialog" aria-modal="true" className="relative bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold text-white">🏆 Registro de Partida</h3>
-              <button onClick={handleClose} className="text-gray-400 hover:text-white text-xl">✕</button>
+              <button onClick={handleClose} aria-label="Fechar" className="text-gray-400 hover:text-white text-xl">✕</button>
             </div>
+
+            {err && (
+              <div className="mb-4 text-sm px-4 py-2 rounded-lg bg-red-900/30 border border-red-700 text-red-400">
+                {err}
+              </div>
+            )}
 
             {/* Set tracker */}
             <div className="bg-[#252525] rounded-xl p-4 mb-5">

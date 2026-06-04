@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface ProfileEditorProps {
@@ -21,6 +21,13 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (successTimer.current) clearTimeout(successTimer.current);
+    };
+  }, []);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -29,6 +36,11 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
 
     if (!name.trim()) {
       setError("Nome não pode ser vazio.");
+      return;
+    }
+
+    if (newPassword && !currentPassword) {
+      setError("Informe sua senha atual para alterá-la.");
       return;
     }
 
@@ -56,6 +68,8 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
       setError(data.error || "Erro ao salvar.");
     } else {
       setSuccess("Perfil atualizado com sucesso!");
+      if (successTimer.current) clearTimeout(successTimer.current);
+      successTimer.current = setTimeout(() => setSuccess(""), 4000);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
