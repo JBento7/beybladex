@@ -163,7 +163,7 @@ export default async function ProfilePage() {
                   <Link
                     key={p.id}
                     href={`/tournaments/${p.tournament.id}`}
-                    className="block bg-[#252525] hover:bg-gray-750 border border-[#333] hover:border-[#f0a500]/30 rounded-lg p-4 transition-colors"
+                    className="block bg-[#252525] hover:bg-[#2d2d2d] border border-[#333] hover:border-[#f0a500]/30 rounded-lg p-4 transition-colors"
                   >
                     <div className="flex items-start justify-between mb-2">
                       <span className="font-semibold text-white text-sm">{p.tournament.name}</span>

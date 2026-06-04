@@ -27,13 +27,20 @@ export default function ClientJoinButton({
 
   const required = deckType === "THREE_ON_THREE" ? 3 : 1;
 
+  const [loadError, setLoadError] = useState(false);
+
   useEffect(() => {
     if (!showModal) return;
     setLoadingBB(true);
+    setLoadError(false);
     setSelected([]);
     fetch("/api/beyblades")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("fetch failed");
+        return r.json();
+      })
       .then((data) => setBeyblades(Array.isArray(data) ? data : []))
+      .catch(() => setLoadError(true))
       .finally(() => setLoadingBB(false));
   }, [showModal]);
 
@@ -92,6 +99,16 @@ export default function ClientJoinButton({
             <div className="flex-1 overflow-y-auto space-y-2 mb-4">
               {loadingBB ? (
                 <p className="text-gray-500 text-sm text-center py-4">Carregando combos...</p>
+              ) : loadError ? (
+                <div className="text-center py-6">
+                  <p className="text-red-400 text-sm mb-2">Erro ao carregar seus combos.</p>
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="text-[#f0a500] text-sm underline"
+                  >
+                    Fechar e tentar novamente
+                  </button>
+                </div>
               ) : beyblades.length === 0 ? (
                 <div className="text-center py-6">
                   <p className="text-gray-400 text-sm">Você não tem combos cadastrados.</p>

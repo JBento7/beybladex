@@ -40,7 +40,7 @@ type MatchWithRelations = {
   player2: { id: string; name: string };
   winner: { id: string; name: string } | null;
   group: { id: string; name: string } | null;
-  points: { id: string; userId: string; finishType: string; points: number }[];
+  points: { userId: string; points: number }[];
 };
 
 function getRoundName(round: number, totalRounds: number, format?: string): string {
@@ -182,7 +182,7 @@ export default async function TournamentDetailPage({
           player1: { select: { id: true, name: true } },
           player2: { select: { id: true, name: true } },
           winner: { select: { id: true, name: true } },
-          points: true,
+          points: { select: { userId: true, points: true } },
           group: true,
         },
         orderBy: [{ round: "asc" }, { bracketPos: "asc" }],
@@ -192,16 +192,35 @@ export default async function TournamentDetailPage({
 
   if (!tournament) notFound();
 
+  const isOrganizerOfThis = session?.user.role === "ORGANIZER";
+
   // Collect all beyblade IDs registered by participants
   const allBeybladeIds = tournament.participants.flatMap((p) =>
     [p.beyblade1, p.beyblade2, p.beyblade3].filter(Boolean) as string[]
   );
-  const beybladeDetails = allBeybladeIds.length > 0
-    ? await prisma.beyblade.findMany({
-        where: { id: { in: allBeybladeIds } },
-        select: { id: true, name: true, blade: true, ratchet: true, bit: true },
-      })
-    : [];
+
+  // These two reads are independent — batch them in a single round-trip
+  const [beybladeDetails, allPlayers] = await Promise.all([
+    allBeybladeIds.length > 0
+      ? prisma.beyblade.findMany({
+          where: { id: { in: allBeybladeIds } },
+          select: { id: true, name: true, blade: true, ratchet: true, bit: true },
+        })
+      : Promise.resolve([]),
+    // If organizer, fetch all active users with their beyblades for admin panel
+    isOrganizerOfThis
+      ? prisma.user.findMany({
+          where: { deleted: false, isGuest: false },
+          select: {
+            id: true,
+            name: true,
+            beyblades: { select: { id: true, name: true } },
+          },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
+  ]);
+
   const beybladeMap = new Map(beybladeDetails.map((b) => [b.id, b]));
 
   const participantBeyblades: ParticipantBeyblades[] = tournament.participants.map((p) => ({
@@ -211,21 +230,6 @@ export default async function TournamentDetailPage({
       .map((id) => beybladeMap.get(id!))
       .filter(Boolean) as BeybladeInfo[],
   }));
-
-  const isOrganizerOfThis = session?.user.role === "ORGANIZER";
-
-  // If organizer, fetch all active users with their beyblades for admin panel
-  const allPlayers = isOrganizerOfThis
-    ? await prisma.user.findMany({
-        where: { deleted: false, isGuest: false },
-        select: {
-          id: true,
-          name: true,
-          beyblades: { select: { id: true, name: true } },
-        },
-        orderBy: { name: "asc" },
-      })
-    : [];
   const isParticipant = tournament.participants.some(
     (p) => p.userId === session?.user.id
   );
@@ -528,11 +532,24 @@ export default async function TournamentDetailPage({
     </div>
   );
   } catch (e) {
+    console.error("[tournament detail]", e);
     return (
-      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center p-8">
-        <div className="bg-[#1a1a1a] border border-red-700 rounded-2xl p-8 max-w-2xl w-full">
-          <h2 className="text-xl font-bold text-red-400 mb-4">Erro ao carregar torneio</h2>
-          <pre className="text-sm text-gray-300 bg-[#252525] rounded-lg p-4 overflow-auto whitespace-pre-wrap break-all">{String(e)}</pre>
+      <div className="min-h-screen bg-[#0d0d0d]">
+        <Navbar />
+        <div className="flex items-center justify-center p-8">
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 max-w-md w-full text-center mt-16">
+            <div className="text-5xl mb-4">🌀</div>
+            <h2 className="text-xl font-bold text-white mb-2">Erro ao carregar torneio</h2>
+            <p className="text-gray-400 text-sm mb-6">
+              Não foi possível carregar este torneio. Tente novamente em instantes.
+            </p>
+            <Link
+              href="/tournaments"
+              className="inline-block bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold text-sm px-5 py-2.5 rounded-lg transition-colors"
+            >
+              Ver todos os torneios
+            </Link>
+          </div>
         </div>
       </div>
     );

@@ -25,13 +25,22 @@ export default function BeybladeManager() {
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState("");
 
+  const [loadError, setLoadError] = useState(false);
+
   const fetchBeyblades = useCallback(async () => {
-    const res = await fetch("/api/beyblades");
-    if (res.ok) {
-      const data = await res.json();
-      setBeyblades(data);
+    try {
+      const res = await fetch("/api/beyblades");
+      if (res.ok) {
+        setBeyblades(await res.json());
+        setLoadError(false);
+      } else {
+        setLoadError(true);
+      }
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -166,6 +175,16 @@ export default function BeybladeManager() {
 
       {loading ? (
         <div className="text-gray-500 text-sm py-4 text-center">Carregando...</div>
+      ) : loadError ? (
+        <div className="text-center py-8">
+          <p className="text-red-400 text-sm mb-3">Erro ao carregar seus combos.</p>
+          <button
+            onClick={() => { setLoading(true); fetchBeyblades(); }}
+            className="text-[#f0a500] hover:underline text-sm font-medium"
+          >
+            Tentar novamente
+          </button>
+        </div>
       ) : beyblades.length === 0 ? (
         <div className="text-center py-8">
           <div className="text-4xl mb-3">🌀</div>

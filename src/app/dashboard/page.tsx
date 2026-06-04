@@ -21,84 +21,53 @@ export default async function DashboardPage() {
 
   const userId = session.user.id;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let participations: any[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let recentMatches: any[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let upcomingMatches: any[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let organizedTournaments: any[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let beyblades: any[] = [];
-  let dbError: string | null = null;
-
-  try {
-    [participations, recentMatches, upcomingMatches, organizedTournaments, beyblades] =
-      await Promise.all([
-        prisma.tournamentParticipant.findMany({
-          where: { userId },
-          include: { tournament: true },
-          orderBy: { createdAt: "desc" },
-        }),
-        prisma.match.findMany({
-          where: {
-            status: "FINISHED",
-            OR: [{ player1Id: userId }, { player2Id: userId }],
-          },
-          include: {
-            player1: { select: { id: true, name: true } },
-            player2: { select: { id: true, name: true } },
-            winner: { select: { id: true, name: true } },
-            tournament: { select: { id: true, name: true } },
-            points: { where: { userId } },
-          },
-          orderBy: { createdAt: "desc" },
-          take: 10,
-        }),
-        prisma.match.findMany({
-          where: {
-            status: { in: ["PENDING", "IN_PROGRESS"] },
-            OR: [{ player1Id: userId }, { player2Id: userId }],
-          },
-          include: {
-            player1: { select: { id: true, name: true } },
-            player2: { select: { id: true, name: true } },
-            tournament: { select: { id: true, name: true } },
-          },
-          orderBy: { createdAt: "asc" },
-          take: 5,
-        }),
-        prisma.tournament.findMany({
-          where: { organizerId: userId, status: { not: "FINISHED" } },
-          include: { _count: { select: { participants: true } } },
-          orderBy: { createdAt: "desc" },
-        }),
-        prisma.beyblade.findMany({
-          where: { userId },
-          include: { matchPoints: { select: { points: true } } },
-          orderBy: { wins: "desc" },
-        }),
-      ]);
-  } catch (e) {
-    dbError = String(e);
-  }
-
-  if (dbError) {
-    return (
-      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center p-8">
-        <div className="bg-[#1a1a1a] border border-red-700 rounded-2xl p-8 max-w-2xl w-full">
-          <h2 className="text-xl font-bold text-red-400 mb-4">Erro no Dashboard</h2>
-          <pre className="text-sm text-gray-300 bg-[#252525] rounded-lg p-4 overflow-auto whitespace-pre-wrap break-all">
-            {dbError}
-          </pre>
-          <p className="text-gray-500 text-xs mt-3">
-            Usuário: {session.user.email} | ID: {userId}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Errors here bubble up to dashboard/error.tsx (friendly boundary)
+  const [participations, recentMatches, upcomingMatches, organizedTournaments, beyblades] =
+    await Promise.all([
+      prisma.tournamentParticipant.findMany({
+        where: { userId },
+        include: { tournament: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.match.findMany({
+        where: {
+          status: "FINISHED",
+          OR: [{ player1Id: userId }, { player2Id: userId }],
+        },
+        include: {
+          player1: { select: { id: true, name: true } },
+          player2: { select: { id: true, name: true } },
+          winner: { select: { id: true, name: true } },
+          tournament: { select: { id: true, name: true } },
+          points: { where: { userId }, select: { points: true, finishType: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+      prisma.match.findMany({
+        where: {
+          status: { in: ["PENDING", "IN_PROGRESS"] },
+          OR: [{ player1Id: userId }, { player2Id: userId }],
+        },
+        include: {
+          player1: { select: { id: true, name: true } },
+          player2: { select: { id: true, name: true } },
+          tournament: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: "asc" },
+        take: 5,
+      }),
+      prisma.tournament.findMany({
+        where: { organizerId: userId, status: { not: "FINISHED" } },
+        include: { _count: { select: { participants: true } } },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.beyblade.findMany({
+        where: { userId },
+        include: { matchPoints: { select: { points: true } } },
+        orderBy: { wins: "desc" },
+      }),
+    ]);
 
   const totalPoints = participations.reduce((sum: number, p: { totalPoints: number }) => sum + p.totalPoints, 0);
   const totalWins = participations.reduce((sum: number, p: { wins: number }) => sum + p.wins, 0);
@@ -153,7 +122,7 @@ export default async function DashboardPage() {
                     <Link
                       key={match.id}
                       href={`/tournaments/${match.tournament.id}`}
-                      className="flex items-center justify-between p-3 bg-[#252525] hover:bg-gray-750 rounded-lg transition-colors"
+                      className="flex items-center justify-between p-3 bg-[#252525] hover:bg-[#2d2d2d] rounded-lg transition-colors"
                     >
                       <div>
                         <div className="text-sm font-medium text-white">vs {opponent.name}</div>
@@ -239,7 +208,7 @@ export default async function DashboardPage() {
                 <Link
                   key={t.id}
                   href={`/tournaments/${t.id}`}
-                  className="bg-[#252525] hover:bg-gray-750 border border-[#333] rounded-lg p-4 transition-colors"
+                  className="bg-[#252525] hover:bg-[#2d2d2d] border border-[#333] rounded-lg p-4 transition-colors"
                 >
                   <div className="font-semibold text-white mb-1">{t.name}</div>
                   <div className="flex items-center gap-2 text-xs text-gray-400">

@@ -321,31 +321,31 @@ export async function recalculateStandings(
 ) {
   const participant = await prisma.tournamentParticipant.findUnique({
     where: { tournamentId_userId: { tournamentId, userId } },
+    select: { id: true },
   });
 
   if (!participant) return;
 
-  const points = await prisma.matchPoint.findMany({
-    where: {
-      userId,
-      match: { tournamentId },
-    },
-  });
+  // These three reads are independent — run them in one round-trip batch
+  const [points, wonMatches, allMatches] = await Promise.all([
+    prisma.matchPoint.findMany({
+      where: { userId, match: { tournamentId } },
+      select: { points: true },
+    }),
+    prisma.match.count({
+      where: { tournamentId, winnerId: userId, status: "FINISHED" },
+    }),
+    prisma.match.findMany({
+      where: {
+        tournamentId,
+        status: "FINISHED",
+        OR: [{ player1Id: userId }, { player2Id: userId }],
+      },
+      select: { winnerId: true },
+    }),
+  ]);
 
   const totalPoints = points.reduce((sum, p) => sum + p.points, 0);
-
-  const wonMatches = await prisma.match.count({
-    where: { tournamentId, winnerId: userId, status: "FINISHED" },
-  });
-
-  const allMatches = await prisma.match.findMany({
-    where: {
-      tournamentId,
-      status: "FINISHED",
-      OR: [{ player1Id: userId }, { player2Id: userId }],
-    },
-  });
-
   const losses = allMatches.filter((m) => m.winnerId !== userId).length;
 
   await prisma.tournamentParticipant.update({

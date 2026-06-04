@@ -2,12 +2,26 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 
 export default function Navbar() {
   const { data: session } = useSession();
+  const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  // Active-link styling: highlight the current section
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const linkClass = (href: string) =>
+    `transition-colors font-medium ${
+      isActive(href) ? "text-[#f0a500]" : "text-gray-300 hover:text-[#f0a500]"
+    }`;
+  const mobileLinkClass = (href: string) =>
+    `block px-3 py-2 transition-colors ${
+      isActive(href) ? "text-[#f0a500]" : "text-gray-300 hover:text-[#f0a500]"
+    }`;
 
   useEffect(() => {
     if (session) {
@@ -37,49 +51,28 @@ export default function Navbar() {
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-6">
-            <Link
-              href="/tournaments"
-              className="text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
-            >
+            <Link href="/tournaments" className={linkClass("/tournaments")}>
               Torneios
             </Link>
-            <Link
-              href="/community"
-              className="text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
-            >
+            <Link href="/community" className={linkClass("/community")}>
               Comunidade
             </Link>
-            <Link
-              href="/upcoming"
-              className="text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
-            >
+            <Link href="/upcoming" className={linkClass("/upcoming")}>
               Próximos
             </Link>
             {session && (
               <>
-                <Link
-                  href="/dashboard"
-                  className="text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
-                >
+                <Link href="/dashboard" className={linkClass("/dashboard")}>
                   Painel
                 </Link>
-                <Link
-                  href="/profile"
-                  className="text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
-                >
+                <Link href="/profile" className={linkClass("/profile")}>
                   Perfil
                 </Link>
-                <Link
-                  href="/tournaments/create"
-                  className="text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
-                >
+                <Link href="/tournaments/create" className={linkClass("/tournaments/create")}>
                   Criar
                 </Link>
                 {session.user.role === "ORGANIZER" && (
-                  <Link
-                    href="/admin"
-                    className="text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
-                  >
+                  <Link href="/admin" className={linkClass("/admin")}>
                     Admin
                   </Link>
                 )}
@@ -139,6 +132,8 @@ export default function Navbar() {
           <button
             className="md:hidden text-gray-300 hover:text-[#f0a500] p-2"
             onClick={() => setMenuOpen(!menuOpen)}
+            aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
+            aria-expanded={menuOpen}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {menuOpen ? (
@@ -153,28 +148,16 @@ export default function Navbar() {
         {/* Mobile menu */}
         {menuOpen && (
           <div className="md:hidden pb-4 pt-2 border-t border-[#2a2a2a] space-y-2">
-            <Link
-              href="/tournaments"
-              className="block px-3 py-2 text-gray-300 hover:text-[#f0a500] transition-colors"
-              onClick={() => setMenuOpen(false)}
-            >
-              Torneios
-            </Link>
-            <Link
-              href="/upcoming"
-              className="block px-3 py-2 text-gray-300 hover:text-[#f0a500] transition-colors"
-              onClick={() => setMenuOpen(false)}
-            >
-              Próximos
-            </Link>
+            <Link href="/tournaments" className={mobileLinkClass("/tournaments")} onClick={() => setMenuOpen(false)}>Torneios</Link>
+            <Link href="/community" className={mobileLinkClass("/community")} onClick={() => setMenuOpen(false)}>Comunidade</Link>
+            <Link href="/upcoming" className={mobileLinkClass("/upcoming")} onClick={() => setMenuOpen(false)}>Próximos</Link>
             {session && (
               <>
-                <Link href="/dashboard" className="block px-3 py-2 text-gray-300 hover:text-[#f0a500]" onClick={() => setMenuOpen(false)}>Painel</Link>
-                <Link href="/community" className="block px-3 py-2 text-gray-300 hover:text-[#f0a500]" onClick={() => setMenuOpen(false)}>Comunidade</Link>
-                <Link href="/profile" className="block px-3 py-2 text-gray-300 hover:text-[#f0a500]" onClick={() => setMenuOpen(false)}>Perfil</Link>
-                <Link href="/tournaments/create" className="block px-3 py-2 text-gray-300 hover:text-[#f0a500]" onClick={() => setMenuOpen(false)}>Criar Torneio</Link>
+                <Link href="/dashboard" className={mobileLinkClass("/dashboard")} onClick={() => setMenuOpen(false)}>Painel</Link>
+                <Link href="/profile" className={mobileLinkClass("/profile")} onClick={() => setMenuOpen(false)}>Perfil</Link>
+                <Link href="/tournaments/create" className={mobileLinkClass("/tournaments/create")} onClick={() => setMenuOpen(false)}>Criar Torneio</Link>
                 {session.user.role === "ORGANIZER" && (
-                  <Link href="/admin" className="block px-3 py-2 text-gray-300 hover:text-[#f0a500]" onClick={() => setMenuOpen(false)}>Admin</Link>
+                  <Link href="/admin" className={mobileLinkClass("/admin")} onClick={() => setMenuOpen(false)}>Admin</Link>
                 )}
                 <button
                   onClick={() => { signOut({ callbackUrl: "/" }); setMenuOpen(false); }}

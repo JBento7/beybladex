@@ -23,23 +23,24 @@ const STATUS_STYLES: Record<TournamentStatus, { label: string; style: string }> 
 export default async function TournamentsPage() {
   const session = await getServerSession(authOptions);
 
-  const tournaments = await prisma.tournament.findMany({
-    include: {
-      organizer: { select: { id: true, name: true } },
-      _count: { select: { participants: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  // Both reads are independent — batch them in a single round-trip
+  const [tournaments, participations] = await Promise.all([
+    prisma.tournament.findMany({
+      include: {
+        organizer: { select: { id: true, name: true } },
+        _count: { select: { participants: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    session
+      ? prisma.tournamentParticipant.findMany({
+          where: { userId: session.user.id },
+          select: { tournamentId: true },
+        })
+      : Promise.resolve([]),
+  ]);
 
-  // Get user's joined tournament IDs
-  let joinedIds = new Set<string>();
-  if (session) {
-    const participations = await prisma.tournamentParticipant.findMany({
-      where: { userId: session.user.id },
-      select: { tournamentId: true },
-    });
-    joinedIds = new Set(participations.map((p) => p.tournamentId));
-  }
+  const joinedIds = new Set(participations.map((p) => p.tournamentId));
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">

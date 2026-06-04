@@ -84,9 +84,11 @@ export async function POST(
       },
     });
 
-    // Recalculate standings for both players
-    await recalculateStandings(match.tournamentId, match.player1Id);
-    await recalculateStandings(match.tournamentId, match.player2Id);
+    // Recalculate standings for both players (independent — run in parallel)
+    await Promise.all([
+      recalculateStandings(match.tournamentId, match.player1Id),
+      recalculateStandings(match.tournamentId, match.player2Id),
+    ]);
 
     // Handle format-specific post-match logic
     const tournament = match.tournament;

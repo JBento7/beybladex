@@ -115,8 +115,10 @@ export async function POST(
           data: { status: "FINISHED", winnerId: matchWinnerId },
         });
 
-        await recalculateStandings(match.tournamentId, match.player1Id);
-        await recalculateStandings(match.tournamentId, match.player2Id);
+        await Promise.all([
+          recalculateStandings(match.tournamentId, match.player1Id),
+          recalculateStandings(match.tournamentId, match.player2Id),
+        ]);
 
         // Update beyblade win/loss stats
         const matchLoserId = matchWinnerId === match.player1Id ? match.player2Id : match.player1Id;
