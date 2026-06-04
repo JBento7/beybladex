@@ -7,6 +7,7 @@ import Link from "next/link";
 import StartTournamentButton from "./StartTournamentButton";
 import ScoreModal from "./ScoreModal";
 import ClientJoinButton from "./ClientJoinButton";
+import AdminParticipantManager from "./AdminParticipantManager";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 
 const FORMAT_LABELS: Record<TournamentFormat, string> = {
@@ -211,7 +212,20 @@ export default async function TournamentDetailPage({
       .filter(Boolean) as BeybladeInfo[],
   }));
 
-  const isOrganizerOfThis = session?.user.id === tournament.organizerId;
+  const isOrganizerOfThis = session?.user.role === "ORGANIZER";
+
+  // If organizer, fetch all active users with their beyblades for admin panel
+  const allPlayers = isOrganizerOfThis
+    ? await prisma.user.findMany({
+        where: { deleted: false },
+        select: {
+          id: true,
+          name: true,
+          beyblades: { select: { id: true, name: true } },
+        },
+        orderBy: { name: "asc" },
+      })
+    : [];
   const isParticipant = tournament.participants.some(
     (p) => p.userId === session?.user.id
   );
@@ -464,34 +478,46 @@ export default async function TournamentDetailPage({
               <h2 className="text-lg font-bold text-white mb-4">
                 Participantes ({tournament.participants.length})
               </h2>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {tournament.participants.length === 0 ? (
-                  <p className="text-gray-500 text-sm text-center py-2">
-                    Nenhum participante ainda
-                  </p>
-                ) : (
-                  tournament.participants.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex items-center gap-3 py-2 border-b border-gray-800 last:border-0"
-                    >
-                      <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-400">
-                        {p.user.name[0].toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-white">
-                          {p.user.name}
+              {isOrganizerOfThis && tournament.status !== "FINISHED" ? (
+                <AdminParticipantManager
+                  tournamentId={tournament.id}
+                  deckType={tournament.deckType}
+                  participants={tournament.participants.map((p) => ({
+                    userId: p.userId,
+                    user: p.user,
+                    beyblade1: p.beyblade1,
+                    beyblade2: p.beyblade2,
+                    beyblade3: p.beyblade3,
+                  }))}
+                  allPlayers={allPlayers}
+                  onRefresh={() => {}}
+                />
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {tournament.participants.length === 0 ? (
+                    <p className="text-gray-500 text-sm text-center py-2">
+                      Nenhum participante ainda
+                    </p>
+                  ) : (
+                    tournament.participants.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center gap-3 py-2 border-b border-gray-800 last:border-0"
+                      >
+                        <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-400">
+                          {p.user.name[0].toUpperCase()}
                         </div>
-                        {p.beyblade1 && (
-                          <div className="text-xs text-gray-500">
-                            {p.beyblade1}
-                          </div>
-                        )}
+                        <div>
+                          <div className="text-sm font-medium text-white">{p.user.name}</div>
+                          {p.beyblade1 && (
+                            <div className="text-xs text-gray-500">{p.beyblade1}</div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
