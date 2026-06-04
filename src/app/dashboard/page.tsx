@@ -314,7 +314,6 @@ export default async function DashboardPage() {
               <p className="text-gray-500 text-sm mt-1">Crie e gerencie seu próprio campeonato de Beyblade.</p>
             </div>
             <div className="flex items-center gap-3">
-              {session.user.role === "ORGANIZER" && <GenerateInviteButton />}
               <Link
                 href="/tournaments/create"
                 className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
