@@ -19,11 +19,10 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   return { title: t?.name ?? "Torneio" };
 }
 
-const FORMAT_LABELS: Record<TournamentFormat, string> = {
+const FORMAT_LABELS: Partial<Record<TournamentFormat, string>> & Record<string, string> = {
   ROUND_ROBIN: "Pontos Corridos",
   GROUPS: "Grupos",
   SINGLE_ELIMINATION: "Eliminação Simples",
-  SWISS: "Suíço",
 };
 
 const STATUS_LABELS: Record<TournamentStatus, string> = {

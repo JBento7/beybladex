@@ -66,7 +66,7 @@ export default async function LandingPage() {
 
           <div className="mt-20 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-3xl mx-auto">
             {[
-              { label: "Formatos de Torneio", value: "4" },
+              { label: "Formatos de Torneio", value: "3" },
               { label: "Tipos de Finish", value: "4" },
               { label: "Rankings em Tempo Real", value: "✓" },
               { label: "Geração de Chaves", value: "Auto" },
@@ -91,7 +91,6 @@ export default async function LandingPage() {
             { icon: "🔄", name: "Pontos Corridos", desc: "Todos os jogadores enfrentam uns aos outros. O campeão é definido pela pontuação total.", badge: "Clássico" },
             { icon: "👥", name: "Grupos", desc: "Divididos em grupos para fase de pontos corridos. Os melhores de cada grupo avançam para a eliminatória.", badge: "Estratégico" },
             { icon: "⚔️", name: "Eliminação Simples", desc: "Perdeu, saiu. O formato de maior pressão — cada batalha é decisiva.", badge: "Intenso" },
-            { icon: "🇨🇭", name: "Suíço", desc: "Dispute contra jogadores do mesmo nível. Sem eliminação — cada rodada conta para o ranking.", badge: "Equilibrado" },
           ].map((format) => (
             <div key={format.name} className="bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#f0a500]/50 rounded-2xl p-6 transition-all group hover:shadow-lg hover:shadow-[#c8102e]/5">
               <div className="text-4xl mb-4">{format.icon}</div>

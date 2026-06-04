@@ -6,11 +6,10 @@ import type { TournamentFormat, TournamentStatus } from "@prisma/client";
 
 export const metadata: Metadata = { title: "Próximos Torneios" };
 
-const FORMAT_LABELS: Record<TournamentFormat, string> = {
+const FORMAT_LABELS: Partial<Record<TournamentFormat, string>> & Record<string, string> = {
   ROUND_ROBIN: "Pontos Corridos",
   GROUPS: "Grupos",
   SINGLE_ELIMINATION: "Eliminação Simples",
-  SWISS: "Suíço",
 };
 
 const STATUS_STYLES: Record<TournamentStatus, { label: string; style: string }> = {

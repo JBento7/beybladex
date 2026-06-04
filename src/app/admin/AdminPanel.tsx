@@ -7,7 +7,6 @@ const FORMATS = [
   { value: "ROUND_ROBIN", label: "Pontos Corridos" },
   { value: "GROUPS", label: "Grupos" },
   { value: "SINGLE_ELIMINATION", label: "Eliminação Simples" },
-  { value: "SWISS", label: "Suíço" },
 ];
 
 const DECK_TYPES = [

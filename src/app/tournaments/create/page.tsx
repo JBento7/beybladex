@@ -24,12 +24,6 @@ const FORMATS = [
     icon: "⚔️",
     desc: "Perdeu, saiu. Formato de chaveamento.",
   },
-  {
-    value: "SWISS",
-    label: "Suíço",
-    icon: "🇨🇭",
-    desc: "Sem eliminação, jogadores emparelhados por desempenho.",
-  },
 ];
 
 export default function CreateTournamentPage() {

@@ -7,7 +7,6 @@ const FORMAT_LABELS: Record<string, string> = {
   ROUND_ROBIN: "Pontos Corridos",
   GROUPS: "Grupos",
   SINGLE_ELIMINATION: "Eliminação Simples",
-  SWISS: "Suíço",
 };
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Rascunho",
