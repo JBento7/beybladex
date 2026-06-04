@@ -55,11 +55,22 @@ export default function AdminParticipantManager({
     if (!selectedUserId) return;
     setSaving(true);
     setError(null);
-    const res = await fetch(`/api/tournaments/${tournamentId}/participants`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: selectedUserId, beybladeIds: selectedBeys }),
-    });
+    let res: Response;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      res = await fetch(`/api/tournaments/${tournamentId}/participants`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selectedUserId, beybladeIds: selectedBeys }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+    } catch {
+      setSaving(false);
+      flash("err", "Tempo esgotado. Verifique sua conexão e tente novamente.");
+      return;
+    }
     const data = await res.json();
     setSaving(false);
     if (res.ok) {
@@ -91,11 +102,22 @@ export default function AdminParticipantManager({
   async function handleRemove(userId: string, name: string) {
     if (!confirm(`Remover ${name} do torneio?`)) return;
     setRemoving(userId);
-    const res = await fetch(`/api/tournaments/${tournamentId}/participants`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
+    let res: Response;
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 15000);
+      res = await fetch(`/api/tournaments/${tournamentId}/participants`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+    } catch {
+      setRemoving(null);
+      flash("err", "Tempo esgotado. Verifique sua conexão e tente novamente.");
+      return;
+    }
     const data = await res.json();
     setRemoving(null);
     if (res.ok) {
