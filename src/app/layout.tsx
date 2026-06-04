@@ -5,6 +5,7 @@ import { Providers } from "./providers";
 export const metadata: Metadata = {
   title: "LBL - Liga Beyblade Londrina",
   description: "A liga oficial de Beyblade de Londrina",
+  icons: { icon: "/lbl-logo.png", apple: "/lbl-logo.png" },
 };
 
 export default function RootLayout({
