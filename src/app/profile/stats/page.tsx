@@ -180,6 +180,50 @@ export default async function ProfileStatsPage() {
                     )}
                   </div>
                 </div>
+
+                {/* Matchup chart */}
+                {c.matchups.length > 0 && (
+                  <div className="mt-6 pt-5 border-t border-[#2a2a2a]">
+                    <h3 className="text-xs font-bold text-[#f0a500] uppercase tracking-wide mb-4">Desempenho contra cada oponente</h3>
+                    <div className="space-y-3">
+                      {c.matchups.slice(0, 10).map((mu) => {
+                        const total = mu.wins + mu.losses;
+                        const winPct = total > 0 ? Math.round((mu.wins / total) * 100) : 0;
+                        const maxBar = Math.max(1, ...c.matchups.slice(0, 10).map((m) => m.wins + m.losses));
+                        const rowPct = Math.round((total / maxBar) * 100);
+                        return (
+                          <div key={mu.opponentBey}>
+                            <div className="flex items-center justify-between text-xs mb-1.5">
+                              <span className="text-gray-300 truncate mr-2 flex items-center gap-1">
+                                <img src="/bey-removebg-preview.png" alt="" className="w-3 h-3 object-contain inline-block opacity-60" />
+                                {mu.opponentBey}
+                              </span>
+                              <span className="flex items-center gap-2 flex-shrink-0">
+                                <span className="text-green-400 font-semibold">{mu.wins}V</span>
+                                <span className="text-gray-600">/</span>
+                                <span className="text-red-400 font-semibold">{mu.losses}D</span>
+                                <span className="text-gray-500 w-8 text-right">{winPct}%</span>
+                              </span>
+                            </div>
+                            <div className="h-2 bg-[#252525] rounded-full overflow-hidden flex" style={{ width: `${rowPct}%` }}>
+                              <div
+                                className="h-full bg-green-500 transition-all"
+                                style={{ width: total > 0 ? `${(mu.wins / total) * 100}%` : "0%" }}
+                              />
+                              <div
+                                className="h-full bg-[#c8102e] transition-all"
+                                style={{ width: total > 0 ? `${(mu.losses / total) * 100}%` : "0%" }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {c.matchups.length > 10 && (
+                      <p className="text-xs text-gray-600 mt-3">+{c.matchups.length - 10} outros oponentes</p>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
