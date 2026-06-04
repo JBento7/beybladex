@@ -10,6 +10,7 @@ interface Beyblade {
   bit: string | null;
   wins: number;
   losses: number;
+  points: number;
   createdAt: string;
 }
 
@@ -201,18 +202,22 @@ export default function BeybladeManager() {
                     </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="grid grid-cols-4 gap-2 text-center">
                   <div>
                     <div className="text-lg font-black text-green-400">{b.wins}</div>
-                    <div className="text-xs text-gray-500">Vitórias</div>
+                    <div className="text-xs text-gray-500">Vit.</div>
                   </div>
                   <div>
                     <div className="text-lg font-black text-red-400">{b.losses}</div>
-                    <div className="text-xs text-gray-500">Derrotas</div>
+                    <div className="text-xs text-gray-500">Der.</div>
                   </div>
                   <div>
-                    <div className="text-lg font-black text-[#f0a500]">{winRate}%</div>
-                    <div className="text-xs text-gray-500">Taxa V.</div>
+                    <div className="text-lg font-black text-blue-400">{winRate}%</div>
+                    <div className="text-xs text-gray-500">Taxa</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-black text-[#f0a500]">{b.points ?? 0}</div>
+                    <div className="text-xs text-gray-500">Pts</div>
                   </div>
                 </div>
               </div>

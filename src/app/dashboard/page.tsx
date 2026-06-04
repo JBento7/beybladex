@@ -29,10 +29,12 @@ export default async function DashboardPage() {
   let upcomingMatches: any[] = [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let organizedTournaments: any[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let beyblades: any[] = [];
   let dbError: string | null = null;
 
   try {
-    [participations, recentMatches, upcomingMatches, organizedTournaments] =
+    [participations, recentMatches, upcomingMatches, organizedTournaments, beyblades] =
       await Promise.all([
         prisma.tournamentParticipant.findMany({
           where: { userId },
@@ -71,6 +73,11 @@ export default async function DashboardPage() {
           where: { organizerId: userId, status: { not: "FINISHED" } },
           include: { _count: { select: { participants: true } } },
           orderBy: { createdAt: "desc" },
+        }),
+        prisma.beyblade.findMany({
+          where: { userId },
+          include: { matchPoints: { select: { points: true } } },
+          orderBy: { wins: "desc" },
         }),
       ]);
   } catch (e) {
@@ -263,6 +270,54 @@ export default async function DashboardPage() {
               >
                 + Novo Torneio
               </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Beyblade Performance */}
+        {beyblades.length > 0 && (
+          <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+              <h2 className="text-lg font-bold text-white">Desempenho dos Combos</h2>
+              <Link href="/profile" className="text-xs text-[#f0a500] hover:underline">
+                Gerenciar combos →
+              </Link>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {beyblades.map((b: { id: string; name: string; blade: string | null; ratchet: string | null; bit: string | null; wins: number; losses: number; matchPoints: { points: number }[] }) => {
+                const total = b.wins + b.losses;
+                const winRate = total > 0 ? Math.round((b.wins / total) * 100) : 0;
+                const points = b.matchPoints.reduce((s: number, mp: { points: number }) => s + mp.points, 0);
+                const parts = [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
+                return (
+                  <div key={b.id} className="bg-[#252525] border border-[#333] rounded-xl p-4">
+                    <div className="flex items-start justify-between mb-3 gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-white truncate">🌀 {b.name}</div>
+                        {parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{parts}</div>}
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="text-lg font-black text-[#f0a500] leading-none">{points}</div>
+                        <div className="text-[10px] text-gray-500">pontos</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <div className="text-base font-black text-green-400">{b.wins}</div>
+                        <div className="text-[10px] text-gray-500">Vitórias</div>
+                      </div>
+                      <div>
+                        <div className="text-base font-black text-red-400">{b.losses}</div>
+                        <div className="text-[10px] text-gray-500">Derrotas</div>
+                      </div>
+                      <div>
+                        <div className="text-base font-black text-blue-400">{winRate}%</div>
+                        <div className="text-[10px] text-gray-500">Taxa V.</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

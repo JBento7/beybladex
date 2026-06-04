@@ -12,10 +12,16 @@ export async function GET() {
 
   const beyblades = await prisma.beyblade.findMany({
     where: { userId: session.user.id },
+    include: { matchPoints: { select: { points: true } } },
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json(beyblades);
+  const withPoints = beyblades.map(({ matchPoints, ...b }) => ({
+    ...b,
+    points: matchPoints.reduce((s, mp) => s + mp.points, 0),
+  }));
+
+  return NextResponse.json(withPoints);
 }
 
 export async function POST(req: NextRequest) {
