@@ -10,16 +10,11 @@ interface Player {
 }
 
 interface Participant {
-  id?: string;
-  userId: string | null;
-  guestName?: string | null;
-  user: { id: string | null; name: string } | null;
+  userId: string;
+  user: { id: string; name: string; isGuest?: boolean };
   beyblade1: string | null;
   beyblade2: string | null;
   beyblade3: string | null;
-  beyblade1Name?: string | null;
-  beyblade2Name?: string | null;
-  beyblade3Name?: string | null;
 }
 
 interface Props {
@@ -55,7 +50,7 @@ export default function AdminParticipantManager({
 
   const required = deckType === "THREE_ON_THREE" ? 3 : 1;
 
-  const participantUserIds = new Set(localParticipants.map((p) => p.userId).filter(Boolean));
+  const participantUserIds = new Set(localParticipants.map((p) => p.userId));
   const availablePlayers = allPlayers.filter((p) => !participantUserIds.has(p.id));
   const selectedPlayer = allPlayers.find((p) => p.id === selectedUserId);
 
@@ -72,15 +67,8 @@ export default function AdminParticipantManager({
     setError(null);
   }
 
-  function openForm() {
-    resetForm();
-    setOpen(true);
-  }
-
-  function closeForm() {
-    resetForm();
-    setOpen(false);
-  }
+  function openForm() { resetForm(); setOpen(true); }
+  function closeForm() { resetForm(); setOpen(false); }
 
   async function handleAdd() {
     setSaving(true);
@@ -88,14 +76,8 @@ export default function AdminParticipantManager({
 
     const body =
       mode === "guest"
-        ? {
-            guestName: guestName.trim(),
-            guestBeyblades: guestBeyblades.filter((b) => b.trim()),
-          }
-        : {
-            userId: selectedUserId,
-            beybladeIds: selectedBeys,
-          };
+        ? { guestName: guestName.trim(), guestBeyblades: guestBeyblades.filter((b) => b.trim()) }
+        : { userId: selectedUserId, beybladeIds: selectedBeys };
 
     let res: Response;
     try {
@@ -118,45 +100,20 @@ export default function AdminParticipantManager({
     setSaving(false);
 
     if (res.ok) {
-      const displayName =
-        mode === "guest" ? guestName.trim() : selectedPlayer?.name ?? "Jogador";
+      const displayName = mode === "guest" ? guestName.trim() : selectedPlayer?.name ?? "Jogador";
       flash("ok", `${displayName} adicionado ao torneio.`);
 
-      if (mode === "guest") {
-        const filledBeys = guestBeyblades.filter((b) => b.trim());
-        setLocalParticipants((prev) => [
-          ...prev,
-          {
-            id: data.id,
-            userId: null,
-            guestName: guestName.trim(),
-            user: { id: null, name: guestName.trim() },
-            beyblade1: null,
-            beyblade2: null,
-            beyblade3: null,
-            beyblade1Name: filledBeys[0] ?? null,
-            beyblade2Name: filledBeys[1] ?? null,
-            beyblade3Name: filledBeys[2] ?? null,
-          },
-        ]);
-      } else {
-        const added = selectedPlayer!;
-        setLocalParticipants((prev) => [
-          ...prev,
-          {
-            id: data.id,
-            userId: added.id,
-            guestName: null,
-            user: { id: added.id, name: added.name },
-            beyblade1: selectedBeys[0] ?? null,
-            beyblade2: selectedBeys[1] ?? null,
-            beyblade3: selectedBeys[2] ?? null,
-            beyblade1Name: null,
-            beyblade2Name: null,
-            beyblade3Name: null,
-          },
-        ]);
-      }
+      // Use the participant returned by the API (has the real new userId)
+      setLocalParticipants((prev) => [
+        ...prev,
+        {
+          userId: data.userId,
+          user: data.user ?? { id: data.userId, name: displayName, isGuest: mode === "guest" },
+          beyblade1: data.beyblade1 ?? null,
+          beyblade2: data.beyblade2 ?? null,
+          beyblade3: data.beyblade3 ?? null,
+        },
+      ]);
 
       closeForm();
       router.refresh();
@@ -165,12 +122,9 @@ export default function AdminParticipantManager({
     }
   }
 
-  async function handleRemove(p: Participant) {
-    const name = p.user?.name ?? p.guestName ?? "Participante";
+  async function handleRemove(userId: string, name: string) {
     if (!confirm(`Remover ${name} do torneio?`)) return;
-
-    const key = p.userId ?? p.id ?? p.guestName ?? "";
-    setRemoving(key);
+    setRemoving(userId);
 
     let res: Response;
     try {
@@ -179,9 +133,7 @@ export default function AdminParticipantManager({
       res = await fetch(`/api/tournaments/${tournamentId}/participants`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          p.userId ? { userId: p.userId } : { participantId: p.id }
-        ),
+        body: JSON.stringify({ userId }),
         signal: controller.signal,
       });
       clearTimeout(timer);
@@ -196,11 +148,7 @@ export default function AdminParticipantManager({
 
     if (res.ok) {
       flash("ok", `${name} removido.`);
-      setLocalParticipants((prev) =>
-        prev.filter((item) =>
-          p.userId ? item.userId !== p.userId : item.id !== p.id
-        )
-      );
+      setLocalParticipants((prev) => prev.filter((p) => p.userId !== userId));
       router.refresh();
     } else {
       flash("err", data.error ?? "Erro ao remover.");
@@ -215,12 +163,10 @@ export default function AdminParticipantManager({
     }
   }
 
-  const canAdd =
-    mode === "guest" ? guestName.trim().length > 0 : selectedUserId !== "";
+  const canAdd = mode === "guest" ? guestName.trim().length > 0 : selectedUserId !== "";
 
   return (
     <div className="mt-4">
-      {/* Messages */}
       {success && (
         <div className="mb-3 text-sm px-4 py-2 rounded-lg bg-green-900/30 border border-green-700 text-green-400">
           {success}
@@ -232,7 +178,6 @@ export default function AdminParticipantManager({
         </div>
       )}
 
-      {/* Add player button */}
       <button
         onClick={() => (open ? closeForm() : openForm())}
         className="mb-4 text-sm bg-[#f0a500]/20 hover:bg-[#f0a500]/30 text-[#f0a500] border border-[#f0a500]/30 font-semibold px-4 py-2 rounded-lg transition-colors"
@@ -240,7 +185,6 @@ export default function AdminParticipantManager({
         {open ? "✕ Cancelar" : "+ Adicionar Participante"}
       </button>
 
-      {/* Add form */}
       {open && (
         <div className="mb-4 bg-[#252525] border border-[#333] rounded-xl p-4 space-y-4">
           {/* Mode toggle */}
@@ -249,9 +193,7 @@ export default function AdminParticipantManager({
               type="button"
               onClick={() => { setMode("registered"); resetForm(); }}
               className={`flex-1 py-2 transition-colors ${
-                mode === "registered"
-                  ? "bg-[#f0a500] text-black"
-                  : "bg-[#1a1a1a] text-gray-400 hover:text-white"
+                mode === "registered" ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-400 hover:text-white"
               }`}
             >
               Jogador Cadastrado
@@ -260,9 +202,7 @@ export default function AdminParticipantManager({
               type="button"
               onClick={() => { setMode("guest"); resetForm(); }}
               className={`flex-1 py-2 transition-colors ${
-                mode === "guest"
-                  ? "bg-[#f0a500] text-black"
-                  : "bg-[#1a1a1a] text-gray-400 hover:text-white"
+                mode === "guest" ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-400 hover:text-white"
               }`}
             >
               Convidado
@@ -334,11 +274,9 @@ export default function AdminParticipantManager({
                   className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#f0a500]"
                 />
               </div>
-
               <div>
                 <label className="text-xs text-gray-400 mb-1.5 block">
-                  Beyblade(s) do convidado
-                  <span className="ml-1 text-gray-600">— opcional</span>
+                  Beyblade(s) do convidado <span className="ml-1 text-gray-600">— opcional</span>
                 </label>
                 <div className="space-y-2">
                   {Array.from({ length: required }).map((_, i) => (
@@ -372,34 +310,27 @@ export default function AdminParticipantManager({
 
       {/* Participants list */}
       <div className="space-y-2">
-        {localParticipants.map((p, i) => {
-          const name = p.user?.name ?? p.guestName ?? "?";
-          const key = p.userId ?? p.id ?? i.toString();
-          const isGuest = !p.userId;
-          return (
-            <div key={key} className="flex items-center justify-between bg-[#252525] rounded-lg px-4 py-2.5">
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-600 w-5 text-right">{i + 1}.</span>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-white font-medium">{name}</span>
-                    {isGuest && (
-                      <span className="text-[10px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded font-medium">convidado</span>
-                    )}
-                  </div>
-                </div>
+        {localParticipants.map((p, i) => (
+          <div key={p.userId} className="flex items-center justify-between bg-[#252525] rounded-lg px-4 py-2.5">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-600 w-5 text-right">{i + 1}.</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-white font-medium">{p.user.name}</span>
+                {p.user.isGuest && (
+                  <span className="text-[10px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded font-medium">convidado</span>
+                )}
               </div>
-              <button
-                onClick={() => handleRemove(p)}
-                disabled={removing === key}
-                className="text-xs text-red-500 hover:text-red-400 px-2 py-1 rounded hover:bg-red-900/20 transition-colors disabled:opacity-50"
-                title="Remover do torneio"
-              >
-                {removing === key ? "..." : "Remover"}
-              </button>
             </div>
-          );
-        })}
+            <button
+              onClick={() => handleRemove(p.userId, p.user.name)}
+              disabled={removing === p.userId}
+              className="text-xs text-red-500 hover:text-red-400 px-2 py-1 rounded hover:bg-red-900/20 transition-colors disabled:opacity-50"
+              title="Remover do torneio"
+            >
+              {removing === p.userId ? "..." : "Remover"}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );

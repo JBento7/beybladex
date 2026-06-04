@@ -17,6 +17,7 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
 
   const users = await prisma.user.findMany({
+    where: { isGuest: false },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,

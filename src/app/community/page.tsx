@@ -11,7 +11,7 @@ export default async function CommunityPage() {
   if (!session) redirect("/login");
 
   const players = await prisma.user.findMany({
-    where: { deleted: false },
+    where: { deleted: false, isGuest: false },
     select: {
       id: true,
       name: true,

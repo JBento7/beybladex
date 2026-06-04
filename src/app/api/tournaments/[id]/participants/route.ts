@@ -3,10 +3,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { randomBytes } from "crypto";
 
 // POST — admin adds a registered player OR a guest to a tournament
 // Registered: { userId, beybladeIds?: string[] }
 // Guest:      { guestName, guestBeyblades?: string[] }
+//
+// Guests are stored as "shadow users" (isGuest=true) so that matches,
+// scoring and standings — which all reference real user IDs — work
+// unchanged. Their beyblades are created as real Beyblade records.
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions);
@@ -51,27 +56,35 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         );
       }
 
-      const alreadyGuest = await prisma.tournamentParticipant.findFirst({
-        where: { tournamentId: params.id, guestName },
+      // Create the shadow user
+      const shadowUser = await prisma.user.create({
+        data: {
+          name: guestName,
+          email: `guest_${randomBytes(12).toString("hex")}@guest.local`,
+          password: randomBytes(24).toString("hex"),
+          isGuest: true,
+        },
       });
-      if (alreadyGuest) {
-        return NextResponse.json({ error: "Já existe um convidado com esse nome neste torneio." }, { status: 409 });
-      }
+
+      // Create their beyblades as real records (so per-beyblade stats work)
+      const createdBeys = await Promise.all(
+        guestBeyblades.map((name) =>
+          prisma.beyblade.create({ data: { userId: shadowUser.id, name } })
+        )
+      );
 
       const participant = await prisma.tournamentParticipant.create({
         data: {
           tournamentId: params.id,
-          guestName,
-          beyblade1Name: guestBeyblades[0] ?? null,
-          beyblade2Name: guestBeyblades[1] ?? null,
-          beyblade3Name: guestBeyblades[2] ?? null,
+          userId: shadowUser.id,
+          beyblade1: createdBeys[0]?.id ?? null,
+          beyblade2: createdBeys[1]?.id ?? null,
+          beyblade3: createdBeys[2]?.id ?? null,
         },
+        include: { user: { select: { id: true, name: true, isGuest: true } } },
       });
 
-      return NextResponse.json(
-        { ...participant, user: { id: null, name: guestName } },
-        { status: 201 }
-      );
+      return NextResponse.json(participant, { status: 201 });
     }
 
     // ── REGISTERED USER PATH ────────────────────────────────────────────────
@@ -104,7 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         beyblade2: ids[1] ?? null,
         beyblade3: ids[2] ?? null,
       },
-      include: { user: { select: { id: true, name: true } } },
+      include: { user: { select: { id: true, name: true, isGuest: true } } },
     });
 
     return NextResponse.json(participant, { status: 201 });
@@ -114,8 +127,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-// DELETE — admin removes a player from a tournament (only if no matches played)
-// Body: { userId } for registered, { participantId } for guests
+// DELETE — admin removes a player from a tournament (only if no matches played).
+// For guests (shadow users) the user record and their beyblades are cleaned up.
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions);
@@ -123,33 +136,44 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    let body: { userId?: string; participantId?: string } = {};
+    let body: { userId?: string } = {};
     try { body = await req.json(); } catch { /* empty body */ }
 
-    const { userId, participantId } = body;
-    if (!userId && !participantId) {
-      return NextResponse.json({ error: "userId ou participantId é obrigatório" }, { status: 400 });
+    const { userId } = body;
+    if (!userId) return NextResponse.json({ error: "userId é obrigatório" }, { status: 400 });
+
+    const playedMatches = await prisma.match.count({
+      where: {
+        tournamentId: params.id,
+        status: { not: "PENDING" },
+        OR: [{ player1Id: userId }, { player2Id: userId }],
+      },
+    });
+    if (playedMatches > 0) {
+      return NextResponse.json(
+        { error: "Não é possível remover um jogador que já disputou partidas." },
+        { status: 400 }
+      );
     }
 
-    if (userId) {
-      const playedMatches = await prisma.match.count({
-        where: {
-          tournamentId: params.id,
-          status: { not: "PENDING" },
-          OR: [{ player1Id: userId }, { player2Id: userId }],
-        },
+    await prisma.tournamentParticipant.deleteMany({
+      where: { tournamentId: params.id, userId },
+    });
+
+    // Clean up shadow guest user if it's no longer used anywhere
+    const guest = await prisma.user.findFirst({
+      where: { id: userId, isGuest: true },
+      select: { id: true },
+    });
+    if (guest) {
+      const stillParticipating = await prisma.tournamentParticipant.count({
+        where: { userId },
       });
-      if (playedMatches > 0) {
-        return NextResponse.json(
-          { error: "Não é possível remover um jogador que já disputou partidas." },
-          { status: 400 }
-        );
+      if (stillParticipating === 0) {
+        await prisma.matchPoint.deleteMany({ where: { userId } });
+        await prisma.beyblade.deleteMany({ where: { userId } });
+        await prisma.user.delete({ where: { id: userId } });
       }
-      await prisma.tournamentParticipant.deleteMany({
-        where: { tournamentId: params.id, userId },
-      });
-    } else {
-      await prisma.tournamentParticipant.delete({ where: { id: participantId } });
     }
 
     return NextResponse.json({ ok: true });

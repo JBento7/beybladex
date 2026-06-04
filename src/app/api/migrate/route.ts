@@ -159,24 +159,8 @@ export async function GET() {
       sql: `DO $$ BEGIN ALTER TABLE "EmailVerifyToken" ADD CONSTRAINT "EmailVerifyToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
     },
     {
-      name: "TournamentParticipant.userId nullable",
-      sql: `ALTER TABLE "TournamentParticipant" ALTER COLUMN "userId" DROP NOT NULL`,
-    },
-    {
-      name: "TournamentParticipant.guestName",
-      sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "guestName" TEXT`,
-    },
-    {
-      name: "TournamentParticipant.beyblade1Name",
-      sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "beyblade1Name" TEXT`,
-    },
-    {
-      name: "TournamentParticipant.beyblade2Name",
-      sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "beyblade2Name" TEXT`,
-    },
-    {
-      name: "TournamentParticipant.beyblade3Name",
-      sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "beyblade3Name" TEXT`,
+      name: "User.isGuest",
+      sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isGuest" BOOLEAN NOT NULL DEFAULT false`,
     },
   ];
 
