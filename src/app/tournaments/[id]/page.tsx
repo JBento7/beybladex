@@ -205,7 +205,7 @@ export default async function TournamentDetailPage({
   const beybladeMap = new Map(beybladeDetails.map((b) => [b.id, b]));
 
   const participantBeyblades: ParticipantBeyblades[] = tournament.participants.map((p) => ({
-    userId: p.userId,
+    userId: p.userId ?? "",
     beyblades: [p.beyblade1, p.beyblade2, p.beyblade3]
       .filter(Boolean)
       .map((id) => beybladeMap.get(id!))
@@ -227,7 +227,7 @@ export default async function TournamentDetailPage({
       })
     : [];
   const isParticipant = tournament.participants.some(
-    (p) => p.userId === session?.user.id
+    (p) => p.userId != null && p.userId === session?.user.id
   );
   const canJoin =
     session &&
@@ -415,7 +415,8 @@ export default async function TournamentDetailPage({
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-white truncate">
-                          {p.user.name}
+                          {p.user?.name ?? p.guestName ?? "?"}
+                          {!p.userId && <span className="ml-1.5 text-[10px] text-gray-500 font-normal">convidado</span>}
                         </div>
                         {p.beyblade1 && (
                           <div className="text-xs text-gray-500 truncate">
@@ -459,7 +460,7 @@ export default async function TournamentDetailPage({
                                 {idx + 1}.
                               </span>
                               <span className="text-gray-300 flex-1">
-                                {p.user.name}
+                                {p.user?.name ?? p.guestName ?? "?"}
                               </span>
                               <span className="text-amber-400 font-medium">
                                 {p.totalPoints}pts
@@ -483,11 +484,16 @@ export default async function TournamentDetailPage({
                   tournamentId={tournament.id}
                   deckType={tournament.deckType}
                   participants={tournament.participants.map((p) => ({
+                    id: p.id,
                     userId: p.userId,
+                    guestName: p.guestName,
                     user: p.user,
                     beyblade1: p.beyblade1,
                     beyblade2: p.beyblade2,
                     beyblade3: p.beyblade3,
+                    beyblade1Name: p.beyblade1Name,
+                    beyblade2Name: p.beyblade2Name,
+                    beyblade3Name: p.beyblade3Name,
                   }))}
                   allPlayers={allPlayers}
                 />
@@ -504,10 +510,13 @@ export default async function TournamentDetailPage({
                         className="flex items-center gap-3 py-2 border-b border-gray-800 last:border-0"
                       >
                         <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-400">
-                          {p.user.name[0].toUpperCase()}
+                          {(p.user?.name ?? p.guestName ?? "?")[0].toUpperCase()}
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-white">{p.user.name}</div>
+                          <div className="text-sm font-medium text-white">
+                            {p.user?.name ?? p.guestName ?? "?"}
+                            {!p.userId && <span className="ml-1.5 text-[10px] text-gray-500">convidado</span>}
+                          </div>
                           {p.beyblade1 && (
                             <div className="text-xs text-gray-500">{p.beyblade1}</div>
                           )}

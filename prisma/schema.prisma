@@ -117,21 +117,25 @@ model Tournament {
 }
 
 model TournamentParticipant {
-  id           String   @id @default(cuid())
-  tournamentId String
-  userId       String
-  groupId      String?
-  totalPoints  Int      @default(0)
-  wins         Int      @default(0)
-  losses       Int      @default(0)
-  placement    Int?
-  beyblade1    String?
-  beyblade2    String?
-  beyblade3    String?
-  createdAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  tournamentId  String
+  userId        String?
+  guestName     String?
+  groupId       String?
+  totalPoints   Int      @default(0)
+  wins          Int      @default(0)
+  losses        Int      @default(0)
+  placement     Int?
+  beyblade1     String?
+  beyblade2     String?
+  beyblade3     String?
+  beyblade1Name String?
+  beyblade2Name String?
+  beyblade3Name String?
+  createdAt     DateTime @default(now())
 
   tournament Tournament @relation(fields: [tournamentId], references: [id])
-  user       User       @relation(fields: [userId], references: [id])
+  user       User?      @relation(fields: [userId], references: [id])
   group      Group?     @relation(fields: [groupId], references: [id])
 
   @@unique([tournamentId, userId])

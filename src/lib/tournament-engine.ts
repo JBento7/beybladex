@@ -19,8 +19,8 @@ export async function generateRoundRobin(tournamentId: string) {
     for (let j = i + 1; j < participants.length; j++) {
       matches.push({
         tournamentId,
-        player1Id: participants[i].userId,
-        player2Id: participants[j].userId,
+        player1Id: participants[i].userId!,
+        player2Id: participants[j].userId!,
         round: 1,
         bracketPos: null,
       });
@@ -57,8 +57,8 @@ export async function advanceRoundRobinPlayoffs(
         data: [
           {
             tournamentId,
-            player1Id: standings[0].userId,
-            player2Id: standings[1].userId,
+            player1Id: standings[0].userId!,
+            player2Id: standings[1].userId!,
             round: 3,
             bracketPos: 1,
           },
@@ -72,15 +72,15 @@ export async function advanceRoundRobinPlayoffs(
       data: [
         {
           tournamentId,
-          player1Id: standings[0].userId,
-          player2Id: standings[3].userId,
+          player1Id: standings[0].userId!,
+          player2Id: standings[3].userId!,
           round: 2,
           bracketPos: 1,
         },
         {
           tournamentId,
-          player1Id: standings[1].userId,
-          player2Id: standings[2].userId,
+          player1Id: standings[1].userId!,
+          player2Id: standings[2].userId!,
           round: 2,
           bracketPos: 2,
         },
@@ -163,8 +163,8 @@ export async function generateGroups(tournamentId: string) {
       for (let j = i + 1; j < groupParticipants.length; j++) {
         matches.push({
           tournamentId,
-          player1Id: groupParticipants[i].userId,
-          player2Id: groupParticipants[j].userId,
+          player1Id: groupParticipants[i].userId!,
+          player2Id: groupParticipants[j].userId!,
           groupId: group.id,
           round: 1,
           bracketPos: null,
@@ -185,8 +185,8 @@ export async function generateSingleElimination(tournamentId: string) {
   for (let i = 0; i < Math.floor(participants.length / 2); i++) {
     matches.push({
       tournamentId,
-      player1Id: participants[i * 2].userId,
-      player2Id: participants[i * 2 + 1].userId,
+      player1Id: participants[i * 2].userId!,
+      player2Id: participants[i * 2 + 1].userId!,
       round: 1,
       bracketPos: i + 1,
     });
@@ -208,8 +208,8 @@ export async function generateSwissRound(
     for (let i = 0; i < Math.floor(participants.length / 2); i++) {
       matches.push({
         tournamentId,
-        player1Id: participants[i * 2].userId,
-        player2Id: participants[i * 2 + 1].userId,
+        player1Id: participants[i * 2].userId!,
+        player2Id: participants[i * 2 + 1].userId!,
         round,
         bracketPos: i + 1,
       });
@@ -247,8 +247,8 @@ export async function generateSwissRound(
         if (!pairedSet.has(`${p1.userId}-${p2.userId}`)) {
           matches.push({
             tournamentId,
-            player1Id: p1.userId,
-            player2Id: p2.userId,
+            player1Id: p1.userId!,
+            player2Id: p2.userId!,
             round,
             bracketPos: matches.length + 1,
           });
@@ -263,8 +263,8 @@ export async function generateSwissRound(
         const p2 = unmatched.shift()!;
         matches.push({
           tournamentId,
-          player1Id: p1.userId,
-          player2Id: p2.userId,
+          player1Id: p1.userId!,
+          player2Id: p2.userId!,
           round,
           bracketPos: matches.length + 1,
         });
