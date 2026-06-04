@@ -11,9 +11,7 @@ export default async function LandingPage() {
     <div className="min-h-screen bg-[#0d0d0d]">
       <nav className="border-b border-[#2a2a2a] bg-[#1a1a1a]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-          <Link href="/">
-            <img src="/lblnovo.png" alt="Liga Beyblade Londrina" className="h-12 w-auto" />
-          </Link>
+          <span className="text-white font-black text-lg tracking-tight">LBL</span>
           <div className="flex items-center gap-4">
             <Link href="/tournaments" className="text-gray-300 hover:text-[#f0a500] transition-colors text-sm font-medium hidden sm:block">
               Torneios
@@ -44,13 +42,13 @@ export default async function LandingPage() {
             <span>A liga oficial de Beyblade de Londrina</span>
           </div>
 
-          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black text-white mb-6 leading-tight">
-            Liga{" "}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#c8102e] to-[#f0a500]">
-              Beyblade
-            </span>
-            {" "}Londrina
-          </h1>
+          <div className="flex justify-center mb-6">
+            <img
+              src="/lblnovo.png"
+              alt="Liga Beyblade Londrina"
+              className="h-40 sm:h-52 lg:h-64 w-auto drop-shadow-2xl"
+            />
+          </div>
 
           <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
             Organize, gerencie e compita em campeonatos de Beyblade. Registre cada
