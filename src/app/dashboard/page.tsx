@@ -22,7 +22,7 @@ export default async function DashboardPage() {
   const userId = session.user.id;
 
   // Errors here bubble up to dashboard/error.tsx (friendly boundary)
-  const [participations, recentMatches, upcomingMatches, organizedTournaments, beyblades] =
+  const [participations, recentMatches, upcomingMatches, organizedTournaments, beyblades, ranking] =
     await Promise.all([
       prisma.tournamentParticipant.findMany({
         where: { userId },
@@ -74,7 +74,28 @@ export default async function DashboardPage() {
         include: { matchPoints: { select: { points: true } } },
         orderBy: { wins: "desc" },
       }),
+      prisma.tournamentParticipant.groupBy({
+        by: ["userId"],
+        where: { tournament: { isOfficial: true }, user: { isGuest: false, deleted: false } },
+        _sum: { totalPoints: true, wins: true, losses: true },
+        orderBy: { _sum: { totalPoints: "desc" } },
+        take: 10,
+      }),
     ]);
+
+  const rankingUserIds = ranking.map((r: { userId: string }) => r.userId);
+  const rankingUsers = await prisma.user.findMany({
+    where: { id: { in: rankingUserIds } },
+    select: { id: true, name: true, avatarUrl: true },
+  });
+  const userMap = Object.fromEntries(rankingUsers.map((u: { id: string; name: string; avatarUrl: string | null }) => [u.id, u]));
+  const rankingList = ranking.map((r: { userId: string; _sum: { totalPoints: number | null; wins: number | null; losses: number | null } }) => ({
+    ...userMap[r.userId],
+    points: r._sum.totalPoints ?? 0,
+    wins: r._sum.wins ?? 0,
+    losses: r._sum.losses ?? 0,
+    isMe: r.userId === userId,
+  })).filter((r: { id?: string }) => r.id);
 
   const totalPoints = participations.reduce((sum: number, p: { totalPoints: number }) => sum + p.totalPoints, 0);
   const totalWins = participations.reduce((sum: number, p: { wins: number }) => sum + p.wins, 0);
@@ -96,25 +117,28 @@ export default async function DashboardPage() {
           <p className="text-gray-400 mt-1">Acompanhe suas partidas, torneios e suba no ranking.</p>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {[
-            { label: "Total de Pontos", value: totalPoints, icon: "⭐", color: "text-[#f0a500]" },
-            { label: "Vitórias", value: totalWins, icon: "🏆", color: "text-green-400" },
-            { label: "Derrotas", value: totalLosses, icon: "💀", color: "text-red-400" },
-            { label: "Torneios Ativos", value: activeTournaments, icon: "/bey-removebg-preview.png", color: "text-blue-400" },
-          ].map((stat) => (
-            <div key={stat.label} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
-              <div className="flex items-center justify-between mb-2">
-                {stat.icon.startsWith("/") ? <img src={stat.icon} alt="" className="w-6 h-6 object-contain" /> : <span className="text-2xl">{stat.icon}</span>}
-              </div>
-              <div className={`text-3xl font-black ${stat.color} mb-1`}>{stat.value}</div>
-              <div className="text-sm text-gray-500">{stat.label}</div>
+        <div className="grid lg:grid-cols-[1fr_300px] gap-6">
+          {/* Left column */}
+          <div className="space-y-6">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                { label: "Total de Pontos", value: totalPoints, icon: "⭐", color: "text-[#f0a500]" },
+                { label: "Vitórias", value: totalWins, icon: "🏆", color: "text-green-400" },
+                { label: "Derrotas", value: totalLosses, icon: "💀", color: "text-red-400" },
+                { label: "Torneios Ativos", value: activeTournaments, icon: "/bey-removebg-preview.png", color: "text-blue-400" },
+              ].map((stat) => (
+                <div key={stat.label} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    {stat.icon.startsWith("/") ? <img src={stat.icon} alt="" className="w-6 h-6 object-contain" /> : <span className="text-2xl">{stat.icon}</span>}
+                  </div>
+                  <div className={`text-3xl font-black ${stat.color} mb-1`}>{stat.value}</div>
+                  <div className="text-sm text-gray-500">{stat.label}</div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        <div className="grid lg:grid-cols-2 gap-6">
+            <div className="grid lg:grid-cols-2 gap-6">
           {/* Upcoming Matches */}
           <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-4">Próximas Partidas</h2>
@@ -193,7 +217,53 @@ export default async function DashboardPage() {
               </div>
             )}
           </div>
-        </div>
+          </div>{/* end inner 2-col grid */}
+          </div>{/* end left column */}
+
+          {/* Right column — Ranking */}
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 lg:self-start lg:sticky lg:top-20">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-white">Ranking Oficial</h2>
+              <Link href="/community" className="text-xs text-[#f0a500] hover:underline">Ver tudo →</Link>
+            </div>
+            {rankingList.length === 0 ? (
+              <p className="text-gray-500 text-sm text-center py-6">Nenhum dado ainda</p>
+            ) : (
+              <div className="space-y-2">
+                {rankingList.map((player: { id: string; name: string; avatarUrl: string | null; points: number; wins: number; losses: number; isMe: boolean }, i: number) => (
+                  <Link
+                    key={player.id}
+                    href={`/community/${player.id}`}
+                    className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors ${
+                      player.isMe
+                        ? "bg-[#f0a500]/10 border border-[#f0a500]/30"
+                        : "hover:bg-[#252525]"
+                    }`}
+                  >
+                    <span className={`text-xs font-black w-5 text-center flex-shrink-0 ${
+                      i === 0 ? "text-[#f0a500]" : i === 1 ? "text-gray-300" : i === 2 ? "text-amber-600" : "text-gray-600"
+                    }`}>
+                      {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
+                    </span>
+                    <div className="w-7 h-7 rounded-full overflow-hidden border border-[#333] flex-shrink-0 bg-[#252525] flex items-center justify-center">
+                      {player.avatarUrl
+                        ? <img src={player.avatarUrl} alt="" className="w-full h-full object-cover" />
+                        : <img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-xs font-semibold truncate ${player.isMe ? "text-[#f0a500]" : "text-white"}`}>
+                        {player.name}{player.isMe && " (você)"}
+                      </div>
+                      <div className="text-[10px] text-gray-500">{player.wins}V · {player.losses}D</div>
+                    </div>
+                    <div className="text-xs font-black text-[#f0a500] flex-shrink-0">{player.points}</div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>{/* end outer 2-col grid */}
 
         {/* Organizer Panel */}
         {organizedTournaments.length > 0 && (
