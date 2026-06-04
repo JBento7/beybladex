@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 interface Player {
   id: string;
@@ -21,7 +22,6 @@ interface Props {
   deckType: string;
   participants: Participant[];
   allPlayers: Player[];
-  onRefresh: () => void;
 }
 
 export default function AdminParticipantManager({
@@ -29,8 +29,9 @@ export default function AdminParticipantManager({
   deckType,
   participants,
   allPlayers,
-  onRefresh,
 }: Props) {
+  const router = useRouter();
+  const onRefresh = () => router.refresh();
   const [open, setOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [selectedBeys, setSelectedBeys] = useState<string[]>([]);

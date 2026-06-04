@@ -490,7 +490,6 @@ export default async function TournamentDetailPage({
                     beyblade3: p.beyblade3,
                   }))}
                   allPlayers={allPlayers}
-                  onRefresh={() => {}}
                 />
               ) : (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
