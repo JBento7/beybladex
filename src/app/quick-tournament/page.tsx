@@ -20,6 +20,7 @@ interface QTState {
   format: "ROUND_ROBIN" | "SINGLE_ELIMINATION";
   participants: string[];
   matches: QTMatch[];
+  arenas: number;
 }
 
 const STORAGE_KEY = "lbl-quick-tournament";
@@ -102,7 +103,7 @@ function hasPlayoffs(participants: string[]) {
 
 export default function QuickTournamentPage() {
   const [state, setState] = useState<QTState>({
-    phase: "setup", title: "", format: "ROUND_ROBIN", participants: [], matches: [],
+    phase: "setup", title: "", format: "ROUND_ROBIN", participants: [], matches: [], arenas: 1,
   });
   const [nameInput, setNameInput] = useState("");
   const [showSummary, setShowSummary] = useState(false);
@@ -194,7 +195,7 @@ export default function QuickTournamentPage() {
 
   function reset() {
     if (!confirm("Reiniciar o torneio? Todo o progresso será perdido.")) return;
-    const fresh: QTState = { phase: "setup", title: "", format: "ROUND_ROBIN", participants: [], matches: [] };
+    const fresh: QTState = { phase: "setup", title: "", format: "ROUND_ROBIN", participants: [], matches: [], arenas: 1 };
     save(fresh);
     setNameInput("");
   }
@@ -264,6 +265,19 @@ export default function QuickTournamentPage() {
                   placeholder="ex: Torneio da Galera"
                   className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Nº de Arenas</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={state.arenas}
+                  onChange={(e) => save({ ...state, arenas: Math.max(1, parseInt(e.target.value) || 1) })}
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                />
+                <p className="text-xs text-gray-500 mt-1">Partidas divididas por arena automaticamente</p>
               </div>
 
               <div>
@@ -411,11 +425,18 @@ export default function QuickTournamentPage() {
                 {/* Pending playoff matches */}
                 {pendingRRPlayoff.length > 0 && (
                   <div className="space-y-3 mb-4">
-                    {pendingRRPlayoff.map((match) => (
+                    {pendingRRPlayoff.map((match, idx) => (
                       <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
-                        {match.label && (
-                          <p className="text-xs font-bold text-[#f0a500] mb-2 text-center uppercase tracking-wide">{match.label}</p>
-                        )}
+                        <div className="flex items-center justify-between mb-2">
+                          {match.label && (
+                            <p className="text-xs font-bold text-[#f0a500] uppercase tracking-wide">{match.label}</p>
+                          )}
+                          {state.arenas > 1 && (
+                            <span className="text-[10px] font-bold bg-[#f0a500]/15 text-[#f0a500] border border-[#f0a500]/30 px-2 py-0.5 rounded-md ml-auto">
+                              Arena {(idx % state.arenas) + 1}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-gray-500 mb-2 text-center">Clique no vencedor</p>
                         <div className="grid grid-cols-2 gap-2">
                           {([match.p1, match.p2] as const).map((player) => (
@@ -454,8 +475,15 @@ export default function QuickTournamentPage() {
               <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
                 <h2 className="text-sm font-bold text-white mb-3">Partidas — Pendentes</h2>
                 <div className="space-y-3">
-                  {pendingRRGroup.map((match) => (
+                  {pendingRRGroup.map((match, idx) => (
                     <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
+                      {state.arenas > 1 && (
+                        <div className="flex justify-end mb-1.5">
+                          <span className="text-[10px] font-bold bg-[#f0a500]/15 text-[#f0a500] border border-[#f0a500]/30 px-2 py-0.5 rounded-md">
+                            Arena {(idx % state.arenas) + 1}
+                          </span>
+                        </div>
+                      )}
                       <p className="text-xs text-gray-500 mb-2 text-center">Clique no vencedor</p>
                       <div className="grid grid-cols-2 gap-2">
                         {([match.p1, match.p2] as const).map((player) => (
@@ -479,8 +507,15 @@ export default function QuickTournamentPage() {
               <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
                 <h2 className="text-sm font-bold text-white mb-3">Rodada {maxRound} — Pendentes</h2>
                 <div className="space-y-3">
-                  {pendingElim.map((match) => (
+                  {pendingElim.map((match, idx) => (
                     <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
+                      {state.arenas > 1 && (
+                        <div className="flex justify-end mb-1.5">
+                          <span className="text-[10px] font-bold bg-[#f0a500]/15 text-[#f0a500] border border-[#f0a500]/30 px-2 py-0.5 rounded-md">
+                            Arena {(idx % state.arenas) + 1}
+                          </span>
+                        </div>
+                      )}
                       <p className="text-xs text-gray-500 mb-2 text-center">Clique no vencedor</p>
                       <div className="grid grid-cols-2 gap-2">
                         {([match.p1, match.p2] as const).map((player) => (

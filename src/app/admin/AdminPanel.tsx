@@ -25,6 +25,7 @@ export default function AdminPanel() {
     maxParticipants: "",
     startDate: "",
     prize: "",
+    arenas: "1",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -50,6 +51,7 @@ export default function AdminPanel() {
         maxParticipants: form.maxParticipants ? parseInt(form.maxParticipants) : undefined,
         startDate: form.startDate || undefined,
         prize: form.prize || undefined,
+        arenas: form.arenas ? parseInt(form.arenas) : 1,
       }),
     });
 
@@ -63,7 +65,7 @@ export default function AdminPanel() {
 
     const tournament = await res.json();
     setOpen(false);
-    setForm({ name: "", description: "", format: "ROUND_ROBIN", deckType: "SOLO", maxParticipants: "", startDate: "", prize: "" });
+    setForm({ name: "", description: "", format: "ROUND_ROBIN", deckType: "SOLO", maxParticipants: "", startDate: "", prize: "", arenas: "1" });
     router.push(`/tournaments/${tournament.id}`);
   }
 
@@ -196,7 +198,7 @@ export default function AdminPanel() {
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1.5">
                 Máx. Participantes <span className="text-gray-500 font-normal">(opcional)</span>
@@ -209,6 +211,22 @@ export default function AdminPanel() {
                 value={form.maxParticipants}
                 onChange={handleChange}
                 placeholder="Ilimitado"
+                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                Nº de Arenas
+              </label>
+              <input
+                name="arenas"
+                type="number"
+                min="1"
+                max="20"
+                value={form.arenas}
+                onChange={handleChange}
+                placeholder="1"
                 className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
               />
             </div>
