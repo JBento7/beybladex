@@ -135,17 +135,39 @@ export async function advanceRoundRobinPlayoffs(
       })),
     });
   } else if (completedRound === 3) {
-    // Award bonus points: 10 to final winner (bracketPos 1), 3 to 3rd-place winner (bracketPos 2)
-    await Promise.all(
-      roundMatches
-        .filter((m) => m.winnerId)
-        .map((m) =>
+    // Award bonus points for round 3
+    // Final (bracketPos 1): winner +10, runner-up +5
+    // 3rd place (bracketPos 2): winner +3
+    const bonusUpdates: Promise<unknown>[] = [];
+    for (const m of roundMatches) {
+      if (!m.winnerId) continue;
+      if (m.bracketPos === 1) {
+        // Final winner
+        bonusUpdates.push(
           prisma.tournamentParticipant.updateMany({
-            where: { tournamentId, userId: m.winnerId! },
-            data: { totalPoints: { increment: m.bracketPos === 1 ? 10 : 3 } },
+            where: { tournamentId, userId: m.winnerId },
+            data: { totalPoints: { increment: 10 } },
           })
-        )
-    );
+        );
+        // Runner-up
+        const runnerUpId = m.player1Id === m.winnerId ? m.player2Id : m.player1Id;
+        bonusUpdates.push(
+          prisma.tournamentParticipant.updateMany({
+            where: { tournamentId, userId: runnerUpId },
+            data: { totalPoints: { increment: 5 } },
+          })
+        );
+      } else {
+        // 3rd place winner
+        bonusUpdates.push(
+          prisma.tournamentParticipant.updateMany({
+            where: { tournamentId, userId: m.winnerId },
+            data: { totalPoints: { increment: 3 } },
+          })
+        );
+      }
+    }
+    await Promise.all(bonusUpdates);
     await prisma.tournament.update({
       where: { id: tournamentId },
       data: { status: "FINISHED" },

@@ -111,7 +111,13 @@ function getRRStandings(participants: string[], allMatches: QTMatch[]) {
     } else if (m.round === 2) {
       pts[m.winner] += RR_POINTS.semiWin;
     } else if (m.round === 3) {
-      pts[m.winner] += m.bracketPos === 0 ? RR_POINTS.finalWin : RR_POINTS.thirdWin;
+      if (m.bracketPos === 0) {
+        pts[m.winner] += RR_POINTS.finalWin;
+        const runnerUp = m.winner === m.p1 ? m.p2 : m.p1;
+        if (pts[runnerUp] !== undefined) pts[runnerUp] += 5;
+      } else {
+        pts[m.winner] += RR_POINTS.thirdWin;
+      }
     }
   }
 
@@ -518,20 +524,20 @@ export default function QuickTournamentPage() {
               </div>
             )}
 
-            {/* Playoffs — semis and finals in separate sections so slots don't collide */}
-            {state.format === "ROUND_ROBIN" && semiMatches.length > 0 && (
-              <ArenaGrid
-                matches={semiMatches}
-                arenas={state.arenas}
-                label="⚔️ Semifinais"
-                onWinner={setWinner}
-              />
-            )}
+            {/* Playoffs — finals first, then semis below */}
             {state.format === "ROUND_ROBIN" && finalMatches.length > 0 && (
               <ArenaGrid
                 matches={finalMatches}
                 arenas={state.arenas}
                 label="🏆 Final & 3º Lugar"
+                onWinner={setWinner}
+              />
+            )}
+            {state.format === "ROUND_ROBIN" && semiMatches.length > 0 && (
+              <ArenaGrid
+                matches={semiMatches}
+                arenas={state.arenas}
+                label="⚔️ Semifinais"
                 onWinner={setWinner}
               />
             )}
