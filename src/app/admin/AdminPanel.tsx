@@ -26,6 +26,7 @@ export default function AdminPanel() {
     startDate: "",
     prize: "",
     arenas: "1",
+    eventType: "TORNEIO",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -52,6 +53,7 @@ export default function AdminPanel() {
         startDate: form.startDate || undefined,
         prize: form.prize || undefined,
         arenas: form.arenas ? parseInt(form.arenas) : 1,
+        eventType: form.eventType,
       }),
     });
 
@@ -65,7 +67,7 @@ export default function AdminPanel() {
 
     const tournament = await res.json();
     setOpen(false);
-    setForm({ name: "", description: "", format: "ROUND_ROBIN", deckType: "SOLO", maxParticipants: "", startDate: "", prize: "", arenas: "1" });
+    setForm({ name: "", description: "", format: "ROUND_ROBIN", deckType: "SOLO", maxParticipants: "", startDate: "", prize: "", arenas: "1", eventType: "TORNEIO" });
     router.push(`/tournaments/${tournament.id}`);
   }
 
@@ -120,6 +122,37 @@ export default function AdminPanel() {
               {error}
             </div>
           )}
+
+          {/* Event type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Tipo de Evento</label>
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                { value: "TORNEIO", label: "🏆 Torneio", desc: "Pontos contam no ranking." },
+                { value: "BEYENCONTRO", label: "🎮 BeyEncontro", desc: "Encontro casual, sem ranking." },
+              ] as const).map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setForm({ ...form, eventType: t.value })}
+                  className={`text-left p-3 rounded-xl border transition-all ${
+                    form.eventType === t.value
+                      ? t.value === "TORNEIO"
+                        ? "border-[#f0a500] bg-[#f0a500]/10"
+                        : "border-blue-500 bg-blue-500/10"
+                      : "border-[#333] bg-[#252525] hover:border-gray-600"
+                  }`}
+                >
+                  <div className={`font-semibold text-sm mb-0.5 ${
+                    form.eventType === t.value
+                      ? t.value === "TORNEIO" ? "text-[#f0a500]" : "text-blue-400"
+                      : "text-white"
+                  }`}>{t.label}</div>
+                  <div className="text-xs text-gray-500">{t.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div>

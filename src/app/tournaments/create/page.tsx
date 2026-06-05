@@ -29,6 +29,7 @@ const FORMATS = [
 export default function CreateTournamentPage() {
   const router = useRouter();
   const { data: session } = useSession();
+  const isAdmin = session?.user.role === "ORGANIZER";
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -38,10 +39,10 @@ export default function CreateTournamentPage() {
     startDate: "",
     prize: "",
     arenas: "1",
+    eventType: "TORNEIO",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [unofficialNotice, setUnofficialNotice] = useState<string | null>(null);
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -68,6 +69,7 @@ export default function CreateTournamentPage() {
         startDate: form.startDate || undefined,
         prize: form.prize || undefined,
         arenas: form.arenas ? parseInt(form.arenas) : 1,
+        eventType: isAdmin ? form.eventType : "BEYENCONTRO",
       }),
     });
 
@@ -80,10 +82,6 @@ export default function CreateTournamentPage() {
     }
 
     const tournament = await res.json();
-    if (session?.user.role !== "ORGANIZER") {
-      setUnofficialNotice(tournament.id);
-      return;
-    }
     router.push(`/tournaments/${tournament.id}`);
   }
 
@@ -102,20 +100,64 @@ export default function CreateTournamentPage() {
           </div>
         )}
 
-        {unofficialNotice && (
-          <div className="bg-yellow-900/30 border border-yellow-600/50 text-yellow-300 px-4 py-4 rounded-lg mb-6 text-sm">
-            <p className="font-bold mb-1">Torneio criado com sucesso!</p>
-            <p className="mb-3">Seu torneio foi criado como <strong>NÃO OFICIAL</strong>. Apenas as estatísticas dos beyblades serão contabilizadas. Pontos não contam no ranking da comunidade.</p>
-            <button
-              onClick={() => router.push(`/tournaments/${unofficialNotice}`)}
-              className="bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold px-4 py-2 rounded-lg transition-colors text-sm"
-            >
-              Ver Torneio →
-            </button>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-6">
+
+          {/* Event Type — admin chooses, player sees fixed notice */}
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+            <h2 className="text-base font-bold text-white mb-4">Tipo de Evento <span className="text-red-400">*</span></h2>
+            {isAdmin ? (
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  {
+                    value: "TORNEIO",
+                    label: "Torneio",
+                    icon: "🏆",
+                    desc: "Partidas oficiais. Pontos contam no ranking da comunidade.",
+                    border: "border-[#f0a500]",
+                    bg: "bg-[#f0a500]/10",
+                    text: "text-[#f0a500]",
+                  },
+                  {
+                    value: "BEYENCONTRO",
+                    label: "BeyEncontro",
+                    icon: "🎮",
+                    desc: "Encontro casual para treino e diversão. Sem pontos de ranking.",
+                    border: "border-blue-500",
+                    bg: "bg-blue-500/10",
+                    text: "text-blue-400",
+                  },
+                ] as const).map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setForm({ ...form, eventType: t.value })}
+                    className={`text-left p-4 rounded-xl border-2 transition-all ${
+                      form.eventType === t.value
+                        ? `${t.border} ${t.bg}`
+                        : "border-[#333] bg-[#252525] hover:border-gray-600"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xl">{t.icon}</span>
+                      <span className={`font-bold text-sm ${form.eventType === t.value ? t.text : "text-white"}`}>
+                        {t.label}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-400">{t.desc}</div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-start gap-3 bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+                <span className="text-2xl">🎮</span>
+                <div>
+                  <p className="font-bold text-blue-400 text-sm">BeyEncontro</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Seus eventos são criados como BeyEncontro — estatísticas de beyblade são registradas, mas pontos não contam no ranking da comunidade.</p>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Tournament Name */}
           <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
             <h2 className="text-base font-bold text-white mb-4">Informações Básicas</h2>

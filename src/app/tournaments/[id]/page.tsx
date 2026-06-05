@@ -294,14 +294,14 @@ export default async function TournamentDetailPage({
                   {FORMAT_LABELS[tournament.format]}
                 </span>
                 {!tournament.isOfficial && (
-                  <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 px-3 py-1 rounded-full font-semibold">
-                    Não-Oficial
+                  <span className="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/40 px-3 py-1 rounded-full font-semibold">
+                    🎮 BeyEncontro
                   </span>
                 )}
               </div>
               {!tournament.isOfficial && (
-                <div className="bg-yellow-900/20 border border-yellow-600/30 text-yellow-300 text-sm px-4 py-2.5 rounded-lg mb-3">
-                  Torneio Não-Oficial — Estatísticas de Beyblade são registradas, pontos não contam no ranking.
+                <div className="bg-blue-900/20 border border-blue-600/30 text-blue-300 text-sm px-4 py-2.5 rounded-lg mb-3">
+                  🎮 BeyEncontro — Estatísticas de beyblade são registradas, mas os pontos não contam no ranking da comunidade.
                 </div>
               )}
               <h1 className="text-3xl font-black text-white mb-2">

@@ -99,8 +99,8 @@ export default async function TournamentsPage() {
                         {status.label}
                       </span>
                       {!t.isOfficial && (
-                        <span className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-2.5 py-1 rounded-full font-semibold">
-                          Não-Oficial
+                        <span className="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-1 rounded-full font-semibold">
+                          🎮 BeyEncontro
                         </span>
                       )}
                     </div>

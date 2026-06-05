@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
     }
 
-    const { name, description, format, maxParticipants, startDate, deckType, prize, arenas } =
+    const { name, description, format, maxParticipants, startDate, deckType, prize, arenas, eventType } =
       await req.json();
 
     if (!name || !format) {
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
         prize: prize || null,
         arenas: arenas ? Math.max(1, parseInt(arenas)) : 1,
         status: "REGISTRATION",
-        isOfficial: session.user.role === "ORGANIZER",
+        isOfficial: session.user.role === "ORGANIZER" && eventType !== "BEYENCONTRO",
       },
     });
 
