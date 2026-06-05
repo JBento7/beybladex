@@ -524,7 +524,7 @@ export default function QuickTournamentPage() {
               </div>
             )}
 
-            {/* Playoffs — finals first, then semis below */}
+            {/* ── PLAYOFFS ── Final & 3º Lugar aparecem primeiro, depois as Semis */}
             {state.format === "ROUND_ROBIN" && finalMatches.length > 0 && (
               <ArenaGrid
                 matches={finalMatches}
