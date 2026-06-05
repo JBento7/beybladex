@@ -544,21 +544,42 @@ export default function QuickTournamentPage() {
               />
             )}
 
-            {/* Completed group/elim matches */}
-            {(state.format === "SINGLE_ELIMINATION" ? doneElim : doneRR.filter((m) => m.round === 1)).length > 0 && (
-              <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
-                <h2 className="text-sm font-bold text-white mb-3">Partidas Concluídas</h2>
-                <div className="space-y-1.5">
-                  {(state.format === "SINGLE_ELIMINATION" ? doneElim : doneRR.filter((m) => m.round === 1)).map((match) => (
-                    <div key={match.id} className="flex items-center justify-between bg-[#252525] rounded-lg px-3 py-2 text-sm">
-                      <span className={match.winner === match.p1 ? "text-[#f0a500] font-bold" : "text-gray-500 line-through"}>{match.p1}</span>
-                      <span className="text-gray-600 text-xs">vs</span>
-                      <span className={match.winner === match.p2 ? "text-[#f0a500] font-bold" : "text-gray-500 line-through"}>{match.p2}</span>
-                    </div>
-                  ))}
+            {/* Completed rounds — winners only, grouped by round */}
+            {(() => {
+              const doneSrc = state.format === "SINGLE_ELIMINATION" ? doneElim : doneRR.filter((m) => m.round === 1);
+              // Only show rounds that are fully finished (all matches in that round have a winner)
+              const roundNums = [...new Set(doneSrc.map((m) => m.round))].sort((a, b) => a - b);
+              // For elim: only show rounds strictly before the current pending round
+              const filteredRounds = state.format === "SINGLE_ELIMINATION"
+                ? roundNums.filter((r) => r < maxRound)
+                : roundNums;
+              if (filteredRounds.length === 0) return null;
+              return (
+                <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
+                  <h2 className="text-sm font-bold text-white mb-3">Vencedores das Rodadas Anteriores</h2>
+                  <div className="space-y-3">
+                    {filteredRounds.map((round) => {
+                      const winners = doneSrc.filter((m) => m.round === round).map((m) => m.winner!);
+                      const roundLabel = state.format === "SINGLE_ELIMINATION"
+                        ? `Rodada ${round}`
+                        : `Fase de Grupos`;
+                      return (
+                        <div key={round}>
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">{roundLabel}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {winners.map((w, i) => (
+                              <span key={i} className="text-xs bg-[#f0a500]/15 text-[#f0a500] border border-[#f0a500]/30 px-2.5 py-1 rounded-full font-semibold">
+                                🏅 {w}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 text-center">
               <p className="text-gray-500 text-xs mb-2">Quer salvar seu histórico e estatísticas de beyblade?</p>

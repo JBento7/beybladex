@@ -21,6 +21,9 @@ export default async function LandingPage() {
             <Link href="/upcoming" className="text-gray-300 hover:text-[#f0a500] transition-colors text-sm font-medium hidden sm:block">
               Próximos
             </Link>
+            <Link href="/quick-tournament" className="text-gray-300 hover:text-[#f0a500] transition-colors text-sm font-medium hidden sm:block">
+              Torneio Rápido
+            </Link>
             <Link href="/login" className="text-gray-300 hover:text-[#f0a500] transition-colors text-sm font-medium">
               Entrar
             </Link>
