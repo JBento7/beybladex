@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
-import { recalculateStandings, advanceSingleElimination, generateSwissRound } from "@/lib/tournament-engine";
+import { recalculateStandings, advanceSingleElimination, generateSwissRound, advanceRoundRobinPlayoffs } from "@/lib/tournament-engine";
 import type { FinishType } from "@prisma/client";
 
 export async function POST(
@@ -114,7 +114,9 @@ export async function POST(
           });
         }
       }
-    } else if (tournament.format === "ROUND_ROBIN" || tournament.format === "GROUPS") {
+    } else if (tournament.format === "ROUND_ROBIN") {
+      await advanceRoundRobinPlayoffs(match.tournamentId, match.round);
+    } else if (tournament.format === "GROUPS") {
       const allMatches = await prisma.match.findMany({
         where: { tournamentId: match.tournamentId },
       });
