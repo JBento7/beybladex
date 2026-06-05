@@ -310,7 +310,8 @@ export default function QuickTournamentPage() {
 
   // Derived state
   const rrMatches = state.matches.filter((m) => m.round === 1 && m.p2 !== "__BYE__");
-  const playoffMatches = state.matches.filter((m) => m.round > 1 && m.p2 !== "__BYE__");
+  const semiMatches = state.matches.filter((m) => m.round === 2 && m.p2 !== "__BYE__");
+  const finalMatches = state.matches.filter((m) => m.round === 3 && m.p2 !== "__BYE__");
   const maxRound = state.matches.length > 0 ? Math.max(...state.matches.map((m) => m.round)) : 1;
 
   const rrStandings = state.format === "ROUND_ROBIN" && state.matches.length > 0
@@ -488,7 +489,7 @@ export default function QuickTournamentPage() {
                         <div className="flex items-center gap-2">
                           <span className={`text-xs font-bold w-5 text-center ${i === 0 ? "text-[#f0a500]" : isTop4 ? "text-gray-400" : "text-gray-600"}`}>#{i + 1}</span>
                           <span className={`text-sm ${isTop4 ? "text-white" : "text-gray-500"}`}>{p.name}</span>
-                          {isTop4 && hasPlayoffs(state.participants) && playoffMatches.length === 0 && state.phase === "playing" && (
+                          {isTop4 && hasPlayoffs(state.participants) && semiMatches.length === 0 && state.phase === "playing" && (
                             <span className="text-[10px] text-[#f0a500] hidden sm:inline">playoffs</span>
                           )}
                         </div>
@@ -503,16 +504,22 @@ export default function QuickTournamentPage() {
               </div>
             )}
 
-            {/* Playoffs section */}
-            {state.format === "ROUND_ROBIN" && playoffMatches.length > 0 && (
-              <div className="bg-[#1a1a1a] border border-[#f0a500]/30 rounded-xl p-5">
-                <h2 className="text-sm font-bold text-[#f0a500] mb-3">⚔️ Playoffs</h2>
-                <ArenaGrid
-                  matches={playoffMatches}
-                  arenas={state.arenas}
-                  onWinner={setWinner}
-                />
-              </div>
+            {/* Playoffs — semis and finals in separate sections so slots don't collide */}
+            {state.format === "ROUND_ROBIN" && semiMatches.length > 0 && (
+              <ArenaGrid
+                matches={semiMatches}
+                arenas={state.arenas}
+                label="⚔️ Semifinais"
+                onWinner={setWinner}
+              />
+            )}
+            {state.format === "ROUND_ROBIN" && finalMatches.length > 0 && (
+              <ArenaGrid
+                matches={finalMatches}
+                arenas={state.arenas}
+                label="🏆 Final & 3º Lugar"
+                onWinner={setWinner}
+              />
             )}
 
             {/* RR group stage matches — all shown in fixed positions */}
@@ -575,10 +582,10 @@ export default function QuickTournamentPage() {
                     </div>
                   ))}
                 </div>
-                {playoffMatches.length > 0 && (
+                {(semiMatches.length > 0 || finalMatches.length > 0) && (
                   <div className="border-t border-[#333] pt-3 mb-4">
                     <p className="text-xs font-bold text-[#f0a500] mb-2 uppercase">Playoffs</p>
-                    {playoffMatches.filter((m) => m.winner).map((m) => (
+                    {[...semiMatches, ...finalMatches].filter((m) => m.winner).map((m) => (
                       <div key={m.id} className="text-xs text-gray-400 mb-1">
                         <span className="text-[#f0a500] font-semibold">{m.label}: </span>
                         <span className="text-white">{m.winner}</span> def. {m.winner === m.p1 ? m.p2 : m.p1}
