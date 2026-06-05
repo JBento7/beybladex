@@ -10,6 +10,7 @@ import ClientJoinButton from "./ClientJoinButton";
 import AdminParticipantManager from "./AdminParticipantManager";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 import type { Metadata } from "next";
+import { scheduleByArena } from "@/lib/arena-schedule";
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const t = await prisma.tournament.findUnique({
@@ -73,13 +74,11 @@ function MatchCard({
   isOrganizer,
   tournamentId,
   participantBeyblades,
-  arena,
 }: {
   match: MatchWithRelations;
   isOrganizer: boolean;
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
-  arena?: number;
 }) {
   const isFinished = match.status === "FINISHED";
   const p1Points = match.points
@@ -97,11 +96,6 @@ function MatchCard({
           : "bg-gray-800/50 border-gray-700/50"
       }`}
     >
-      {arena !== undefined && (
-        <span className="flex-shrink-0 text-[10px] font-bold bg-[#f0a500]/15 text-[#f0a500] border border-[#f0a500]/30 px-2 py-1 rounded-md">
-          Arena {arena}
-        </span>
-      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <span
@@ -364,30 +358,82 @@ export default async function TournamentDetailPage({
           {/* Main content */}
           <div className="lg:col-span-2 space-y-6">
             {sortedRounds.length > 0 ? (
-              sortedRounds.map(([round, matches]: [number, typeof tournament.matches]) => (
-                <div
-                  key={round}
-                  className="bg-gray-900 border border-gray-800 rounded-xl p-6"
-                >
-                  <h2 className="text-lg font-bold text-white mb-4">
-                    {(tournament.format === "SINGLE_ELIMINATION" || tournament.format === "ROUND_ROBIN")
-                      ? getRoundName(round, sortedRounds.length, tournament.format)
-                      : `Rodada ${round}`}
-                  </h2>
-                  <div className="space-y-3">
-                    {matches.map((match, matchIdx) => (
-                      <MatchCard
-                        key={match.id}
-                        match={match}
-                        isOrganizer={isOrganizerOfThis}
-                        tournamentId={tournament.id}
-                        participantBeyblades={participantBeyblades}
-                        arena={(tournament.arenas ?? 1) > 1 ? (matchIdx % (tournament.arenas ?? 1)) + 1 : undefined}
-                      />
-                    ))}
+              sortedRounds.map(([round, roundMatches]: [number, typeof tournament.matches]) => {
+                const arenaCount = tournament.arenas ?? 1;
+                const scheduled = scheduleByArena(
+                  roundMatches,
+                  arenaCount,
+                  (m) => m.player1.id,
+                  (m) => m.player2.id,
+                );
+                const totalSlots = scheduled.length > 0 ? Math.max(...scheduled.map((s) => s.slot)) + 1 : 0;
+
+                return (
+                  <div key={round} className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                    <h2 className="text-lg font-bold text-white mb-4">
+                      {(tournament.format === "SINGLE_ELIMINATION" || tournament.format === "ROUND_ROBIN")
+                        ? getRoundName(round, sortedRounds.length, tournament.format)
+                        : `Rodada ${round}`}
+                    </h2>
+
+                    {arenaCount > 1 ? (
+                      <div className="overflow-x-auto">
+                        {/* Arena column headers */}
+                        <div
+                          className="grid gap-3 mb-3 min-w-0"
+                          style={{ gridTemplateColumns: `repeat(${arenaCount}, minmax(180px, 1fr))` }}
+                        >
+                          {Array.from({ length: arenaCount }, (_, i) => (
+                            <div key={i} className="text-center text-xs font-bold text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/20 rounded-lg py-1.5">
+                              Arena {i + 1}
+                            </div>
+                          ))}
+                        </div>
+                        {/* One row per slot */}
+                        {Array.from({ length: totalSlots }, (_, slot) => (
+                          <div
+                            key={slot}
+                            className="grid gap-3 mb-3"
+                            style={{ gridTemplateColumns: `repeat(${arenaCount}, minmax(180px, 1fr))` }}
+                          >
+                            {Array.from({ length: arenaCount }, (_, i) => {
+                              const entry = scheduled.find((s) => s.slot === slot && s.arena === i + 1);
+                              if (!entry) {
+                                return (
+                                  <div key={i} className="border border-dashed border-gray-800 rounded-lg flex items-center justify-center py-6">
+                                    <span className="text-gray-700 text-xs">livre</span>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <MatchCard
+                                  key={entry.match.id}
+                                  match={entry.match}
+                                  isOrganizer={isOrganizerOfThis}
+                                  tournamentId={tournament.id}
+                                  participantBeyblades={participantBeyblades}
+                                />
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {roundMatches.map((match) => (
+                          <MatchCard
+                            key={match.id}
+                            match={match}
+                            isOrganizer={isOrganizerOfThis}
+                            tournamentId={tournament.id}
+                            participantBeyblades={participantBeyblades}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             ) : tournament.status === "REGISTRATION" ? (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
                 <div className="text-4xl mb-3">⏳</div>

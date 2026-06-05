@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import { scheduleByArena } from "@/lib/arena-schedule";
 
 interface QTMatch {
   id: string;
@@ -99,6 +100,80 @@ function getRRStandings(participants: string[], matches: QTMatch[]) {
 // Returns true if playoffs are applicable (>=4 players in RR)
 function hasPlayoffs(participants: string[]) {
   return participants.length >= 4;
+}
+
+/** Arena column grid for pending matches */
+function PendingArenaGrid({
+  matches,
+  arenas,
+  label,
+  onWinner,
+}: {
+  matches: QTMatch[];
+  arenas: number;
+  label?: string;
+  onWinner: (id: string, winner: string) => void;
+}) {
+  const scheduled = scheduleByArena(matches, arenas, (m) => m.p1, (m) => m.p2);
+  const totalSlots = scheduled.length > 0 ? Math.max(...scheduled.map((s) => s.slot)) + 1 : 0;
+
+  return (
+    <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
+      {label && <h2 className="text-sm font-bold text-white mb-3">{label}</h2>}
+      <div className="overflow-x-auto">
+        {/* Arena headers */}
+        <div
+          className="grid gap-3 mb-3"
+          style={{ gridTemplateColumns: `repeat(${arenas}, minmax(160px, 1fr))` }}
+        >
+          {Array.from({ length: arenas }, (_, i) => (
+            <div key={i} className="text-center text-xs font-bold text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/20 rounded-lg py-1.5">
+              Arena {i + 1}
+            </div>
+          ))}
+        </div>
+        {/* One row per slot */}
+        {Array.from({ length: totalSlots }, (_, slot) => (
+          <div
+            key={slot}
+            className="grid gap-3 mb-3"
+            style={{ gridTemplateColumns: `repeat(${arenas}, minmax(160px, 1fr))` }}
+          >
+            {Array.from({ length: arenas }, (_, i) => {
+              const entry = scheduled.find((s) => s.slot === slot && s.arena === i + 1);
+              if (!entry) {
+                return (
+                  <div key={i} className="border border-dashed border-[#333] rounded-xl flex items-center justify-center py-6">
+                    <span className="text-gray-700 text-xs">livre</span>
+                  </div>
+                );
+              }
+              const match = entry.match;
+              return (
+                <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
+                  {match.label && (
+                    <p className="text-[10px] font-bold text-[#f0a500] uppercase tracking-wide mb-2 text-center">{match.label}</p>
+                  )}
+                  <p className="text-xs text-gray-500 mb-2 text-center">Clique no vencedor</p>
+                  <div className="space-y-2">
+                    {([match.p1, match.p2] as const).map((player) => (
+                      <button
+                        key={player}
+                        onClick={() => onWinner(match.id, player)}
+                        className="w-full bg-[#1a1a1a] hover:bg-[#f0a500]/10 hover:border-[#f0a500] border border-[#333] text-white font-semibold text-sm py-2.5 px-3 rounded-xl transition-all"
+                      >
+                        {player}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function QuickTournamentPage() {
@@ -424,33 +499,12 @@ export default function QuickTournamentPage() {
 
                 {/* Pending playoff matches */}
                 {pendingRRPlayoff.length > 0 && (
-                  <div className="space-y-3 mb-4">
-                    {pendingRRPlayoff.map((match, idx) => (
-                      <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          {match.label && (
-                            <p className="text-xs font-bold text-[#f0a500] uppercase tracking-wide">{match.label}</p>
-                          )}
-                          {state.arenas > 1 && (
-                            <span className="text-[10px] font-bold bg-[#f0a500]/15 text-[#f0a500] border border-[#f0a500]/30 px-2 py-0.5 rounded-md ml-auto">
-                              Arena {(idx % state.arenas) + 1}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 mb-2 text-center">Clique no vencedor</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          {([match.p1, match.p2] as const).map((player) => (
-                            <button
-                              key={player}
-                              onClick={() => setWinner(match.id, player)}
-                              className="bg-[#1a1a1a] hover:bg-[#f0a500]/10 hover:border-[#f0a500] border border-[#333] text-white font-semibold text-sm py-3 px-4 rounded-xl transition-all"
-                            >
-                              {player}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                  <div className="mb-4">
+                    <PendingArenaGrid
+                      matches={pendingRRPlayoff}
+                      arenas={state.arenas}
+                      onWinner={setWinner}
+                    />
                   </div>
                 )}
 
@@ -472,66 +526,22 @@ export default function QuickTournamentPage() {
 
             {/* Pending RR group matches */}
             {state.phase === "playing" && pendingRRGroup.length > 0 && (
-              <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
-                <h2 className="text-sm font-bold text-white mb-3">Partidas — Pendentes</h2>
-                <div className="space-y-3">
-                  {pendingRRGroup.map((match, idx) => (
-                    <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
-                      {state.arenas > 1 && (
-                        <div className="flex justify-end mb-1.5">
-                          <span className="text-[10px] font-bold bg-[#f0a500]/15 text-[#f0a500] border border-[#f0a500]/30 px-2 py-0.5 rounded-md">
-                            Arena {(idx % state.arenas) + 1}
-                          </span>
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-500 mb-2 text-center">Clique no vencedor</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {([match.p1, match.p2] as const).map((player) => (
-                          <button
-                            key={player}
-                            onClick={() => setWinner(match.id, player)}
-                            className="bg-[#1a1a1a] hover:bg-[#f0a500]/10 hover:border-[#f0a500] border border-[#333] text-white font-semibold text-sm py-3 px-4 rounded-xl transition-all"
-                          >
-                            {player}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <PendingArenaGrid
+                matches={pendingRRGroup}
+                arenas={state.arenas}
+                label="Partidas — Pendentes"
+                onWinner={setWinner}
+              />
             )}
 
             {/* Pending elim matches */}
             {state.format === "SINGLE_ELIMINATION" && state.phase === "playing" && pendingElim.length > 0 && (
-              <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
-                <h2 className="text-sm font-bold text-white mb-3">Rodada {maxRound} — Pendentes</h2>
-                <div className="space-y-3">
-                  {pendingElim.map((match, idx) => (
-                    <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
-                      {state.arenas > 1 && (
-                        <div className="flex justify-end mb-1.5">
-                          <span className="text-[10px] font-bold bg-[#f0a500]/15 text-[#f0a500] border border-[#f0a500]/30 px-2 py-0.5 rounded-md">
-                            Arena {(idx % state.arenas) + 1}
-                          </span>
-                        </div>
-                      )}
-                      <p className="text-xs text-gray-500 mb-2 text-center">Clique no vencedor</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {([match.p1, match.p2] as const).map((player) => (
-                          <button
-                            key={player}
-                            onClick={() => setWinner(match.id, player)}
-                            className="bg-[#1a1a1a] hover:bg-[#f0a500]/10 hover:border-[#f0a500] border border-[#333] text-white font-semibold text-sm py-3 px-4 rounded-xl transition-all"
-                          >
-                            {player}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <PendingArenaGrid
+                matches={pendingElim}
+                arenas={state.arenas}
+                label={`Rodada ${maxRound} — Pendentes`}
+                onWinner={setWinner}
+              />
             )}
 
             {/* Completed group/elim matches */}
