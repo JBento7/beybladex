@@ -276,18 +276,23 @@ export default function QuickTournamentPage() {
         }
 
         if (semis.length === 2 && semis.every((m) => m.winner !== null) && final.length === 0) {
-          // Generate final — assign arena
-          const finalRaw = [{ p1: semis[0].winner!, p2: semis[1].winner! }];
-          const finalSched = scheduleByArena(finalRaw, state.arenas, (m) => m.p1, (m) => m.p2);
-          const newFinal: QTMatch = {
-            id: genId(), round: 3, p1: finalSched[0].match.p1, p2: finalSched[0].match.p2,
-            winner: null, bracketPos: 0, arena: finalSched[0].arena, slot: finalSched[0].slot, label: "Final",
-          };
-          save({ ...state, matches: [...matches, newFinal] });
+          // Generate final + 3rd place match — assign arenas
+          const loser1 = semis[0].winner === semis[0].p1 ? semis[0].p2 : semis[0].p1;
+          const loser2 = semis[1].winner === semis[1].p1 ? semis[1].p2 : semis[1].p1;
+          const round3Raw = [
+            { p1: semis[0].winner!, p2: semis[1].winner! },
+            { p1: loser1, p2: loser2 },
+          ];
+          const r3Sched = scheduleByArena(round3Raw, state.arenas, (m) => m.p1, (m) => m.p2);
+          const newRound3: QTMatch[] = r3Sched.map(({ match, slot, arena }, i) => ({
+            id: genId(), round: 3, p1: match.p1, p2: match.p2,
+            winner: null, bracketPos: i, arena, slot, label: i === 0 ? "Final" : "3º Lugar",
+          }));
+          save({ ...state, matches: [...matches, ...newRound3] });
           return;
         }
 
-        if (final.length === 1 && final[0].winner) {
+        if (final.length > 0 && final.every((m) => m.winner !== null)) {
           save({ ...state, matches, phase: "finished" });
           return;
         }
@@ -316,9 +321,10 @@ export default function QuickTournamentPage() {
     ? state.matches.filter((m) => m.round === maxRound)[0]?.winner
     : null;
 
-  // RR champion: final winner if playoffs happened, else #1 in standings
+  // RR champion: winner of the Final (bracketPos 0 in round 3), else standings leader
+  const rrFinalMatch = state.matches.find((m) => m.round === 3 && m.bracketPos === 0);
   const rrChampion = state.format === "ROUND_ROBIN" && state.phase === "finished"
-    ? (state.matches.find((m) => m.round === 3)?.winner ?? rrStandings[0]?.name)
+    ? (rrFinalMatch?.winner ?? rrStandings[0]?.name)
     : null;
 
   return (
