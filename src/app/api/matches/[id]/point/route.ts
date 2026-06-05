@@ -32,8 +32,8 @@ export async function POST(
     });
 
     if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
-    if (match.tournament.organizerId !== session.user.id) {
-      return NextResponse.json({ error: "Apenas o organizador pode registrar pontos" }, { status: 403 });
+    if (match.tournament.organizerId !== session.user.id && session.user.role !== "ORGANIZER") {
+      return NextResponse.json({ error: "Apenas organizadores podem registrar pontos" }, { status: 403 });
     }
     if (match.status === "FINISHED") {
       return NextResponse.json({ error: "Partida já finalizada" }, { status: 400 });

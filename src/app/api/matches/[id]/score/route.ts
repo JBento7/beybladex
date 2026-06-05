@@ -35,9 +35,9 @@ export async function POST(
       return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
     }
 
-    if (match.tournament.organizerId !== session.user.id) {
+    if (match.tournament.organizerId !== session.user.id && session.user.role !== "ORGANIZER") {
       return NextResponse.json(
-        { error: "Apenas o organizador pode registrar pontuações" },
+        { error: "Apenas organizadores podem registrar pontuações" },
         { status: 403 }
       );
     }

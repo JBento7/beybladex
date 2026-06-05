@@ -29,9 +29,9 @@ export async function POST(
       return NextResponse.json({ error: "Tournament not found" }, { status: 404 });
     }
 
-    if (tournament.organizerId !== session.user.id) {
+    if (tournament.organizerId !== session.user.id && session.user.role !== "ORGANIZER") {
       return NextResponse.json(
-        { error: "Only the organizer can start the tournament" },
+        { error: "Only organizers can start the tournament" },
         { status: 403 }
       );
     }

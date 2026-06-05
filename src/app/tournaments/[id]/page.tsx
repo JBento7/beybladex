@@ -203,6 +203,8 @@ export default async function TournamentDetailPage({
   if (!tournament) notFound();
 
   const isOrganizerOfThis = !!session && session.user.id === tournament.organizerId;
+  // Any ORGANIZER-role user can manage participants (not just the creator)
+  const isAdminUser = !!session && session.user.role === "ORGANIZER";
 
   // Collect all beyblade IDs registered by participants
   const allBeybladeIds = tournament.participants.flatMap((p) =>
@@ -217,8 +219,8 @@ export default async function TournamentDetailPage({
           select: { id: true, name: true, blade: true, ratchet: true, bit: true },
         })
       : Promise.resolve([]),
-    // If organizer, fetch all active users with their beyblades for admin panel
-    isOrganizerOfThis
+    // Any organizer-role user gets the full player list for the admin panel
+    isAdminUser
       ? prisma.user.findMany({
           where: { deleted: false, isGuest: false },
           select: {
@@ -247,6 +249,8 @@ export default async function TournamentDetailPage({
     session &&
     tournament.status === "REGISTRATION" &&
     !isParticipant &&
+    // Participants can only self-register for BeyEncontros; official tournaments require admin
+    (!tournament.isOfficial || session.user.role === "ORGANIZER") &&
     (!tournament.maxParticipants ||
       tournament.participants.length < tournament.maxParticipants);
 
@@ -338,7 +342,7 @@ export default async function TournamentDetailPage({
                   ✓ Você está inscrito
                 </span>
               )}
-              {isOrganizerOfThis &&
+              {isAdminUser &&
                 tournament.status === "REGISTRATION" &&
                 tournament.participants.length >= 2 && (
                   <StartTournamentButton tournamentId={tournament.id} />
@@ -556,7 +560,7 @@ export default async function TournamentDetailPage({
               <h2 className="text-lg font-bold text-white mb-4">
                 Participantes ({tournament.participants.length})
               </h2>
-              {isOrganizerOfThis && tournament.status !== "FINISHED" ? (
+              {isAdminUser && tournament.status !== "FINISHED" ? (
                 <AdminParticipantManager
                   tournamentId={tournament.id}
                   deckType={tournament.deckType}
