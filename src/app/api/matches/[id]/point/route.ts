@@ -115,11 +115,9 @@ export async function POST(
           data: { status: "FINISHED", winnerId: matchWinnerId },
         });
 
-        // For RR tournaments standings only reflect the group stage (round 1)
-        const rrMaxRound = match.tournament.format === "ROUND_ROBIN" ? 1 : undefined;
         await Promise.all([
-          recalculateStandings(match.tournamentId, match.player1Id, rrMaxRound),
-          recalculateStandings(match.tournamentId, match.player2Id, rrMaxRound),
+          recalculateStandings(match.tournamentId, match.player1Id),
+          recalculateStandings(match.tournamentId, match.player2Id),
         ]);
 
         // Update beyblade win/loss stats

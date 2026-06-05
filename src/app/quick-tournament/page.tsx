@@ -91,19 +91,33 @@ function advanceElim(matches: QTMatch[], arenas: number): QTMatch[] {
   return [...matches, ...next];
 }
 
-function getRRStandings(participants: string[], matches: QTMatch[]) {
-  const stats: Record<string, { wins: number; losses: number }> = {};
-  for (const p of participants) stats[p] = { wins: 0, losses: 0 };
-  for (const m of matches) {
-    if (!m.winner) continue;
+// Points awarded per stage
+const RR_POINTS = { groupWin: 1, semiWin: 5, finalWin: 10, thirdWin: 3 };
+
+function getRRStandings(participants: string[], allMatches: QTMatch[]) {
+  const pts: Record<string, number> = {};
+  const wins: Record<string, number> = {};
+  const losses: Record<string, number> = {};
+  for (const p of participants) { pts[p] = 0; wins[p] = 0; losses[p] = 0; }
+
+  for (const m of allMatches) {
+    if (!m.winner || m.p2 === "__BYE__") continue;
     const loser = m.winner === m.p1 ? m.p2 : m.p1;
-    stats[m.winner].wins++;
-    if (stats[loser]) stats[loser].losses++;
+    wins[m.winner]++;
+    if (losses[loser] !== undefined) losses[loser]++;
+
+    if (m.round === 1) {
+      pts[m.winner] += RR_POINTS.groupWin;
+    } else if (m.round === 2) {
+      pts[m.winner] += RR_POINTS.semiWin;
+    } else if (m.round === 3) {
+      pts[m.winner] += m.bracketPos === 0 ? RR_POINTS.finalWin : RR_POINTS.thirdWin;
+    }
   }
-  return participants
-    .slice()
-    .sort((a, b) => stats[b].wins - stats[a].wins || a.localeCompare(b))
-    .map((p) => ({ name: p, ...stats[p] }));
+
+  return participants.slice()
+    .sort((a, b) => pts[b] - pts[a] || wins[b] - wins[a] || a.localeCompare(b))
+    .map((p) => ({ name: p, wins: wins[p], losses: losses[p], points: pts[p] }));
 }
 
 // Returns true if playoffs are applicable (>=4 players in RR)
@@ -315,7 +329,7 @@ export default function QuickTournamentPage() {
   const maxRound = state.matches.length > 0 ? Math.max(...state.matches.map((m) => m.round)) : 1;
 
   const rrStandings = state.format === "ROUND_ROBIN" && state.matches.length > 0
-    ? getRRStandings(state.participants, rrMatches)
+    ? getRRStandings(state.participants, state.matches.filter((m) => m.p2 !== "__BYE__"))
     : [];
 
   const elimChampion = state.format === "SINGLE_ELIMINATION" && state.phase === "finished"
@@ -494,8 +508,8 @@ export default function QuickTournamentPage() {
                           )}
                         </div>
                         <div className="flex gap-3 text-xs">
-                          <span className="text-green-400">{p.wins}V</span>
-                          <span className="text-red-400">{p.losses}D</span>
+                          <span className="text-[#f0a500] font-bold">{p.points}pts</span>
+                          <span className="text-gray-500">{p.wins}V {p.losses}D</span>
                         </div>
                       </div>
                     );

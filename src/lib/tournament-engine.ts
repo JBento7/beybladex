@@ -96,6 +96,18 @@ export async function advanceRoundRobinPlayoffs(
       })),
     });
   } else if (completedRound === 2) {
+    // Award 5 bonus points to each semi winner
+    await Promise.all(
+      roundMatches
+        .filter((m) => m.winnerId)
+        .map((m) =>
+          prisma.tournamentParticipant.updateMany({
+            where: { tournamentId, userId: m.winnerId! },
+            data: { totalPoints: { increment: 5 } },
+          })
+        )
+    );
+
     const semi1 = roundMatches.find((m) => m.bracketPos === 1)!;
     const semi2 = roundMatches.find((m) => m.bracketPos === 2)!;
 
@@ -123,6 +135,17 @@ export async function advanceRoundRobinPlayoffs(
       })),
     });
   } else if (completedRound === 3) {
+    // Award bonus points: 10 to final winner (bracketPos 1), 3 to 3rd-place winner (bracketPos 2)
+    await Promise.all(
+      roundMatches
+        .filter((m) => m.winnerId)
+        .map((m) =>
+          prisma.tournamentParticipant.updateMany({
+            where: { tournamentId, userId: m.winnerId! },
+            data: { totalPoints: { increment: m.bracketPos === 1 ? 10 : 3 } },
+          })
+        )
+    );
     await prisma.tournament.update({
       where: { id: tournamentId },
       data: { status: "FINISHED" },
