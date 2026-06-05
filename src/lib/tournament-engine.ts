@@ -1,4 +1,5 @@
 import { prisma } from "./prisma";
+import { scheduleByArena } from "./arena-schedule";
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -10,24 +11,32 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export async function generateRoundRobin(tournamentId: string) {
-  const participants = await prisma.tournamentParticipant.findMany({
-    where: { tournamentId },
-  });
+  const [participants, tournament] = await Promise.all([
+    prisma.tournamentParticipant.findMany({ where: { tournamentId } }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
+  ]);
+  const arenaCount = tournament?.arenas ?? 1;
 
-  const matches = [];
+  const matchData: { player1Id: string; player2Id: string }[] = [];
   for (let i = 0; i < participants.length; i++) {
     for (let j = i + 1; j < participants.length; j++) {
-      matches.push({
-        tournamentId,
-        player1Id: participants[i].userId!,
-        player2Id: participants[j].userId!,
-        round: 1,
-        bracketPos: null,
-      });
+      matchData.push({ player1Id: participants[i].userId!, player2Id: participants[j].userId! });
     }
   }
 
-  await prisma.match.createMany({ data: matches });
+  const scheduled = scheduleByArena(matchData, arenaCount, (m) => m.player1Id, (m) => m.player2Id);
+
+  await prisma.match.createMany({
+    data: scheduled.map(({ match, slot, arena }) => ({
+      tournamentId,
+      player1Id: match.player1Id,
+      player2Id: match.player2Id,
+      round: 1,
+      bracketPos: null,
+      arena,
+      slot,
+    })),
+  });
 }
 
 // Called after each match finishes in a ROUND_ROBIN (Pontos Corridos) tournament.
@@ -37,86 +46,81 @@ export async function advanceRoundRobinPlayoffs(
   tournamentId: string,
   completedRound: number
 ) {
-  const roundMatches = await prisma.match.findMany({
-    where: { tournamentId, round: completedRound },
-  });
+  const [roundMatches, tournament] = await Promise.all([
+    prisma.match.findMany({ where: { tournamentId, round: completedRound } }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
+  ]);
+  const arenaCount = tournament?.arenas ?? 1;
 
   const allFinished = roundMatches.every((m) => m.status === "FINISHED");
   if (!allFinished) return;
 
   if (completedRound === 1) {
-    // Sort participants by wins desc, then totalPoints desc
     const standings = await prisma.tournamentParticipant.findMany({
       where: { tournamentId },
       orderBy: [{ wins: "desc" }, { totalPoints: "desc" }],
     });
 
     if (standings.length < 4) {
-      // Fewer than 4 players — skip straight to final
+      // Fewer than 4 players — direct final
       await prisma.match.createMany({
-        data: [
-          {
-            tournamentId,
-            player1Id: standings[0].userId!,
-            player2Id: standings[1].userId!,
-            round: 3,
-            bracketPos: 1,
-          },
-        ],
+        data: [{
+          tournamentId,
+          player1Id: standings[0].userId!,
+          player2Id: standings[1].userId!,
+          round: 3,
+          bracketPos: 1,
+          arena: 1,
+          slot: 0,
+        }],
       });
       return;
     }
 
-    // Semis: 1st vs 4th, 2nd vs 3rd
+    // Semis: 1st vs 4th, 2nd vs 3rd — assign arenas
+    const semiData = [
+      { player1Id: standings[0].userId!, player2Id: standings[3].userId! },
+      { player1Id: standings[1].userId!, player2Id: standings[2].userId! },
+    ];
+    const semiScheduled = scheduleByArena(semiData, arenaCount, (m) => m.player1Id, (m) => m.player2Id);
+
     await prisma.match.createMany({
-      data: [
-        {
-          tournamentId,
-          player1Id: standings[0].userId!,
-          player2Id: standings[3].userId!,
-          round: 2,
-          bracketPos: 1,
-        },
-        {
-          tournamentId,
-          player1Id: standings[1].userId!,
-          player2Id: standings[2].userId!,
-          round: 2,
-          bracketPos: 2,
-        },
-      ],
+      data: semiScheduled.map(({ match, slot, arena }, idx) => ({
+        tournamentId,
+        player1Id: match.player1Id,
+        player2Id: match.player2Id,
+        round: 2,
+        bracketPos: idx + 1,
+        arena,
+        slot,
+      })),
     });
   } else if (completedRound === 2) {
-    // Build final and 3rd-place match from semi results
     const semi1 = roundMatches.find((m) => m.bracketPos === 1)!;
     const semi2 = roundMatches.find((m) => m.bracketPos === 2)!;
 
     const finalWinner1 = semi1.winnerId!;
     const finalWinner2 = semi2.winnerId!;
-    const thirdPlace1 =
-      semi1.player1Id === finalWinner1 ? semi1.player2Id : semi1.player1Id;
-    const thirdPlace2 =
-      semi2.player1Id === finalWinner2 ? semi2.player2Id : semi2.player1Id;
+    const thirdPlace1 = semi1.player1Id === finalWinner1 ? semi1.player2Id : semi1.player1Id;
+    const thirdPlace2 = semi2.player1Id === finalWinner2 ? semi2.player2Id : semi2.player1Id;
+
+    // Final and 3rd-place match — assign arenas
+    const round3Data = [
+      { player1Id: finalWinner1, player2Id: finalWinner2 },
+      { player1Id: thirdPlace1, player2Id: thirdPlace2 },
+    ];
+    const r3Scheduled = scheduleByArena(round3Data, arenaCount, (m) => m.player1Id, (m) => m.player2Id);
 
     await prisma.match.createMany({
-      data: [
-        // Final
-        {
-          tournamentId,
-          player1Id: finalWinner1,
-          player2Id: finalWinner2,
-          round: 3,
-          bracketPos: 1,
-        },
-        // 3rd place
-        {
-          tournamentId,
-          player1Id: thirdPlace1,
-          player2Id: thirdPlace2,
-          round: 3,
-          bracketPos: 2,
-        },
-      ],
+      data: r3Scheduled.map(({ match, slot, arena }, idx) => ({
+        tournamentId,
+        player1Id: match.player1Id,
+        player2Id: match.player2Id,
+        round: 3,
+        bracketPos: idx + 1,
+        arena,
+        slot,
+      })),
     });
   } else if (completedRound === 3) {
     await prisma.tournament.update({
@@ -317,7 +321,8 @@ export async function advanceSingleElimination(
 
 export async function recalculateStandings(
   tournamentId: string,
-  userId: string
+  userId: string,
+  maxRound?: number
 ) {
   const participant = await prisma.tournamentParticipant.findUnique({
     where: { tournamentId_userId: { tournamentId, userId } },
@@ -326,20 +331,22 @@ export async function recalculateStandings(
 
   if (!participant) return;
 
-  // These three reads are independent — run them in one round-trip batch
+  const roundFilter = maxRound != null ? { lte: maxRound } : undefined;
+
   const [points, wonMatches, allMatches] = await Promise.all([
     prisma.matchPoint.findMany({
-      where: { userId, match: { tournamentId } },
+      where: { userId, match: { tournamentId, ...(roundFilter ? { round: roundFilter } : {}) } },
       select: { points: true },
     }),
     prisma.match.count({
-      where: { tournamentId, winnerId: userId, status: "FINISHED" },
+      where: { tournamentId, winnerId: userId, status: "FINISHED", ...(roundFilter ? { round: roundFilter } : {}) },
     }),
     prisma.match.findMany({
       where: {
         tournamentId,
         status: "FINISHED",
         OR: [{ player1Id: userId }, { player2Id: userId }],
+        ...(roundFilter ? { round: roundFilter } : {}),
       },
       select: { winnerId: true },
     }),

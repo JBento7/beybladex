@@ -10,7 +10,6 @@ import ClientJoinButton from "./ClientJoinButton";
 import AdminParticipantManager from "./AdminParticipantManager";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 import type { Metadata } from "next";
-import { scheduleByArena } from "@/lib/arena-schedule";
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const t = await prisma.tournament.findUnique({
@@ -44,6 +43,8 @@ type MatchWithRelations = {
   id: string;
   round: number;
   bracketPos: number | null;
+  arena: number | null;
+  slot: number | null;
   status: MatchStatus;
   player1: { id: string; name: string; bladerName: string | null };
   player2: { id: string; name: string; bladerName: string | null };
@@ -194,7 +195,7 @@ export default async function TournamentDetailPage({
           points: { select: { userId: true, points: true } },
           group: true,
         },
-        orderBy: [{ round: "asc" }, { bracketPos: "asc" }],
+        orderBy: [{ round: "asc" }, { slot: "asc" }, { arena: "asc" }],
       },
     },
   });
@@ -360,13 +361,11 @@ export default async function TournamentDetailPage({
             {sortedRounds.length > 0 ? (
               sortedRounds.map(([round, roundMatches]: [number, typeof tournament.matches]) => {
                 const arenaCount = tournament.arenas ?? 1;
-                const scheduled = scheduleByArena(
-                  roundMatches,
-                  arenaCount,
-                  (m) => m.player1.id,
-                  (m) => m.player2.id,
-                );
-                const totalSlots = scheduled.length > 0 ? Math.max(...scheduled.map((s) => s.slot)) + 1 : 0;
+                // Use stored arena/slot from DB — these are fixed at match creation time
+                const useStoredArenas = arenaCount > 1 && roundMatches.some((m) => m.arena != null);
+                const slots = useStoredArenas
+                  ? [...new Set(roundMatches.map((m) => m.slot ?? 0))].sort((a, b) => a - b)
+                  : [];
 
                 return (
                   <div key={round} className="bg-gray-900 border border-gray-800 rounded-xl p-6">
@@ -376,7 +375,7 @@ export default async function TournamentDetailPage({
                         : `Rodada ${round}`}
                     </h2>
 
-                    {arenaCount > 1 ? (
+                    {useStoredArenas ? (
                       <div className="overflow-x-auto">
                         {/* Arena column headers */}
                         <div
@@ -389,16 +388,18 @@ export default async function TournamentDetailPage({
                             </div>
                           ))}
                         </div>
-                        {/* One row per slot */}
-                        {Array.from({ length: totalSlots }, (_, slot) => (
+                        {/* One fixed row per slot */}
+                        {slots.map((slot) => (
                           <div
                             key={slot}
                             className="grid gap-3 mb-3"
                             style={{ gridTemplateColumns: `repeat(${arenaCount}, minmax(180px, 1fr))` }}
                           >
                             {Array.from({ length: arenaCount }, (_, i) => {
-                              const entry = scheduled.find((s) => s.slot === slot && s.arena === i + 1);
-                              if (!entry) {
+                              const match = roundMatches.find(
+                                (m) => (m.slot ?? 0) === slot && (m.arena ?? 1) === i + 1
+                              );
+                              if (!match) {
                                 return (
                                   <div key={i} className="border border-dashed border-gray-800 rounded-lg flex items-center justify-center py-6">
                                     <span className="text-gray-700 text-xs">livre</span>
@@ -407,8 +408,8 @@ export default async function TournamentDetailPage({
                               }
                               return (
                                 <MatchCard
-                                  key={entry.match.id}
-                                  match={entry.match}
+                                  key={match.id}
+                                  match={match}
                                   isOrganizer={isOrganizerOfThis}
                                   tournamentId={tournament.id}
                                   participantBeyblades={participantBeyblades}

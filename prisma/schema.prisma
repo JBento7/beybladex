@@ -160,6 +160,8 @@ model Match {
   groupId      String?
   round        Int
   bracketPos   Int?
+  arena        Int?
+  slot         Int?
   status       MatchStatus @default(PENDING)
   createdAt    DateTime    @default(now())
 

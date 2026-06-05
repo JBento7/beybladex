@@ -12,6 +12,8 @@ interface QTMatch {
   p2: string;
   winner: string | null;
   bracketPos: number;
+  arena: number;
+  slot: number;
   label?: string; // "Semifinal 1", "Final", etc.
 }
 
@@ -30,15 +32,14 @@ function genId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function generateRoundRobin(participants: string[]): QTMatch[] {
-  const matches: QTMatch[] = [];
-  let pos = 0;
-  for (let i = 0; i < participants.length; i++) {
-    for (let j = i + 1; j < participants.length; j++) {
-      matches.push({ id: genId(), round: 1, p1: participants[i], p2: participants[j], winner: null, bracketPos: pos++ });
-    }
-  }
-  return matches;
+function generateRoundRobin(participants: string[], arenas: number): QTMatch[] {
+  const raw = participants.flatMap((p1, i) =>
+    participants.slice(i + 1).map((p2) => ({ p1, p2 }))
+  );
+  const scheduled = scheduleByArena(raw, arenas, (m) => m.p1, (m) => m.p2);
+  return scheduled.map(({ match, slot, arena }, pos) => ({
+    id: genId(), round: 1, p1: match.p1, p2: match.p2, winner: null, bracketPos: pos, arena, slot,
+  }));
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -50,20 +51,24 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-function generateElimRound1(participants: string[]): QTMatch[] {
+function generateElimRound1(participants: string[], arenas: number): QTMatch[] {
   const seeded = shuffle(participants);
-  const matches: QTMatch[] = [];
+  const raw: { p1: string; p2: string }[] = [];
   for (let i = 0; i + 1 < seeded.length; i += 2) {
-    matches.push({ id: genId(), round: 1, p1: seeded[i], p2: seeded[i + 1], winner: null, bracketPos: i / 2 });
+    raw.push({ p1: seeded[i], p2: seeded[i + 1] });
   }
+  const scheduled = scheduleByArena(raw, arenas, (m) => m.p1, (m) => m.p2);
+  const matches: QTMatch[] = scheduled.map(({ match, slot, arena }, pos) => ({
+    id: genId(), round: 1, p1: match.p1, p2: match.p2, winner: null, bracketPos: pos, arena, slot,
+  }));
   if (seeded.length % 2 !== 0) {
     const bye = seeded[seeded.length - 1];
-    matches.push({ id: genId(), round: 1, p1: bye, p2: "__BYE__", winner: bye, bracketPos: matches.length });
+    matches.push({ id: genId(), round: 1, p1: bye, p2: "__BYE__", winner: bye, bracketPos: matches.length, arena: 1, slot: matches.length });
   }
   return matches;
 }
 
-function advanceElim(matches: QTMatch[]): QTMatch[] {
+function advanceElim(matches: QTMatch[], arenas: number): QTMatch[] {
   const maxRound = Math.max(...matches.map((m) => m.round));
   const roundMatches = matches.filter((m) => m.round === maxRound);
   if (roundMatches.some((m) => !m.winner)) return matches;
@@ -71,13 +76,17 @@ function advanceElim(matches: QTMatch[]): QTMatch[] {
   const winners = roundMatches.map((m) => m.winner as string);
   if (winners.length === 1) return matches;
 
-  const next: QTMatch[] = [];
+  const raw: { p1: string; p2: string }[] = [];
   for (let i = 0; i + 1 < winners.length; i += 2) {
-    next.push({ id: genId(), round: maxRound + 1, p1: winners[i], p2: winners[i + 1], winner: null, bracketPos: i / 2 });
+    raw.push({ p1: winners[i], p2: winners[i + 1] });
   }
+  const scheduled = scheduleByArena(raw, arenas, (m) => m.p1, (m) => m.p2);
+  const next: QTMatch[] = scheduled.map(({ match, slot, arena }, pos) => ({
+    id: genId(), round: maxRound + 1, p1: match.p1, p2: match.p2, winner: null, bracketPos: pos, arena, slot,
+  }));
   if (winners.length % 2 !== 0) {
     const bye = winners[winners.length - 1];
-    next.push({ id: genId(), round: maxRound + 1, p1: bye, p2: "__BYE__", winner: bye, bracketPos: next.length });
+    next.push({ id: genId(), round: maxRound + 1, p1: bye, p2: "__BYE__", winner: bye, bracketPos: next.length, arena: 1, slot: next.length });
   }
   return [...matches, ...next];
 }
@@ -102,8 +111,8 @@ function hasPlayoffs(participants: string[]) {
   return participants.length >= 4;
 }
 
-/** Arena column grid for pending matches */
-function PendingArenaGrid({
+/** Arena column grid — uses stored arena/slot so positions never shift */
+function ArenaGrid({
   matches,
   arenas,
   label,
@@ -114,41 +123,52 @@ function PendingArenaGrid({
   label?: string;
   onWinner: (id: string, winner: string) => void;
 }) {
-  const scheduled = scheduleByArena(matches, arenas, (m) => m.p1, (m) => m.p2);
-  const totalSlots = scheduled.length > 0 ? Math.max(...scheduled.map((s) => s.slot)) + 1 : 0;
+  const slots = [...new Set(matches.map((m) => m.slot))].sort((a, b) => a - b);
 
   return (
     <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
       {label && <h2 className="text-sm font-bold text-white mb-3">{label}</h2>}
       <div className="overflow-x-auto">
-        {/* Arena headers */}
-        <div
-          className="grid gap-3 mb-3"
-          style={{ gridTemplateColumns: `repeat(${arenas}, minmax(160px, 1fr))` }}
-        >
-          {Array.from({ length: arenas }, (_, i) => (
-            <div key={i} className="text-center text-xs font-bold text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/20 rounded-lg py-1.5">
-              Arena {i + 1}
-            </div>
-          ))}
-        </div>
-        {/* One row per slot */}
-        {Array.from({ length: totalSlots }, (_, slot) => (
+        {arenas > 1 && (
+          <div
+            className="grid gap-3 mb-3"
+            style={{ gridTemplateColumns: `repeat(${arenas}, minmax(160px, 1fr))` }}
+          >
+            {Array.from({ length: arenas }, (_, i) => (
+              <div key={i} className="text-center text-xs font-bold text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/20 rounded-lg py-1.5">
+                Arena {i + 1}
+              </div>
+            ))}
+          </div>
+        )}
+        {slots.map((slot) => (
           <div
             key={slot}
             className="grid gap-3 mb-3"
             style={{ gridTemplateColumns: `repeat(${arenas}, minmax(160px, 1fr))` }}
           >
             {Array.from({ length: arenas }, (_, i) => {
-              const entry = scheduled.find((s) => s.slot === slot && s.arena === i + 1);
-              if (!entry) {
+              const match = matches.find((m) => m.slot === slot && m.arena === i + 1);
+              if (!match) {
                 return (
                   <div key={i} className="border border-dashed border-[#333] rounded-xl flex items-center justify-center py-6">
                     <span className="text-gray-700 text-xs">livre</span>
                   </div>
                 );
               }
-              const match = entry.match;
+              if (match.winner) {
+                // Completed match — show result in fixed cell
+                const loser = match.winner === match.p1 ? match.p2 : match.p1;
+                return (
+                  <div key={match.id} className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl p-3 opacity-80">
+                    {match.label && (
+                      <p className="text-[10px] font-bold text-[#f0a500] uppercase tracking-wide mb-2 text-center">{match.label}</p>
+                    )}
+                    <p className="text-xs text-green-400 font-semibold text-center mb-1">🏅 {match.winner}</p>
+                    <p className="text-xs text-gray-600 line-through text-center">{loser}</p>
+                  </div>
+                );
+              }
               return (
                 <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
                   {match.label && (
@@ -209,8 +229,8 @@ export default function QuickTournamentPage() {
   function startTournament() {
     if (state.participants.length < 2) return;
     const matches = state.format === "ROUND_ROBIN"
-      ? generateRoundRobin(state.participants)
-      : generateElimRound1(state.participants);
+      ? generateRoundRobin(state.participants, state.arenas)
+      : generateElimRound1(state.participants, state.arenas);
     save({ ...state, phase: "playing", matches });
   }
 
@@ -218,7 +238,7 @@ export default function QuickTournamentPage() {
     let matches = state.matches.map((m) => m.id === matchId ? { ...m, winner } : m);
 
     if (state.format === "SINGLE_ELIMINATION") {
-      matches = advanceElim(matches);
+      matches = advanceElim(matches, state.arenas);
       const maxRound = Math.max(...matches.map((m) => m.round));
       const last = matches.filter((m) => m.round === maxRound);
       if (last.length === 1 && last[0].winner) {
@@ -236,12 +256,17 @@ export default function QuickTournamentPage() {
 
         if (semis.length === 0) {
           if (hasPlayoffs(state.participants)) {
-            // Generate semifinals: #1 vs #4, #2 vs #3
+            // Generate semifinals: #1 vs #4, #2 vs #3 — assign arenas now
             const standings = getRRStandings(state.participants, rrMatches);
-            const newSemis: QTMatch[] = [
-              { id: genId(), round: 2, p1: standings[0].name, p2: standings[3].name, winner: null, bracketPos: 0, label: "Semifinal 1" },
-              { id: genId(), round: 2, p1: standings[1].name, p2: standings[2].name, winner: null, bracketPos: 1, label: "Semifinal 2" },
+            const semiRaw = [
+              { p1: standings[0].name, p2: standings[3].name },
+              { p1: standings[1].name, p2: standings[2].name },
             ];
+            const semiSched = scheduleByArena(semiRaw, state.arenas, (m) => m.p1, (m) => m.p2);
+            const newSemis: QTMatch[] = semiSched.map(({ match, slot, arena }, i) => ({
+              id: genId(), round: 2, p1: match.p1, p2: match.p2, winner: null, bracketPos: i, arena, slot,
+              label: `Semifinal ${i + 1}`,
+            }));
             save({ ...state, matches: [...matches, ...newSemis] });
             return;
           } else {
@@ -251,9 +276,12 @@ export default function QuickTournamentPage() {
         }
 
         if (semis.length === 2 && semis.every((m) => m.winner !== null) && final.length === 0) {
-          // Generate final
+          // Generate final — assign arena
+          const finalRaw = [{ p1: semis[0].winner!, p2: semis[1].winner! }];
+          const finalSched = scheduleByArena(finalRaw, state.arenas, (m) => m.p1, (m) => m.p2);
           const newFinal: QTMatch = {
-            id: genId(), round: 3, p1: semis[0].winner!, p2: semis[1].winner!, winner: null, bracketPos: 0, label: "Final",
+            id: genId(), round: 3, p1: finalSched[0].match.p1, p2: finalSched[0].match.p2,
+            winner: null, bracketPos: 0, arena: finalSched[0].arena, slot: finalSched[0].slot, label: "Final",
           };
           save({ ...state, matches: [...matches, newFinal] });
           return;
@@ -292,29 +320,6 @@ export default function QuickTournamentPage() {
   const rrChampion = state.format === "ROUND_ROBIN" && state.phase === "finished"
     ? (state.matches.find((m) => m.round === 3)?.winner ?? rrStandings[0]?.name)
     : null;
-
-  // Pending matches to display (only unplayed)
-  const pendingElim = state.format === "SINGLE_ELIMINATION"
-    ? state.matches.filter((m) => m.round === maxRound && !m.winner && m.p2 !== "__BYE__")
-    : [];
-  const pendingRR = state.format === "ROUND_ROBIN"
-    ? state.matches.filter((m) => !m.winner && m.p2 !== "__BYE__")
-    : [];
-
-  // Separate pending RR by stage
-  const pendingRRGroup = pendingRR.filter((m) => m.round === 1);
-  const pendingRRPlayoff = pendingRR.filter((m) => m.round > 1);
-
-  // Completed matches
-  const doneElim = state.format === "SINGLE_ELIMINATION"
-    ? state.matches.filter((m) => m.winner && m.p2 !== "__BYE__")
-    : [];
-  const doneRR = state.format === "ROUND_ROBIN"
-    ? state.matches.filter((m) => m.winner && m.p2 !== "__BYE__")
-    : [];
-
-  // Top 4 highlight for standings
-  const top4Names = new Set(rrStandings.slice(0, 4).map((p) => p.name));
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
@@ -496,89 +501,47 @@ export default function QuickTournamentPage() {
             {state.format === "ROUND_ROBIN" && playoffMatches.length > 0 && (
               <div className="bg-[#1a1a1a] border border-[#f0a500]/30 rounded-xl p-5">
                 <h2 className="text-sm font-bold text-[#f0a500] mb-3">⚔️ Playoffs</h2>
-
-                {/* Pending playoff matches */}
-                {pendingRRPlayoff.length > 0 && (
-                  <div className="mb-4">
-                    <PendingArenaGrid
-                      matches={pendingRRPlayoff}
-                      arenas={state.arenas}
-                      onWinner={setWinner}
-                    />
-                  </div>
-                )}
-
-                {/* Completed playoff matches */}
-                {playoffMatches.filter((m) => m.winner).length > 0 && (
-                  <div className="space-y-1.5">
-                    {playoffMatches.filter((m) => m.winner).map((match) => (
-                      <div key={match.id} className="bg-[#252525] rounded-lg px-3 py-2">
-                        {match.label && <span className="text-[10px] text-[#f0a500] font-bold uppercase mr-2">{match.label}:</span>}
-                        <span className="text-[#f0a500] font-bold text-sm">{match.winner}</span>
-                        <span className="text-gray-600 text-xs mx-2">def.</span>
-                        <span className="text-gray-500 line-through text-sm">{match.winner === match.p1 ? match.p2 : match.p1}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <ArenaGrid
+                  matches={playoffMatches}
+                  arenas={state.arenas}
+                  onWinner={setWinner}
+                />
               </div>
             )}
 
-            {/* Pending RR group matches */}
-            {state.phase === "playing" && pendingRRGroup.length > 0 && (
-              <PendingArenaGrid
-                matches={pendingRRGroup}
+            {/* RR group stage matches — all shown in fixed positions */}
+            {state.format === "ROUND_ROBIN" && rrMatches.length > 0 && (
+              <ArenaGrid
+                matches={rrMatches}
                 arenas={state.arenas}
-                label="Partidas — Pendentes"
+                label="Fase de Grupos"
                 onWinner={setWinner}
               />
             )}
 
-            {/* Pending elim matches */}
-            {state.format === "SINGLE_ELIMINATION" && state.phase === "playing" && pendingElim.length > 0 && (
-              <PendingArenaGrid
-                matches={pendingElim}
+            {/* Elimination matches — current round in fixed positions */}
+            {state.format === "SINGLE_ELIMINATION" && state.phase === "playing" && (
+              <ArenaGrid
+                matches={state.matches.filter((m) => m.round === maxRound && m.p2 !== "__BYE__")}
                 arenas={state.arenas}
-                label={`Rodada ${maxRound} — Pendentes`}
+                label={`Rodada ${maxRound}`}
                 onWinner={setWinner}
               />
             )}
 
-            {/* Completed rounds — winners only, grouped by round */}
-            {(() => {
-              const doneSrc = state.format === "SINGLE_ELIMINATION" ? doneElim : doneRR.filter((m) => m.round === 1);
-              // Only show rounds that are fully finished (all matches in that round have a winner)
-              const roundNums = [...new Set(doneSrc.map((m) => m.round))].sort((a, b) => a - b);
-              // For elim: only show rounds strictly before the current pending round
-              const filteredRounds = state.format === "SINGLE_ELIMINATION"
-                ? roundNums.filter((r) => r < maxRound)
-                : roundNums;
-              if (filteredRounds.length === 0) return null;
-              return (
-                <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
-                  <h2 className="text-sm font-bold text-white mb-3">Vencedores das Rodadas Anteriores</h2>
-                  <div className="space-y-3">
-                    {filteredRounds.map((round) => {
-                      const winners = doneSrc.filter((m) => m.round === round).map((m) => m.winner!);
-                      const roundLabel = state.format === "SINGLE_ELIMINATION"
-                        ? `Rodada ${round}`
-                        : `Fase de Grupos`;
-                      return (
-                        <div key={round}>
-                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">{roundLabel}</p>
-                          <div className="flex flex-wrap gap-2">
-                            {winners.map((w, i) => (
-                              <span key={i} className="text-xs bg-[#f0a500]/15 text-[#f0a500] border border-[#f0a500]/30 px-2.5 py-1 rounded-full font-semibold">
-                                🏅 {w}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
+            {/* Elimination — show previous completed rounds */}
+            {state.format === "SINGLE_ELIMINATION" && (() => {
+              const prevRounds = [...new Set(state.matches.filter((m) => m.round < maxRound && m.winner && m.p2 !== "__BYE__").map((m) => m.round))].sort((a, b) => a - b);
+              if (prevRounds.length === 0) return null;
+              return prevRounds.map((r) => (
+                <ArenaGrid
+                  key={r}
+                  matches={state.matches.filter((m) => m.round === r && m.p2 !== "__BYE__")}
+                  arenas={state.arenas}
+                  label={`Rodada ${r} — Concluída`}
+                  onWinner={setWinner}
+                />
+              ));
             })()}
 
             <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 text-center">
