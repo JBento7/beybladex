@@ -179,6 +179,10 @@ export async function GET() {
       name: "User.bladerName",
       sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "bladerName" TEXT`,
     },
+    {
+      name: "Tournament.arenas",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "arenas" INTEGER DEFAULT 1`,
+    },
   ];
 
   for (const migration of migrations) {

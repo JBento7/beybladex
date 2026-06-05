@@ -73,11 +73,13 @@ function MatchCard({
   isOrganizer,
   tournamentId,
   participantBeyblades,
+  arena,
 }: {
   match: MatchWithRelations;
   isOrganizer: boolean;
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
+  arena?: number;
 }) {
   const isFinished = match.status === "FINISHED";
   const p1Points = match.points
@@ -95,6 +97,11 @@ function MatchCard({
           : "bg-gray-800/50 border-gray-700/50"
       }`}
     >
+      {arena !== undefined && (
+        <span className="flex-shrink-0 text-[10px] font-bold bg-[#f0a500]/15 text-[#f0a500] border border-[#f0a500]/30 px-2 py-1 rounded-md">
+          Arena {arena}
+        </span>
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <span
@@ -368,13 +375,14 @@ export default async function TournamentDetailPage({
                       : `Rodada ${round}`}
                   </h2>
                   <div className="space-y-3">
-                    {matches.map((match) => (
+                    {matches.map((match, matchIdx) => (
                       <MatchCard
                         key={match.id}
                         match={match}
                         isOrganizer={isOrganizerOfThis}
                         tournamentId={tournament.id}
                         participantBeyblades={participantBeyblades}
+                        arena={(tournament.arenas ?? 1) > 1 ? (matchIdx % (tournament.arenas ?? 1)) + 1 : undefined}
                       />
                     ))}
                   </div>
