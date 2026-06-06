@@ -58,7 +58,7 @@ export async function advanceRoundRobinPlayoffs(
   if (completedRound === 1) {
     const standings = await prisma.tournamentParticipant.findMany({
       where: { tournamentId },
-      orderBy: [{ wins: "desc" }, { totalPoints: "desc" }],
+      orderBy: [{ totalPoints: "desc" }, { wins: "desc" }],
     });
 
     if (standings.length < 4) {
