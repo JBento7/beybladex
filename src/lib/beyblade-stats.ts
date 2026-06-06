@@ -60,7 +60,7 @@ export async function getComboStats(userId: string): Promise<ComboStat[]> {
       ? await Promise.all([
           prisma.matchPoint.findMany({
             where: { matchId: { in: [...matchIds] }, userId: { not: userId } },
-            select: { matchId: true, points: true, finishType: true, beybladeUsed: true },
+            select: { matchId: true, points: true, finishType: true, beybladeUsed: true, beyblade: { select: { name: true } } },
           }),
           prisma.match.findMany({
             where: { id: { in: [...matchIds] } },
@@ -70,10 +70,10 @@ export async function getComboStats(userId: string): Promise<ComboStat[]> {
       : [[], []];
 
   // Index opponent points by match
-  const oppByMatch = new Map<string, { points: number; finishType: FinishType; beybladeUsed: string | null }[]>();
+  const oppByMatch = new Map<string, { points: number; finishType: FinishType; beybladeName: string | null }[]>();
   for (const op of opponentPoints) {
     const arr = oppByMatch.get(op.matchId) ?? [];
-    arr.push({ points: op.points, finishType: op.finishType, beybladeUsed: op.beybladeUsed });
+    arr.push({ points: op.points, finishType: op.finishType, beybladeName: op.beyblade?.name ?? op.beybladeUsed });
     oppByMatch.set(op.matchId, arr);
   }
 
@@ -122,7 +122,7 @@ export async function getComboStats(userId: string): Promise<ComboStat[]> {
 
       // Pick the opponent's beyblade name (first non-null entry)
       const oppBeyName =
-        opps.find((o) => o.beybladeUsed)?.beybladeUsed ?? "Desconhecido";
+        opps.find((o) => o.beybladeName)?.beybladeName ?? "Desconhecido";
 
       const entry = matchupMap.get(oppBeyName) ?? { wins: 0, losses: 0, finishesScored: {}, finishesSuffered: {} };
 
