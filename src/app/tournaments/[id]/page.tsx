@@ -261,6 +261,34 @@ export default async function TournamentDetailPage({
   const isParticipant = tournament.participants.some(
     (p) => p.userId === session?.user.id
   );
+
+  // For Round Robin tournaments that reached playoffs, the standings order
+  // must reflect the actual bracket result (champion/runner-up/3rd/4th)
+  // rather than raw accumulated points, since bonus values can't always
+  // outweigh group-stage point gaps.
+  let standingsParticipants = tournament.participants;
+  if (tournament.format === "ROUND_ROBIN") {
+    const round3 = tournament.matches.filter((m) => m.round === 3 && m.status === "FINISHED");
+    const final = round3.find((m) => m.bracketPos === 1);
+    const thirdPlace = round3.find((m) => m.bracketPos === 2);
+    if (final?.winnerId) {
+      const champion = final.winnerId;
+      const runnerUp = final.player1.id === champion ? final.player2.id : final.player1.id;
+      const ranked = [champion, runnerUp];
+      if (thirdPlace?.winnerId) {
+        const fourth = thirdPlace.player1.id === thirdPlace.winnerId ? thirdPlace.player2.id : thirdPlace.player1.id;
+        ranked.push(thirdPlace.winnerId, fourth);
+      }
+      const rankedSet = new Set(ranked);
+      const rest = tournament.participants.filter((p) => !rankedSet.has(p.userId));
+      const byUserId = new Map(tournament.participants.map((p) => [p.userId, p]));
+      standingsParticipants = [
+        ...ranked.map((id) => byUserId.get(id)).filter(Boolean) as typeof tournament.participants,
+        ...rest,
+      ];
+    }
+  }
+
   const canJoin =
     session &&
     tournament.status === "REGISTRATION" &&
@@ -488,7 +516,7 @@ export default async function TournamentDetailPage({
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {tournament.participants.map((p, idx) => (
+                  {standingsParticipants.map((p, idx) => (
                     <div
                       key={p.id}
                       className={`flex items-center gap-3 p-3 rounded-lg ${
