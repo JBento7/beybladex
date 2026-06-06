@@ -64,10 +64,34 @@ export async function getComboStats(userId: string): Promise<ComboStat[]> {
           }),
           prisma.match.findMany({
             where: { id: { in: [...matchIds] } },
-            select: { id: true, winnerId: true },
+            select: { id: true, winnerId: true, tournamentId: true, player1Id: true, player2Id: true },
           }),
         ])
       : [[], []];
+
+  // Fallback: when the opponent never scored a point, look up their registered
+  // combo for that tournament instead of showing "Desconhecido"
+  const oppFallbackName = new Map<string, string>(); // matchId -> combo name
+  if (matchRecords.length > 0) {
+    const tournamentIds = [...new Set(matchRecords.map((m) => m.tournamentId))];
+    const participants = await prisma.tournamentParticipant.findMany({
+      where: { tournamentId: { in: tournamentIds } },
+      select: { tournamentId: true, userId: true, beyblade1: true },
+    });
+    const beyIds = participants.map((p) => p.beyblade1).filter(Boolean) as string[];
+    const beys = beyIds.length > 0
+      ? await prisma.beyblade.findMany({ where: { id: { in: beyIds } }, select: { id: true, name: true } })
+      : [];
+    const beyNameMap = new Map(beys.map((b) => [b.id, b.name]));
+    const participantMap = new Map(participants.map((p) => [`${p.tournamentId}:${p.userId}`, p.beyblade1]));
+
+    for (const m of matchRecords) {
+      const oppUserId = m.player1Id === userId ? m.player2Id : m.player1Id;
+      const beyId = participantMap.get(`${m.tournamentId}:${oppUserId}`);
+      const name = beyId ? beyNameMap.get(beyId) : undefined;
+      if (name) oppFallbackName.set(m.id, name);
+    }
+  }
 
   // Index opponent points by match
   const oppByMatch = new Map<string, { points: number; finishType: FinishType; beybladeName: string | null }[]>();
@@ -122,7 +146,7 @@ export async function getComboStats(userId: string): Promise<ComboStat[]> {
 
       // Pick the opponent's beyblade name (first non-null entry)
       const oppBeyName =
-        opps.find((o) => o.beybladeName)?.beybladeName ?? "Desconhecido";
+        opps.find((o) => o.beybladeName)?.beybladeName ?? oppFallbackName.get(mid) ?? "Desconhecido";
 
       const entry = matchupMap.get(oppBeyName) ?? { wins: 0, losses: 0, finishesScored: {}, finishesSuffered: {} };
 
