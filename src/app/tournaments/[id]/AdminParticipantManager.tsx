@@ -20,6 +20,8 @@ interface Participant {
 interface Props {
   tournamentId: string;
   deckType: string;
+  tournamentStatus: string;
+  isOfficial: boolean;
   participants: Participant[];
   allPlayers: Player[];
 }
@@ -27,6 +29,8 @@ interface Props {
 export default function AdminParticipantManager({
   tournamentId,
   deckType,
+  tournamentStatus,
+  isOfficial,
   participants,
   allPlayers,
 }: Props) {
@@ -179,12 +183,16 @@ export default function AdminParticipantManager({
         </div>
       )}
 
-      <button
-        onClick={() => (open ? closeForm() : openForm())}
-        className="mb-4 text-sm bg-[#f0a500]/20 hover:bg-[#f0a500]/30 text-[#f0a500] border border-[#f0a500]/30 font-semibold px-4 py-2 rounded-lg transition-colors"
-      >
-        {open ? "✕ Cancelar" : "+ Adicionar Participante"}
-      </button>
+      {isOfficial && tournamentStatus === "IN_PROGRESS" ? (
+        <p className="text-xs text-gray-500 mb-4">Inscrições encerradas após o início do torneio oficial.</p>
+      ) : (
+        <button
+          onClick={() => (open ? closeForm() : openForm())}
+          className="mb-4 text-sm bg-[#f0a500]/20 hover:bg-[#f0a500]/30 text-[#f0a500] border border-[#f0a500]/30 font-semibold px-4 py-2 rounded-lg transition-colors"
+        >
+          {open ? "✕ Cancelar" : "+ Adicionar Participante"}
+        </button>
+      )}
 
       {open && (
         <div className="mb-4 bg-[#252525] border border-[#333] rounded-xl p-4 space-y-4">

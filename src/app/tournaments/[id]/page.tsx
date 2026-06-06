@@ -235,12 +235,28 @@ export default async function TournamentDetailPage({
 
   const beybladeMap = new Map(beybladeDetails.map((b) => [b.id, b]));
 
+  type BeybladeWithUser = BeybladeInfo & { userId: string };
+  const allParticipantBeyblades: Map<string, BeybladeInfo[]> = new Map();
+  if (!tournament.isOfficial) {
+    const participantUserIds = tournament.participants.map((p) => p.userId);
+    const allBeys = await prisma.beyblade.findMany({
+      where: { userId: { in: participantUserIds } },
+      select: { id: true, name: true, blade: true, ratchet: true, bit: true, userId: true },
+    }) as BeybladeWithUser[];
+    for (const b of allBeys) {
+      if (!allParticipantBeyblades.has(b.userId)) allParticipantBeyblades.set(b.userId, []);
+      allParticipantBeyblades.get(b.userId)!.push({ id: b.id, name: b.name, blade: b.blade, ratchet: b.ratchet, bit: b.bit });
+    }
+  }
+
   const participantBeyblades: ParticipantBeyblades[] = tournament.participants.map((p) => ({
     userId: p.userId,
-    beyblades: [p.beyblade1, p.beyblade2, p.beyblade3]
-      .filter(Boolean)
-      .map((id) => beybladeMap.get(id!))
-      .filter(Boolean) as BeybladeInfo[],
+    beyblades: !tournament.isOfficial && allParticipantBeyblades.has(p.userId)
+      ? allParticipantBeyblades.get(p.userId)!
+      : [p.beyblade1, p.beyblade2, p.beyblade3]
+          .filter(Boolean)
+          .map((id) => beybladeMap.get(id!))
+          .filter(Boolean) as BeybladeInfo[],
   }));
   const isParticipant = tournament.participants.some(
     (p) => p.userId === session?.user.id
@@ -499,11 +515,6 @@ export default async function TournamentDetailPage({
                           {p.user.bladerName || p.user.name}
                           {p.user.isGuest && <span className="ml-1.5 text-[10px] text-gray-500 font-normal">convidado</span>}
                         </div>
-                        {p.beyblade1 && (
-                          <div className="text-xs text-gray-500 truncate">
-                            {beybladeMap.get(p.beyblade1)?.name ?? ""}
-                          </div>
-                        )}
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-bold text-amber-400">
@@ -564,6 +575,8 @@ export default async function TournamentDetailPage({
                 <AdminParticipantManager
                   tournamentId={tournament.id}
                   deckType={tournament.deckType}
+                  tournamentStatus={tournament.status}
+                  isOfficial={tournament.isOfficial}
                   participants={tournament.participants.map((p) => ({
                     userId: p.userId,
                     user: p.user,
@@ -593,9 +606,6 @@ export default async function TournamentDetailPage({
                             {p.user.bladerName || p.user.name}
                             {p.user.isGuest && <span className="ml-1.5 text-[10px] text-gray-500">convidado</span>}
                           </div>
-                          {p.beyblade1 && (
-                            <div className="text-xs text-gray-500">{p.beyblade1}</div>
-                          )}
                         </div>
                       </div>
                     ))

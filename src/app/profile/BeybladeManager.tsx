@@ -28,6 +28,8 @@ export default function BeybladeManager() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [confirmResetId, setConfirmResetId] = useState<string | null>(null);
 
   const [loadError, setLoadError] = useState(false);
 
@@ -105,6 +107,20 @@ export default function BeybladeManager() {
     } else {
       const data = await res.json();
       setError(data.error || "Erro ao salvar combo");
+    }
+  }
+
+  async function handleResetStats(id: string) {
+    setResettingId(id);
+    try {
+      const res = await fetch(`/api/beyblades/${id}/reset-stats`, { method: "POST" });
+      if (res.ok) {
+        setConfirmResetId(null);
+        flashSuccess("Estatísticas zeradas!");
+        fetchBeyblades();
+      }
+    } finally {
+      setResettingId(null);
     }
   }
 
@@ -271,6 +287,18 @@ export default function BeybladeManager() {
                           </>
                         )}
                       </div>
+                    ) : confirmResetId === b.id ? (
+                      <div className="flex items-center gap-2 text-xs">
+                        {resettingId === b.id ? (
+                          <span className="text-gray-400">Zerando...</span>
+                        ) : (
+                          <>
+                            <span className="text-gray-400">Zerar stats?</span>
+                            <button onClick={() => handleResetStats(b.id)} className="text-amber-400 hover:text-amber-300 font-semibold transition-colors">Sim</button>
+                            <button onClick={() => setConfirmResetId(null)} className="text-gray-400 hover:text-gray-200 font-semibold transition-colors">Não</button>
+                          </>
+                        )}
+                      </div>
                     ) : (
                       <>
                         <button
@@ -290,6 +318,15 @@ export default function BeybladeManager() {
                           title="Remover"
                         >
                           ✕
+                        </button>
+                        <button
+                          onClick={() => { setConfirmResetId(b.id); }}
+                          disabled={deletingId === b.id}
+                          aria-label="Zerar estatísticas"
+                          className="text-gray-600 hover:text-amber-400 disabled:opacity-50 transition-colors text-xs"
+                          title="Zerar estatísticas"
+                        >
+                          ↺
                         </button>
                       </>
                     )}

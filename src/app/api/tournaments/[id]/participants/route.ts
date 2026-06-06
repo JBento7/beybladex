@@ -37,6 +37,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (tournament.status === "FINISHED") {
       return NextResponse.json({ error: "Torneio já finalizado" }, { status: 400 });
     }
+    if (tournament.status === "IN_PROGRESS" && tournament.isOfficial) {
+      return NextResponse.json(
+        { error: "Não é possível adicionar participantes após o início de um torneio oficial." },
+        { status: 400 }
+      );
+    }
     if (tournament.maxParticipants && tournament._count.participants >= tournament.maxParticipants) {
       return NextResponse.json({ error: "Torneio está cheio" }, { status: 400 });
     }
