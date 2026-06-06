@@ -501,7 +501,7 @@ export default async function TournamentDetailPage({
                         </div>
                         {p.beyblade1 && (
                           <div className="text-xs text-gray-500 truncate">
-                            {p.beyblade1}
+                            {beybladeMap.get(p.beyblade1)?.name ?? ""}
                           </div>
                         )}
                       </div>
