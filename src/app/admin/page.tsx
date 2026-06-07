@@ -7,6 +7,7 @@ import AdminPanel from "./AdminPanel";
 import UserManager from "./UserManager";
 import ResetTokenManager from "./ResetTokenManager";
 import TournamentManager from "./TournamentManager";
+import ResetBeybladeStatsButton from "./ResetBeybladeStatsButton";
 import type { TournamentFormat, TournamentStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -123,6 +124,9 @@ export default async function AdminPage() {
 
         {/* Reset Token Management */}
         <ResetTokenManager />
+
+        {/* Reset Beyblade Stats */}
+        <ResetBeybladeStatsButton />
       </main>
     </div>
   );
