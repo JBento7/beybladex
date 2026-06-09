@@ -26,7 +26,7 @@ export default async function CommunityPage() {
       },
       participations: {
         where: { tournament: { isOfficial: true } },
-        select: { wins: true, losses: true, totalPoints: true },
+        select: { wins: true, losses: true, rankingPoints: true },
       },
     },
     orderBy: { name: "asc" },
@@ -35,7 +35,7 @@ export default async function CommunityPage() {
   const playersWithStats = players.map((p) => {
     const wins = p.participations.reduce((s, x) => s + x.wins, 0);
     const losses = p.participations.reduce((s, x) => s + x.losses, 0);
-    const points = p.participations.reduce((s, x) => s + x.totalPoints, 0);
+    const points = p.participations.reduce((s, x) => s + x.rankingPoints, 0);
     const matches = wins + losses;
     const winRate = matches > 0 ? Math.round((wins / matches) * 100) : 0;
     return { ...p, wins, losses, points, matches, winRate };

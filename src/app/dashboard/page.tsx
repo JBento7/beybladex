@@ -80,8 +80,8 @@ export default async function DashboardPage() {
       prisma.tournamentParticipant.groupBy({
         by: ["userId"],
         where: { tournament: { isOfficial: true }, user: { isGuest: false, deleted: false } },
-        _sum: { totalPoints: true, wins: true, losses: true },
-        orderBy: { _sum: { totalPoints: "desc" } },
+        _sum: { rankingPoints: true, wins: true, losses: true },
+        orderBy: { _sum: { rankingPoints: "desc" } },
         take: 10,
       }),
     ]);
@@ -97,9 +97,9 @@ export default async function DashboardPage() {
     select: { id: true, name: true, bladerName: true, avatarUrl: true },
   });
   const userMap = Object.fromEntries(rankingUsers.map((u: { id: string; name: string; bladerName: string | null; avatarUrl: string | null }) => [u.id, u]));
-  const rankingList = ranking.map((r: { userId: string; _sum: { totalPoints: number | null; wins: number | null; losses: number | null } }) => ({
+  const rankingList = ranking.map((r: { userId: string; _sum: { rankingPoints: number | null; wins: number | null; losses: number | null } }) => ({
     ...userMap[r.userId],
-    points: r._sum.totalPoints ?? 0,
+    points: r._sum.rankingPoints ?? 0,
     wins: r._sum.wins ?? 0,
     losses: r._sum.losses ?? 0,
     isMe: r.userId === userId,

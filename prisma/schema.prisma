@@ -126,6 +126,7 @@ model TournamentParticipant {
   userId       String
   groupId      String?
   totalPoints  Int      @default(0)
+  rankingPoints Int     @default(0)
   wins         Int      @default(0)
   losses       Int      @default(0)
   placement    Int?

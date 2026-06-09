@@ -191,6 +191,10 @@ export async function GET() {
       name: "Match.slot",
       sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "slot" INTEGER`,
     },
+    {
+      name: "TournamentParticipant.rankingPoints",
+      sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "rankingPoints" INTEGER NOT NULL DEFAULT 0`,
+    },
   ];
 
   for (const migration of migrations) {

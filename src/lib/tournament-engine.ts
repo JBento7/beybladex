@@ -39,140 +39,63 @@ export async function generateRoundRobin(tournamentId: string) {
   });
 }
 
-// Called after each match finishes in a ROUND_ROBIN (Pontos Corridos) tournament.
-// When all round-1 matches are done: top 4 → semis (round 2).
-// When semis done: top 2 → final + 3rd place match (round 3).
-export async function advanceRoundRobinPlayoffs(
-  tournamentId: string,
-  completedRound: number
-) {
-  const [roundMatches, tournament] = await Promise.all([
-    prisma.match.findMany({ where: { tournamentId, round: completedRound } }),
-    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
-  ]);
-  const arenaCount = tournament?.arenas ?? 1;
+// Ranking points awarded to the top 5 finishers of an official tournament,
+// added to TournamentParticipant.rankingPoints (which feeds the global ranking).
+const RANKING_POINTS_BY_PLACE = [100, 70, 50, 30, 10];
 
+// Sorts participants by totalPoints, breaking ties by point differential
+// (points scored - points conceded across the tournament's finished matches),
+// then awards rankingPoints to the top 5 and marks the tournament FINISHED.
+export async function finalizeTournamentRanking(tournamentId: string) {
+  const [participants, matches] = await Promise.all([
+    prisma.tournamentParticipant.findMany({ where: { tournamentId } }),
+    prisma.match.findMany({
+      where: { tournamentId, status: "FINISHED" },
+      select: {
+        player1Id: true,
+        player2Id: true,
+        points: { select: { userId: true, points: true } },
+      },
+    }),
+  ]);
+
+  const diff = new Map<string, number>();
+  for (const m of matches) {
+    const p1Pts = m.points.filter((p) => p.userId === m.player1Id).reduce((s, p) => s + p.points, 0);
+    const p2Pts = m.points.filter((p) => p.userId === m.player2Id).reduce((s, p) => s + p.points, 0);
+    diff.set(m.player1Id, (diff.get(m.player1Id) ?? 0) + (p1Pts - p2Pts));
+    diff.set(m.player2Id, (diff.get(m.player2Id) ?? 0) + (p2Pts - p1Pts));
+  }
+
+  const ranked = [...participants].sort((a, b) => {
+    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+    return (diff.get(b.userId!) ?? 0) - (diff.get(a.userId!) ?? 0);
+  });
+
+  await Promise.all(
+    ranked.map((p, idx) =>
+      prisma.tournamentParticipant.update({
+        where: { id: p.id },
+        data: { rankingPoints: RANKING_POINTS_BY_PLACE[idx] ?? 0 },
+      })
+    )
+  );
+
+  await prisma.tournament.update({
+    where: { id: tournamentId },
+    data: { status: "FINISHED" },
+  });
+}
+
+// Called after each match finishes in a ROUND_ROBIN (Pontos Corridos) tournament.
+// There is no playoff bracket: once every round-1 match is done, the standings
+// (1 point per win) are final and ranking points are awarded.
+export async function finalizeRoundRobin(tournamentId: string) {
+  const roundMatches = await prisma.match.findMany({ where: { tournamentId, round: 1 } });
   const allFinished = roundMatches.every((m) => m.status === "FINISHED");
   if (!allFinished) return;
 
-  if (completedRound === 1) {
-    const standings = await prisma.tournamentParticipant.findMany({
-      where: { tournamentId },
-      orderBy: [{ totalPoints: "desc" }, { wins: "desc" }],
-    });
-
-    if (standings.length < 4) {
-      // Fewer than 4 players — direct final
-      await prisma.match.createMany({
-        data: [{
-          tournamentId,
-          player1Id: standings[0].userId!,
-          player2Id: standings[1].userId!,
-          round: 3,
-          bracketPos: 1,
-          arena: 1,
-          slot: 0,
-        }],
-      });
-      return;
-    }
-
-    // Semis: 1st vs 4th, 2nd vs 3rd — assign arenas
-    const semiData = [
-      { player1Id: standings[0].userId!, player2Id: standings[3].userId! },
-      { player1Id: standings[1].userId!, player2Id: standings[2].userId! },
-    ];
-    const semiScheduled = scheduleByArena(semiData, arenaCount, (m) => m.player1Id, (m) => m.player2Id);
-
-    await prisma.match.createMany({
-      data: semiScheduled.map(({ match, slot, arena }, idx) => ({
-        tournamentId,
-        player1Id: match.player1Id,
-        player2Id: match.player2Id,
-        round: 2,
-        bracketPos: idx + 1,
-        arena,
-        slot,
-      })),
-    });
-  } else if (completedRound === 2) {
-    // Award 5 bonus points to each semi winner
-    await Promise.all(
-      roundMatches
-        .filter((m) => m.winnerId)
-        .map((m) =>
-          prisma.tournamentParticipant.updateMany({
-            where: { tournamentId, userId: m.winnerId! },
-            data: { totalPoints: { increment: 5 } },
-          })
-        )
-    );
-
-    const semi1 = roundMatches.find((m) => m.bracketPos === 1)!;
-    const semi2 = roundMatches.find((m) => m.bracketPos === 2)!;
-
-    const finalWinner1 = semi1.winnerId!;
-    const finalWinner2 = semi2.winnerId!;
-    const thirdPlace1 = semi1.player1Id === finalWinner1 ? semi1.player2Id : semi1.player1Id;
-    const thirdPlace2 = semi2.player1Id === finalWinner2 ? semi2.player2Id : semi2.player1Id;
-
-    // Final and 3rd-place match — assign arenas
-    const round3Data = [
-      { player1Id: finalWinner1, player2Id: finalWinner2 },
-      { player1Id: thirdPlace1, player2Id: thirdPlace2 },
-    ];
-    const r3Scheduled = scheduleByArena(round3Data, arenaCount, (m) => m.player1Id, (m) => m.player2Id);
-
-    await prisma.match.createMany({
-      data: r3Scheduled.map(({ match, slot, arena }, idx) => ({
-        tournamentId,
-        player1Id: match.player1Id,
-        player2Id: match.player2Id,
-        round: 3,
-        bracketPos: idx + 1,
-        arena,
-        slot,
-      })),
-    });
-  } else if (completedRound === 3) {
-    // Award bonus points for round 3
-    // Final (bracketPos 1): winner +10, runner-up +5
-    // 3rd place (bracketPos 2): winner +3
-    const bonusUpdates: Promise<unknown>[] = [];
-    for (const m of roundMatches) {
-      if (!m.winnerId) continue;
-      if (m.bracketPos === 1) {
-        // Final winner
-        bonusUpdates.push(
-          prisma.tournamentParticipant.updateMany({
-            where: { tournamentId, userId: m.winnerId },
-            data: { totalPoints: { increment: 10 } },
-          })
-        );
-        // Runner-up
-        const runnerUpId = m.player1Id === m.winnerId ? m.player2Id : m.player1Id;
-        bonusUpdates.push(
-          prisma.tournamentParticipant.updateMany({
-            where: { tournamentId, userId: runnerUpId },
-            data: { totalPoints: { increment: 5 } },
-          })
-        );
-      } else {
-        // 3rd place winner
-        bonusUpdates.push(
-          prisma.tournamentParticipant.updateMany({
-            where: { tournamentId, userId: m.winnerId },
-            data: { totalPoints: { increment: 3 } },
-          })
-        );
-      }
-    }
-    await Promise.all(bonusUpdates);
-    await prisma.tournament.update({
-      where: { id: tournamentId },
-      data: { status: "FINISHED" },
-    });
-  }
+  await finalizeTournamentRanking(tournamentId);
 }
 
 export async function generateGroups(tournamentId: string) {
@@ -341,10 +264,7 @@ export async function advanceSingleElimination(
 
   if (winners.length < 2) {
     // Tournament complete
-    await prisma.tournament.update({
-      where: { id: tournamentId },
-      data: { status: "FINISHED" },
-    });
+    await finalizeTournamentRanking(tournamentId);
     return;
   }
 
@@ -366,39 +286,42 @@ export async function advanceSingleElimination(
 
 export async function recalculateStandings(
   tournamentId: string,
-  userId: string,
-  maxRound?: number
+  userId: string
 ) {
-  const participant = await prisma.tournamentParticipant.findUnique({
-    where: { tournamentId_userId: { tournamentId, userId } },
-    select: { id: true },
-  });
+  const [participant, tournament] = await Promise.all([
+    prisma.tournamentParticipant.findUnique({
+      where: { tournamentId_userId: { tournamentId, userId } },
+      select: { id: true },
+    }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true } }),
+  ]);
 
   if (!participant) return;
 
-  const roundFilter = maxRound != null ? { lte: maxRound } : undefined;
-
   const [points, wonMatches, allMatches] = await Promise.all([
     prisma.matchPoint.findMany({
-      where: { userId, match: { tournamentId, ...(roundFilter ? { round: roundFilter } : {}) } },
+      where: { userId, match: { tournamentId } },
       select: { points: true },
     }),
     prisma.match.count({
-      where: { tournamentId, winnerId: userId, status: "FINISHED", ...(roundFilter ? { round: roundFilter } : {}) },
+      where: { tournamentId, winnerId: userId, status: "FINISHED" },
     }),
     prisma.match.findMany({
       where: {
         tournamentId,
         status: "FINISHED",
         OR: [{ player1Id: userId }, { player2Id: userId }],
-        ...(roundFilter ? { round: roundFilter } : {}),
       },
       select: { winnerId: true },
     }),
   ]);
 
-  const totalPoints = points.reduce((sum, p) => sum + p.points, 0);
   const losses = allMatches.filter((m) => m.winnerId !== userId).length;
+  // Round Robin: 1 point per win, no points for finishes/losses.
+  // Other formats keep points based on finish-type scoring.
+  const totalPoints = tournament?.format === "ROUND_ROBIN"
+    ? wonMatches
+    : points.reduce((sum, p) => sum + p.points, 0);
 
   await prisma.tournamentParticipant.update({
     where: { id: participant.id },

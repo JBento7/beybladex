@@ -54,11 +54,8 @@ type MatchWithRelations = {
 };
 
 function getRoundName(round: number, totalRounds: number, format?: string): string {
-  // Pontos Corridos (ROUND_ROBIN): round 1 = fase de grupos, round 2 = semifinais, round 3 = final
   if (format === "ROUND_ROBIN") {
-    if (round === 1) return "Fase de Pontos Corridos";
-    if (round === 2) return "Semifinais";
-    if (round === 3) return "Final";
+    return "Fase de Pontos Corridos";
   }
   const roundsFromEnd = totalRounds - round;
   if (roundsFromEnd === 0) return "Final";
@@ -262,31 +259,22 @@ export default async function TournamentDetailPage({
     (p) => p.userId === session?.user.id
   );
 
-  // For Round Robin tournaments that reached playoffs, the standings order
-  // must reflect the actual bracket result (champion/runner-up/3rd/4th)
-  // rather than raw accumulated points, since bonus values can't always
-  // outweigh group-stage point gaps.
+  // For Round Robin tournaments, ties in totalPoints are broken by point
+  // differential (points scored - points conceded across finished matches).
   let standingsParticipants = tournament.participants;
   if (tournament.format === "ROUND_ROBIN") {
-    const round3 = tournament.matches.filter((m) => m.round === 3 && m.status === "FINISHED");
-    const final = round3.find((m) => m.bracketPos === 1);
-    const thirdPlace = round3.find((m) => m.bracketPos === 2);
-    if (final?.winnerId) {
-      const champion = final.winnerId;
-      const runnerUp = final.player1.id === champion ? final.player2.id : final.player1.id;
-      const ranked = [champion, runnerUp];
-      if (thirdPlace?.winnerId) {
-        const fourth = thirdPlace.player1.id === thirdPlace.winnerId ? thirdPlace.player2.id : thirdPlace.player1.id;
-        ranked.push(thirdPlace.winnerId, fourth);
-      }
-      const rankedSet = new Set(ranked);
-      const rest = tournament.participants.filter((p) => !rankedSet.has(p.userId));
-      const byUserId = new Map(tournament.participants.map((p) => [p.userId, p]));
-      standingsParticipants = [
-        ...ranked.map((id) => byUserId.get(id)).filter(Boolean) as typeof tournament.participants,
-        ...rest,
-      ];
+    const diff = new Map<string, number>();
+    for (const m of tournament.matches) {
+      if (m.status !== "FINISHED") continue;
+      const p1Pts = m.points.filter((p) => p.userId === m.player1.id).reduce((s, p) => s + p.points, 0);
+      const p2Pts = m.points.filter((p) => p.userId === m.player2.id).reduce((s, p) => s + p.points, 0);
+      diff.set(m.player1.id, (diff.get(m.player1.id) ?? 0) + (p1Pts - p2Pts));
+      diff.set(m.player2.id, (diff.get(m.player2.id) ?? 0) + (p2Pts - p1Pts));
     }
+    standingsParticipants = [...tournament.participants].sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      return (diff.get(b.userId) ?? 0) - (diff.get(a.userId) ?? 0);
+    });
   }
 
   const canJoin =

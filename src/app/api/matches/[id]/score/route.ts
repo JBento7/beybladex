@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
-import { recalculateStandings, advanceSingleElimination, generateSwissRound, advanceRoundRobinPlayoffs } from "@/lib/tournament-engine";
+import { recalculateStandings, advanceSingleElimination, generateSwissRound, finalizeRoundRobin, finalizeTournamentRanking } from "@/lib/tournament-engine";
 import type { FinishType } from "@prisma/client";
 
 export async function POST(
@@ -107,24 +107,18 @@ export async function POST(
         if (match.round < maxRounds) {
           await generateSwissRound(match.tournamentId, match.round + 1);
         } else {
-          await prisma.tournament.update({
-            where: { id: match.tournamentId },
-            data: { status: "FINISHED" },
-          });
+          await finalizeTournamentRanking(match.tournamentId);
         }
       }
     } else if (tournament.format === "ROUND_ROBIN") {
-      await advanceRoundRobinPlayoffs(match.tournamentId, match.round);
+      await finalizeRoundRobin(match.tournamentId);
     } else if (tournament.format === "GROUPS") {
       const allMatches = await prisma.match.findMany({
         where: { tournamentId: match.tournamentId },
       });
       const allDone = allMatches.every((m) => m.status === "FINISHED");
       if (allDone) {
-        await prisma.tournament.update({
-          where: { id: match.tournamentId },
-          data: { status: "FINISHED" },
-        });
+        await finalizeTournamentRanking(match.tournamentId);
       }
     }
 
