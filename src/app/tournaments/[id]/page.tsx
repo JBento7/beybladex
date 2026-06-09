@@ -23,6 +23,7 @@ const FORMAT_LABELS: Partial<Record<TournamentFormat, string>> & Record<string, 
   ROUND_ROBIN: "Pontos Corridos",
   GROUPS: "Grupos",
   SINGLE_ELIMINATION: "Eliminação Simples",
+  SWISS: "Suíço",
 };
 
 const STATUS_LABELS: Record<TournamentStatus, string> = {
@@ -85,6 +86,21 @@ function MatchCard({
   const p2Points = match.points
     .filter((p) => p.userId === match.player2.id)
     .reduce((s, p) => s + p.points, 0);
+
+  // Bye: a self-match (player1 === player2) where the player advances without
+  // playing because the bracket field wasn't a power of two.
+  if (match.player1.id === match.player2.id) {
+    return (
+      <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-dashed border-gray-700 bg-gray-800/40">
+        <span className="text-sm font-semibold text-amber-400 truncate">
+          {match.player1.bladerName || match.player1.name}
+        </span>
+        <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-700 text-gray-400 flex-shrink-0">
+          Passou (bye)
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -358,7 +374,7 @@ export default async function TournamentDetailPage({
                 </span>
                 {tournament.startDate && (
                   <span>
-                    📅 {new Date(tournament.startDate).toLocaleDateString()}
+                    📅 {new Date(tournament.startDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                   </span>
                 )}
               </div>
@@ -489,7 +505,7 @@ export default async function TournamentDetailPage({
             ) : (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
                 <div className="mb-3"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
-                <p className="text-gray-400">No matches yet.</p>
+                <p className="text-gray-400">Nenhuma partida ainda.</p>
               </div>
             )}
           </div>

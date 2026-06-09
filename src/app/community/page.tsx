@@ -101,7 +101,7 @@ export default async function CommunityPage() {
                   </div>
                   <div className="bg-[#252525] rounded-lg p-3 text-center">
                     <div className="text-lg font-black text-[#f0a500]">{player.winRate}%</div>
-                    <div className="text-xs text-gray-500">Win Rate</div>
+                    <div className="text-xs text-gray-500">Taxa V.</div>
                   </div>
                   <div className="bg-[#252525] rounded-lg p-3 text-center">
                     <div className="text-lg font-black text-blue-400">{player.points}</div>

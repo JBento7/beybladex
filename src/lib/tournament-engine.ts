@@ -43,15 +43,20 @@ export async function generateRoundRobin(tournamentId: string) {
 // added to TournamentParticipant.rankingPoints (which feeds the global ranking).
 const RANKING_POINTS_BY_PLACE = [100, 70, 50, 30, 10];
 
-// Sorts participants by totalPoints, breaking ties by point differential
-// (points scored - points conceded across the tournament's finished matches),
-// then awards rankingPoints to the top 5 and marks the tournament FINISHED.
+// Ranks the final standings, awards rankingPoints to the top 5 and marks the
+// tournament FINISHED. Knockout formats (SINGLE_ELIMINATION) are ranked by how
+// far each player advanced (bracket placement), so the champion always places
+// 1st. Points-based formats (ROUND_ROBIN, GROUPS) are ranked by totalPoints,
+// tie-broken by point differential (points scored - points conceded).
 export async function finalizeTournamentRanking(tournamentId: string) {
-  const [participants, matches] = await Promise.all([
+  const [tournament, participants, matches] = await Promise.all([
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true } }),
     prisma.tournamentParticipant.findMany({ where: { tournamentId } }),
     prisma.match.findMany({
       where: { tournamentId, status: "FINISHED" },
       select: {
+        round: true,
+        winnerId: true,
         player1Id: true,
         player2Id: true,
         points: { select: { userId: true, points: true } },
@@ -59,18 +64,39 @@ export async function finalizeTournamentRanking(tournamentId: string) {
     }),
   ]);
 
+  // Point differential, ignoring bye self-matches.
   const diff = new Map<string, number>();
   for (const m of matches) {
+    if (m.player1Id === m.player2Id) continue;
     const p1Pts = m.points.filter((p) => p.userId === m.player1Id).reduce((s, p) => s + p.points, 0);
     const p2Pts = m.points.filter((p) => p.userId === m.player2Id).reduce((s, p) => s + p.points, 0);
     diff.set(m.player1Id, (diff.get(m.player1Id) ?? 0) + (p1Pts - p2Pts));
     diff.set(m.player2Id, (diff.get(m.player2Id) ?? 0) + (p2Pts - p1Pts));
   }
 
-  const ranked = [...participants].sort((a, b) => {
-    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-    return (diff.get(b.userId!) ?? 0) - (diff.get(a.userId!) ?? 0);
-  });
+  let ranked: typeof participants;
+  if (tournament?.format === "SINGLE_ELIMINATION") {
+    // The round each player LOST in; the champion never loses (treated as ∞).
+    // A later elimination round means a better placement.
+    const elimRound = new Map<string, number>();
+    for (const m of matches) {
+      if (m.player1Id === m.player2Id || !m.winnerId) continue;
+      const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
+      elimRound.set(loserId, m.round);
+    }
+    ranked = [...participants].sort((a, b) => {
+      const aE = elimRound.get(a.userId!) ?? Infinity;
+      const bE = elimRound.get(b.userId!) ?? Infinity;
+      if (bE !== aE) return bE - aE;
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      return (diff.get(b.userId!) ?? 0) - (diff.get(a.userId!) ?? 0);
+    });
+  } else {
+    ranked = [...participants].sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      return (diff.get(b.userId!) ?? 0) - (diff.get(a.userId!) ?? 0);
+    });
+  }
 
   await Promise.all(
     ranked.map((p, idx) =>
@@ -152,15 +178,48 @@ export async function generateSingleElimination(tournamentId: string) {
   const participants = shuffle(
     await prisma.tournamentParticipant.findMany({ where: { tournamentId } })
   );
+  const players = participants.map((p) => p.userId!);
 
-  const matches = [];
-  for (let i = 0; i < Math.floor(participants.length / 2); i++) {
+  // Pad the field to the next power of two with first-round byes so nobody is
+  // ever dropped from the bracket. A bye is stored as an auto-finished
+  // self-match (player1 === player2 === winner) so the player advances without
+  // playing; every later round then has an even number of players.
+  let pow2 = 1;
+  while (pow2 < players.length) pow2 *= 2;
+  const byeCount = pow2 - players.length;
+
+  const matches: {
+    tournamentId: string;
+    player1Id: string;
+    player2Id: string;
+    round: number;
+    bracketPos: number;
+    winnerId?: string;
+    status?: "FINISHED";
+  }[] = [];
+  let pos = 1;
+
+  for (let i = 0; i < byeCount; i++) {
+    const p = players[i];
     matches.push({
       tournamentId,
-      player1Id: participants[i * 2].userId!,
-      player2Id: participants[i * 2 + 1].userId!,
+      player1Id: p,
+      player2Id: p,
       round: 1,
-      bracketPos: i + 1,
+      bracketPos: pos++,
+      winnerId: p,
+      status: "FINISHED",
+    });
+  }
+
+  const rest = players.slice(byeCount);
+  for (let i = 0; i + 1 < rest.length; i += 2) {
+    matches.push({
+      tournamentId,
+      player1Id: rest[i],
+      player2Id: rest[i + 1],
+      round: 1,
+      bracketPos: pos++,
     });
   }
 
@@ -298,13 +357,10 @@ export async function recalculateStandings(
 
   if (!participant) return;
 
-  const [points, wonMatches, allMatches] = await Promise.all([
+  const [points, allMatches] = await Promise.all([
     prisma.matchPoint.findMany({
       where: { userId, match: { tournamentId } },
       select: { points: true },
-    }),
-    prisma.match.count({
-      where: { tournamentId, winnerId: userId, status: "FINISHED" },
     }),
     prisma.match.findMany({
       where: {
@@ -312,22 +368,25 @@ export async function recalculateStandings(
         status: "FINISHED",
         OR: [{ player1Id: userId }, { player2Id: userId }],
       },
-      select: { winnerId: true },
+      select: { winnerId: true, player1Id: true, player2Id: true },
     }),
   ]);
 
-  const losses = allMatches.filter((m) => m.winnerId !== userId).length;
+  // Exclude bye self-matches (player1 === player2) from win/loss tallies.
+  const realMatches = allMatches.filter((m) => m.player1Id !== m.player2Id);
+  const wins = realMatches.filter((m) => m.winnerId === userId).length;
+  const losses = realMatches.filter((m) => m.winnerId && m.winnerId !== userId).length;
   // Round Robin: 1 point per win, no points for finishes/losses.
   // Other formats keep points based on finish-type scoring.
   const totalPoints = tournament?.format === "ROUND_ROBIN"
-    ? wonMatches
+    ? wins
     : points.reduce((sum, p) => sum + p.points, 0);
 
   await prisma.tournamentParticipant.update({
     where: { id: participant.id },
     data: {
       totalPoints,
-      wins: wonMatches,
+      wins,
       losses,
     },
   });

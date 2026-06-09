@@ -172,7 +172,7 @@ export default function CreateTournamentPage() {
                   value={form.name}
                   onChange={handleChange}
                   required
-                  placeholder="ex: Campeonato Primavera 2025"
+                  placeholder="ex: Campeonato Primavera"
                   className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                 />
               </div>

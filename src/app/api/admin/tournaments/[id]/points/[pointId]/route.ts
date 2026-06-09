@@ -65,6 +65,13 @@ export async function POST(
     return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
   }
 
+  if (scorerId !== match.player1Id && scorerId !== match.player2Id) {
+    return NextResponse.json(
+      { error: "O jogador deve ser um dos participantes da partida" },
+      { status: 400 }
+    );
+  }
+
   const points = FINISH_TYPE_POINTS[finishType as FinishType];
   if (!points) return NextResponse.json({ error: "Tipo inválido" }, { status: 400 });
 

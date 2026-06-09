@@ -175,7 +175,7 @@ export default async function LandingPage() {
       </section>
 
       <footer className="border-t border-[#2a2a2a] py-8 text-center text-gray-500 text-sm">
-        <p>© 2025 LBL — Liga Beyblade Londrina</p>
+        <p>© {new Date().getFullYear()} LBL — Liga Beyblade Londrina</p>
         <p className="mt-1 text-xs text-gray-600">A liga oficial de Beyblade de Londrina</p>
       </footer>
     </div>

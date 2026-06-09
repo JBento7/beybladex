@@ -299,7 +299,7 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="font-semibold text-white">{t.name}</span>
                     {!t.isOfficial && (
-                      <span className="text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded font-semibold">Não-Oficial</span>
+                      <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded font-semibold">🎮 BeyEncontro</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-400">
@@ -395,7 +395,7 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span className="font-semibold text-white">{p.tournament.name}</span>
                     {!p.tournament.isOfficial && (
-                      <span className="text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 px-1.5 py-0.5 rounded font-semibold">Não-Oficial</span>
+                      <span className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded font-semibold">🎮 BeyEncontro</span>
                     )}
                   </div>
                   <div className="flex items-center gap-3 text-sm">

@@ -61,7 +61,7 @@ export async function sendVerificationEmail(to: string, name: string, token: str
         <!-- Footer -->
         <tr>
           <td style="background:#111111;padding:20px 32px;text-align:center;border-top:1px solid #2a2a2a;">
-            <p style="color:#444444;font-size:12px;margin:0;">© 2025 Liga Beyblade Londrina · Londrina, PR</p>
+            <p style="color:#444444;font-size:12px;margin:0;">© ${new Date().getFullYear()} Liga Beyblade Londrina · Londrina, PR</p>
           </td>
         </tr>
       </table>

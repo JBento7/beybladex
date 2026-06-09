@@ -12,6 +12,7 @@ const FORMAT_LABELS: Partial<Record<TournamentFormat, string>> & Record<string, 
   ROUND_ROBIN: "Pontos Corridos",
   GROUPS: "Grupos",
   SINGLE_ELIMINATION: "Eliminação Simples",
+  SWISS: "Suíço",
 };
 
 const STATUS_STYLES: Record<TournamentStatus, { label: string; style: string }> = {
@@ -116,6 +117,12 @@ export default async function TournamentsPage() {
                   )}
 
                   <div className="mt-auto">
+                    {t.prize && (
+                      <div className="mb-4 text-sm bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500] px-3 py-2 rounded-lg font-medium">
+                        🏆 {t.prize}
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
                       <span>
                         👥 {t._count.participants}
@@ -126,7 +133,7 @@ export default async function TournamentsPage() {
 
                     {t.startDate && (
                       <div className="text-xs text-gray-500 mb-4">
-                        📅 {new Date(t.startDate).toLocaleDateString()}
+                        📅 {new Date(t.startDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                       </div>
                     )}
 

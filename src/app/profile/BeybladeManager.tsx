@@ -112,13 +112,19 @@ export default function BeybladeManager() {
 
   async function handleResetStats(id: string) {
     setResettingId(id);
+    setError("");
     try {
       const res = await fetch(`/api/beyblades/${id}/reset-stats`, { method: "POST" });
       if (res.ok) {
         setConfirmResetId(null);
         flashSuccess("Estatísticas zeradas!");
         fetchBeyblades();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Erro ao zerar estatísticas. Tente novamente.");
       }
+    } catch {
+      setError("Erro de conexão. Tente novamente.");
     } finally {
       setResettingId(null);
     }

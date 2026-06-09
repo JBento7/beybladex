@@ -1,5 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
@@ -17,6 +19,10 @@ const TEST_USERS = [
 const DEFAULT_PASSWORD = "Teste123456";
 
 export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== "ORGANIZER") {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+  }
   try {
     const hash = await bcrypt.hash(DEFAULT_PASSWORD, 10);
     const results: { name: string; email: string; status: string }[] = [];

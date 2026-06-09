@@ -1,10 +1,18 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// One-time migration endpoint to apply missing schema columns
-// Call: GET /api/migrate
+// One-time migration endpoint to apply missing schema columns.
+// Restricted to signed-in organizers — it runs destructive DDL.
+// Call: GET /api/migrate (while logged in as an ORGANIZER)
 export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== "ORGANIZER") {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+  }
+
   const results: Record<string, string> = {};
 
   const migrations = [
