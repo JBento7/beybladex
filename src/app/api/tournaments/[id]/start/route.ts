@@ -17,7 +17,7 @@ export async function POST(
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
     const tournament = await prisma.tournament.findUnique({
@@ -26,52 +26,70 @@ export async function POST(
     });
 
     if (!tournament) {
-      return NextResponse.json({ error: "Tournament not found" }, { status: 404 });
+      return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
     }
 
     if (tournament.organizerId !== session.user.id && session.user.role !== "ORGANIZER") {
       return NextResponse.json(
-        { error: "Only organizers can start the tournament" },
+        { error: "Apenas organizadores podem iniciar o torneio" },
         { status: 403 }
       );
     }
 
     if (tournament.status !== "REGISTRATION") {
       return NextResponse.json(
-        { error: "Tournament is not in registration phase" },
+        { error: "O torneio não está na fase de inscrições" },
         { status: 400 }
       );
     }
 
     if (tournament._count.participants < 2) {
       return NextResponse.json(
-        { error: "Need at least 2 participants to start" },
+        { error: "São necessários pelo menos 2 participantes para iniciar" },
         { status: 400 }
       );
     }
 
-    // Generate matches based on format
-    switch (tournament.format) {
-      case "ROUND_ROBIN":
-        await generateRoundRobin(params.id);
-        break;
-      case "GROUPS":
-        await generateGroups(params.id);
-        break;
-      case "SINGLE_ELIMINATION":
-        await generateSingleElimination(params.id);
-        break;
-      case "SWISS":
-        await generateSwissRound(params.id, 1);
-        break;
-    }
-
-    // Update tournament status
-    const updated = await prisma.tournament.update({
-      where: { id: params.id },
+    // Atomically claim the tournament so two concurrent "start" requests can't
+    // both generate a bracket. Only the request that flips the status wins.
+    const claim = await prisma.tournament.updateMany({
+      where: { id: params.id, status: "REGISTRATION" },
       data: { status: "IN_PROGRESS" },
     });
 
+    if (claim.count === 0) {
+      return NextResponse.json(
+        { error: "O torneio já foi iniciado" },
+        { status: 400 }
+      );
+    }
+
+    // Generate matches based on format. If generation fails, release the claim
+    // so the organizer can try again instead of being stuck IN_PROGRESS.
+    try {
+      switch (tournament.format) {
+        case "ROUND_ROBIN":
+          await generateRoundRobin(params.id);
+          break;
+        case "GROUPS":
+          await generateGroups(params.id);
+          break;
+        case "SINGLE_ELIMINATION":
+          await generateSingleElimination(params.id);
+          break;
+        case "SWISS":
+          await generateSwissRound(params.id, 1);
+          break;
+      }
+    } catch (genErr) {
+      await prisma.tournament.update({
+        where: { id: params.id },
+        data: { status: "REGISTRATION" },
+      });
+      throw genErr;
+    }
+
+    const updated = await prisma.tournament.findUnique({ where: { id: params.id } });
     return NextResponse.json(updated);
   } catch (err) {
     console.error(err);

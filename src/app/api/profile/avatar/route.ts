@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (avatarUrl && avatarUrl.length > 600_000) {
-    return NextResponse.json({ error: "Imagem muito grande. Máximo 400KB." }, { status: 400 });
+    return NextResponse.json({ error: "Imagem muito grande. Use uma imagem menor." }, { status: 400 });
   }
 
   if (avatarUrl && !avatarUrl.startsWith("data:image/")) {

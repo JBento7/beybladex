@@ -47,7 +47,10 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (bladerName !== undefined) {
-    updates.bladerName = bladerName.trim() || null;
+    if (bladerName !== null && typeof bladerName !== "string") {
+      return NextResponse.json({ error: "Apelido inválido" }, { status: 400 });
+    }
+    updates.bladerName = (bladerName?.trim() || null) as string;
   }
 
   if (newPassword !== undefined) {
