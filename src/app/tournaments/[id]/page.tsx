@@ -297,8 +297,6 @@ export default async function TournamentDetailPage({
     session &&
     tournament.status === "REGISTRATION" &&
     !isParticipant &&
-    // Participants can only self-register for BeyEncontros; official tournaments require admin
-    (!tournament.isOfficial || session.user.role === "ORGANIZER") &&
     (!tournament.maxParticipants ||
       tournament.participants.length < tournament.maxParticipants);
 

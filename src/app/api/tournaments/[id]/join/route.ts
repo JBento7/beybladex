@@ -34,15 +34,6 @@ export async function POST(
       );
     }
 
-    // Participants (non-organizers) can only self-register for BeyEncontros.
-    // Official tournaments require an organizer to add players manually.
-    if (tournament.isOfficial && session.user.role !== "ORGANIZER") {
-      return NextResponse.json(
-        { error: "Inscrições abertas apenas para participantes convidados pelo organizador." },
-        { status: 403 }
-      );
-    }
-
     if (
       tournament.maxParticipants &&
       tournament._count.participants >= tournament.maxParticipants
