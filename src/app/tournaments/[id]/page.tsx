@@ -7,6 +7,7 @@ import Link from "next/link";
 import StartTournamentButton from "./StartTournamentButton";
 import ScoreModal from "./ScoreModal";
 import ClientJoinButton from "./ClientJoinButton";
+import EditBeybladesButton from "./EditBeybladesButton";
 import WOButton from "./WOButton";
 import AdminParticipantManager from "./AdminParticipantManager";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
@@ -285,6 +286,15 @@ export default async function TournamentDetailPage({
     (p) => p.userId === session?.user.id
   );
 
+  const currentParticipant = tournament.participants.find(
+    (p) => p.userId === session?.user.id
+  );
+  const currentBeybladeIds = currentParticipant
+    ? ([currentParticipant.beyblade1, currentParticipant.beyblade2, currentParticipant.beyblade3].filter(
+        Boolean
+      ) as string[])
+    : [];
+
   // For Round Robin tournaments, ties in totalPoints are broken by point
   // differential (points scored - points conceded across finished matches).
   let standingsParticipants = tournament.participants;
@@ -394,9 +404,16 @@ export default async function TournamentDetailPage({
                 <ClientJoinButton tournamentId={tournament.id} deckType={tournament.deckType} />
               )}
               {isParticipant && tournament.status === "REGISTRATION" && (
-                <span className="text-sm bg-green-500/20 text-green-400 border border-green-500/30 px-4 py-2 rounded-lg font-medium text-center">
-                  ✓ Você está inscrito
-                </span>
+                <>
+                  <span className="text-sm bg-green-500/20 text-green-400 border border-green-500/30 px-4 py-2 rounded-lg font-medium text-center">
+                    ✓ Você está inscrito
+                  </span>
+                  <EditBeybladesButton
+                    tournamentId={tournament.id}
+                    deckType={tournament.deckType}
+                    currentBeybladeIds={currentBeybladeIds}
+                  />
+                </>
               )}
               {isAdminUser &&
                 tournament.status === "REGISTRATION" &&
