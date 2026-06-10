@@ -259,6 +259,14 @@ export async function GET() {
       name: "PollResponse unique announcementId+userId",
       sql: `DO $$ BEGIN ALTER TABLE "PollResponse" ADD CONSTRAINT "PollResponse_announcementId_userId_key" UNIQUE ("announcementId", "userId"); EXCEPTION WHEN duplicate_object THEN null; END $$`,
     },
+    {
+      name: "TournamentParticipant.hasPaid",
+      sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "hasPaid" BOOLEAN NOT NULL DEFAULT false`,
+    },
+    {
+      name: "TournamentParticipant.beybladeInspected",
+      sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "beybladeInspected" BOOLEAN NOT NULL DEFAULT false`,
+    },
   ];
 
   for (const migration of migrations) {

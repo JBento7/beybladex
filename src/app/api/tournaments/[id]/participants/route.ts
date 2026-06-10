@@ -134,10 +134,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-// PATCH — admin edits a participant's beyblades, only while the
-// tournament is in REGISTRATION (combos lock once it starts).
-// Registered: { userId, beybladeIds?: string[] }
-// Guest:      { userId, guestBeyblades?: string[] }
+// PATCH — admin edits a participant.
+// Combos:  { userId, beybladeIds?: string[] } / { userId, guestBeyblades?: string[] }
+//          — only while the tournament is in REGISTRATION (combos lock once it starts).
+// Status flags: { userId, hasPaid?: boolean, beybladeInspected?: boolean }
+//          — payment/inspection checkboxes, editable any time before FINISHED.
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getServerSession(authOptions);
@@ -145,7 +146,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    let body: { userId?: string; beybladeIds?: string[]; guestBeyblades?: string[] } = {};
+    let body: {
+      userId?: string;
+      beybladeIds?: string[];
+      guestBeyblades?: string[];
+      hasPaid?: boolean;
+      beybladeInspected?: boolean;
+    } = {};
     try { body = await req.json(); } catch { /* empty body */ }
 
     const { userId } = body;
@@ -153,6 +160,32 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const tournament = await prisma.tournament.findUnique({ where: { id: params.id } });
     if (!tournament) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    if (tournament.status === "FINISHED") {
+      return NextResponse.json({ error: "Torneio já finalizado" }, { status: 400 });
+    }
+
+    // ── STATUS FLAGS PATH (payment / beyblade inspection) ──────────────────
+    if (typeof body.hasPaid === "boolean" || typeof body.beybladeInspected === "boolean") {
+      const participant = await prisma.tournamentParticipant.findUnique({
+        where: { tournamentId_userId: { tournamentId: params.id, userId } },
+      });
+      if (!participant) {
+        return NextResponse.json({ error: "Participante não encontrado" }, { status: 404 });
+      }
+
+      const data: { hasPaid?: boolean; beybladeInspected?: boolean } = {};
+      if (typeof body.hasPaid === "boolean") data.hasPaid = body.hasPaid;
+      if (typeof body.beybladeInspected === "boolean") data.beybladeInspected = body.beybladeInspected;
+
+      const updated = await prisma.tournamentParticipant.update({
+        where: { id: participant.id },
+        data,
+      });
+
+      return NextResponse.json(updated);
+    }
+
+    // ── COMBO EDIT PATH ──────────────────────────────────────────────────────
     if (tournament.status !== "REGISTRATION") {
       return NextResponse.json(
         { error: "As beyblades só podem ser editadas enquanto o torneio está em inscrições." },

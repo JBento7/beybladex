@@ -145,6 +145,8 @@ model TournamentParticipant {
   beyblade1    String?
   beyblade2    String?
   beyblade3    String?
+  hasPaid            Boolean  @default(false)
+  beybladeInspected  Boolean  @default(false)
   createdAt    DateTime @default(now())
 
   tournament Tournament @relation(fields: [tournamentId], references: [id])

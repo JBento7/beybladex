@@ -16,6 +16,8 @@ interface Participant {
   beyblade2: string | null;
   beyblade3: string | null;
   currentBeyblades: { id: string; name: string }[];
+  hasPaid: boolean;
+  beybladeInspected: boolean;
 }
 
 interface Props {
@@ -125,6 +127,8 @@ export default function AdminParticipantManager({
           beyblade2: data.beyblade2 ?? null,
           beyblade3: data.beyblade3 ?? null,
           currentBeyblades: [],
+          hasPaid: false,
+          beybladeInspected: false,
         },
       ]);
 
@@ -223,6 +227,42 @@ export default function AdminParticipantManager({
       router.refresh();
     } else {
       flash("err", data.error ?? "Erro ao atualizar combos.");
+    }
+  }
+
+  const [togglingFlag, setTogglingFlag] = useState<string | null>(null);
+
+  async function toggleFlag(p: Participant, flag: "hasPaid" | "beybladeInspected", value: boolean) {
+    const flagKey = `${p.userId}:${flag}`;
+    setTogglingFlag(flagKey);
+    setLocalParticipants((prev) =>
+      prev.map((lp) => (lp.userId === p.userId ? { ...lp, [flag]: value } : lp))
+    );
+
+    let res: Response;
+    try {
+      res = await fetch(`/api/tournaments/${tournamentId}/participants`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: p.userId, [flag]: value }),
+      });
+    } catch {
+      setTogglingFlag(null);
+      setLocalParticipants((prev) =>
+        prev.map((lp) => (lp.userId === p.userId ? { ...lp, [flag]: !value } : lp))
+      );
+      flash("err", "Tempo esgotado. Verifique sua conexão e tente novamente.");
+      return;
+    }
+
+    setTogglingFlag(null);
+
+    if (!res.ok) {
+      setLocalParticipants((prev) =>
+        prev.map((lp) => (lp.userId === p.userId ? { ...lp, [flag]: !value } : lp))
+      );
+      const data = await res.json().catch(() => ({}));
+      flash("err", data.error ?? "Erro ao atualizar.");
     }
   }
 
@@ -426,6 +466,29 @@ export default function AdminParticipantManager({
                     {removing === p.userId ? "..." : "Remover"}
                   </button>
                 </div>
+              </div>
+
+              <div className="flex items-center gap-4 mt-2 pl-8">
+                <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={p.hasPaid}
+                    disabled={togglingFlag === `${p.userId}:hasPaid`}
+                    onChange={(e) => toggleFlag(p, "hasPaid", e.target.checked)}
+                    className="accent-[#f0a500]"
+                  />
+                  Pagamento confirmado
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={p.beybladeInspected}
+                    disabled={togglingFlag === `${p.userId}:beybladeInspected`}
+                    onChange={(e) => toggleFlag(p, "beybladeInspected", e.target.checked)}
+                    className="accent-[#f0a500]"
+                  />
+                  Beyblade inspecionada
+                </label>
               </div>
 
               {isEditing && (

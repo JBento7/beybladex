@@ -653,6 +653,8 @@ export default async function TournamentDetailPage({
                     beyblade2: p.beyblade2,
                     beyblade3: p.beyblade3,
                     currentBeyblades: currentSelectionMap.get(p.userId) ?? [],
+                    hasPaid: p.hasPaid,
+                    beybladeInspected: p.beybladeInspected,
                   }))}
                   allPlayers={allPlayers}
                 />
