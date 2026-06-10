@@ -203,6 +203,10 @@ export async function GET() {
       name: "TournamentParticipant.rankingPoints",
       sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "rankingPoints" INTEGER NOT NULL DEFAULT 0`,
     },
+    {
+      name: "Match.isWalkover",
+      sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "isWalkover" BOOLEAN NOT NULL DEFAULT false`,
+    },
   ];
 
   for (const migration of migrations) {

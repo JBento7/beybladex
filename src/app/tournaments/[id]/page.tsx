@@ -7,6 +7,7 @@ import Link from "next/link";
 import StartTournamentButton from "./StartTournamentButton";
 import ScoreModal from "./ScoreModal";
 import ClientJoinButton from "./ClientJoinButton";
+import WOButton from "./WOButton";
 import AdminParticipantManager from "./AdminParticipantManager";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 import type { Metadata } from "next";
@@ -47,6 +48,7 @@ type MatchWithRelations = {
   arena: number | null;
   slot: number | null;
   status: MatchStatus;
+  isWalkover: boolean;
   player1: { id: string; name: string; bladerName: string | null };
   player2: { id: string; name: string; bladerName: string | null };
   winner: { id: string; name: string; bladerName: string | null } | null;
@@ -125,7 +127,7 @@ function MatchCard({
           </span>
           {isFinished && (
             <span className="text-sm font-bold text-amber-400 flex-shrink-0">
-              {p1Points}
+              {match.isWalkover ? (match.winner?.id === match.player1.id ? "" : "W.O.") : p1Points}
             </span>
           )}
         </div>
@@ -143,13 +145,18 @@ function MatchCard({
           </span>
           {isFinished && (
             <span className="text-sm font-bold text-amber-400 flex-shrink-0">
-              {p2Points}
+              {match.isWalkover ? (match.winner?.id === match.player2.id ? "" : "W.O.") : p2Points}
             </span>
           )}
         </div>
       </div>
 
       <div className="flex items-center gap-2 flex-shrink-0">
+        {match.isWalkover && (
+          <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-500/20 text-red-400">
+            W.O.
+          </span>
+        )}
         <span
           className={`text-xs px-2 py-1 rounded-full font-medium ${
             match.status === "FINISHED"
@@ -166,14 +173,17 @@ function MatchCard({
             : "Pendente"}
         </span>
         {isOrganizer && !isFinished && (
-          <ScoreModal
-            matchId={match.id}
-            player1={match.player1}
-            player2={match.player2}
-            tournamentId={tournamentId}
-            player1Beyblades={participantBeyblades.find(p => p.userId === match.player1.id)?.beyblades ?? []}
-            player2Beyblades={participantBeyblades.find(p => p.userId === match.player2.id)?.beyblades ?? []}
-          />
+          <>
+            <ScoreModal
+              matchId={match.id}
+              player1={match.player1}
+              player2={match.player2}
+              tournamentId={tournamentId}
+              player1Beyblades={participantBeyblades.find(p => p.userId === match.player1.id)?.beyblades ?? []}
+              player2Beyblades={participantBeyblades.find(p => p.userId === match.player2.id)?.beyblades ?? []}
+            />
+            <WOButton matchId={match.id} player1={match.player1} player2={match.player2} />
+          </>
         )}
       </div>
     </div>
