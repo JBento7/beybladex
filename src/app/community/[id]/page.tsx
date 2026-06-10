@@ -43,6 +43,12 @@ export default async function PlayerProfilePage({
   // redirect to own profile page
   if (params.id === session.user.id) redirect("/profile");
 
+  const activeOfficialTournament = await prisma.tournament.findFirst({
+    where: { isOfficial: true, status: "IN_PROGRESS" },
+    select: { id: true },
+  });
+  const beybladesHidden = !!activeOfficialTournament;
+
   const player = await prisma.user.findUnique({
     where: { id: params.id, deleted: false },
     select: {
@@ -239,9 +245,15 @@ export default async function PlayerProfilePage({
         <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
           <h2 className="text-lg font-bold text-white mb-5">
             Beyblades de {player.bladerName || player.name}
-            <span className="text-gray-500 text-sm font-normal ml-2">({player.beyblades.length})</span>
+            {!beybladesHidden && (
+              <span className="text-gray-500 text-sm font-normal ml-2">({player.beyblades.length})</span>
+            )}
           </h2>
-          {player.beyblades.length === 0 ? (
+          {beybladesHidden ? (
+            <p className="text-gray-500 text-sm text-center py-8">
+              🔒 Beyblades ocultas durante o torneio oficial em andamento.
+            </p>
+          ) : player.beyblades.length === 0 ? (
             <p className="text-gray-500 text-sm text-center py-8">Nenhuma beyblade cadastrada</p>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -13,6 +13,12 @@ export default async function CommunityPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
+  const activeOfficialTournament = await prisma.tournament.findFirst({
+    where: { isOfficial: true, status: "IN_PROGRESS" },
+    select: { id: true },
+  });
+  const beybladesHidden = !!activeOfficialTournament;
+
   const players = await prisma.user.findMany({
     where: { deleted: false, isGuest: false },
     select: {
@@ -55,6 +61,12 @@ export default async function CommunityPage() {
           <p className="text-gray-400 mt-1">Conheça os jogadores e suas Beyblades.</p>
         </div>
 
+        {beybladesHidden && (
+          <div className="mb-6 text-sm bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500] px-4 py-3 rounded-lg font-medium">
+            🔒 Há um torneio oficial em andamento. As beyblades dos jogadores ficam ocultas até o término do torneio.
+          </div>
+        )}
+
         {playersWithStats.length === 0 ? (
           <p className="text-gray-500 text-center py-16">Nenhum jogador cadastrado ainda.</p>
         ) : (
@@ -88,7 +100,9 @@ export default async function CommunityPage() {
                       )}
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5">
-                      {player.beyblades.length} beyblade{player.beyblades.length !== 1 ? "s" : ""}
+                      {beybladesHidden
+                        ? "Beyblades ocultas"
+                        : `${player.beyblades.length} beyblade${player.beyblades.length !== 1 ? "s" : ""}`}
                     </div>
                   </div>
                 </div>
@@ -110,7 +124,9 @@ export default async function CommunityPage() {
                 </div>
 
                 {/* Beyblades preview */}
-                {player.beyblades.length > 0 ? (
+                {beybladesHidden ? (
+                  <div className="text-xs text-gray-600 text-center py-2">🔒 Ocultas durante o torneio oficial</div>
+                ) : player.beyblades.length > 0 ? (
                   <div className="space-y-1.5">
                     {player.beyblades.slice(0, 3).map((bey) => {
                       const t = bey.wins + bey.losses;
