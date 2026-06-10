@@ -391,7 +391,7 @@ export default async function TournamentDetailPage({
               {isAdminUser &&
                 tournament.status === "REGISTRATION" &&
                 tournament.participants.length >= 2 && (
-                  <StartTournamentButton tournamentId={tournament.id} />
+                  <StartTournamentButton tournamentId={tournament.id} defaultArenas={tournament.arenas ?? 1} />
                 )}
               {isOrganizerOfThis && (
                 <Link

@@ -125,12 +125,24 @@ export async function finalizeRoundRobin(tournamentId: string) {
 }
 
 export async function generateGroups(tournamentId: string) {
-  const participants = shuffle(
-    await prisma.tournamentParticipant.findMany({ where: { tournamentId } })
-  );
+  const [rawParticipants, tournament] = await Promise.all([
+    prisma.tournamentParticipant.findMany({ where: { tournamentId } }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
+  ]);
+  const participants = shuffle(rawParticipants);
+  const arenaCount = tournament?.arenas ?? 1;
 
   const groupSize = 4;
   const numGroups = Math.ceil(participants.length / groupSize);
+
+  const allMatches: {
+    tournamentId: string;
+    player1Id: string;
+    player2Id: string;
+    groupId: string;
+    round: number;
+    bracketPos: null;
+  }[] = [];
 
   for (let g = 0; g < numGroups; g++) {
     const group = await prisma.group.create({
@@ -156,10 +168,9 @@ export async function generateGroups(tournamentId: string) {
     );
 
     // Create round robin within group
-    const matches = [];
     for (let i = 0; i < groupParticipants.length; i++) {
       for (let j = i + 1; j < groupParticipants.length; j++) {
-        matches.push({
+        allMatches.push({
           tournamentId,
           player1Id: groupParticipants[i].userId!,
           player2Id: groupParticipants[j].userId!,
@@ -169,15 +180,24 @@ export async function generateGroups(tournamentId: string) {
         });
       }
     }
-
-    await prisma.match.createMany({ data: matches });
   }
+
+  // Schedule across arenas so no player is double-booked in the same slot,
+  // even across different groups.
+  const scheduled = scheduleByArena(allMatches, arenaCount, (m) => m.player1Id, (m) => m.player2Id);
+
+  await prisma.match.createMany({
+    data: scheduled.map(({ match, slot, arena }) => ({ ...match, arena, slot })),
+  });
 }
 
 export async function generateSingleElimination(tournamentId: string) {
-  const participants = shuffle(
-    await prisma.tournamentParticipant.findMany({ where: { tournamentId } })
-  );
+  const [rawParticipants, tournament] = await Promise.all([
+    prisma.tournamentParticipant.findMany({ where: { tournamentId } }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
+  ]);
+  const participants = shuffle(rawParticipants);
+  const arenaCount = tournament?.arenas ?? 1;
   const players = participants.map((p) => p.userId!);
 
   // Pad the field to the next power of two with first-round byes so nobody is
@@ -196,6 +216,8 @@ export async function generateSingleElimination(tournamentId: string) {
     bracketPos: number;
     winnerId?: string;
     status?: "FINISHED";
+    arena?: number;
+    slot?: number;
   }[] = [];
   let pos = 1;
 
@@ -212,14 +234,23 @@ export async function generateSingleElimination(tournamentId: string) {
     });
   }
 
+  const realMatches: { player1Id: string; player2Id: string }[] = [];
   const rest = players.slice(byeCount);
   for (let i = 0; i + 1 < rest.length; i += 2) {
+    realMatches.push({ player1Id: rest[i], player2Id: rest[i + 1] });
+  }
+
+  // Schedule real round-1 matches across arenas so no player is double-booked.
+  const scheduled = scheduleByArena(realMatches, arenaCount, (m) => m.player1Id, (m) => m.player2Id);
+  for (const { match, slot, arena } of scheduled) {
     matches.push({
       tournamentId,
-      player1Id: rest[i],
-      player2Id: rest[i + 1],
+      player1Id: match.player1Id,
+      player2Id: match.player2Id,
       round: 1,
       bracketPos: pos++,
+      arena,
+      slot,
     });
   }
 
@@ -328,17 +359,27 @@ export async function advanceSingleElimination(
   }
 
   const nextRound = completedRound + 1;
-  const matches = [];
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: { arenas: true },
+  });
+  const arenaCount = tournament?.arenas ?? 1;
 
+  const pairs: { player1Id: string; player2Id: string }[] = [];
   for (let i = 0; i < Math.floor(winners.length / 2); i++) {
-    matches.push({
-      tournamentId,
-      player1Id: winners[i * 2],
-      player2Id: winners[i * 2 + 1],
-      round: nextRound,
-      bracketPos: i + 1,
-    });
+    pairs.push({ player1Id: winners[i * 2], player2Id: winners[i * 2 + 1] });
   }
+
+  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id);
+  const matches = scheduled.map(({ match, slot, arena }, i) => ({
+    tournamentId,
+    player1Id: match.player1Id,
+    player2Id: match.player2Id,
+    round: nextRound,
+    bracketPos: i + 1,
+    arena,
+    slot,
+  }));
 
   await prisma.match.createMany({ data: matches });
 }

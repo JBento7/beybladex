@@ -11,7 +11,7 @@ import {
 } from "@/lib/tournament-engine";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -19,6 +19,9 @@ export async function POST(
     if (!session) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
+
+    let body: { arenas?: number } = {};
+    try { body = await req.json(); } catch { /* empty body */ }
 
     const tournament = await prisma.tournament.findUnique({
       where: { id: params.id },
@@ -50,11 +53,21 @@ export async function POST(
       );
     }
 
+    // Validate the confirmed arena count, if provided.
+    const data: { status: "IN_PROGRESS"; arenas?: number } = { status: "IN_PROGRESS" };
+    if (body.arenas !== undefined) {
+      const arenas = Number(body.arenas);
+      if (!Number.isInteger(arenas) || arenas < 1 || arenas > 20) {
+        return NextResponse.json({ error: "Número de arenas inválido" }, { status: 400 });
+      }
+      data.arenas = arenas;
+    }
+
     // Atomically claim the tournament so two concurrent "start" requests can't
     // both generate a bracket. Only the request that flips the status wins.
     const claim = await prisma.tournament.updateMany({
       where: { id: params.id, status: "REGISTRATION" },
-      data: { status: "IN_PROGRESS" },
+      data,
     });
 
     if (claim.count === 0) {
