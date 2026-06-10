@@ -45,65 +45,73 @@ export async function POST(
     const points = FINISH_TYPE_POINTS[finishType as FinishType];
     if (!points) return NextResponse.json({ error: "Tipo de finish inválido" }, { status: 400 });
 
-    // Get or create current set
-    let currentSet = match.sets.find((s) => s.status === "IN_PROGRESS");
-    if (!currentSet) {
-      const setNumber = match.sets.length + 1;
-      if (setNumber > 3) {
-        return NextResponse.json({ error: "Número máximo de sets atingido" }, { status: 400 });
-      }
-      currentSet = await prisma.matchSet.create({
-        data: {
-          matchId: params.id,
-          setNumber,
-          status: "IN_PROGRESS",
-        },
-      });
-      // Update match to IN_PROGRESS
-      await prisma.match.update({
-        where: { id: params.id },
-        data: { status: "IN_PROGRESS" },
-      });
+    if (!match.sets.find((s) => s.status === "IN_PROGRESS") && match.sets.length + 1 > 3) {
+      return NextResponse.json({ error: "Número máximo de sets atingido" }, { status: 400 });
     }
-
-    // Add point to the set
-    await prisma.matchPoint.create({
-      data: {
-        matchId: params.id,
-        userId: scorerId,
-        finishType: finishType as FinishType,
-        points,
-        setId: currentSet.id,
-        beybladeId: beybladeId || null,
-      },
-    });
-
-    // Update set point counters
-    const isPlayer1 = scorerId === match.player1Id;
-    const updatedSet = await prisma.matchSet.update({
-      where: { id: currentSet.id },
-      data: isPlayer1
-        ? { player1Points: { increment: points } }
-        : { player2Points: { increment: points } },
-    });
 
     let matchFinished = false;
     let matchWinnerId: string | null = null;
+
+    // Get or create current set, register the point and update set/match state atomically.
+    const updatedSet = await prisma.$transaction(async (tx) => {
+      let currentSet = match.sets.find((s) => s.status === "IN_PROGRESS");
+      if (!currentSet) {
+        const setNumber = match.sets.length + 1;
+        currentSet = await tx.matchSet.create({
+          data: {
+            matchId: params.id,
+            setNumber,
+            status: "IN_PROGRESS",
+          },
+        });
+        // Update match to IN_PROGRESS
+        await tx.match.update({
+          where: { id: params.id },
+          data: { status: "IN_PROGRESS" },
+        });
+      }
+
+      // Add point to the set
+      await tx.matchPoint.create({
+        data: {
+          matchId: params.id,
+          userId: scorerId,
+          finishType: finishType as FinishType,
+          points,
+          setId: currentSet.id,
+          beybladeId: beybladeId || null,
+        },
+      });
+
+      // Update set point counters
+      const isPlayer1 = scorerId === match.player1Id;
+      return tx.matchSet.update({
+        where: { id: currentSet.id },
+        data: isPlayer1
+          ? { player1Points: { increment: points } }
+          : { player2Points: { increment: points } },
+      });
+    });
 
     // Check if set is won
     const p1Pts = updatedSet.player1Points;
     const p2Pts = updatedSet.player2Points;
     if (p1Pts >= POINTS_TO_WIN_SET || p2Pts >= POINTS_TO_WIN_SET) {
       const setWinnerId = p1Pts >= POINTS_TO_WIN_SET ? match.player1Id : match.player2Id;
-      await prisma.matchSet.update({
-        where: { id: currentSet.id },
-        data: { status: "FINISHED", winnerId: setWinnerId },
-      });
 
-      // Count sets won
-      const allSets = await prisma.matchSet.findMany({ where: { matchId: params.id } });
-      const p1Sets = allSets.filter((s) => s.winnerId === match.player1Id).length;
-      const p2Sets = allSets.filter((s) => s.winnerId === match.player2Id).length;
+      const { p1Sets, p2Sets } = await prisma.$transaction(async (tx) => {
+        await tx.matchSet.update({
+          where: { id: updatedSet.id },
+          data: { status: "FINISHED", winnerId: setWinnerId },
+        });
+
+        // Count sets won
+        const allSets = await tx.matchSet.findMany({ where: { matchId: params.id } });
+        return {
+          p1Sets: allSets.filter((s) => s.winnerId === match.player1Id).length,
+          p2Sets: allSets.filter((s) => s.winnerId === match.player2Id).length,
+        };
+      });
 
       if (p1Sets >= SETS_TO_WIN || p2Sets >= SETS_TO_WIN) {
         // Match is over

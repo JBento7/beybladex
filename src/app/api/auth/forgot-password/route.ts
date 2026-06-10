@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendPasswordResetEmail, isEmailConfigured } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,9 +15,17 @@ export async function POST(req: NextRequest) {
 
     if (user) {
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      await prisma.passwordResetToken.create({
+      const resetToken = await prisma.passwordResetToken.create({
         data: { userId: user.id, expiresAt },
       });
+
+      if (await isEmailConfigured()) {
+        try {
+          await sendPasswordResetEmail(user.email, user.name, resetToken.token);
+        } catch (emailErr) {
+          console.error("Failed to send password reset email:", emailErr);
+        }
+      }
     }
 
     return NextResponse.json({ ok: true });

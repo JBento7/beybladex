@@ -62,32 +62,33 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         );
       }
 
-      // Create the shadow user
-      const shadowUser = await prisma.user.create({
-        data: {
-          name: guestName,
-          email: `guest_${randomBytes(12).toString("hex")}@guest.local`,
-          password: randomBytes(24).toString("hex"),
-          isGuest: true,
-        },
-      });
+      const participant = await prisma.$transaction(async (tx) => {
+        // Create the shadow user
+        const shadowUser = await tx.user.create({
+          data: {
+            name: guestName,
+            email: `guest_${randomBytes(12).toString("hex")}@guest.local`,
+            password: randomBytes(24).toString("hex"),
+            isGuest: true,
+          },
+        });
 
-      // Create their beyblades as real records (so per-beyblade stats work)
-      const createdBeys = await Promise.all(
-        guestBeyblades.map((name) =>
-          prisma.beyblade.create({ data: { userId: shadowUser.id, name } })
-        )
-      );
+        // Create their beyblades as real records (so per-beyblade stats work)
+        const createdBeys = [];
+        for (const name of guestBeyblades) {
+          createdBeys.push(await tx.beyblade.create({ data: { userId: shadowUser.id, name } }));
+        }
 
-      const participant = await prisma.tournamentParticipant.create({
-        data: {
-          tournamentId: params.id,
-          userId: shadowUser.id,
-          beyblade1: createdBeys[0]?.id ?? null,
-          beyblade2: createdBeys[1]?.id ?? null,
-          beyblade3: createdBeys[2]?.id ?? null,
-        },
-        include: { user: { select: { id: true, name: true, isGuest: true } } },
+        return tx.tournamentParticipant.create({
+          data: {
+            tournamentId: params.id,
+            userId: shadowUser.id,
+            beyblade1: createdBeys[0]?.id ?? null,
+            beyblade2: createdBeys[1]?.id ?? null,
+            beyblade3: createdBeys[2]?.id ?? null,
+          },
+          include: { user: { select: { id: true, name: true, isGuest: true } } },
+        });
       });
 
       return NextResponse.json(participant, { status: 201 });

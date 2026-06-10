@@ -48,7 +48,7 @@ export default function ForgotPasswordPage() {
         {submitted ? (
           <div className="text-center space-y-4">
             <div aria-live="polite" className="bg-green-900/30 border border-green-700 text-green-400 text-sm px-4 py-4 rounded-lg">
-              Se esse e-mail estiver cadastrado, um link de redefinição foi gerado. Peça ao administrador para acessar o painel Admin → Tokens de Redefinição para compartilhar o link com você.
+              Se esse e-mail estiver cadastrado, enviamos um link de redefinição de senha para sua caixa de entrada. Verifique também a pasta de spam.
             </div>
             <Link href="/login" className="block text-[#f0a500] hover:text-[#d4940a] text-sm font-medium mt-4">
               ← Voltar ao login

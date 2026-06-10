@@ -36,17 +36,29 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  await prisma.matchPoint.deleteMany({ where: { match: { tournamentId: params.id } } });
-  await prisma.matchSet.deleteMany({ where: { match: { tournamentId: params.id } } });
-  await prisma.match.updateMany({
-    where: { tournamentId: params.id },
-    data: { status: "PENDING", winnerId: null },
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: params.id },
+    select: { organizerId: true },
   });
-  // Reset participant standings
-  await prisma.tournamentParticipant.updateMany({
-    where: { tournamentId: params.id },
-    data: { wins: 0, losses: 0, totalPoints: 0 },
-  });
+  if (!tournament) {
+    return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+  }
+  if (tournament.organizerId !== session.user.id) {
+    return NextResponse.json({ error: "Apenas o organizador do torneio pode zerar os pontos" }, { status: 403 });
+  }
+
+  await prisma.$transaction([
+    prisma.matchPoint.deleteMany({ where: { match: { tournamentId: params.id } } }),
+    prisma.matchSet.deleteMany({ where: { match: { tournamentId: params.id } } }),
+    prisma.match.updateMany({
+      where: { tournamentId: params.id },
+      data: { status: "PENDING", winnerId: null },
+    }),
+    prisma.tournamentParticipant.updateMany({
+      where: { tournamentId: params.id },
+      data: { wins: 0, losses: 0, totalPoints: 0 },
+    }),
+  ]);
 
   return NextResponse.json({ ok: true });
 }
