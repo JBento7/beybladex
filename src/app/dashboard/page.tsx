@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 export const metadata: Metadata = { title: "Painel" };
 import Navbar from "@/components/Navbar";
+import NewsPopup from "./NewsPopup";
 import Link from "next/link";
 import { FINISH_TYPE_LABELS } from "@/lib/scoring";
 import type { FinishType } from "@prisma/client";
@@ -116,6 +117,7 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
       <Navbar />
+      <NewsPopup />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">

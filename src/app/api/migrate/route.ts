@@ -207,6 +207,58 @@ export async function GET() {
       name: "Match.isWalkover",
       sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "isWalkover" BOOLEAN NOT NULL DEFAULT false`,
     },
+    {
+      name: "AnnouncementType enum",
+      sql: `DO $$ BEGIN CREATE TYPE "AnnouncementType" AS ENUM ('NEWS', 'POLL'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "PollType enum",
+      sql: `DO $$ BEGIN CREATE TYPE "PollType" AS ENUM ('TEXT', 'CHECKBOX'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "Announcement table",
+      sql: `CREATE TABLE IF NOT EXISTS "Announcement" (
+        "id" TEXT NOT NULL,
+        "type" "AnnouncementType" NOT NULL,
+        "title" TEXT NOT NULL,
+        "content" TEXT NOT NULL,
+        "pollType" "PollType",
+        "options" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+        "active" BOOLEAN NOT NULL DEFAULT true,
+        "createdBy" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "Announcement_pkey" PRIMARY KEY ("id")
+      )`,
+    },
+    {
+      name: "Announcement.createdBy FK",
+      sql: `DO $$ BEGIN ALTER TABLE "Announcement" ADD CONSTRAINT "Announcement_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "PollResponse table",
+      sql: `CREATE TABLE IF NOT EXISTS "PollResponse" (
+        "id" TEXT NOT NULL,
+        "announcementId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "answerText" TEXT,
+        "selectedOptions" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+        "validated" BOOLEAN NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "PollResponse_pkey" PRIMARY KEY ("id")
+      )`,
+    },
+    {
+      name: "PollResponse.announcementId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "PollResponse" ADD CONSTRAINT "PollResponse_announcementId_fkey" FOREIGN KEY ("announcementId") REFERENCES "Announcement"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "PollResponse.userId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "PollResponse" ADD CONSTRAINT "PollResponse_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "PollResponse unique announcementId+userId",
+      sql: `DO $$ BEGIN ALTER TABLE "PollResponse" ADD CONSTRAINT "PollResponse_announcementId_userId_key" UNIQUE ("announcementId", "userId"); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
   ];
 
   for (const migration of migrations) {

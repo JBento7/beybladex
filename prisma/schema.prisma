@@ -49,6 +49,16 @@ enum SetStatus {
   FINISHED
 }
 
+enum AnnouncementType {
+  NEWS
+  POLL
+}
+
+enum PollType {
+  TEXT
+  CHECKBOX
+}
+
 model User {
   id            String   @id @default(cuid())
   name          String
@@ -74,6 +84,8 @@ model User {
   resetTokens          PasswordResetToken[]
   emailVerifyTokens    EmailVerifyToken[]
   emailVerified        Boolean  @default(false)
+  announcements        Announcement[]   @relation("AnnouncementCreator")
+  pollResponses        PollResponse[]
 }
 
 model PasswordResetToken {
@@ -222,6 +234,36 @@ model Beyblade {
 
   user        User         @relation(fields: [userId], references: [id])
   matchPoints MatchPoint[]
+}
+
+model Announcement {
+  id        String           @id @default(cuid())
+  type      AnnouncementType
+  title     String
+  content   String
+  pollType  PollType?
+  options   String[]         @default([])
+  active    Boolean          @default(true)
+  createdBy String
+  createdAt DateTime         @default(now())
+
+  creator   User           @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+  responses PollResponse[]
+}
+
+model PollResponse {
+  id             String   @id @default(cuid())
+  announcementId String
+  userId         String
+  answerText     String?
+  selectedOptions String[] @default([])
+  validated      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@unique([announcementId, userId])
 }
 
 model EmailVerifyToken {
