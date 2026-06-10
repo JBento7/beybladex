@@ -14,7 +14,7 @@ export default async function CommunityPage() {
   if (!session) redirect("/login");
 
   const activeOfficialTournament = await prisma.tournament.findFirst({
-    where: { isOfficial: true, status: "IN_PROGRESS" },
+    where: { isOfficial: true, status: { in: ["REGISTRATION", "IN_PROGRESS"] } },
     select: { id: true },
   });
   const beybladesHidden = !!activeOfficialTournament;
@@ -63,7 +63,7 @@ export default async function CommunityPage() {
 
         {beybladesHidden && (
           <div className="mb-6 text-sm bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500] px-4 py-3 rounded-lg font-medium">
-            🔒 Há um torneio oficial em andamento. As beyblades dos jogadores ficam ocultas até o término do torneio.
+            🔒 Há um torneio oficial em curso (inscrições ou em andamento). As beyblades dos jogadores ficam ocultas até o término do torneio.
           </div>
         )}
 

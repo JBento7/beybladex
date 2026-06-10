@@ -44,7 +44,7 @@ export default async function PlayerProfilePage({
   if (params.id === session.user.id) redirect("/profile");
 
   const activeOfficialTournament = await prisma.tournament.findFirst({
-    where: { isOfficial: true, status: "IN_PROGRESS" },
+    where: { isOfficial: true, status: { in: ["REGISTRATION", "IN_PROGRESS"] } },
     select: { id: true },
   });
   const beybladesHidden = !!activeOfficialTournament;
