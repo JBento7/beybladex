@@ -282,6 +282,18 @@ export default async function TournamentDetailPage({
           .map((id) => beybladeMap.get(id!))
           .filter(Boolean) as BeybladeInfo[],
   }));
+
+  // Always the participant's currently selected combo (used by the admin
+  // edit-beyblades form, regardless of tournament.isOfficial).
+  const currentSelectionMap: Map<string, BeybladeInfo[]> = new Map(
+    tournament.participants.map((p) => [
+      p.userId,
+      [p.beyblade1, p.beyblade2, p.beyblade3]
+        .filter(Boolean)
+        .map((id) => beybladeMap.get(id!))
+        .filter(Boolean) as BeybladeInfo[],
+    ])
+  );
   const isParticipant = tournament.participants.some(
     (p) => p.userId === session?.user.id
   );
@@ -640,6 +652,7 @@ export default async function TournamentDetailPage({
                     beyblade1: p.beyblade1,
                     beyblade2: p.beyblade2,
                     beyblade3: p.beyblade3,
+                    currentBeyblades: currentSelectionMap.get(p.userId) ?? [],
                   }))}
                   allPlayers={allPlayers}
                 />

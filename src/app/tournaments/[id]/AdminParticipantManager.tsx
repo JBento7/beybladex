@@ -15,6 +15,7 @@ interface Participant {
   beyblade1: string | null;
   beyblade2: string | null;
   beyblade3: string | null;
+  currentBeyblades: { id: string; name: string }[];
 }
 
 interface Props {
@@ -52,6 +53,12 @@ export default function AdminParticipantManager({
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Editing a participant's beyblades (registration phase only)
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editSelectedBeys, setEditSelectedBeys] = useState<string[]>([]);
+  const [editGuestBeyblades, setEditGuestBeyblades] = useState<string[]>(["", "", ""]);
+  const [editSaving, setEditSaving] = useState(false);
 
   const required = deckType === "THREE_ON_THREE" ? 3 : 1;
 
@@ -117,6 +124,7 @@ export default function AdminParticipantManager({
           beyblade1: data.beyblade1 ?? null,
           beyblade2: data.beyblade2 ?? null,
           beyblade3: data.beyblade3 ?? null,
+          currentBeyblades: [],
         },
       ]);
 
@@ -157,6 +165,64 @@ export default function AdminParticipantManager({
       router.refresh();
     } else {
       flash("err", data.error ?? "Erro ao remover.");
+    }
+  }
+
+  function openEdit(p: Participant) {
+    setError(null);
+    if (p.user.isGuest) {
+      const names = p.currentBeyblades.map((b) => b.name);
+      setEditGuestBeyblades([names[0] ?? "", names[1] ?? "", names[2] ?? ""]);
+    } else {
+      setEditSelectedBeys(p.currentBeyblades.map((b) => b.id));
+    }
+    setEditingUserId(p.userId);
+  }
+
+  function closeEdit() {
+    setEditingUserId(null);
+    setEditSelectedBeys([]);
+    setEditGuestBeyblades(["", "", ""]);
+  }
+
+  function toggleEditBey(id: string) {
+    setEditSelectedBeys((prev) => {
+      if (prev.includes(id)) return prev.filter((b) => b !== id);
+      if (prev.length >= required) return prev;
+      return [...prev, id];
+    });
+  }
+
+  async function handleEditSave(p: Participant) {
+    setEditSaving(true);
+    setError(null);
+
+    const body = p.user.isGuest
+      ? { userId: p.userId, guestBeyblades: editGuestBeyblades.filter((b) => b.trim()) }
+      : { userId: p.userId, beybladeIds: editSelectedBeys };
+
+    let res: Response;
+    try {
+      res = await fetch(`/api/tournaments/${tournamentId}/participants`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      setEditSaving(false);
+      flash("err", "Tempo esgotado. Verifique sua conexão e tente novamente.");
+      return;
+    }
+
+    const data = await res.json();
+    setEditSaving(false);
+
+    if (res.ok) {
+      flash("ok", `Combos de ${p.user.name} atualizados.`);
+      closeEdit();
+      router.refresh();
+    } else {
+      flash("err", data.error ?? "Erro ao atualizar combos.");
     }
   }
 
@@ -319,27 +385,109 @@ export default function AdminParticipantManager({
 
       {/* Participants list */}
       <div className="space-y-2">
-        {localParticipants.map((p, i) => (
-          <div key={p.userId} className="flex items-center justify-between bg-[#252525] rounded-lg px-4 py-2.5">
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-600 w-5 text-right">{i + 1}.</span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-white font-medium">{p.user.name}</span>
-                {p.user.isGuest && (
-                  <span className="text-[10px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded font-medium">convidado</span>
-                )}
+        {localParticipants.map((p, i) => {
+          const player = allPlayers.find((pl) => pl.id === p.userId);
+          const isEditing = editingUserId === p.userId;
+          return (
+            <div key={p.userId} className="bg-[#252525] rounded-lg px-4 py-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-gray-600 w-5 text-right">{i + 1}.</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-white font-medium">{p.user.name}</span>
+                      {p.user.isGuest && (
+                        <span className="text-[10px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded font-medium">convidado</span>
+                      )}
+                    </div>
+                    {p.currentBeyblades.length > 0 && (
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {p.currentBeyblades.map((b) => b.name).join(", ")}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {tournamentStatus === "REGISTRATION" && (
+                    <button
+                      onClick={() => (isEditing ? closeEdit() : openEdit(p))}
+                      className="text-xs text-[#f0a500] hover:text-[#d4940a] px-2 py-1 rounded hover:bg-[#f0a500]/10 transition-colors"
+                      title="Editar combos"
+                    >
+                      {isEditing ? "Cancelar" : "Editar combos"}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleRemove(p.userId, p.user.name)}
+                    disabled={removing === p.userId}
+                    className="text-xs text-red-500 hover:text-red-400 px-2 py-1 rounded hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                    title="Remover do torneio"
+                  >
+                    {removing === p.userId ? "..." : "Remover"}
+                  </button>
+                </div>
               </div>
+
+              {isEditing && (
+                <div className="mt-3 pt-3 border-t border-[#333] space-y-3">
+                  {p.user.isGuest ? (
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-400 block">
+                        Beyblade(s) do convidado <span className="ml-1 text-gray-600">— opcional</span>
+                      </label>
+                      {Array.from({ length: required }).map((_, idx) => (
+                        <input
+                          key={idx}
+                          type="text"
+                          value={editGuestBeyblades[idx] ?? ""}
+                          onChange={(e) => {
+                            const updated = [...editGuestBeyblades];
+                            updated[idx] = e.target.value;
+                            setEditGuestBeyblades(updated);
+                          }}
+                          placeholder={`Beyblade ${idx + 1} (ex: Dran Sword 3-60 Flat)`}
+                          className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#f0a500]"
+                        />
+                      ))}
+                    </div>
+                  ) : player && player.beyblades.length > 0 ? (
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1.5 block">
+                        Beyblades ({required === 1 ? "escolha 1" : `escolha até ${required}`})
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {player.beyblades.map((b) => (
+                          <button
+                            key={b.id}
+                            type="button"
+                            onClick={() => toggleEditBey(b.id)}
+                            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                              editSelectedBeys.includes(b.id)
+                                ? "bg-[#f0a500] text-black border-[#f0a500] font-bold"
+                                : "bg-[#1a1a1a] text-gray-300 border-[#333] hover:border-[#f0a500]/50"
+                            }`}
+                          >
+                            <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" />{b.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500">Este jogador não tem beyblades cadastradas.</p>
+                  )}
+
+                  <button
+                    onClick={() => handleEditSave(p)}
+                    disabled={editSaving}
+                    className="bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold text-sm px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {editSaving ? "Salvando..." : "Salvar combos"}
+                  </button>
+                </div>
+              )}
             </div>
-            <button
-              onClick={() => handleRemove(p.userId, p.user.name)}
-              disabled={removing === p.userId}
-              className="text-xs text-red-500 hover:text-red-400 px-2 py-1 rounded hover:bg-red-900/20 transition-colors disabled:opacity-50"
-              title="Remover do torneio"
-            >
-              {removing === p.userId ? "..." : "Remover"}
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

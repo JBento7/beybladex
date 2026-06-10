@@ -134,6 +134,114 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 }
 
+// PATCH — admin edits a participant's beyblades, only while the
+// tournament is in REGISTRATION (combos lock once it starts).
+// Registered: { userId, beybladeIds?: string[] }
+// Guest:      { userId, guestBeyblades?: string[] }
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== "ORGANIZER") {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+
+    let body: { userId?: string; beybladeIds?: string[]; guestBeyblades?: string[] } = {};
+    try { body = await req.json(); } catch { /* empty body */ }
+
+    const { userId } = body;
+    if (!userId) return NextResponse.json({ error: "userId é obrigatório" }, { status: 400 });
+
+    const tournament = await prisma.tournament.findUnique({ where: { id: params.id } });
+    if (!tournament) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    if (tournament.status !== "REGISTRATION") {
+      return NextResponse.json(
+        { error: "As beyblades só podem ser editadas enquanto o torneio está em inscrições." },
+        { status: 400 }
+      );
+    }
+
+    const [participant, user] = await Promise.all([
+      prisma.tournamentParticipant.findUnique({
+        where: { tournamentId_userId: { tournamentId: params.id, userId } },
+      }),
+      prisma.user.findUnique({ where: { id: userId }, select: { id: true, isGuest: true } }),
+    ]);
+    if (!participant || !user) {
+      return NextResponse.json({ error: "Participante não encontrado" }, { status: 404 });
+    }
+
+    // ── GUEST PATH ──────────────────────────────────────────────────────────
+    if (user.isGuest) {
+      const guestBeyblades = Array.isArray(body.guestBeyblades)
+        ? body.guestBeyblades.map((s) => s.trim()).filter(Boolean)
+        : [];
+
+      const required = tournament.deckType === "THREE_ON_THREE" ? 3 : 1;
+      if (guestBeyblades.length > 0 && guestBeyblades.length !== required) {
+        return NextResponse.json(
+          { error: `Informe exatamente ${required} beyblade(s) para o convidado ou deixe em branco.` },
+          { status: 400 }
+        );
+      }
+
+      const oldIds = [participant.beyblade1, participant.beyblade2, participant.beyblade3].filter(Boolean) as string[];
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const createdBeys = [];
+        for (const name of guestBeyblades) {
+          createdBeys.push(await tx.beyblade.create({ data: { userId, name } }));
+        }
+
+        const result = await tx.tournamentParticipant.update({
+          where: { id: participant.id },
+          data: {
+            beyblade1: createdBeys[0]?.id ?? null,
+            beyblade2: createdBeys[1]?.id ?? null,
+            beyblade3: createdBeys[2]?.id ?? null,
+          },
+        });
+
+        if (oldIds.length > 0) {
+          await tx.matchPoint.updateMany({ where: { beybladeId: { in: oldIds } }, data: { beybladeId: null } });
+          await tx.beyblade.deleteMany({ where: { id: { in: oldIds } } });
+        }
+
+        return result;
+      });
+
+      return NextResponse.json(updated);
+    }
+
+    // ── REGISTERED USER PATH ────────────────────────────────────────────────
+    const ids = Array.isArray(body.beybladeIds) ? body.beybladeIds.filter(Boolean) : [];
+
+    if (new Set(ids).size !== ids.length) {
+      return NextResponse.json({ error: "Não é possível selecionar o mesmo combo mais de uma vez." }, { status: 400 });
+    }
+
+    const owned = ids.length > 0
+      ? await prisma.beyblade.findMany({ where: { id: { in: ids }, userId } })
+      : [];
+    if (owned.length !== ids.length) {
+      return NextResponse.json({ error: "Algumas beyblades não pertencem ao jogador" }, { status: 400 });
+    }
+
+    const updated = await prisma.tournamentParticipant.update({
+      where: { id: participant.id },
+      data: {
+        beyblade1: ids[0] ?? null,
+        beyblade2: ids[1] ?? null,
+        beyblade3: ids[2] ?? null,
+      },
+    });
+
+    return NextResponse.json(updated);
+  } catch (err) {
+    console.error("[participants PATCH]", err);
+    return NextResponse.json({ error: "Erro no servidor" }, { status: 500 });
+  }
+}
+
 // DELETE — admin removes a player from a tournament (only if no matches played).
 // For guests (shadow users) the user record and their beyblades are cleaned up.
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
