@@ -230,6 +230,12 @@ export default async function TournamentDetailPage({
   // Any ORGANIZER-role user can manage participants (not just the creator)
   const isAdminUser = !!session && session.user.role === "ORGANIZER";
 
+  // In official tournaments, only admins (any ORGANIZER-role user) can act as
+  // judges (score points / declare W.O.) — even if they're also competing,
+  // since judging is account-wide and doesn't depend on which arena a match
+  // is being played in. In BeyEncontros, only the tournament's creator judges.
+  const canJudge = tournament.isOfficial ? isAdminUser : isOrganizerOfThis;
+
   // Collect all beyblade IDs registered by participants
   const allBeybladeIds = tournament.participants.flatMap((p) =>
     [p.beyblade1, p.beyblade2, p.beyblade3].filter(Boolean) as string[]
@@ -499,7 +505,7 @@ export default async function TournamentDetailPage({
                                 <MatchCard
                                   key={match.id}
                                   match={match}
-                                  isOrganizer={isOrganizerOfThis}
+                                  isOrganizer={canJudge}
                                   tournamentId={tournament.id}
                                   participantBeyblades={participantBeyblades}
                                 />
@@ -514,7 +520,7 @@ export default async function TournamentDetailPage({
                           <MatchCard
                             key={match.id}
                             match={match}
-                            isOrganizer={isOrganizerOfThis}
+                            isOrganizer={canJudge}
                             tournamentId={tournament.id}
                             participantBeyblades={participantBeyblades}
                           />
