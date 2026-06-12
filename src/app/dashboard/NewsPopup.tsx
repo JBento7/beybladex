@@ -18,7 +18,8 @@ const STATUS_LABELS: Record<string, string> = {
   IN_PROGRESS: "Em andamento",
 };
 
-const SEEN_KEY = "beybladex_seen_news";
+const SEEN_KEY = "beybladex_seen_items";
+const HIDDEN_KEY = "beybladex_hidden_items";
 
 export default function NewsPopup() {
   const [news, setNews] = useState<NewsItem[]>([]);
@@ -28,6 +29,7 @@ export default function NewsPopup() {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<Record<string, boolean>>({});
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetch("/api/announcements")
@@ -35,22 +37,30 @@ export default function NewsPopup() {
       .then((data) => {
         if (!data) return;
 
+        let hidden: string[] = [];
         let seen: string[] = [];
         try {
+          hidden = JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]");
           seen = JSON.parse(localStorage.getItem(SEEN_KEY) || "[]");
         } catch {
+          hidden = [];
           seen = [];
         }
 
-        const unseenNews: NewsItem[] = (data.news || []).filter((n: NewsItem) => !seen.includes(n.id));
+        const visibleNews: NewsItem[] = (data.news || []).filter(
+          (n: NewsItem) => !hidden.includes(`news:${n.id}`)
+        );
         const allPolls: PollItem[] = data.polls || [];
-        const tournaments: TournamentItem[] = data.tournaments || [];
+        const visibleTournaments: TournamentItem[] = (data.tournaments || []).filter(
+          (t: TournamentItem) => !hidden.includes(`tournament:${t.id}`)
+        );
 
-        setNews(unseenNews);
+        setNews(visibleNews);
         setPolls(allPolls);
-        setTournaments(tournaments);
+        setTournaments(visibleTournaments);
+        setSeenIds(new Set(seen));
 
-        if (unseenNews.length > 0 || allPolls.length > 0 || tournaments.length > 0) {
+        if (visibleNews.length > 0 || allPolls.length > 0 || visibleTournaments.length > 0) {
           setOpen(true);
         }
       })
@@ -62,10 +72,26 @@ export default function NewsPopup() {
       const allSeen = new Set<string>(
         JSON.parse(localStorage.getItem(SEEN_KEY) || "[]")
       );
-      news.forEach((n) => allSeen.add(n.id));
+      news.forEach((n) => allSeen.add(`news:${n.id}`));
+      tournaments.forEach((t) => allSeen.add(`tournament:${t.id}`));
       localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(allSeen)));
     } catch {}
     setOpen(false);
+  }
+
+  function hideForever(key: string) {
+    try {
+      const hidden = new Set<string>(JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]"));
+      hidden.add(key);
+      localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(hidden)));
+    } catch {}
+    if (key.startsWith("news:")) {
+      const id = key.slice("news:".length);
+      setNews((prev) => prev.filter((n) => n.id !== id));
+    } else if (key.startsWith("tournament:")) {
+      const id = key.slice("tournament:".length);
+      setTournaments((prev) => prev.filter((t) => t.id !== id));
+    }
   }
 
   function setTextAnswer(pollId: string, value: string) {
@@ -119,17 +145,26 @@ export default function NewsPopup() {
             <h3 className="text-sm font-bold text-[#f0a500] mb-2">Torneios</h3>
             <div className="flex flex-col gap-2">
               {tournaments.map((t) => (
-                <a
-                  key={t.id}
-                  href={`/tournaments/${t.id}`}
-                  className="block p-3 rounded-xl border border-[#2a2a2a] bg-[#252525] hover:border-[#f0a500] transition-colors"
-                >
-                  <div className="text-sm font-bold text-white">{t.name}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    {STATUS_LABELS[t.status] || t.status}
-                    {t.isOfficial ? " · Oficial" : ""}
-                  </div>
-                </a>
+                <div key={t.id} className="rounded-xl border border-[#2a2a2a] bg-[#252525] overflow-hidden">
+                  <a
+                    href={`/tournaments/${t.id}`}
+                    className="block p-3 hover:border-[#f0a500] transition-colors"
+                  >
+                    <div className="text-sm font-bold text-white">{t.name}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {STATUS_LABELS[t.status] || t.status}
+                      {t.isOfficial ? " · Oficial" : ""}
+                    </div>
+                  </a>
+                  {seenIds.has(`tournament:${t.id}`) && (
+                    <button
+                      onClick={() => hideForever(`tournament:${t.id}`)}
+                      className="w-full text-xs text-gray-500 hover:text-gray-300 border-t border-[#2a2a2a] py-1.5 transition-colors"
+                    >
+                      Não mostrar novamente
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -140,9 +175,19 @@ export default function NewsPopup() {
             <h3 className="text-sm font-bold text-[#f0a500] mb-2">Avisos</h3>
             <div className="flex flex-col gap-2">
               {news.map((n) => (
-                <div key={n.id} className="p-3 rounded-xl border border-[#2a2a2a] bg-[#252525]">
-                  <div className="text-sm font-bold text-white">{n.title}</div>
-                  <div className="text-xs text-gray-400 mt-1 whitespace-pre-wrap">{n.content}</div>
+                <div key={n.id} className="rounded-xl border border-[#2a2a2a] bg-[#252525] overflow-hidden">
+                  <div className="p-3">
+                    <div className="text-sm font-bold text-white">{n.title}</div>
+                    <div className="text-xs text-gray-400 mt-1 whitespace-pre-wrap">{n.content}</div>
+                  </div>
+                  {seenIds.has(`news:${n.id}`) && (
+                    <button
+                      onClick={() => hideForever(`news:${n.id}`)}
+                      className="w-full text-xs text-gray-500 hover:text-gray-300 border-t border-[#2a2a2a] py-1.5 transition-colors"
+                    >
+                      Não mostrar novamente
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
