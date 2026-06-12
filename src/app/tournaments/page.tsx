@@ -131,10 +131,12 @@ export default async function TournamentsPage() {
                       <span>🎯 {t.organizer.name}</span>
                     </div>
 
-                    {t.startDate && (
+                    {t.startDate ? (
                       <div className="text-xs text-gray-500 mb-4">
                         📅 {new Date(t.startDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                       </div>
+                    ) : (t.status === "DRAFT" || t.status === "REGISTRATION") && (
+                      <div className="text-xs text-gray-500 mb-4">📅 Data a definir</div>
                     )}
 
                     <div className="flex items-center gap-3">

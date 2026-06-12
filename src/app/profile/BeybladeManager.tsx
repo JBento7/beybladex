@@ -11,6 +11,7 @@ interface Beyblade {
   wins: number;
   losses: number;
   points: number;
+  hiddenFromCommunity: boolean;
   createdAt: string;
 }
 
@@ -30,6 +31,7 @@ export default function BeybladeManager() {
   const [deleteError, setDeleteError] = useState("");
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [confirmResetId, setConfirmResetId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const [loadError, setLoadError] = useState(false);
 
@@ -146,6 +148,29 @@ export default function BeybladeManager() {
       setDeleteError("Erro ao remover combo. Tente novamente.");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleToggleHidden(b: Beyblade) {
+    setTogglingId(b.id);
+    setError("");
+    try {
+      const res = await fetch(`/api/beyblades/${b.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hiddenFromCommunity: !b.hiddenFromCommunity }),
+      });
+      if (res.ok) {
+        flashSuccess(!b.hiddenFromCommunity ? "Combo trancado!" : "Combo destrancado!");
+        fetchBeyblades();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Erro ao atualizar combo. Tente novamente.");
+      }
+    } catch {
+      setError("Erro de conexão. Tente novamente.");
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -267,7 +292,14 @@ export default function BeybladeManager() {
               <div key={b.id} className="bg-[#252525] border border-[#333] rounded-xl p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="min-w-0">
-                    <div className="font-bold text-white truncate">{b.name}</div>
+                    <div className="font-bold text-white truncate flex items-center gap-1.5">
+                      {b.name}
+                      {b.hiddenFromCommunity && (
+                        <span className="text-[10px] bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">
+                          🔒 Trancado
+                        </span>
+                      )}
+                    </div>
                     {parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{parts}</div>}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-2">
@@ -307,6 +339,17 @@ export default function BeybladeManager() {
                       </div>
                     ) : (
                       <>
+                        <button
+                          onClick={() => handleToggleHidden(b)}
+                          disabled={deletingId === b.id || togglingId === b.id}
+                          aria-label={b.hiddenFromCommunity ? "Destrancar combo" : "Trancar combo"}
+                          className={`disabled:opacity-50 transition-colors text-xs ${
+                            b.hiddenFromCommunity ? "text-[#f0a500] hover:text-[#d4940a]" : "text-gray-600 hover:text-[#f0a500]"
+                          }`}
+                          title={b.hiddenFromCommunity ? "Destrancar (visível na comunidade)" : "Trancar (ocultar da comunidade)"}
+                        >
+                          {b.hiddenFromCommunity ? "🔒" : "🔓"}
+                        </button>
                         <button
                           onClick={() => openEdit(b)}
                           disabled={deletingId === b.id}

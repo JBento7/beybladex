@@ -57,6 +57,7 @@ export default function EditTournamentForm({
     arenas: tournament.arenas ? String(tournament.arenas) : "1",
     eventType: tournament.isOfficial ? "TORNEIO" : "BEYENCONTRO",
   });
+  const [dateTBD, setDateTBD] = useState(!tournament.startDate);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -80,7 +81,7 @@ export default function EditTournamentForm({
         format: form.format,
         deckType: form.deckType,
         maxParticipants: form.maxParticipants ? parseInt(form.maxParticipants) : undefined,
-        startDate: form.startDate || undefined,
+        startDate: dateTBD ? undefined : form.startDate || undefined,
         prize: form.prize || undefined,
         arenas: form.arenas ? parseInt(form.arenas) : 1,
         eventType: form.eventType,
@@ -254,8 +255,21 @@ export default function EditTournamentForm({
                   type="datetime-local"
                   value={form.startDate}
                   onChange={handleChange}
-                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                  disabled={dateTBD}
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors disabled:opacity-50"
                 />
+                <label className="flex items-center gap-2 mt-2 text-sm text-gray-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={dateTBD}
+                    onChange={(e) => {
+                      setDateTBD(e.target.checked);
+                      if (e.target.checked) setForm({ ...form, startDate: "" });
+                    }}
+                    className="accent-[#f0a500]"
+                  />
+                  Data a definir
+                </label>
               </div>
             </div>
           </div>

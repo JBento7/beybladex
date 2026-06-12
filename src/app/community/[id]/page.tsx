@@ -69,6 +69,7 @@ export default async function PlayerProfilePage({
       avatarUrl: true,
       createdAt: true,
       beyblades: {
+        where: { hiddenFromCommunity: false },
         select: {
           id: true,
           name: true,

@@ -267,6 +267,10 @@ export async function GET() {
       name: "TournamentParticipant.beybladeInspected",
       sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "beybladeInspected" BOOLEAN NOT NULL DEFAULT false`,
     },
+    {
+      name: "Beyblade.hiddenFromCommunity",
+      sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "hiddenFromCommunity" BOOLEAN NOT NULL DEFAULT false`,
+    },
   ];
 
   for (const migration of migrations) {

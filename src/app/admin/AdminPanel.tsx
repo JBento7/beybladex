@@ -28,6 +28,7 @@ export default function AdminPanel() {
     arenas: "1",
     eventType: "TORNEIO",
   });
+  const [dateTBD, setDateTBD] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [inviteLink, setInviteLink] = useState("");
@@ -50,7 +51,7 @@ export default function AdminPanel() {
         format: form.format,
         deckType: form.deckType,
         maxParticipants: form.maxParticipants ? parseInt(form.maxParticipants) : undefined,
-        startDate: form.startDate || undefined,
+        startDate: dateTBD ? undefined : form.startDate || undefined,
         prize: form.prize || undefined,
         arenas: form.arenas ? parseInt(form.arenas) : 1,
         eventType: form.eventType,
@@ -68,6 +69,7 @@ export default function AdminPanel() {
     const tournament = await res.json();
     setOpen(false);
     setForm({ name: "", description: "", format: "ROUND_ROBIN", deckType: "SOLO", maxParticipants: "", startDate: "", prize: "", arenas: "1", eventType: "TORNEIO" });
+    setDateTBD(false);
     router.push(`/tournaments/${tournament.id}`);
   }
 
@@ -273,8 +275,21 @@ export default function AdminPanel() {
                 type="datetime-local"
                 value={form.startDate}
                 onChange={handleChange}
-                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                disabled={dateTBD}
+                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors disabled:opacity-50"
               />
+              <label className="flex items-center gap-2 mt-2 text-sm text-gray-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={dateTBD}
+                  onChange={(e) => {
+                    setDateTBD(e.target.checked);
+                    if (e.target.checked) setForm({ ...form, startDate: "" });
+                  }}
+                  className="accent-[#f0a500]"
+                />
+                Data a definir
+              </label>
             </div>
           </div>
 

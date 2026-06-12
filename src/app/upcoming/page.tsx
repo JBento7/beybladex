@@ -91,7 +91,7 @@ export default async function UpcomingPage() {
                       <span>🎯 {t.organizer.name}</span>
                     </div>
 
-                    {t.startDate && (
+                    {t.startDate ? (
                       <div className="text-xs text-gray-400 mb-4 bg-[#252525] rounded-lg px-3 py-2">
                         📅 {new Date(t.startDate).toLocaleDateString("pt-BR", {
                           day: "2-digit",
@@ -101,6 +101,8 @@ export default async function UpcomingPage() {
                           minute: "2-digit",
                         })}
                       </div>
+                    ) : (t.status === "DRAFT" || t.status === "REGISTRATION") && (
+                      <div className="text-xs text-gray-400 mb-4 bg-[#252525] rounded-lg px-3 py-2">📅 Data a definir</div>
                     )}
 
                     <div className="flex items-center gap-3">

@@ -232,6 +232,7 @@ model Beyblade {
   model       String?
   wins        Int      @default(0)
   losses      Int      @default(0)
+  hiddenFromCommunity Boolean @default(false)
   createdAt   DateTime @default(now())
 
   user        User         @relation(fields: [userId], references: [id])

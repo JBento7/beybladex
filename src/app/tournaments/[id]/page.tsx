@@ -416,10 +416,12 @@ export default async function TournamentDetailPage({
                     : ""}{" "}
                   participantes
                 </span>
-                {tournament.startDate && (
+                {tournament.startDate ? (
                   <span>
                     📅 {new Date(tournament.startDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                   </span>
+                ) : (tournament.status === "DRAFT" || tournament.status === "REGISTRATION") && (
+                  <span>📅 Data a definir</span>
                 )}
               </div>
             </div>

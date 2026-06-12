@@ -38,6 +38,7 @@ export default async function CommunityPage() {
       role: true,
       avatarUrl: true,
       beyblades: {
+        where: { hiddenFromCommunity: false },
         select: { id: true, name: true, wins: true, losses: true },
       },
       participations: {
