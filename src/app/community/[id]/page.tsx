@@ -43,8 +43,18 @@ export default async function PlayerProfilePage({
   // redirect to own profile page
   if (params.id === session.user.id) redirect("/profile");
 
+  // Beyblades are hidden once an official tournament is in progress, or
+  // once registration is open and the tournament starts within 7 days.
+  // They become visible again once the tournament finishes.
+  const sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   const activeOfficialTournament = await prisma.tournament.findFirst({
-    where: { isOfficial: true, status: { in: ["REGISTRATION", "IN_PROGRESS"] } },
+    where: {
+      isOfficial: true,
+      OR: [
+        { status: "IN_PROGRESS" },
+        { status: "REGISTRATION", startDate: { lte: sevenDaysFromNow } },
+      ],
+    },
     select: { id: true },
   });
   const beybladesHidden = !!activeOfficialTournament;
