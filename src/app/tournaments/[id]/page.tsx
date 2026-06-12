@@ -236,6 +236,14 @@ export default async function TournamentDetailPage({
   // is being played in. In BeyEncontros, only the tournament's creator judges.
   const canJudge = tournament.isOfficial ? isAdminUser : isOrganizerOfThis;
 
+  // Editing (name, format, deck type, arenas, etc.) is only allowed before
+  // the event starts. Official tournaments: admins only. BeyEncontros: the
+  // creator or any admin.
+  const canEditTournament =
+    (tournament.status === "DRAFT" || tournament.status === "REGISTRATION") &&
+    (tournament.isOfficial ? isAdminUser : isAdminUser || isOrganizerOfThis);
+
+
   // Collect all beyblade IDs registered by participants
   const allBeybladeIds = tournament.participants.flatMap((p) =>
     [p.beyblade1, p.beyblade2, p.beyblade3].filter(Boolean) as string[]
@@ -438,6 +446,14 @@ export default async function TournamentDetailPage({
                 tournament.participants.length >= 2 && (
                   <StartTournamentButton tournamentId={tournament.id} defaultArenas={tournament.arenas ?? 1} />
                 )}
+              {canEditTournament && (
+                <Link
+                  href={`/tournaments/${tournament.id}/edit`}
+                  className="text-sm bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold px-4 py-2 rounded-lg transition-colors text-center"
+                >
+                  ✏️ Editar
+                </Link>
+              )}
               {isOrganizerOfThis && (
                 <Link
                   href="/dashboard"
