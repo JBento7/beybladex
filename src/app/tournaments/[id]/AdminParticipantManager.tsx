@@ -468,28 +468,30 @@ export default function AdminParticipantManager({
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 mt-2 pl-8">
-                <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={p.hasPaid}
-                    disabled={togglingFlag === `${p.userId}:hasPaid`}
-                    onChange={(e) => toggleFlag(p, "hasPaid", e.target.checked)}
-                    className="accent-[#f0a500]"
-                  />
-                  Pagamento confirmado
-                </label>
-                <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={p.beybladeInspected}
-                    disabled={togglingFlag === `${p.userId}:beybladeInspected`}
-                    onChange={(e) => toggleFlag(p, "beybladeInspected", e.target.checked)}
-                    className="accent-[#f0a500]"
-                  />
-                  Beyblade inspecionada
-                </label>
-              </div>
+              {isOfficial && (
+                <div className="flex items-center gap-4 mt-2 pl-8">
+                  <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={p.hasPaid}
+                      disabled={togglingFlag === `${p.userId}:hasPaid`}
+                      onChange={(e) => toggleFlag(p, "hasPaid", e.target.checked)}
+                      className="accent-[#f0a500]"
+                    />
+                    Pagamento confirmado
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={p.beybladeInspected}
+                      disabled={togglingFlag === `${p.userId}:beybladeInspected`}
+                      onChange={(e) => toggleFlag(p, "beybladeInspected", e.target.checked)}
+                      className="accent-[#f0a500]"
+                    />
+                    Beyblade inspecionada
+                  </label>
+                </div>
+              )}
 
               {isEditing && (
                 <div className="mt-3 pt-3 border-t border-[#333] space-y-3">
