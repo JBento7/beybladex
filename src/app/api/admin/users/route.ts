@@ -24,6 +24,7 @@ export async function GET() {
       name: true,
       email: true,
       role: true,
+      canJudge: true,
       deleted: true,
       createdAt: true,
       _count: { select: { participations: true, beyblades: true } },

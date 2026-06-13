@@ -26,7 +26,11 @@ export async function POST(
     });
 
     if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
-    if (match.tournament.organizerId !== session.user.id && session.user.role !== "ORGANIZER") {
+    if (
+      match.tournament.organizerId !== session.user.id &&
+      session.user.role !== "ORGANIZER" &&
+      !session.user.canJudge
+    ) {
       return NextResponse.json({ error: "Apenas organizadores podem registrar W.O." }, { status: 403 });
     }
     if (match.status === "FINISHED") {

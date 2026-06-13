@@ -17,15 +17,25 @@ export const authOptions: NextAuthOptions = {
         }
 
         // Use raw query to avoid issues if schema columns don't exist yet in DB
-        const users = await prisma.$queryRaw<
-          { id: string; name: string; email: string; password: string; role: string }[]
-        >`
-          SELECT id, name, email, password, role
-          FROM "User"
-          WHERE email = ${credentials.email}
-            AND (deleted IS NULL OR deleted = false)
-          LIMIT 1
-        `;
+        type AuthUser = { id: string; name: string; email: string; password: string; role: string; canJudge: boolean | null };
+        let users: AuthUser[];
+        try {
+          users = await prisma.$queryRaw<AuthUser[]>`
+            SELECT id, name, email, password, role, "canJudge"
+            FROM "User"
+            WHERE email = ${credentials.email}
+              AND (deleted IS NULL OR deleted = false)
+            LIMIT 1
+          `;
+        } catch {
+          users = await prisma.$queryRaw<AuthUser[]>`
+            SELECT id, name, email, password, role, false AS "canJudge"
+            FROM "User"
+            WHERE email = ${credentials.email}
+              AND (deleted IS NULL OR deleted = false)
+            LIMIT 1
+          `;
+        }
 
         const user = users[0];
         if (!user) return null;
@@ -42,6 +52,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
+          canJudge: !!user.canJudge,
         };
       },
     }),
@@ -51,6 +62,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = (user as { id: string; role: string }).role;
+        token.canJudge = (user as { canJudge?: boolean }).canJudge ?? false;
       }
       return token;
     },
@@ -58,6 +70,7 @@ export const authOptions: NextAuthOptions = {
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
+        session.user.canJudge = (token.canJudge as boolean) ?? false;
       }
       return session;
     },

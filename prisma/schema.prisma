@@ -70,6 +70,7 @@ model User {
   deleted       Boolean  @default(false)
   isGuest       Boolean  @default(false)
   bladerName    String?
+  canJudge      Boolean  @default(false)
   createdAt     DateTime @default(now())
 
   organizedTournaments Tournament[]           @relation("OrganizerTournaments")

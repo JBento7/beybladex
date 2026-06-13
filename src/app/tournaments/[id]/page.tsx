@@ -229,12 +229,18 @@ export default async function TournamentDetailPage({
   const isOrganizerOfThis = !!session && session.user.id === tournament.organizerId;
   // Any ORGANIZER-role user can manage participants (not just the creator)
   const isAdminUser = !!session && session.user.role === "ORGANIZER";
+  // Admins can grant individual users permission to judge matches
+  // (score points / declare W.O.) across tournaments and BeyEncontros.
+  const hasJudgePermission = !!session && session.user.canJudge;
 
-  // In official tournaments, only admins (any ORGANIZER-role user) can act as
-  // judges (score points / declare W.O.) — even if they're also competing,
-  // since judging is account-wide and doesn't depend on which arena a match
-  // is being played in. In BeyEncontros, only the tournament's creator judges.
-  const canJudge = tournament.isOfficial ? isAdminUser : isOrganizerOfThis;
+  // In official tournaments, only admins or users with judge permission can
+  // act as judges — even if they're also competing, since judging is
+  // account-wide and doesn't depend on which arena a match is being played
+  // in. In BeyEncontros, the creator, admins, or users with judge permission
+  // can judge.
+  const canJudge = tournament.isOfficial
+    ? isAdminUser || hasJudgePermission
+    : isOrganizerOfThis || isAdminUser || hasJudgePermission;
 
   // Editing (name, format, deck type, arenas, etc.) is only allowed before
   // the event starts. Official tournaments: admins only. BeyEncontros: the

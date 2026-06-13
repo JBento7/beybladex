@@ -19,7 +19,7 @@ export async function PATCH(
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
 
-  const { name, email, password, role } = await req.json();
+  const { name, email, password, role, canJudge } = await req.json();
 
   const user = await prisma.user.findUnique({ where: { id: params.id } });
   if (!user) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
@@ -35,11 +35,12 @@ export async function PATCH(
   }
   if (password) data.password = await bcrypt.hash(password, 10);
   if (role) data.role = role === "ORGANIZER" ? "ORGANIZER" : "PARTICIPANT";
+  if (typeof canJudge === "boolean") data.canJudge = canJudge;
 
   const updated = await prisma.user.update({
     where: { id: params.id },
     data,
-    select: { id: true, name: true, email: true, role: true },
+    select: { id: true, name: true, email: true, role: true, canJudge: true },
   });
 
   return NextResponse.json(updated);
