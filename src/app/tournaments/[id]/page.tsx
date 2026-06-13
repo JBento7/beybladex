@@ -108,13 +108,13 @@ function MatchCard({
 
   return (
     <div
-      className={`flex items-center gap-4 p-4 rounded-lg border ${
+      className={`flex flex-col gap-3 p-4 rounded-lg border ${
         isFinished
           ? "bg-gray-800 border-gray-700"
           : "bg-gray-800/50 border-gray-700/50"
       }`}
     >
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0">
         <div className="flex items-center justify-between gap-2">
           <span
             className={`text-sm font-semibold truncate ${
@@ -153,7 +153,7 @@ function MatchCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center gap-2 flex-wrap">
         {match.isWalkover && (
           <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-500/20 text-red-400">
             W.O.
