@@ -10,6 +10,39 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+// Generates round-robin rounds using the "circle method": one player stays
+// fixed while the rest rotate around it, producing N-1 (or N, if there's a
+// bye) rounds where every player appears at most once per round. Flattening
+// the rounds in order keeps players diversified across consecutive matches,
+// instead of pitting the same few players against everyone in sequence.
+function circleMethodRounds(players: string[]): Array<{ player1Id: string; player2Id: string }[]> {
+  const arr = [...players];
+  if (arr.length % 2 !== 0) arr.push("BYE");
+
+  const numRounds = arr.length - 1;
+  const half = arr.length / 2;
+  const rounds: Array<{ player1Id: string; player2Id: string }[]> = [];
+
+  let list = [...arr];
+  for (let r = 0; r < numRounds; r++) {
+    const roundPairs: { player1Id: string; player2Id: string }[] = [];
+    for (let i = 0; i < half; i++) {
+      const a = list[i];
+      const b = list[arr.length - 1 - i];
+      if (a !== "BYE" && b !== "BYE") roundPairs.push({ player1Id: a, player2Id: b });
+    }
+    rounds.push(roundPairs);
+
+    // Rotate everyone except the first player.
+    const fixed = list[0];
+    const rest = list.slice(1);
+    rest.unshift(rest.pop()!);
+    list = [fixed, ...rest];
+  }
+
+  return rounds;
+}
+
 export async function generateRoundRobin(tournamentId: string) {
   const [participants, tournament] = await Promise.all([
     prisma.tournamentParticipant.findMany({ where: { tournamentId } }),
@@ -17,12 +50,8 @@ export async function generateRoundRobin(tournamentId: string) {
   ]);
   const arenaCount = tournament?.arenas ?? 1;
 
-  const matchData: { player1Id: string; player2Id: string }[] = [];
-  for (let i = 0; i < participants.length; i++) {
-    for (let j = i + 1; j < participants.length; j++) {
-      matchData.push({ player1Id: participants[i].userId!, player2Id: participants[j].userId! });
-    }
-  }
+  const rounds = circleMethodRounds(shuffle(participants).map((p) => p.userId!));
+  const matchData: { player1Id: string; player2Id: string }[] = rounds.flat();
 
   const scheduled = scheduleByArena(matchData, arenaCount, (m) => m.player1Id, (m) => m.player2Id);
 

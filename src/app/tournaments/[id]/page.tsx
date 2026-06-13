@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import StartTournamentButton from "./StartTournamentButton";
+import FinishTournamentButton from "./FinishTournamentButton";
 import ScoreModal from "./ScoreModal";
 import ClientJoinButton from "./ClientJoinButton";
 import EditBeybladesButton from "./EditBeybladesButton";
@@ -454,6 +455,9 @@ export default async function TournamentDetailPage({
                 tournament.participants.length >= 2 && (
                   <StartTournamentButton tournamentId={tournament.id} defaultArenas={tournament.arenas ?? 1} />
                 )}
+              {canJudge && tournament.status === "IN_PROGRESS" && (
+                <FinishTournamentButton tournamentId={tournament.id} isOfficial={tournament.isOfficial} />
+              )}
               {canEditTournament && (
                 <Link
                   href={`/tournaments/${tournament.id}/edit`}
