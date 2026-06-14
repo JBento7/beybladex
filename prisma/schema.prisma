@@ -196,6 +196,7 @@ model Match {
   slot         Int?
   status       MatchStatus @default(PENDING)
   isWalkover   Boolean     @default(false)
+  isThirdPlace Boolean     @default(false)
   createdAt    DateTime    @default(now())
 
   tournament Tournament  @relation(fields: [tournamentId], references: [id])

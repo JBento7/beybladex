@@ -88,6 +88,7 @@ export async function finalizeTournamentRanking(tournamentId: string) {
         winnerId: true,
         player1Id: true,
         player2Id: true,
+        isThirdPlace: true,
         points: { select: { userId: true, points: true } },
       },
     }),
@@ -109,14 +110,20 @@ export async function finalizeTournamentRanking(tournamentId: string) {
     // A later elimination round means a better placement.
     const elimRound = new Map<string, number>();
     for (const m of matches) {
-      if (m.player1Id === m.player2Id || !m.winnerId) continue;
+      if (m.player1Id === m.player2Id || !m.winnerId || m.isThirdPlace) continue;
       const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
       elimRound.set(loserId, m.round);
     }
+    // The third-place match settles the tie between the two semifinal losers.
+    const thirdPlaceMatch = matches.find((m) => m.isThirdPlace && m.winnerId);
     ranked = [...participants].sort((a, b) => {
       const aE = elimRound.get(a.userId!) ?? Infinity;
       const bE = elimRound.get(b.userId!) ?? Infinity;
       if (bE !== aE) return bE - aE;
+      if (thirdPlaceMatch) {
+        if (thirdPlaceMatch.winnerId === a.userId && thirdPlaceMatch.winnerId !== b.userId) return -1;
+        if (thirdPlaceMatch.winnerId === b.userId && thirdPlaceMatch.winnerId !== a.userId) return 1;
+      }
       if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
       return (diff.get(b.userId!) ?? 0) - (diff.get(a.userId!) ?? 0);
     });
@@ -374,10 +381,14 @@ export async function advanceSingleElimination(
     where: { tournamentId, round: completedRound },
   });
 
+  // The third-place match shares its round number with the final, but isn't
+  // part of the winners' bracket — it doesn't feed into a next round.
+  const bracketMatches = roundMatches.filter((m) => !m.isThirdPlace);
+
   const allFinished = roundMatches.every((m) => m.status === "FINISHED");
   if (!allFinished) return;
 
-  const winners = roundMatches
+  const winners = bracketMatches
     .filter((m) => m.winnerId)
     .map((m) => m.winnerId!);
 
@@ -394,9 +405,21 @@ export async function advanceSingleElimination(
   });
   const arenaCount = tournament?.arenas ?? 1;
 
-  const pairs: { player1Id: string; player2Id: string }[] = [];
+  const pairs: { player1Id: string; player2Id: string; isThirdPlace?: boolean }[] = [];
   for (let i = 0; i < Math.floor(winners.length / 2); i++) {
     pairs.push({ player1Id: winners[i * 2], player2Id: winners[i * 2 + 1] });
+  }
+
+  // This round is the semifinal (it produces exactly one final match) — also
+  // schedule a third-place match between this round's two losers, if both
+  // come from real (non-bye) matches.
+  if (winners.length === 2) {
+    const losers = bracketMatches
+      .filter((m) => m.player1Id !== m.player2Id && m.winnerId)
+      .map((m) => (m.winnerId === m.player1Id ? m.player2Id : m.player1Id));
+    if (losers.length === 2) {
+      pairs.push({ player1Id: losers[0], player2Id: losers[1], isThirdPlace: true });
+    }
   }
 
   const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id);
@@ -406,6 +429,7 @@ export async function advanceSingleElimination(
     player2Id: match.player2Id,
     round: nextRound,
     bracketPos: i + 1,
+    isThirdPlace: !!match.isThirdPlace,
     arena,
     slot,
   }));

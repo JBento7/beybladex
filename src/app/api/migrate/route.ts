@@ -302,6 +302,10 @@ export async function GET() {
       name: "Tournament.isTest",
       sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "isTest" BOOLEAN NOT NULL DEFAULT false`,
     },
+    {
+      name: "Match.isThirdPlace",
+      sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "isThirdPlace" BOOLEAN NOT NULL DEFAULT false`,
+    },
   ];
 
   for (const migration of migrations) {

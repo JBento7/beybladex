@@ -51,6 +51,7 @@ type MatchWithRelations = {
   slot: number | null;
   status: MatchStatus;
   isWalkover: boolean;
+  isThirdPlace: boolean;
   player1: { id: string; name: string; bladerName: string | null };
   player2: { id: string; name: string; bladerName: string | null };
   winner: { id: string; name: string; bladerName: string | null } | null;
@@ -414,9 +415,14 @@ export default async function TournamentDetailPage({
     (!tournament.maxParticipants ||
       tournament.participants.length < tournament.maxParticipants);
 
+  // The third-place match shares its round with the final but sits outside
+  // the winners' bracket — render it separately from the bracket tree.
+  const thirdPlaceMatch = tournament.matches.find((m) => m.isThirdPlace) ?? null;
+
   // Group matches by round
   const rounds = new Map<number, typeof tournament.matches>();
   for (const match of tournament.matches) {
+    if (match.isThirdPlace) continue;
     if (!rounds.has(match.round)) rounds.set(match.round, []);
     rounds.get(match.round)!.push(match);
   }
@@ -556,15 +562,30 @@ export default async function TournamentDetailPage({
           {/* Main content */}
           <div className="lg:col-span-2 space-y-6">
             {tournament.format === "SINGLE_ELIMINATION" && sortedRounds.length > 0 ? (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                <BracketView
-                  rounds={sortedRounds}
-                  totalRounds={totalBracketRounds}
-                  isOrganizer={canJudge}
-                  tournamentId={tournament.id}
-                  participantBeyblades={participantBeyblades}
-                />
-              </div>
+              <>
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                  <BracketView
+                    rounds={sortedRounds}
+                    totalRounds={totalBracketRounds}
+                    isOrganizer={canJudge}
+                    tournamentId={tournament.id}
+                    participantBeyblades={participantBeyblades}
+                  />
+                </div>
+                {thirdPlaceMatch && (
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                    <h2 className="text-lg font-bold text-white mb-4">Disputa de 3º Lugar</h2>
+                    <div className="max-w-sm">
+                      <MatchCard
+                        match={thirdPlaceMatch}
+                        isOrganizer={canJudge}
+                        tournamentId={tournament.id}
+                        participantBeyblades={participantBeyblades}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
             ) : sortedRounds.length > 0 ? (
               sortedRounds.map(([round, roundMatches]: [number, typeof tournament.matches]) => {
                 const arenaCount = tournament.arenas ?? 1;
