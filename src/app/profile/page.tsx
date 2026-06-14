@@ -48,12 +48,12 @@ export default async function ProfilePage() {
 
   const [participations, allPoints, comboStats] = await Promise.all([
     prisma.tournamentParticipant.findMany({
-      where: { userId },
+      where: { userId, tournament: { isTest: false } },
       include: { tournament: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.matchPoint.findMany({
-      where: { userId },
+      where: { userId, match: { tournament: { isTest: false } } },
       select: { finishType: true, points: true, beybladeId: true },
     }),
     getComboStats(userId),

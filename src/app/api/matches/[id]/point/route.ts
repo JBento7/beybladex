@@ -132,9 +132,11 @@ export async function POST(
           recalculateStandings(match.tournamentId, match.player2Id),
         ]);
 
-        // Update beyblade win/loss stats
-        const matchLoserId = matchWinnerId === match.player1Id ? match.player2Id : match.player1Id;
-        await updateBeybladeStats(params.id, matchWinnerId, matchLoserId);
+        // Update beyblade win/loss stats (skip for test tournaments — those shouldn't affect global combo stats)
+        if (!match.tournament.isTest) {
+          const matchLoserId = matchWinnerId === match.player1Id ? match.player2Id : match.player1Id;
+          await updateBeybladeStats(params.id, matchWinnerId, matchLoserId);
+        }
 
         // Format-specific post-match
         if (match.tournament.format === "ROUND_ROBIN") {

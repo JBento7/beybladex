@@ -80,7 +80,7 @@ export default async function DashboardPage() {
       }),
       prisma.tournamentParticipant.groupBy({
         by: ["userId"],
-        where: { tournament: { isOfficial: true }, user: { isGuest: false, deleted: false } },
+        where: { tournament: { isOfficial: true, isTest: false }, user: { isGuest: false, deleted: false } },
         _sum: { rankingPoints: true, wins: true, losses: true },
         orderBy: { _sum: { rankingPoints: "desc" } },
         take: 10,

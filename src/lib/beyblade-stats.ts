@@ -43,7 +43,10 @@ export async function getComboStats(userId: string): Promise<ComboStat[]> {
       bit: true,
       wins: true,
       losses: true,
-      matchPoints: { select: { points: true, finishType: true, matchId: true, beybladeId: true } },
+      matchPoints: {
+        where: { match: { tournament: { isTest: false } } },
+        select: { points: true, finishType: true, matchId: true, beybladeId: true },
+      },
     },
     orderBy: { wins: "desc" },
   });
