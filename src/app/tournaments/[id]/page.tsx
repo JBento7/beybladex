@@ -218,7 +218,7 @@ function BracketView({
 }) {
   const CARD_WIDTH = 240;
   const GAP = 32;
-  const BASE_SLOT = 132;
+  const BASE_SLOT = 176;
 
   return (
     <div className="overflow-x-auto pb-2">
