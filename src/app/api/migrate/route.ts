@@ -306,6 +306,26 @@ export async function GET() {
       name: "Match.isThirdPlace",
       sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "isThirdPlace" BOOLEAN NOT NULL DEFAULT false`,
     },
+    {
+      name: "Match.judgeId",
+      sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "judgeId" TEXT`,
+    },
+    {
+      name: "TournamentJudge table",
+      sql: `CREATE TABLE IF NOT EXISTS "TournamentJudge" ("id" TEXT NOT NULL, "tournamentId" TEXT NOT NULL, "userId" TEXT NOT NULL, CONSTRAINT "TournamentJudge_pkey" PRIMARY KEY ("id"))`,
+    },
+    {
+      name: "TournamentJudge unique tournamentId+userId",
+      sql: `DO $$ BEGIN ALTER TABLE "TournamentJudge" ADD CONSTRAINT "TournamentJudge_tournamentId_userId_key" UNIQUE ("tournamentId", "userId"); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "TournamentJudge.tournamentId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "TournamentJudge" ADD CONSTRAINT "TournamentJudge_tournamentId_fkey" FOREIGN KEY ("tournamentId") REFERENCES "Tournament"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "TournamentJudge.userId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "TournamentJudge" ADD CONSTRAINT "TournamentJudge_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
   ];
 
   for (const migration of migrations) {

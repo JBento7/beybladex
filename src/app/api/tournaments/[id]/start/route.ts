@@ -20,12 +20,15 @@ export async function POST(
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    let body: { arenas?: number } = {};
+    let body: { arenas?: number; judgeIds?: string[] } = {};
     try { body = await req.json(); } catch { /* empty body */ }
 
     const tournament = await prisma.tournament.findUnique({
       where: { id: params.id },
-      include: { _count: { select: { participants: true } } },
+      include: {
+        _count: { select: { participants: true } },
+        participants: { select: { userId: true } },
+      },
     });
 
     if (!tournament) {
@@ -63,6 +66,20 @@ export async function POST(
       data.arenas = arenas;
     }
 
+    // Validate the selected judges, if provided. Judges may be admins or
+    // participants; we only require they're real, non-deleted users.
+    let judgeIds: string[] = [];
+    if (Array.isArray(body.judgeIds) && body.judgeIds.length > 0) {
+      judgeIds = [...new Set(body.judgeIds.filter((id): id is string => typeof id === "string"))];
+      const validJudges = await prisma.user.findMany({
+        where: { id: { in: judgeIds }, deleted: false },
+        select: { id: true },
+      });
+      if (validJudges.length !== judgeIds.length) {
+        return NextResponse.json({ error: "Lista de juízes inválida" }, { status: 400 });
+      }
+    }
+
     // Atomically claim the tournament so two concurrent "start" requests can't
     // both generate a bracket. Only the request that flips the status wins.
     const claim = await prisma.tournament.updateMany({
@@ -75,6 +92,16 @@ export async function POST(
         { error: "O torneio já foi iniciado" },
         { status: 400 }
       );
+    }
+
+    // Register the selected judges before generating matches — the schedulers
+    // read TournamentJudge to assign a judge per match and keep judges from
+    // having a parallel match while arbitrating.
+    if (judgeIds.length > 0) {
+      await prisma.tournamentJudge.createMany({
+        data: judgeIds.map((userId) => ({ tournamentId: params.id, userId })),
+        skipDuplicates: true,
+      });
     }
 
     // Generate matches based on format. If generation fails, release the claim

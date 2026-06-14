@@ -93,6 +93,8 @@ model User {
   matchesAsPlayer1     Match[]                @relation("Player1Matches")
   matchesAsPlayer2     Match[]                @relation("Player2Matches")
   wonMatches           Match[]                @relation("WinnerMatches")
+  judgedMatches        Match[]                @relation("JudgeMatches")
+  judgingTournaments   TournamentJudge[]
   matchPoints          MatchPoint[]
   createdInvites       OrganizerInvite[]      @relation("InviteCreator")
   beyblades            Beyblade[]
@@ -147,6 +149,18 @@ model Tournament {
   participants TournamentParticipant[]
   groups       Group[]
   matches      Match[]
+  judges       TournamentJudge[]
+}
+
+model TournamentJudge {
+  id           String @id @default(cuid())
+  tournamentId String
+  userId       String
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@unique([tournamentId, userId])
 }
 
 model TournamentParticipant {
@@ -190,6 +204,7 @@ model Match {
   player2Id    String
   winnerId     String?
   groupId      String?
+  judgeId      String?
   round        Int
   bracketPos   Int?
   arena        Int?
@@ -203,6 +218,7 @@ model Match {
   player1    User        @relation("Player1Matches", fields: [player1Id], references: [id])
   player2    User        @relation("Player2Matches", fields: [player2Id], references: [id])
   winner     User?       @relation("WinnerMatches", fields: [winnerId], references: [id])
+  judge      User?       @relation("JudgeMatches", fields: [judgeId], references: [id])
   group      Group?      @relation(fields: [groupId], references: [id])
   points     MatchPoint[]
   sets       MatchSet[]

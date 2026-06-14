@@ -56,6 +56,7 @@ type MatchWithRelations = {
   player1: { id: string; name: string; bladerName: string | null };
   player2: { id: string; name: string; bladerName: string | null };
   winner: { id: string; name: string; bladerName: string | null } | null;
+  judge: { id: string; name: string; bladerName: string | null } | null;
   group: { id: string; name: string } | null;
   points: { userId: string; points: number }[];
 };
@@ -80,13 +81,18 @@ function MatchCard({
   tournamentId,
   participantBeyblades,
   arenaCount = 1,
+  currentUserId,
 }: {
   match: MatchWithRelations;
   isOrganizer: boolean;
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
   arenaCount?: number;
+  currentUserId?: string;
 }) {
+  // The match's assigned judge can score / declare W.O. for their own match,
+  // even if they aren't an admin or global judge.
+  const canScore = isOrganizer || (!!currentUserId && match.judge?.id === currentUserId);
   const isFinished = match.status === "FINISHED";
   const p1Points = match.points
     .filter((p) => p.userId === match.player1.id)
@@ -163,6 +169,11 @@ function MatchCard({
             Arena {match.arena}
           </span>
         )}
+        {match.judge && (
+          <span className="text-xs px-2 py-1 rounded-full font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20">
+            ⚖️ {match.judge.bladerName || match.judge.name}
+          </span>
+        )}
         {match.isWalkover && (
           <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-500/20 text-red-400">
             W.O.
@@ -183,7 +194,7 @@ function MatchCard({
             ? "Ao Vivo"
             : "Pendente"}
         </span>
-        {isOrganizer && !isFinished && (
+        {canScore && !isFinished && (
           <>
             <ScoreModal
               matchId={match.id}
@@ -208,6 +219,7 @@ function BracketView({
   tournamentId,
   participantBeyblades,
   arenaCount,
+  currentUserId,
 }: {
   rounds: [number, MatchWithRelations[]][];
   totalRounds: number;
@@ -215,6 +227,7 @@ function BracketView({
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
   arenaCount: number;
+  currentUserId?: string;
 }) {
   const CARD_WIDTH = 240;
   const GAP = 32;
@@ -239,6 +252,7 @@ function BracketView({
                       tournamentId={tournamentId}
                       participantBeyblades={participantBeyblades}
                       arenaCount={arenaCount}
+                      currentUserId={currentUserId}
                     />
                   </div>
                   {r < rounds.length - 1 && (
@@ -285,11 +299,15 @@ export default async function TournamentDetailPage({
         orderBy: { totalPoints: "desc" },
       },
       groups: true,
+      judges: {
+        include: { user: { select: { id: true, name: true, bladerName: true } } },
+      },
       matches: {
         include: {
           player1: { select: { id: true, name: true, bladerName: true } },
           player2: { select: { id: true, name: true, bladerName: true } },
           winner: { select: { id: true, name: true, bladerName: true } },
+          judge: { select: { id: true, name: true, bladerName: true } },
           points: { select: { userId: true, points: true } },
           group: true,
         },
@@ -376,6 +394,40 @@ export default async function TournamentDetailPage({
           .map((id) => beybladeMap.get(id!))
           .filter(Boolean) as BeybladeInfo[],
   }));
+
+  // Judge candidates for official tournaments: the registered participants plus
+  // every admin (an admin can judge even without competing). Only fetched/built
+  // when the admin is about to start the tournament.
+  const showStartButton =
+    isAdminUser &&
+    tournament.status === "REGISTRATION" &&
+    tournament.participants.length >= 2;
+
+  type JudgeCandidate = { id: string; name: string; isAdmin: boolean; isParticipant: boolean };
+  let judgeCandidates: JudgeCandidate[] = [];
+  if (showStartButton && tournament.isOfficial) {
+    const adminUsers = await prisma.user.findMany({
+      where: { role: "ORGANIZER", deleted: false, isGuest: false },
+      select: { id: true, name: true, bladerName: true },
+      orderBy: { name: "asc" },
+    });
+    const candidateMap = new Map<string, JudgeCandidate>();
+    for (const p of tournament.participants) {
+      if (p.user.isGuest) continue;
+      candidateMap.set(p.userId, {
+        id: p.userId,
+        name: p.user.bladerName || p.user.name,
+        isAdmin: false,
+        isParticipant: true,
+      });
+    }
+    for (const a of adminUsers) {
+      const existing = candidateMap.get(a.id);
+      if (existing) existing.isAdmin = true;
+      else candidateMap.set(a.id, { id: a.id, name: a.bladerName || a.name, isAdmin: true, isParticipant: false });
+    }
+    judgeCandidates = [...candidateMap.values()];
+  }
 
   // Always the participant's currently selected combo (used by the admin
   // edit-beyblades form, regardless of tournament.isOfficial).
@@ -571,11 +623,14 @@ export default async function TournamentDetailPage({
                   />
                 </>
               )}
-              {isAdminUser &&
-                tournament.status === "REGISTRATION" &&
-                tournament.participants.length >= 2 && (
-                  <StartTournamentButton tournamentId={tournament.id} defaultArenas={tournament.arenas ?? 1} />
-                )}
+              {showStartButton && (
+                <StartTournamentButton
+                  tournamentId={tournament.id}
+                  defaultArenas={tournament.arenas ?? 1}
+                  candidates={judgeCandidates}
+                  allowJudges={tournament.isOfficial}
+                />
+              )}
               {canJudge && tournament.status === "IN_PROGRESS" && (
                 <FinishTournamentButton tournamentId={tournament.id} isOfficial={tournament.isOfficial} />
               )}
@@ -615,6 +670,7 @@ export default async function TournamentDetailPage({
                     tournamentId={tournament.id}
                     participantBeyblades={participantBeyblades}
                     arenaCount={tournament.arenas ?? 1}
+                    currentUserId={session?.user.id}
                   />
                 </div>
                 {thirdPlaceMatch && (
@@ -627,6 +683,7 @@ export default async function TournamentDetailPage({
                         arenaCount={tournament.arenas ?? 1}
                         tournamentId={tournament.id}
                         participantBeyblades={participantBeyblades}
+                        currentUserId={session?.user.id}
                       />
                     </div>
                   </div>
@@ -687,6 +744,7 @@ export default async function TournamentDetailPage({
                                   isOrganizer={canJudge}
                                   tournamentId={tournament.id}
                                   participantBeyblades={participantBeyblades}
+                                  currentUserId={session?.user.id}
                                 />
                               );
                             })}
@@ -702,6 +760,7 @@ export default async function TournamentDetailPage({
                             isOrganizer={canJudge}
                             tournamentId={tournament.id}
                             participantBeyblades={participantBeyblades}
+                            currentUserId={session?.user.id}
                           />
                         ))}
                       </div>

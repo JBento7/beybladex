@@ -34,6 +34,7 @@ export async function POST(
       prisma.matchSet.deleteMany({ where: { matchId: { in: matchIds } } }),
       prisma.match.deleteMany({ where: { tournamentId: params.id } }),
       prisma.group.deleteMany({ where: { tournamentId: params.id } }),
+      prisma.tournamentJudge.deleteMany({ where: { tournamentId: params.id } }),
       prisma.tournamentParticipant.updateMany({
         where: { tournamentId: params.id },
         data: { totalPoints: 0, wins: 0, losses: 0, rankingPoints: 0, placement: null, groupId: null },

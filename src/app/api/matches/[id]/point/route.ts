@@ -35,7 +35,8 @@ export async function POST(
     if (
       match.tournament.organizerId !== session.user.id &&
       session.user.role !== "ORGANIZER" &&
-      !session.user.canJudge
+      !session.user.canJudge &&
+      match.judgeId !== session.user.id
     ) {
       return NextResponse.json({ error: "Apenas organizadores podem registrar pontos" }, { status: 403 });
     }
