@@ -82,7 +82,6 @@ export default async function PlayerProfilePage({
         orderBy: { wins: "desc" },
       },
       participations: {
-        where: { tournament: { isOfficial: true } },
         select: {
           wins: true,
           losses: true,
