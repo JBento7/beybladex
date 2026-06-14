@@ -192,6 +192,67 @@ function MatchCard({
   );
 }
 
+function BracketView({
+  rounds,
+  totalRounds,
+  isOrganizer,
+  tournamentId,
+  participantBeyblades,
+}: {
+  rounds: [number, MatchWithRelations[]][];
+  totalRounds: number;
+  isOrganizer: boolean;
+  tournamentId: string;
+  participantBeyblades: ParticipantBeyblades[];
+}) {
+  const CARD_WIDTH = 240;
+  const GAP = 32;
+  const BASE_SLOT = 132;
+
+  return (
+    <div className="overflow-x-auto pb-2">
+      <div className="flex" style={{ width: rounds.length * (CARD_WIDTH + GAP) }}>
+        {rounds.map(([round, matches], r) => {
+          const slotHeight = BASE_SLOT * Math.pow(2, r);
+          return (
+            <div key={round} className="flex-shrink-0" style={{ width: CARD_WIDTH + GAP }}>
+              <h3 className="text-center text-sm font-bold text-gray-400 mb-3">
+                {getRoundName(round, totalRounds, "SINGLE_ELIMINATION")}
+              </h3>
+              {matches.map((match, i) => (
+                <div key={match.id} className="relative flex items-center" style={{ height: slotHeight }}>
+                  <div style={{ width: CARD_WIDTH }}>
+                    <MatchCard
+                      match={match}
+                      isOrganizer={isOrganizer}
+                      tournamentId={tournamentId}
+                      participantBeyblades={participantBeyblades}
+                    />
+                  </div>
+                  {r < rounds.length - 1 && (
+                    <div
+                      className="absolute border-gray-700"
+                      style={{
+                        left: CARD_WIDTH,
+                        width: GAP,
+                        height: slotHeight / 2,
+                        top: i % 2 === 0 ? "50%" : 0,
+                        borderRightWidth: 2,
+                        borderTopWidth: i % 2 === 1 ? 2 : 0,
+                        borderBottomWidth: i % 2 === 0 ? 2 : 0,
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default async function TournamentDetailPage({
   params,
 }: {
@@ -359,7 +420,20 @@ export default async function TournamentDetailPage({
     if (!rounds.has(match.round)) rounds.set(match.round, []);
     rounds.get(match.round)!.push(match);
   }
-  const sortedRounds = Array.from(rounds.entries()).sort((a, b) => a[0] - b[0]);
+  const sortedRounds = Array.from(rounds.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([round, roundMatches]) => [
+      round,
+      [...roundMatches].sort((a, b) => (a.bracketPos ?? 0) - (b.bracketPos ?? 0)),
+    ] as [number, typeof tournament.matches]);
+
+  // Total rounds in a single-elimination bracket, based on the participant
+  // count (next power of two) rather than how many rounds exist in the DB so
+  // far — keeps round names ("Final", "Semifinal"...) stable as the bracket
+  // advances.
+  let bracketSize = 1;
+  while (bracketSize < tournament.participants.length) bracketSize *= 2;
+  const totalBracketRounds = Math.max(1, Math.log2(bracketSize));
 
   // Group participants by group (for GROUPS format)
   const groupMap = new Map<
@@ -481,7 +555,17 @@ export default async function TournamentDetailPage({
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Main content */}
           <div className="lg:col-span-2 space-y-6">
-            {sortedRounds.length > 0 ? (
+            {tournament.format === "SINGLE_ELIMINATION" && sortedRounds.length > 0 ? (
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                <BracketView
+                  rounds={sortedRounds}
+                  totalRounds={totalBracketRounds}
+                  isOrganizer={canJudge}
+                  tournamentId={tournament.id}
+                  participantBeyblades={participantBeyblades}
+                />
+              </div>
+            ) : sortedRounds.length > 0 ? (
               sortedRounds.map(([round, roundMatches]: [number, typeof tournament.matches]) => {
                 const arenaCount = tournament.arenas ?? 1;
                 // Use stored arena/slot from DB — these are fixed at match creation time
