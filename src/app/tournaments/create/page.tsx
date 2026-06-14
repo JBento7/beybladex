@@ -41,6 +41,7 @@ export default function CreateTournamentPage() {
     arenas: "1",
     eventType: "TORNEIO",
   });
+  const [isTest, setIsTest] = useState(false);
   const [dateTBD, setDateTBD] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -71,6 +72,7 @@ export default function CreateTournamentPage() {
         prize: form.prize || undefined,
         arenas: form.arenas ? parseInt(form.arenas) : 1,
         eventType: isAdmin ? form.eventType : "BEYENCONTRO",
+        isTest: isAdmin ? isTest : false,
       }),
     });
 
@@ -156,6 +158,24 @@ export default function CreateTournamentPage() {
                   <p className="text-xs text-gray-400 mt-0.5">Seus eventos são criados como BeyEncontro — estatísticas de beyblade são registradas, mas pontos não contam no ranking da comunidade.</p>
                 </div>
               </div>
+            )}
+
+            {isAdmin && (
+              <label className="flex items-start gap-3 mt-4 bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isTest}
+                  onChange={(e) => setIsTest(e.target.checked)}
+                  className="accent-purple-500 mt-0.5"
+                />
+                <div>
+                  <p className="font-bold text-purple-400 text-sm">🧪 Torneio de Teste</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Não aparece na lista pública de torneios — fica disponível apenas em
+                    &quot;Teste Torneios&quot;, visível só para admins.
+                  </p>
+                </div>
+              </label>
             )}
           </div>
 

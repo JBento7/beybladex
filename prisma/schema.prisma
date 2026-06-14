@@ -140,6 +140,7 @@ model Tournament {
   prize           String?
   arenas          Int?    @default(1)
   isOfficial      Boolean @default(true)
+  isTest          Boolean @default(false)
   createdAt       DateTime         @default(now())
 
   organizer    User                   @relation("OrganizerTournaments", fields: [organizerId], references: [id])

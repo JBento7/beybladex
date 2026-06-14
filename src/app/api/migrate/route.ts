@@ -298,6 +298,10 @@ export async function GET() {
       name: "BeyPart unique line+category+name",
       sql: `DO $$ BEGIN ALTER TABLE "BeyPart" ADD CONSTRAINT "BeyPart_line_category_name_key" UNIQUE ("line", "category", "name"); EXCEPTION WHEN duplicate_object THEN null; END $$`,
     },
+    {
+      name: "Tournament.isTest",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "isTest" BOOLEAN NOT NULL DEFAULT false`,
+    },
   ];
 
   for (const migration of migrations) {

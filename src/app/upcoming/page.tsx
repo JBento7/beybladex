@@ -25,6 +25,7 @@ export default async function UpcomingPage() {
   const tournaments = await prisma.tournament.findMany({
     where: {
       status: { in: ["DRAFT", "REGISTRATION", "IN_PROGRESS"] },
+      isTest: false,
     },
     include: {
       organizer: { select: { id: true, name: true } },

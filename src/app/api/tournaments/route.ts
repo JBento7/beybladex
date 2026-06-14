@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET() {
   try {
     const tournaments = await prisma.tournament.findMany({
+      where: { isTest: false },
       include: {
         organizer: { select: { id: true, name: true } },
         _count: { select: { participants: true } },
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
     }
 
-    const { name, description, format, maxParticipants, startDate, deckType, prize, arenas, eventType } =
+    const { name, description, format, maxParticipants, startDate, deckType, prize, arenas, eventType, isTest } =
       await req.json();
 
     if (!name || !format) {
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
         arenas: arenas ? Math.max(1, parseInt(arenas)) : 1,
         status: "REGISTRATION",
         isOfficial: session.user.role === "ORGANIZER" && eventType !== "BEYENCONTRO",
+        isTest: session.user.role === "ORGANIZER" && !!isTest,
       },
     });
 
