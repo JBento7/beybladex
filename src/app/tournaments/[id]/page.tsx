@@ -417,6 +417,36 @@ export default async function TournamentDetailPage({
       if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
       return (diff.get(b.userId) ?? 0) - (diff.get(a.userId) ?? 0);
     });
+  } else if (tournament.format === "SINGLE_ELIMINATION") {
+    // Ranking follows bracket placement: the round a player lost in (later =
+    // better), with the champion never losing (treated as infinite). The
+    // third-place match settles the tie between the two semifinal losers.
+    const diff = new Map<string, number>();
+    for (const m of tournament.matches) {
+      if (m.player1.id === m.player2.id || m.status !== "FINISHED") continue;
+      const p1Pts = m.points.filter((p) => p.userId === m.player1.id).reduce((s, p) => s + p.points, 0);
+      const p2Pts = m.points.filter((p) => p.userId === m.player2.id).reduce((s, p) => s + p.points, 0);
+      diff.set(m.player1.id, (diff.get(m.player1.id) ?? 0) + (p1Pts - p2Pts));
+      diff.set(m.player2.id, (diff.get(m.player2.id) ?? 0) + (p2Pts - p1Pts));
+    }
+    const elimRound = new Map<string, number>();
+    for (const m of tournament.matches) {
+      if (m.player1.id === m.player2.id || !m.winner || m.status !== "FINISHED" || m.isThirdPlace) continue;
+      const loserId = m.winner.id === m.player1.id ? m.player2.id : m.player1.id;
+      elimRound.set(loserId, m.round);
+    }
+    const finishedThirdPlace = tournament.matches.find((m) => m.isThirdPlace && m.winner);
+    standingsParticipants = [...tournament.participants].sort((a, b) => {
+      const aE = elimRound.get(a.userId) ?? Infinity;
+      const bE = elimRound.get(b.userId) ?? Infinity;
+      if (bE !== aE) return bE - aE;
+      if (finishedThirdPlace) {
+        if (finishedThirdPlace.winner!.id === a.userId && finishedThirdPlace.winner!.id !== b.userId) return -1;
+        if (finishedThirdPlace.winner!.id === b.userId && finishedThirdPlace.winner!.id !== a.userId) return 1;
+      }
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      return (diff.get(b.userId) ?? 0) - (diff.get(a.userId) ?? 0);
+    });
   }
 
   const canJoin =
