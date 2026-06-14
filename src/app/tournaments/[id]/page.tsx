@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import StartTournamentButton from "./StartTournamentButton";
 import FinishTournamentButton from "./FinishTournamentButton";
+import ResetTournamentButton from "./ResetTournamentButton";
 import ScoreModal from "./ScoreModal";
 import ClientJoinButton from "./ClientJoinButton";
 import EditBeybladesButton from "./EditBeybladesButton";
@@ -78,11 +79,13 @@ function MatchCard({
   isOrganizer,
   tournamentId,
   participantBeyblades,
+  arenaCount = 1,
 }: {
   match: MatchWithRelations;
   isOrganizer: boolean;
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
+  arenaCount?: number;
 }) {
   const isFinished = match.status === "FINISHED";
   const p1Points = match.points
@@ -155,6 +158,11 @@ function MatchCard({
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
+        {match.arena != null && arenaCount > 1 && (
+          <span className="text-xs px-2 py-1 rounded-full font-semibold bg-[#f0a500]/10 text-[#f0a500] border border-[#f0a500]/20">
+            Arena {match.arena}
+          </span>
+        )}
         {match.isWalkover && (
           <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-500/20 text-red-400">
             W.O.
@@ -199,12 +207,14 @@ function BracketView({
   isOrganizer,
   tournamentId,
   participantBeyblades,
+  arenaCount,
 }: {
   rounds: [number, MatchWithRelations[]][];
   totalRounds: number;
   isOrganizer: boolean;
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
+  arenaCount: number;
 }) {
   const CARD_WIDTH = 240;
   const GAP = 32;
@@ -228,6 +238,7 @@ function BracketView({
                       isOrganizer={isOrganizer}
                       tournamentId={tournamentId}
                       participantBeyblades={participantBeyblades}
+                      arenaCount={arenaCount}
                     />
                   </div>
                   {r < rounds.length - 1 && (
@@ -538,6 +549,9 @@ export default async function TournamentDetailPage({
               {canJudge && tournament.status === "IN_PROGRESS" && (
                 <FinishTournamentButton tournamentId={tournament.id} isOfficial={tournament.isOfficial} />
               )}
+              {isAdminUser && tournament.isTest && tournament.status !== "REGISTRATION" && (
+                <ResetTournamentButton tournamentId={tournament.id} />
+              )}
               {canEditTournament && (
                 <Link
                   href={`/tournaments/${tournament.id}/edit`}
@@ -570,6 +584,7 @@ export default async function TournamentDetailPage({
                     isOrganizer={canJudge}
                     tournamentId={tournament.id}
                     participantBeyblades={participantBeyblades}
+                    arenaCount={tournament.arenas ?? 1}
                   />
                 </div>
                 {thirdPlaceMatch && (
@@ -579,6 +594,7 @@ export default async function TournamentDetailPage({
                       <MatchCard
                         match={thirdPlaceMatch}
                         isOrganizer={canJudge}
+                        arenaCount={tournament.arenas ?? 1}
                         tournamentId={tournament.id}
                         participantBeyblades={participantBeyblades}
                       />
