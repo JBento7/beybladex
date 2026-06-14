@@ -275,6 +275,29 @@ export async function GET() {
       name: "User.canJudge",
       sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "canJudge" BOOLEAN NOT NULL DEFAULT false`,
     },
+    {
+      name: "BeyPartLine enum",
+      sql: `DO $$ BEGIN CREATE TYPE "BeyPartLine" AS ENUM ('BX', 'UX', 'CX'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "BeyPartCategory enum",
+      sql: `DO $$ BEGIN CREATE TYPE "BeyPartCategory" AS ENUM ('BLADE', 'RATCHET', 'BIT', 'LOCK_CHIP', 'MAIN_BLADE', 'ASSIST_BLADE'); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "BeyPart table",
+      sql: `CREATE TABLE IF NOT EXISTS "BeyPart" (
+        "id" TEXT NOT NULL,
+        "line" "BeyPartLine" NOT NULL,
+        "category" "BeyPartCategory" NOT NULL,
+        "name" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "BeyPart_pkey" PRIMARY KEY ("id")
+      )`,
+    },
+    {
+      name: "BeyPart unique line+category+name",
+      sql: `DO $$ BEGIN ALTER TABLE "BeyPart" ADD CONSTRAINT "BeyPart_line_category_name_key" UNIQUE ("line", "category", "name"); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
   ];
 
   for (const migration of migrations) {

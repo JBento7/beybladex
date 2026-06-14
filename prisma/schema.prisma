@@ -59,6 +59,21 @@ enum PollType {
   CHECKBOX
 }
 
+enum BeyPartLine {
+  BX
+  UX
+  CX
+}
+
+enum BeyPartCategory {
+  BLADE
+  RATCHET
+  BIT
+  LOCK_CHIP
+  MAIN_BLADE
+  ASSIST_BLADE
+}
+
 model User {
   id            String   @id @default(cuid())
   name          String
@@ -278,4 +293,14 @@ model EmailVerifyToken {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BeyPart {
+  id        String           @id @default(cuid())
+  line      BeyPartLine
+  category  BeyPartCategory
+  name      String
+  createdAt DateTime         @default(now())
+
+  @@unique([line, category, name])
 }
