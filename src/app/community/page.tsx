@@ -42,7 +42,7 @@ export default async function CommunityPage() {
         select: { id: true, name: true, wins: true, losses: true },
       },
       participations: {
-        select: { wins: true, losses: true, rankingPoints: true },
+        select: { wins: true, losses: true, rankingPoints: true, tournament: { select: { isOfficial: true } } },
       },
     },
     orderBy: { name: "asc" },
@@ -51,10 +51,15 @@ export default async function CommunityPage() {
   const playersWithStats = players.map((p) => {
     const wins = p.participations.reduce((s, x) => s + x.wins, 0);
     const losses = p.participations.reduce((s, x) => s + x.losses, 0);
-    const points = p.participations.reduce((s, x) => s + x.rankingPoints, 0);
+    const officialPoints = p.participations
+      .filter((x) => x.tournament.isOfficial)
+      .reduce((s, x) => s + x.rankingPoints, 0);
+    const beyPoints = p.participations
+      .filter((x) => !x.tournament.isOfficial)
+      .reduce((s, x) => s + x.rankingPoints, 0);
     const matches = wins + losses;
     const winRate = matches > 0 ? Math.round((wins / matches) * 100) : 0;
-    return { ...p, wins, losses, points, matches, winRate };
+    return { ...p, wins, losses, officialPoints, beyPoints, matches, winRate };
   });
 
   // sort by wins desc
@@ -118,7 +123,7 @@ export default async function CommunityPage() {
                 </div>
 
                 {/* Stats */}
-                <div className="grid grid-cols-3 gap-2 mb-5">
+                <div className="grid grid-cols-2 gap-2 mb-2">
                   <div className="bg-[#252525] rounded-lg p-3 text-center">
                     <div className="text-lg font-black text-green-400">{player.wins}</div>
                     <div className="text-xs text-gray-500">Vitórias</div>
@@ -127,9 +132,15 @@ export default async function CommunityPage() {
                     <div className="text-lg font-black text-[#f0a500]">{player.winRate}%</div>
                     <div className="text-xs text-gray-500">Taxa V.</div>
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-5">
                   <div className="bg-[#252525] rounded-lg p-3 text-center">
-                    <div className="text-lg font-black text-blue-400">{player.points}</div>
-                    <div className="text-xs text-gray-500">Pontos</div>
+                    <div className="text-lg font-black text-blue-400">{player.officialPoints}</div>
+                    <div className="text-xs text-gray-500">Pontos Liga</div>
+                  </div>
+                  <div className="bg-[#252525] rounded-lg p-3 text-center">
+                    <div className="text-lg font-black text-purple-400">{player.beyPoints}</div>
+                    <div className="text-xs text-gray-500">Pts BeyEncontro</div>
                   </div>
                 </div>
 

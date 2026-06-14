@@ -86,8 +86,9 @@ export default async function PlayerProfilePage({
           wins: true,
           losses: true,
           totalPoints: true,
+          rankingPoints: true,
           placement: true,
-          tournament: { select: { id: true, name: true, status: true } },
+          tournament: { select: { id: true, name: true, status: true, isOfficial: true } },
         },
         orderBy: { createdAt: "desc" },
       },
@@ -102,6 +103,12 @@ export default async function PlayerProfilePage({
   const totalWins = player.participations.reduce((s, p) => s + p.wins, 0);
   const totalLosses = player.participations.reduce((s, p) => s + p.losses, 0);
   const totalPoints = player.participations.reduce((s, p) => s + p.totalPoints, 0);
+  const officialPoints = player.participations
+    .filter((p) => p.tournament.isOfficial)
+    .reduce((s, p) => s + p.rankingPoints, 0);
+  const beyPoints = player.participations
+    .filter((p) => !p.tournament.isOfficial)
+    .reduce((s, p) => s + p.rankingPoints, 0);
   const totalMatches = totalWins + totalLosses;
   const winRate = totalMatches > 0 ? Math.round((totalWins / totalMatches) * 100) : 0;
 
@@ -155,9 +162,11 @@ export default async function PlayerProfilePage({
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           {[
             { label: "Pontos Totais", value: totalPoints, color: "text-[#f0a500]", icon: "⭐" },
+            { label: "Pontos Liga", value: officialPoints, color: "text-blue-400", icon: "🏅" },
+            { label: "Pts BeyEncontro", value: beyPoints, color: "text-purple-400", icon: "🎲" },
             { label: "Taxa de Vitória", value: `${winRate}%`, color: "text-green-400", icon: "📈" },
             { label: "Vitórias", value: totalWins, color: "text-green-400", icon: "🏆" },
             { label: "Torneios", value: player.participations.length, color: "text-blue-400", icon: "/bey-removebg-preview.png" },
