@@ -534,6 +534,10 @@ export default async function TournamentDetailPage({
   while (bracketSize < tournament.participants.length) bracketSize *= 2;
   const totalBracketRounds = Math.max(1, Math.log2(bracketSize));
 
+  // Hide standings/participants sidebar while the tournament is in progress to
+  // free up space for match viewing; it reappears once finished (or before starting).
+  const showSidebar = tournament.status !== "IN_PROGRESS";
+
   // Group participants by group (for GROUPS format)
   const groupMap = new Map<
     string,
@@ -657,9 +661,9 @@ export default async function TournamentDetailPage({
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className={showSidebar ? "grid lg:grid-cols-3 gap-6" : ""}>
           {/* Main content */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className={showSidebar ? "lg:col-span-2 space-y-6" : "space-y-6"}>
             {tournament.format === "SINGLE_ELIMINATION" && sortedRounds.length > 0 ? (
               <>
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
@@ -792,6 +796,7 @@ export default async function TournamentDetailPage({
           </div>
 
           {/* Sidebar: Standings */}
+          {showSidebar && (
           <div className="space-y-6">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
               <h2 className="text-lg font-bold text-white mb-4">Classificação</h2>
@@ -930,6 +935,7 @@ export default async function TournamentDetailPage({
               )}
             </div>
           </div>
+          )}
         </div>
       </main>
     </div>
