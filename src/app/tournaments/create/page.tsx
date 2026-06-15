@@ -40,6 +40,8 @@ export default function CreateTournamentPage() {
     prize: "",
     arenas: "1",
     eventType: "TORNEIO",
+    setsToWin: "2",
+    pointsToWinSet: "4",
   });
   const [isTest, setIsTest] = useState(false);
   const [dateTBD, setDateTBD] = useState(false);
@@ -47,7 +49,7 @@ export default function CreateTournamentPage() {
   const [error, setError] = useState("");
 
   function handleChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
@@ -73,6 +75,8 @@ export default function CreateTournamentPage() {
         arenas: form.arenas ? parseInt(form.arenas) : 1,
         eventType: isAdmin ? form.eventType : "BEYENCONTRO",
         isTest: isAdmin ? isTest : false,
+        setsToWin: form.setsToWin,
+        pointsToWinSet: form.pointsToWinSet,
       }),
     });
 
@@ -353,6 +357,44 @@ export default function CreateTournamentPage() {
                   <div className="text-xs text-gray-400">{f.desc}</div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Match Rules */}
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+            <h2 className="text-base font-bold text-white mb-4">Regras da Partida</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Sets por partida
+                </label>
+                <select
+                  name="setsToWin"
+                  value={form.setsToWin}
+                  onChange={handleChange}
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                >
+                  <option value="1">1 set</option>
+                  <option value="2">Melhor de 3 (2 sets)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Pontos para vencer o set
+                </label>
+                <select
+                  name="pointsToWinSet"
+                  value={form.pointsToWinSet}
+                  onChange={handleChange}
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                >
+                  <option value="4">4 pontos</option>
+                  <option value="5">5 pontos</option>
+                  <option value="6">6 pontos</option>
+                  <option value="7">7 pontos</option>
+                </select>
+              </div>
             </div>
           </div>
 

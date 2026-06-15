@@ -6,8 +6,6 @@ import { FINISH_TYPE_LABELS, FINISH_TYPE_POINTS } from "@/lib/scoring";
 import type { FinishType } from "@prisma/client";
 
 const FINISH_TYPES: FinishType[] = ["SPIN_FINISH", "OVER_FINISH", "BURST_FINISH", "EXTREME_FINISH"];
-const POINTS_TO_WIN_SET = 4;
-const SETS_TO_WIN = 2;
 
 type Player = { id: string; name: string; bladerName?: string | null };
 type BeybladeInfo = { id: string; name: string; blade: string | null; ratchet: string | null; bit: string | null };
@@ -28,6 +26,8 @@ type MatchState = {
   player2Sets: number;
   matchFinished: boolean;
   winnerId: string | null;
+  setsToWin: number;
+  pointsToWinSet: number;
 };
 
 function comboParts(b: BeybladeInfo) {
@@ -110,6 +110,9 @@ export default function ScoreModal({
   const cur = state?.currentSet;
   const p1Pts = cur?.player1Points ?? 0;
   const p2Pts = cur?.player2Points ?? 0;
+  const setsToWin = state?.setsToWin ?? 2;
+  const pointsToWinSet = state?.pointsToWinSet ?? 4;
+  const maxSets = setsToWin * 2 - 1;
 
   return (
     <>
@@ -137,15 +140,17 @@ export default function ScoreModal({
 
             {/* Set tracker */}
             <div className="bg-[#252525] rounded-xl p-4 mb-5">
-              <div className="text-xs text-gray-500 text-center mb-3 font-medium">SETS (melhor de 3 — primeiro a {SETS_TO_WIN} sets vence)</div>
+              <div className="text-xs text-gray-500 text-center mb-3 font-medium">
+                {maxSets === 1 ? "SET ÚNICO" : `SETS (melhor de ${maxSets} — primeiro a ${setsToWin} sets vence)`}
+              </div>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex-1 text-center">
                   <div className="text-sm font-bold text-white mb-1 truncate">{player1.bladerName || player1.name}</div>
-                  <div className={`text-4xl font-black ${p1Sets >= SETS_TO_WIN ? "text-[#f0a500]" : "text-white"}`}>{p1Sets}</div>
+                  <div className={`text-4xl font-black ${p1Sets >= setsToWin ? "text-[#f0a500]" : "text-white"}`}>{p1Sets}</div>
                   <div className="text-xs text-gray-500 mt-1">sets</div>
                 </div>
                 <div className="flex flex-col items-center gap-1">
-                  {Array.from({ length: 3 }).map((_, i) => {
+                  {Array.from({ length: maxSets }).map((_, i) => {
                     const s = state?.sets[i];
                     return (
                       <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
@@ -161,7 +166,7 @@ export default function ScoreModal({
                 </div>
                 <div className="flex-1 text-center">
                   <div className="text-sm font-bold text-white mb-1 truncate">{player2.bladerName || player2.name}</div>
-                  <div className={`text-4xl font-black ${p2Sets >= SETS_TO_WIN ? "text-[#f0a500]" : "text-white"}`}>{p2Sets}</div>
+                  <div className={`text-4xl font-black ${p2Sets >= setsToWin ? "text-[#f0a500]" : "text-white"}`}>{p2Sets}</div>
                   <div className="text-xs text-gray-500 mt-1">sets</div>
                 </div>
               </div>
@@ -183,33 +188,33 @@ export default function ScoreModal({
                 {cur && (
                   <div className="bg-[#252525] rounded-xl p-4 mb-5">
                     <div className="text-xs text-gray-500 text-center mb-3 font-medium">
-                      SET {cur.setNumber} — primeiro a {POINTS_TO_WIN_SET} pontos vence
+                      SET {cur.setNumber} — primeiro a {pointsToWinSet} pontos vence
                     </div>
                     <div className="flex items-center justify-center gap-6">
                       <div className="text-center">
                         <div className="text-xs text-gray-400 mb-1 truncate max-w-[80px]">{player1.bladerName || player1.name}</div>
-                        <div className={`text-5xl font-black ${p1Pts >= POINTS_TO_WIN_SET ? "text-[#f0a500]" : "text-white"}`}>{p1Pts}</div>
+                        <div className={`text-5xl font-black ${p1Pts >= pointsToWinSet ? "text-[#f0a500]" : "text-white"}`}>{p1Pts}</div>
                       </div>
                       <div className="text-2xl text-gray-600 font-bold">×</div>
                       <div className="text-center">
                         <div className="text-xs text-gray-400 mb-1 truncate max-w-[80px]">{player2.bladerName || player2.name}</div>
-                        <div className={`text-5xl font-black ${p2Pts >= POINTS_TO_WIN_SET ? "text-[#f0a500]" : "text-white"}`}>{p2Pts}</div>
+                        <div className={`text-5xl font-black ${p2Pts >= pointsToWinSet ? "text-[#f0a500]" : "text-white"}`}>{p2Pts}</div>
                       </div>
                     </div>
                     <div className="mt-3 space-y-1.5">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500 w-16 truncate">{player1.bladerName || player1.name}</span>
                         <div className="flex-1 h-2 bg-[#333] rounded-full overflow-hidden">
-                          <div className="h-full bg-[#f0a500] rounded-full transition-all" style={{ width: `${(p1Pts / POINTS_TO_WIN_SET) * 100}%` }} />
+                          <div className="h-full bg-[#f0a500] rounded-full transition-all" style={{ width: `${(p1Pts / pointsToWinSet) * 100}%` }} />
                         </div>
-                        <span className="text-xs text-[#f0a500] font-bold w-8 text-right">{p1Pts}/{POINTS_TO_WIN_SET}</span>
+                        <span className="text-xs text-[#f0a500] font-bold w-8 text-right">{p1Pts}/{pointsToWinSet}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-gray-500 w-16 truncate">{player2.bladerName || player2.name}</span>
                         <div className="flex-1 h-2 bg-[#333] rounded-full overflow-hidden">
-                          <div className="h-full bg-[#c8102e] rounded-full transition-all" style={{ width: `${(p2Pts / POINTS_TO_WIN_SET) * 100}%` }} />
+                          <div className="h-full bg-[#c8102e] rounded-full transition-all" style={{ width: `${(p2Pts / pointsToWinSet) * 100}%` }} />
                         </div>
-                        <span className="text-xs text-[#c8102e] font-bold w-8 text-right">{p2Pts}/{POINTS_TO_WIN_SET}</span>
+                        <span className="text-xs text-[#c8102e] font-bold w-8 text-right">{p2Pts}/{pointsToWinSet}</span>
                       </div>
                     </div>
                   </div>

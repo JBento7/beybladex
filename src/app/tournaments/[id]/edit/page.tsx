@@ -29,6 +29,8 @@ export default async function EditTournamentPage({
       isOfficial: true,
       organizerId: true,
       status: true,
+      setsToWin: true,
+      pointsToWinSet: true,
     },
   });
 
@@ -59,6 +61,8 @@ export default async function EditTournamentPage({
         prize: tournament.prize,
         arenas: tournament.arenas,
         isOfficial: tournament.isOfficial,
+        setsToWin: tournament.setsToWin,
+        pointsToWinSet: tournament.pointsToWinSet,
       }}
       canChangeEventType={isAdmin}
     />

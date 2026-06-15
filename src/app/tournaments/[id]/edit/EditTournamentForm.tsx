@@ -36,6 +36,8 @@ type Initial = {
   prize: string | null;
   arenas: number | null;
   isOfficial: boolean;
+  setsToWin: number;
+  pointsToWinSet: number;
 };
 
 export default function EditTournamentForm({
@@ -56,13 +58,15 @@ export default function EditTournamentForm({
     prize: tournament.prize ?? "",
     arenas: tournament.arenas ? String(tournament.arenas) : "1",
     eventType: tournament.isOfficial ? "TORNEIO" : "BEYENCONTRO",
+    setsToWin: String(tournament.setsToWin),
+    pointsToWinSet: String(tournament.pointsToWinSet),
   });
   const [dateTBD, setDateTBD] = useState(!tournament.startDate);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   function handleChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
@@ -85,6 +89,8 @@ export default function EditTournamentForm({
         prize: form.prize || undefined,
         arenas: form.arenas ? parseInt(form.arenas) : 1,
         eventType: form.eventType,
+        setsToWin: form.setsToWin,
+        pointsToWinSet: form.pointsToWinSet,
       }),
     });
 
@@ -338,6 +344,44 @@ export default function EditTournamentForm({
                   <div className="text-xs text-gray-400">{f.desc}</div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Match Rules */}
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+            <h2 className="text-base font-bold text-white mb-4">Regras da Partida</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Sets por partida
+                </label>
+                <select
+                  name="setsToWin"
+                  value={form.setsToWin}
+                  onChange={handleChange}
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                >
+                  <option value="1">1 set</option>
+                  <option value="2">Melhor de 3 (2 sets)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Pontos para vencer o set
+                </label>
+                <select
+                  name="pointsToWinSet"
+                  value={form.pointsToWinSet}
+                  onChange={handleChange}
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                >
+                  <option value="4">4 pontos</option>
+                  <option value="5">5 pontos</option>
+                  <option value="6">6 pontos</option>
+                  <option value="7">7 pontos</option>
+                </select>
+              </div>
             </div>
           </div>
 

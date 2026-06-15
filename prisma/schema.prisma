@@ -143,6 +143,8 @@ model Tournament {
   arenas          Int?    @default(1)
   isOfficial      Boolean @default(true)
   isTest          Boolean @default(false)
+  setsToWin       Int     @default(2)
+  pointsToWinSet  Int     @default(4)
   createdAt       DateTime         @default(now())
 
   organizer    User                   @relation("OrganizerTournaments", fields: [organizerId], references: [id])

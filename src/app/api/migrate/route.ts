@@ -326,6 +326,14 @@ export async function GET() {
       name: "TournamentJudge.userId FK",
       sql: `DO $$ BEGIN ALTER TABLE "TournamentJudge" ADD CONSTRAINT "TournamentJudge_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
     },
+    {
+      name: "Tournament.setsToWin",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "setsToWin" INTEGER NOT NULL DEFAULT 2`,
+    },
+    {
+      name: "Tournament.pointsToWinSet",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "pointsToWinSet" INTEGER NOT NULL DEFAULT 4`,
+    },
   ];
 
   for (const migration of migrations) {

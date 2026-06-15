@@ -82,7 +82,7 @@ export async function PATCH(
       }
     }
 
-    const { name, description, format, maxParticipants, startDate, deckType, prize, arenas, eventType } =
+    const { name, description, format, maxParticipants, startDate, deckType, prize, arenas, eventType, setsToWin, pointsToWinSet } =
       await req.json();
 
     if (!name || !format) {
@@ -98,6 +98,8 @@ export async function PATCH(
       startDate: startDate ? new Date(startDate) : null,
       prize: prize || null,
       arenas: arenas ? Math.max(1, parseInt(arenas)) : 1,
+      setsToWin: setsToWin ? Math.min(2, Math.max(1, parseInt(setsToWin))) : 2,
+      pointsToWinSet: pointsToWinSet ? Math.min(7, Math.max(4, parseInt(pointsToWinSet))) : 4,
     };
 
     // Only admins can change whether a tournament counts as official.

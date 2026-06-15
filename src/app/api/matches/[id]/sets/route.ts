@@ -11,6 +11,7 @@ export async function GET(
       where: { id: params.id },
       include: {
         sets: { orderBy: { setNumber: "asc" } },
+        tournament: { select: { setsToWin: true, pointsToWinSet: true } },
       },
     });
 
@@ -29,6 +30,8 @@ export async function GET(
       player2Sets,
       matchFinished,
       winnerId: match.winnerId,
+      setsToWin: match.tournament.setsToWin,
+      pointsToWinSet: match.tournament.pointsToWinSet,
     });
   } catch (err) {
     console.error(err);

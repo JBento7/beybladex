@@ -7,9 +7,6 @@ import { FINISH_TYPE_POINTS } from "@/lib/scoring";
 import { recalculateStandings, advanceSingleElimination, generateSwissRound, finalizeRoundRobin, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
 import type { FinishType } from "@prisma/client";
 
-const POINTS_TO_WIN_SET = 4;
-const SETS_TO_WIN = 2;
-
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -50,7 +47,11 @@ export async function POST(
     const points = FINISH_TYPE_POINTS[finishType as FinishType];
     if (!points) return NextResponse.json({ error: "Tipo de finish inválido" }, { status: 400 });
 
-    if (!match.sets.find((s) => s.status === "IN_PROGRESS") && match.sets.length + 1 > 3) {
+    const setsToWin = match.tournament.setsToWin;
+    const pointsToWinSet = match.tournament.pointsToWinSet;
+    const maxSets = setsToWin * 2 - 1;
+
+    if (!match.sets.find((s) => s.status === "IN_PROGRESS") && match.sets.length + 1 > maxSets) {
       return NextResponse.json({ error: "Número máximo de sets atingido" }, { status: 400 });
     }
 
@@ -101,8 +102,8 @@ export async function POST(
     // Check if set is won
     const p1Pts = updatedSet.player1Points;
     const p2Pts = updatedSet.player2Points;
-    if (p1Pts >= POINTS_TO_WIN_SET || p2Pts >= POINTS_TO_WIN_SET) {
-      const setWinnerId = p1Pts >= POINTS_TO_WIN_SET ? match.player1Id : match.player2Id;
+    if (p1Pts >= pointsToWinSet || p2Pts >= pointsToWinSet) {
+      const setWinnerId = p1Pts >= pointsToWinSet ? match.player1Id : match.player2Id;
 
       const { p1Sets, p2Sets } = await prisma.$transaction(async (tx) => {
         await tx.matchSet.update({
@@ -118,9 +119,9 @@ export async function POST(
         };
       });
 
-      if (p1Sets >= SETS_TO_WIN || p2Sets >= SETS_TO_WIN) {
+      if (p1Sets >= setsToWin || p2Sets >= setsToWin) {
         // Match is over
-        matchWinnerId = p1Sets >= SETS_TO_WIN ? match.player1Id : match.player2Id;
+        matchWinnerId = p1Sets >= setsToWin ? match.player1Id : match.player2Id;
         matchFinished = true;
 
         await prisma.match.update({
