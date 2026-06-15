@@ -59,6 +59,7 @@ export default async function DashboardPage() {
         where: {
           status: { in: ["PENDING", "IN_PROGRESS"] },
           OR: [{ player1Id: userId }, { player2Id: userId }],
+          tournament: { status: { not: "FINISHED" } },
         },
         include: {
           player1: { select: { id: true, name: true } },
