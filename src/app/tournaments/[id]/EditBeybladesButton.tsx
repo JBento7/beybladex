@@ -23,6 +23,8 @@ export default function EditBeybladesButton({
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [beyblades, setBeyblades] = useState<Beyblade[]>([]);
+  // IDs from currentBeybladeIds that are no longer in the user's beyblade list
+  const [orphanedIds, setOrphanedIds] = useState<string[]>([]);
   const [loadingBB, setLoadingBB] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -42,7 +44,12 @@ export default function EditBeybladesButton({
         if (!r.ok) throw new Error("fetch failed");
         return r.json();
       })
-      .then((data) => setBeyblades(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const list: Beyblade[] = Array.isArray(data) ? data : [];
+        setBeyblades(list);
+        const fetchedIds = new Set(list.map((b) => b.id));
+        setOrphanedIds(currentBeybladeIds.filter((id) => !fetchedIds.has(id)));
+      })
       .catch(() => setLoadError(true))
       .finally(() => setLoadingBB(false));
   }, [showModal, currentBeybladeIds]);
@@ -127,7 +134,7 @@ export default function EditBeybladesButton({
                     Fechar e tentar novamente
                   </button>
                 </div>
-              ) : beyblades.length === 0 ? (
+              ) : beyblades.length === 0 && orphanedIds.length === 0 ? (
                 <div className="text-center py-6">
                   <p className="text-gray-400 text-sm">Você não tem combos cadastrados.</p>
                   <a
@@ -138,7 +145,23 @@ export default function EditBeybladesButton({
                   </a>
                 </div>
               ) : (
-                beyblades.map((b) => {
+                <>
+                {orphanedIds.map((id) => (
+                  <button
+                    key={id}
+                    onClick={() => toggleSelect(id)}
+                    className="w-full text-left p-3 rounded-xl border border-red-700/50 bg-red-900/20 transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full border-2 flex-shrink-0 border-red-500 bg-red-500" />
+                      <div>
+                        <div className="font-semibold text-sm text-red-400">[Combo removido]</div>
+                        <div className="text-xs text-red-600">Este combo foi excluído do seu perfil — clique para remover do torneio.</div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+                {beyblades.map((b) => {
                   const isSelected = selected.includes(b.id);
                   const parts = comboParts(b);
                   return (
@@ -170,7 +193,8 @@ export default function EditBeybladesButton({
                       </div>
                     </button>
                   );
-                })
+                })}
+                </>
               )}
             </div>
 

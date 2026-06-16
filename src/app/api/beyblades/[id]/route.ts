@@ -70,6 +70,25 @@ export async function DELETE(
     return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
   }
 
+  // Block deletion if this beyblade is registered in any active tournament
+  const activeParticipation = await prisma.tournamentParticipant.findFirst({
+    where: {
+      OR: [
+        { beyblade1: params.id },
+        { beyblade2: params.id },
+        { beyblade3: params.id },
+      ],
+      tournament: { status: { in: ["REGISTRATION", "IN_PROGRESS"] } },
+    },
+    select: { tournament: { select: { name: true } } },
+  });
+  if (activeParticipation) {
+    return NextResponse.json(
+      { error: `Este combo está cadastrado no torneio "${activeParticipation.tournament.name}" e não pode ser removido enquanto o torneio estiver ativo.` },
+      { status: 400 }
+    );
+  }
+
   await prisma.beyblade.delete({ where: { id: params.id } });
 
   return NextResponse.json({ ok: true });
