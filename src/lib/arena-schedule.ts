@@ -63,7 +63,11 @@ export function scheduleByArena<T>(
       let judge: string | null = null;
       if (hasJudges) {
         judge = pickJudge(slot.busy, p1, p2);
-        if (judge === null) continue; // no eligible judge free in this slot
+        // If no free judge exists in this slot, still place the match here
+        // (judgeId will be null). The player-conflict check above already
+        // ensures players aren't double-booked; we shouldn't force a new slot
+        // just because the judge pool is exhausted (e.g. all judges are also
+        // participants and everyone is already playing).
       }
 
       const arena = pickArena(slot.arenas);
