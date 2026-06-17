@@ -334,6 +334,34 @@ export async function GET() {
       name: "Tournament.pointsToWinSet",
       sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "pointsToWinSet" INTEGER NOT NULL DEFAULT 4`,
     },
+    {
+      name: "BeyPart.imageUrl",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "imageUrl" TEXT`,
+    },
+    {
+      name: "BeyPart.statAtk",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statAtk" INTEGER`,
+    },
+    {
+      name: "BeyPart.statDef",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statDef" INTEGER`,
+    },
+    {
+      name: "BeyPart.statSta",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statSta" INTEGER`,
+    },
+    {
+      name: "BeyPart.statBr",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statBr" INTEGER`,
+    },
+    {
+      name: "BeyPart.statXdash",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statXdash" INTEGER`,
+    },
+    {
+      name: "BeyPart.statBal",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statBal" INTEGER`,
+    },
   ];
 
   for (const migration of migrations) {

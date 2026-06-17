@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
 
-  const { line, category, name } = await req.json();
+  const { line, category, name, imageUrl, statAtk, statDef, statSta, statBr, statXdash, statBal } = await req.json();
 
   if (!LINES.includes(line)) {
     return NextResponse.json({ error: "Linha inválida" }, { status: 400 });
@@ -41,7 +41,18 @@ export async function POST(req: NextRequest) {
 
   try {
     const part = await prisma.beyPart.create({
-      data: { line, category, name: name.trim() },
+      data: {
+        line,
+        category,
+        name: name.trim(),
+        imageUrl: imageUrl?.trim() || null,
+        statAtk: statAtk != null ? Number(statAtk) : null,
+        statDef: statDef != null ? Number(statDef) : null,
+        statSta: statSta != null ? Number(statSta) : null,
+        statBr: statBr != null ? Number(statBr) : null,
+        statXdash: statXdash != null ? Number(statXdash) : null,
+        statBal: statBal != null ? Number(statBal) : null,
+      },
     });
     return NextResponse.json(part, { status: 201 });
   } catch (err: unknown) {
