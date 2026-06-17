@@ -72,7 +72,7 @@ const CATEGORY_STATS: Record<Category, StatKey[]> = {
   BLADE:        ["statAttack", "statDefense", "statStamina"],
   RATCHET:      ["statAttack", "statDefense", "statStamina", "statHeight"],
   BIT:          ["statAttack", "statDefense", "statStamina", "statDash", "statBurst"],
-  LOCK_CHIP:    ["statAttack", "statDefense", "statStamina"],
+  LOCK_CHIP:    [],
   MAIN_BLADE:   ["statAttack", "statDefense", "statStamina"],
   ASSIST_BLADE: ["statAttack", "statDefense", "statStamina"],
 };
