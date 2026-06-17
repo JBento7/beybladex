@@ -353,6 +353,7 @@ export default function BeyPartsManager() {
   const [parts, setParts] = useState<BeyPart[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeLine, setActiveLine] = useState<Line>("BX");
+  const [activeCategory, setActiveCategory] = useState<Category | null>(null);
   const [error, setError] = useState("");
   const [newNames, setNewNames] = useState<Record<Category, string>>({
     BLADE: "", RATCHET: "", BIT: "", LOCK_CHIP: "", MAIN_BLADE: "", ASSIST_BLADE: "",
@@ -416,11 +417,15 @@ export default function BeyPartsManager() {
         <p className="text-gray-400 text-sm mt-1">Cadastre as peças disponíveis para cada linha de Beyblade.</p>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-5">
+      {/* Line tabs */}
+      <div className="flex flex-wrap gap-2 mb-3">
         {(Object.keys(LINE_LABELS) as Line[]).map((line) => (
           <button
             key={line}
-            onClick={() => setActiveLine(line)}
+            onClick={() => {
+              setActiveLine(line);
+              setActiveCategory(null);
+            }}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
               activeLine === line ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 hover:text-white"
             }`}
@@ -429,6 +434,31 @@ export default function BeyPartsManager() {
           </button>
         ))}
       </div>
+
+      {/* Category sub-tabs (only when line has multiple categories) */}
+      {LINE_CATEGORIES[activeLine].length > 1 && (
+        <div className="flex flex-wrap gap-1.5 mb-5 pl-1 border-l-2 border-[#333]">
+          <button
+            onClick={() => setActiveCategory(null)}
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+              activeCategory === null ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            Todas
+          </button>
+          {LINE_CATEGORIES[activeLine].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                activeCategory === cat ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              {CATEGORY_LABELS[cat]}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 text-red-400 text-sm bg-red-900/20 border border-red-700/30 px-3 py-2 rounded-lg">
@@ -440,7 +470,9 @@ export default function BeyPartsManager() {
         <p className="text-gray-500 text-sm text-center py-4">Carregando...</p>
       ) : (
         <div className="space-y-8">
-          {LINE_CATEGORIES[activeLine].map((category) => {
+          {LINE_CATEGORIES[activeLine]
+            .filter((cat) => activeCategory === null || cat === activeCategory)
+            .map((category) => {
             const items = partsByCategory(category);
             return (
               <div key={category}>
