@@ -354,6 +354,7 @@ export default function BeyPartsManager() {
   const [loading, setLoading] = useState(true);
   const [activeLine, setActiveLine] = useState<Line>("BX");
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
+  const [activeRatchetSize, setActiveRatchetSize] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [newNames, setNewNames] = useState<Record<Category, string>>({
     BLADE: "", RATCHET: "", BIT: "", LOCK_CHIP: "", MAIN_BLADE: "", ASSIST_BLADE: "",
@@ -407,8 +408,29 @@ export default function BeyPartsManager() {
     setEditingPart(null);
   }
 
+  // Extracts the leading number from a ratchet name, e.g. "3-60" → "3", "4-80" → "4"
+  function ratchetSize(name: string): string {
+    const m = name.match(/^(\d+)/);
+    return m ? m[1] : "?";
+  }
+
+  const ratchetSizes: string[] = activeLine === "RATCHET"
+    ? [...new Set(
+        parts
+          .filter((p) => p.line === "RATCHET")
+          .map((p) => ratchetSize(p.name))
+      )].sort((a, b) => Number(a) - Number(b))
+    : [];
+
   const partsByCategory = (category: Category) =>
-    parts.filter((p) => p.line === activeLine && p.category === category);
+    parts
+      .filter((p) => p.line === activeLine && p.category === category)
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+
+  const ratchetParts = parts
+    .filter((p) => p.line === "RATCHET")
+    .filter((p) => activeRatchetSize === null || ratchetSize(p.name) === activeRatchetSize)
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   return (
     <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
@@ -425,6 +447,7 @@ export default function BeyPartsManager() {
             onClick={() => {
               setActiveLine(line);
               setActiveCategory(null);
+              setActiveRatchetSize(null);
             }}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
               activeLine === line ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 hover:text-white"
@@ -468,6 +491,64 @@ export default function BeyPartsManager() {
 
       {loading ? (
         <p className="text-gray-500 text-sm text-center py-4">Carregando...</p>
+      ) : activeLine === "RATCHET" ? (
+        <div>
+          {/* Ratchet size sub-tabs */}
+          {ratchetSizes.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-5 pl-1 border-l-2 border-[#333]">
+              <button
+                onClick={() => setActiveRatchetSize(null)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  activeRatchetSize === null ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                Todos
+              </button>
+              {ratchetSizes.map((size) => (
+                <button
+                  key={size}
+                  onClick={() => setActiveRatchetSize(size)}
+                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                    activeRatchetSize === size ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+                  }`}
+                >
+                  {size} lâminas
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {ratchetParts.map((p) => (
+              <PartCard
+                key={p.id}
+                part={p}
+                onEdit={() => setEditingPart(p)}
+                onDelete={() => handleDelete(p.id)}
+                deleting={deletingId === p.id}
+              />
+            ))}
+            {/* Add new card */}
+            <div className="bg-[#111] border border-dashed border-[#333] rounded-xl p-3 flex flex-col justify-between min-h-[80px]">
+              <div className="text-xs font-semibold text-gray-500 mb-2">Novo ratchet</div>
+              <input
+                type="text"
+                value={newNames.RATCHET}
+                onChange={(e) => setNewNames((prev) => ({ ...prev, RATCHET: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === "Enter") handleAdd("RATCHET"); }}
+                placeholder="Ex: 3-60"
+                className="bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
+              />
+              <button
+                onClick={() => handleAdd("RATCHET")}
+                disabled={saving === "RATCHET" || !newNames.RATCHET.trim()}
+                className="bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-40 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {saving === "RATCHET" ? "..." : "+ Adicionar"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="space-y-8">
           {LINE_CATEGORIES[activeLine]
