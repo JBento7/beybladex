@@ -382,6 +382,10 @@ export async function GET() {
       name: "BeyPartLine.CX_EXPAND",
       sql: `DO $$ BEGIN ALTER TYPE "BeyPartLine" ADD VALUE IF NOT EXISTS 'CX_EXPAND'; EXCEPTION WHEN others THEN null; END $$`,
     },
+    {
+      name: "BeyPartCategory.OVER_BLADE",
+      sql: `DO $$ BEGIN ALTER TYPE "BeyPartCategory" ADD VALUE IF NOT EXISTS 'OVER_BLADE'; EXCEPTION WHEN others THEN null; END $$`,
+    },
   ];
 
   for (const migration of migrations) {

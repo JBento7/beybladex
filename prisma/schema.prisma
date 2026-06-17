@@ -77,6 +77,7 @@ enum BeyPartCategory {
   LOCK_CHIP
   MAIN_BLADE
   ASSIST_BLADE
+  OVER_BLADE
 }
 
 model User {

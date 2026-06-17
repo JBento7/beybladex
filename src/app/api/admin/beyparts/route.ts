@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import type { BeyPartLine, BeyPartCategory } from "@prisma/client";
 
 const LINES: BeyPartLine[] = ["BX", "UX", "CX", "RATCHET", "BIT", "BX_EXPAND", "UX_EXPAND", "CX_EXPAND"];
-const CATEGORIES: BeyPartCategory[] = ["BLADE", "RATCHET", "BIT", "LOCK_CHIP", "MAIN_BLADE", "ASSIST_BLADE"];
+const CATEGORIES: BeyPartCategory[] = ["BLADE", "RATCHET", "BIT", "LOCK_CHIP", "MAIN_BLADE", "ASSIST_BLADE", "OVER_BLADE"];
 
 export async function GET() {
   const session = await getServerSession(authOptions);

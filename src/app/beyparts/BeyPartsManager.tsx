@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 
 type Line = "BX" | "UX" | "CX" | "RATCHET" | "BIT" | "BX_EXPAND" | "UX_EXPAND" | "CX_EXPAND";
-type Category = "BLADE" | "RATCHET" | "BIT" | "LOCK_CHIP" | "MAIN_BLADE" | "ASSIST_BLADE";
+type Category = "BLADE" | "RATCHET" | "BIT" | "LOCK_CHIP" | "MAIN_BLADE" | "ASSIST_BLADE" | "OVER_BLADE";
 
 interface BeyPart {
   id: string;
@@ -35,6 +35,7 @@ const CATEGORY_LABELS: Record<Category, string> = {
   RATCHET: "Ratchet",
   BIT: "Bit",
   LOCK_CHIP: "Lock Chip",
+  OVER_BLADE: "Over Blade",
   MAIN_BLADE: "Metal Blade",
   ASSIST_BLADE: "Assist Blade",
 };
@@ -47,7 +48,7 @@ const LINE_CATEGORIES: Record<Line, Category[]> = {
   BIT: ["BIT"],
   BX_EXPAND: ["BLADE"],
   UX_EXPAND: ["BLADE"],
-  CX_EXPAND: ["LOCK_CHIP", "MAIN_BLADE", "ASSIST_BLADE"],
+  CX_EXPAND: ["LOCK_CHIP", "OVER_BLADE", "MAIN_BLADE", "ASSIST_BLADE"],
 };
 
 // Stats shown per category
@@ -73,6 +74,7 @@ const CATEGORY_STATS: Record<Category, StatKey[]> = {
   RATCHET:      ["statAttack", "statDefense", "statStamina", "statHeight"],
   BIT:          ["statAttack", "statDefense", "statStamina", "statDash", "statBurst"],
   LOCK_CHIP:    [],
+  OVER_BLADE:   ["statAttack", "statDefense", "statStamina"],
   MAIN_BLADE:   ["statAttack", "statDefense", "statStamina"],
   ASSIST_BLADE: ["statAttack", "statDefense", "statStamina"],
 };
@@ -357,7 +359,7 @@ export default function BeyPartsManager() {
   const [activeRatchetSize, setActiveRatchetSize] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [newNames, setNewNames] = useState<Record<Category, string>>({
-    BLADE: "", RATCHET: "", BIT: "", LOCK_CHIP: "", MAIN_BLADE: "", ASSIST_BLADE: "",
+    BLADE: "", RATCHET: "", BIT: "", LOCK_CHIP: "", OVER_BLADE: "", MAIN_BLADE: "", ASSIST_BLADE: "",
   });
   const [saving, setSaving] = useState<Category | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
