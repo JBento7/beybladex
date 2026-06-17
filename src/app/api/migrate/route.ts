@@ -362,6 +362,26 @@ export async function GET() {
       name: "BeyPart.statBal",
       sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statBal" INTEGER`,
     },
+    {
+      name: "BeyPartLine.RATCHET",
+      sql: `DO $$ BEGIN ALTER TYPE "BeyPartLine" ADD VALUE IF NOT EXISTS 'RATCHET'; EXCEPTION WHEN others THEN null; END $$`,
+    },
+    {
+      name: "BeyPartLine.BIT",
+      sql: `DO $$ BEGIN ALTER TYPE "BeyPartLine" ADD VALUE IF NOT EXISTS 'BIT'; EXCEPTION WHEN others THEN null; END $$`,
+    },
+    {
+      name: "BeyPartLine.BX_EXPAND",
+      sql: `DO $$ BEGIN ALTER TYPE "BeyPartLine" ADD VALUE IF NOT EXISTS 'BX_EXPAND'; EXCEPTION WHEN others THEN null; END $$`,
+    },
+    {
+      name: "BeyPartLine.UX_EXPAND",
+      sql: `DO $$ BEGIN ALTER TYPE "BeyPartLine" ADD VALUE IF NOT EXISTS 'UX_EXPAND'; EXCEPTION WHEN others THEN null; END $$`,
+    },
+    {
+      name: "BeyPartLine.CX_EXPAND",
+      sql: `DO $$ BEGIN ALTER TYPE "BeyPartLine" ADD VALUE IF NOT EXISTS 'CX_EXPAND'; EXCEPTION WHEN others THEN null; END $$`,
+    },
   ];
 
   for (const migration of migrations) {

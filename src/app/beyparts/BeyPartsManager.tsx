@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-type Line = "BX" | "UX" | "CX";
+type Line = "BX" | "UX" | "CX" | "RATCHET" | "BIT" | "BX_EXPAND" | "UX_EXPAND" | "CX_EXPAND";
 type Category = "BLADE" | "RATCHET" | "BIT" | "LOCK_CHIP" | "MAIN_BLADE" | "ASSIST_BLADE";
 
 interface BeyPart {
@@ -19,7 +19,16 @@ interface BeyPart {
   statBal: number | null;
 }
 
-const LINE_LABELS: Record<Line, string> = { BX: "BX", UX: "UX", CX: "CX" };
+const LINE_LABELS: Record<Line, string> = {
+  BX: "Linha BX",
+  UX: "Linha UX",
+  CX: "Linha CX",
+  RATCHET: "Ratchet",
+  BIT: "Bit",
+  BX_EXPAND: "BX Expand",
+  UX_EXPAND: "UX Expand",
+  CX_EXPAND: "CX Expand",
+};
 
 const CATEGORY_LABELS: Record<Category, string> = {
   BLADE: "Blade",
@@ -31,9 +40,14 @@ const CATEGORY_LABELS: Record<Category, string> = {
 };
 
 const LINE_CATEGORIES: Record<Line, Category[]> = {
-  BX: ["BLADE", "RATCHET", "BIT"],
-  UX: ["BLADE", "RATCHET", "BIT"],
-  CX: ["LOCK_CHIP", "MAIN_BLADE", "ASSIST_BLADE", "RATCHET", "BIT"],
+  BX: ["BLADE"],
+  UX: ["BLADE"],
+  CX: ["LOCK_CHIP", "MAIN_BLADE", "ASSIST_BLADE"],
+  RATCHET: ["RATCHET"],
+  BIT: ["BIT"],
+  BX_EXPAND: ["BLADE"],
+  UX_EXPAND: ["BLADE"],
+  CX_EXPAND: ["LOCK_CHIP", "MAIN_BLADE", "ASSIST_BLADE"],
 };
 
 const STAT_KEYS = ["statAtk", "statDef", "statSta", "statBal", "statXdash", "statBr"] as const;
@@ -396,7 +410,7 @@ export default function BeyPartsManager() {
       </div>
 
       {/* Line tabs */}
-      <div className="flex gap-2 mb-5">
+      <div className="flex flex-wrap gap-2 mb-5">
         {(Object.keys(LINE_LABELS) as Line[]).map((line) => (
           <button
             key={line}
@@ -407,7 +421,7 @@ export default function BeyPartsManager() {
                 : "bg-[#252525] text-gray-400 hover:text-white"
             }`}
           >
-            Linha {LINE_LABELS[line]}
+            {LINE_LABELS[line]}
           </button>
         ))}
       </div>

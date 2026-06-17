@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { BeyPartLine, BeyPartCategory } from "@prisma/client";
 
-const LINES: BeyPartLine[] = ["BX", "UX", "CX"];
+const LINES: BeyPartLine[] = ["BX", "UX", "CX", "RATCHET", "BIT", "BX_EXPAND", "UX_EXPAND", "CX_EXPAND"];
 const CATEGORIES: BeyPartCategory[] = ["BLADE", "RATCHET", "BIT", "LOCK_CHIP", "MAIN_BLADE", "ASSIST_BLADE"];
 
 export async function GET() {

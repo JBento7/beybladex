@@ -63,6 +63,11 @@ enum BeyPartLine {
   BX
   UX
   CX
+  RATCHET
+  BIT
+  BX_EXPAND
+  UX_EXPAND
+  CX_EXPAND
 }
 
 enum BeyPartCategory {
