@@ -97,7 +97,7 @@ function RadarChart({ part, size = 130 }: { part: BeyPart; size?: number }) {
   const cx = size / 2;
   const cy = size / 2;
   const r = size * 0.36;
-  const labelR = size * 0.48;
+  const labelR = size * 0.46;
 
   if (n < 3) return null;
 
@@ -320,16 +320,20 @@ function PartCard({ part, onEdit, onDelete, deleting }: {
           </span>
         </div>
 
-        {/* Radar + bars side by side */}
-        <div className="flex gap-2 items-center mb-3">
-          {axes.length >= 3 && <RadarChart part={part} size={90} />}
-          <div className="flex-1 min-w-0">
-            {hasStats ? (
-              <StatBars part={part} />
-            ) : (
-              <p className="text-[11px] text-gray-600 italic">Sem stats</p>
-            )}
+        {/* Radar chart centered */}
+        {axes.length >= 3 && (
+          <div className="flex justify-center mb-2">
+            <RadarChart part={part} size={110} />
           </div>
+        )}
+
+        {/* Stat bars below */}
+        <div className="mb-3">
+          {hasStats ? (
+            <StatBars part={part} />
+          ) : (
+            <p className="text-[11px] text-gray-600 italic text-center">Sem stats</p>
+          )}
         </div>
 
         <div className="flex gap-2 mt-auto">
