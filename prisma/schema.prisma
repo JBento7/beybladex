@@ -325,14 +325,14 @@ model BeyPart {
   line      BeyPartLine
   category  BeyPartCategory
   name      String
-  imageUrl  String?
-  statAtk   Int?
-  statDef   Int?
-  statSta   Int?
-  statBr    Int?
-  statXdash Int?
-  statBal   Int?
-  createdAt DateTime         @default(now())
+  imageUrl    String?
+  statAttack  Int?
+  statDefense Int?
+  statStamina Int?
+  statHeight  Int?
+  statDash    Int?
+  statBurst   Int?
+  createdAt   DateTime         @default(now())
 
   @@unique([line, category, name])
 }

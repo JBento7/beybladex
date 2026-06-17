@@ -339,28 +339,28 @@ export async function GET() {
       sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "imageUrl" TEXT`,
     },
     {
-      name: "BeyPart.statAtk",
-      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statAtk" INTEGER`,
+      name: "BeyPart.statAttack",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statAttack" INTEGER`,
     },
     {
-      name: "BeyPart.statDef",
-      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statDef" INTEGER`,
+      name: "BeyPart.statDefense",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statDefense" INTEGER`,
     },
     {
-      name: "BeyPart.statSta",
-      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statSta" INTEGER`,
+      name: "BeyPart.statStamina",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statStamina" INTEGER`,
     },
     {
-      name: "BeyPart.statBr",
-      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statBr" INTEGER`,
+      name: "BeyPart.statHeight",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statHeight" INTEGER`,
     },
     {
-      name: "BeyPart.statXdash",
-      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statXdash" INTEGER`,
+      name: "BeyPart.statDash",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statDash" INTEGER`,
     },
     {
-      name: "BeyPart.statBal",
-      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statBal" INTEGER`,
+      name: "BeyPart.statBurst",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "statBurst" INTEGER`,
     },
     {
       name: "BeyPartLine.RATCHET",

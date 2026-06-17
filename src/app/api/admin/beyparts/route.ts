@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
 
-  const { line, category, name, imageUrl, statAtk, statDef, statSta, statBr, statXdash, statBal } = await req.json();
+  const { line, category, name, imageUrl, statAttack, statDefense, statStamina, statHeight, statDash, statBurst } = await req.json();
 
   if (!LINES.includes(line)) {
     return NextResponse.json({ error: "Linha inválida" }, { status: 400 });
@@ -46,12 +46,12 @@ export async function POST(req: NextRequest) {
         category,
         name: name.trim(),
         imageUrl: imageUrl?.trim() || null,
-        statAtk: statAtk != null ? Number(statAtk) : null,
-        statDef: statDef != null ? Number(statDef) : null,
-        statSta: statSta != null ? Number(statSta) : null,
-        statBr: statBr != null ? Number(statBr) : null,
-        statXdash: statXdash != null ? Number(statXdash) : null,
-        statBal: statBal != null ? Number(statBal) : null,
+        statAttack: statAttack != null ? Number(statAttack) : null,
+        statDefense: statDefense != null ? Number(statDefense) : null,
+        statStamina: statStamina != null ? Number(statStamina) : null,
+        statHeight: statHeight != null ? Number(statHeight) : null,
+        statDash: statDash != null ? Number(statDash) : null,
+        statBurst: statBurst != null ? Number(statBurst) : null,
       },
     });
     return NextResponse.json(part, { status: 201 });
