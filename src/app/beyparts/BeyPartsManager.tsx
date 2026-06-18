@@ -513,6 +513,7 @@ export default function BeyPartsManager() {
   const [activeLine, setActiveLine] = useState<Line>("BX");
   const [activeCategory, setActiveCategory] = useState<Category | null>(null);
   const [activeRatchetSize, setActiveRatchetSize] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [newNames, setNewNames] = useState<Record<Category, string>>({
     BLADE: "", RATCHET: "", BIT: "", LOCK_CHIP: "", OVER_BLADE: "", MAIN_BLADE: "", ASSIST_BLADE: "",
@@ -580,67 +581,123 @@ export default function BeyPartsManager() {
       )].sort((a, b) => Number(a) - Number(b))
     : [];
 
+  const searchTerm = search.trim().toLowerCase();
+
   const partsByCategory = (category: Category) =>
     parts
       .filter((p) => p.line === activeLine && p.category === category)
+      .filter((p) => !searchTerm || p.name.toLowerCase().includes(searchTerm))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   const ratchetParts = parts
     .filter((p) => p.line === "RATCHET")
     .filter((p) => activeRatchetSize === null || ratchetSize(p.name) === activeRatchetSize)
+    .filter((p) => !searchTerm || p.name.toLowerCase().includes(searchTerm))
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   return (
-    <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
-      <div className="mb-5">
-        <h2 className="text-lg font-bold text-white">Catálogo de Peças</h2>
-        <p className="text-gray-400 text-sm mt-1">Cadastre as peças disponíveis para cada linha de Beyblade.</p>
-      </div>
+    <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl">
+      {/* Sticky header + tabs */}
+      <div className="sticky top-[64px] md:top-[100px] z-30 bg-[#1a1a1a] border-b border-[#2a2a2a] px-6 pt-5 pb-3">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-lg font-bold text-white">Catálogo de Peças</h2>
+            <p className="text-gray-400 text-sm mt-0.5">Cadastre as peças disponíveis para cada linha de Beyblade.</p>
+          </div>
+          {/* Search */}
+          <div className="relative flex-shrink-0 w-52">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Pesquisar peça..."
+              className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
 
-      {/* Line tabs */}
-      <div className="flex flex-wrap gap-2 mb-3">
-        {(Object.keys(LINE_LABELS) as Line[]).map((line) => (
-          <button
-            key={line}
-            onClick={() => {
-              setActiveLine(line);
-              setActiveCategory(null);
-              setActiveRatchetSize(null);
-            }}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
-              activeLine === line ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 hover:text-white"
-            }`}
-          >
-            {LINE_LABELS[line]}
-          </button>
-        ))}
-      </div>
-
-      {/* Category sub-tabs (only when line has multiple categories) */}
-      {LINE_CATEGORIES[activeLine].length > 1 && (
-        <div className="flex flex-wrap gap-1.5 mb-5 pl-1 border-l-2 border-[#333]">
-          <button
-            onClick={() => setActiveCategory(null)}
-            className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-              activeCategory === null ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
-            }`}
-          >
-            Todas
-          </button>
-          {LINE_CATEGORIES[activeLine].map((cat) => (
+        {/* Line tabs */}
+        <div className="flex flex-wrap gap-2 mb-2">
+          {(Object.keys(LINE_LABELS) as Line[]).map((line) => (
             <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-                activeCategory === cat ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+              key={line}
+              onClick={() => {
+                setActiveLine(line);
+                setActiveCategory(null);
+                setActiveRatchetSize(null);
+                setSearch("");
+              }}
+              className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${
+                activeLine === line ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 hover:text-white"
               }`}
             >
-              {CATEGORY_LABELS[cat]}
+              {LINE_LABELS[line]}
             </button>
           ))}
         </div>
-      )}
 
+        {/* Category sub-tabs */}
+        {LINE_CATEGORIES[activeLine].length > 1 && (
+          <div className="flex flex-wrap gap-1.5 pt-1.5 pl-1 border-l-2 border-[#333]">
+            <button
+              onClick={() => setActiveCategory(null)}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                activeCategory === null ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              Todas
+            </button>
+            {LINE_CATEGORIES[activeLine].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  activeCategory === cat ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                {CATEGORY_LABELS[cat]}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Ratchet size sub-tabs (shown inside sticky bar too) */}
+        {activeLine === "RATCHET" && ratchetSizes.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1.5 pl-1 border-l-2 border-[#333]">
+            <button
+              onClick={() => setActiveRatchetSize(null)}
+              className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                activeRatchetSize === null ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              Todos
+            </button>
+            {ratchetSizes.map((size) => (
+              <button
+                key={size}
+                onClick={() => setActiveRatchetSize(size)}
+                className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  activeRatchetSize === size ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                {size} lâminas
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="px-6 pb-6 pt-5">
       {error && (
         <div className="mb-4 text-red-400 text-sm bg-red-900/20 border border-red-700/30 px-3 py-2 rounded-lg">
           {error}
@@ -651,31 +708,6 @@ export default function BeyPartsManager() {
         <p className="text-gray-500 text-sm text-center py-4">Carregando...</p>
       ) : activeLine === "RATCHET" ? (
         <div>
-          {/* Ratchet size sub-tabs */}
-          {ratchetSizes.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-5 pl-1 border-l-2 border-[#333]">
-              <button
-                onClick={() => setActiveRatchetSize(null)}
-                className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-                  activeRatchetSize === null ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                Todos
-              </button>
-              {ratchetSizes.map((size) => (
-                <button
-                  key={size}
-                  onClick={() => setActiveRatchetSize(size)}
-                  className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-                    activeRatchetSize === size ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
-                  }`}
-                >
-                  {size} lâminas
-                </button>
-              ))}
-            </div>
-          )}
-
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {ratchetParts.map((p) => (
               <PartCard
@@ -752,6 +784,8 @@ export default function BeyPartsManager() {
           })}
         </div>
       )}
+
+      </div>
 
       {editingPart && (
         <EditPartModal part={editingPart} onClose={() => setEditingPart(null)} onSaved={handleSaved} />
