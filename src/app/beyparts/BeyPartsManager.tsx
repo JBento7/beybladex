@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 type Line = "BX" | "UX" | "CX" | "RATCHET" | "BIT" | "BX_EXPAND" | "UX_EXPAND" | "CX_EXPAND";
 type Category = "BLADE" | "RATCHET" | "BIT" | "LOCK_CHIP" | "MAIN_BLADE" | "ASSIST_BLADE" | "OVER_BLADE";
@@ -248,7 +248,28 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
     )
   );
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setErr("");
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/admin/beyparts/upload", { method: "POST", body: fd });
+    setUploading(false);
+    if (res.ok) {
+      const data = await res.json();
+      setImageUrl(data.path);
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setErr(data.error ?? "Erro ao enviar imagem");
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   const preview: BeyPart = {
     ...part,
@@ -314,12 +335,38 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
         </div>
 
         <div className="mb-4">
-          <label className="block text-xs font-semibold text-gray-400 mb-1">URL da Foto</label>
+          <label className="block text-xs font-semibold text-gray-400 mb-1">Foto da Peça</label>
+          {/* Upload button */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="w-full mb-2 flex items-center justify-center gap-2 bg-[#252525] hover:bg-[#2e2e2e] border border-dashed border-[#444] hover:border-[#f0a500] disabled:opacity-50 text-gray-300 text-sm font-medium py-2.5 rounded-lg transition-colors"
+          >
+            {uploading ? (
+              <span className="text-gray-500">Enviando...</span>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Enviar imagem do computador
+              </>
+            )}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          {/* Manual URL fallback */}
           <input
             type="text"
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
-            placeholder="https://..."
+            placeholder="Ou cole uma URL..."
             className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
           />
         </div>
