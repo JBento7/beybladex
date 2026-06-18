@@ -36,11 +36,11 @@ export async function POST(req: NextRequest) {
   const filename = `${safeName}-${Date.now()}.${ext}`;
 
   const dir = path.join(process.cwd(), "public", "beyparts");
-  await mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true, mode: 0o755 });
   const filePath = path.join(dir, filename);
 
   const bytes = await file.arrayBuffer();
-  await writeFile(filePath, Buffer.from(bytes));
+  await writeFile(filePath, Buffer.from(bytes), { mode: 0o644 });
 
   return NextResponse.json({ path: `/beyparts/${filename}` });
 }
