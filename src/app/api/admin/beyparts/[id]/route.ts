@@ -13,12 +13,13 @@ export async function PATCH(
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
 
-  const { imageUrl, statAttack, statDefense, statStamina, statHeight, statDash, statBurst } = await req.json();
+  const { imageUrl, partType, statAttack, statDefense, statStamina, statHeight, statDash, statBurst } = await req.json();
 
   const updated = await prisma.beyPart.update({
     where: { id: params.id },
     data: {
       imageUrl: imageUrl?.trim() || null,
+      partType: partType?.trim() || null,
       statAttack: statAttack != null ? Number(statAttack) : null,
       statDefense: statDefense != null ? Number(statDefense) : null,
       statStamina: statStamina != null ? Number(statStamina) : null,

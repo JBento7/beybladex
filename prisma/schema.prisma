@@ -327,6 +327,7 @@ model BeyPart {
   category  BeyPartCategory
   name      String
   imageUrl    String?
+  partType    String?
   statAttack  Int?
   statDefense Int?
   statStamina Int?

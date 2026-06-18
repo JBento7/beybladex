@@ -5,12 +5,32 @@ import { useState, useEffect, useCallback } from "react";
 type Line = "BX" | "UX" | "CX" | "RATCHET" | "BIT" | "BX_EXPAND" | "UX_EXPAND" | "CX_EXPAND";
 type Category = "BLADE" | "RATCHET" | "BIT" | "LOCK_CHIP" | "MAIN_BLADE" | "ASSIST_BLADE" | "OVER_BLADE";
 
+type PartType = "ATTACK" | "DEFENSE" | "STAMINA" | "BALANCE";
+
+const PART_TYPE_LABELS: Record<PartType, string> = {
+  ATTACK:  "Ataque",
+  DEFENSE: "Defesa",
+  STAMINA: "Resistência",
+  BALANCE: "Equilíbrio",
+};
+
+const PART_TYPE_IMAGES: Record<PartType, string> = {
+  ATTACK:  "/ataque.png",
+  DEFENSE: "/defesa.png",
+  STAMINA: "/resistencia.png",
+  BALANCE: "/equilibrio.png",
+};
+
+// Categories that use a type badge instead of stats
+const TYPE_ONLY_CATEGORIES: Category[] = ["OVER_BLADE", "ASSIST_BLADE"];
+
 interface BeyPart {
   id: string;
   line: Line;
   category: Category;
   name: string;
   imageUrl: string | null;
+  partType: string | null;
   statAttack: number | null;
   statDefense: number | null;
   statStamina: number | null;
@@ -74,9 +94,9 @@ const CATEGORY_STATS: Record<Category, StatKey[]> = {
   RATCHET:      ["statAttack", "statDefense", "statStamina", "statHeight"],
   BIT:          ["statAttack", "statDefense", "statStamina", "statDash", "statBurst"],
   LOCK_CHIP:    [],
-  OVER_BLADE:   ["statAttack", "statDefense", "statStamina"],
+  OVER_BLADE:   [],
   MAIN_BLADE:   ["statAttack", "statDefense", "statStamina"],
-  ASSIST_BLADE: ["statAttack", "statDefense", "statStamina"],
+  ASSIST_BLADE: [],
 };
 
 const STAT_MAX: Record<StatKey, number> = {
@@ -173,6 +193,20 @@ function StatBars({ part }: { part: BeyPart }) {
   );
 }
 
+function PartTypeBadge({ type }: { type: string | null }) {
+  const pt = type as PartType | null;
+  if (!pt || !PART_TYPE_IMAGES[pt]) {
+    return <p className="text-[11px] text-gray-600 italic text-center py-2">Tipo não definido</p>;
+  }
+  return (
+    <div className="flex flex-col items-center gap-1.5 py-2">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={PART_TYPE_IMAGES[pt]} alt={PART_TYPE_LABELS[pt]} className="w-12 h-12 object-contain" />
+      <span className="text-xs font-bold text-gray-300">{PART_TYPE_LABELS[pt]}</span>
+    </div>
+  );
+}
+
 interface EditModalProps {
   part: BeyPart;
   onClose: () => void;
@@ -181,7 +215,9 @@ interface EditModalProps {
 
 function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
   const axes = CATEGORY_STATS[part.category];
+  const isTypeOnly = TYPE_ONLY_CATEGORIES.includes(part.category);
   const [imageUrl, setImageUrl] = useState(part.imageUrl ?? "");
+  const [partType, setPartType] = useState<string>(part.partType ?? "");
   const [stats, setStats] = useState<Partial<Record<StatKey, string>>>(() =>
     Object.fromEntries(
       axes.map((k) => [k, part[k] != null ? String(part[k]) : ""])
@@ -193,17 +229,20 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
   const preview: BeyPart = {
     ...part,
     imageUrl: imageUrl.trim() || null,
+    partType: partType || null,
     ...Object.fromEntries(axes.map((k) => [k, stats[k] !== "" && stats[k] != null ? Number(stats[k]) : null])),
   };
 
   async function handleSave() {
     setSaving(true);
     setErr("");
-    const body: Record<string, unknown> = { imageUrl: imageUrl.trim() || null };
+    const body: Record<string, unknown> = {
+      imageUrl: imageUrl.trim() || null,
+      partType: partType || null,
+    };
     for (const k of axes) {
       body[k] = stats[k] !== "" && stats[k] != null ? Number(stats[k]) : null;
     }
-    // null out stats not applicable to this category
     const allKeys: StatKey[] = ["statAttack", "statDefense", "statStamina", "statHeight", "statDash", "statBurst"];
     for (const k of allKeys) {
       if (!axes.includes(k)) body[k] = null;
@@ -242,7 +281,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <StatBars part={preview} />
+            {isTypeOnly ? <PartTypeBadge type={preview.partType} /> : <StatBars part={preview} />}
           </div>
         </div>
 
@@ -256,6 +295,32 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
             className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
           />
         </div>
+
+        {isTypeOnly && (
+          <div className="mb-5">
+            <label className="block text-xs font-semibold text-gray-400 mb-2">Tipo da Peça</label>
+            <div className="grid grid-cols-4 gap-2">
+              {(Object.keys(PART_TYPE_LABELS) as PartType[]).map((pt) => (
+                <button
+                  key={pt}
+                  type="button"
+                  onClick={() => setPartType(partType === pt ? "" : pt)}
+                  className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all ${
+                    partType === pt
+                      ? "border-[#f0a500] bg-[#f0a500]/10"
+                      : "border-[#333] bg-[#252525] hover:border-gray-500"
+                  }`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={PART_TYPE_IMAGES[pt]} alt={PART_TYPE_LABELS[pt]} className="w-8 h-8 object-contain" />
+                  <span className={`text-[10px] font-semibold ${partType === pt ? "text-[#f0a500]" : "text-gray-400"}`}>
+                    {PART_TYPE_LABELS[pt]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3 mb-6">
           {axes.map((key) => {
@@ -298,6 +363,7 @@ function PartCard({ part, onEdit, onDelete, deleting }: {
 }) {
   const axes = CATEGORY_STATS[part.category];
   const hasStats = axes.some((k) => part[k] != null);
+  const isTypeOnly = TYPE_ONLY_CATEGORIES.includes(part.category);
 
   return (
     <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden flex flex-col">
@@ -322,21 +388,26 @@ function PartCard({ part, onEdit, onDelete, deleting }: {
           </span>
         </div>
 
-        {/* Radar chart centered */}
-        {axes.length >= 3 && (
-          <div className="flex justify-center mb-2">
-            <RadarChart part={part} size={110} />
+        {isTypeOnly ? (
+          <div className="mb-3">
+            <PartTypeBadge type={part.partType} />
           </div>
+        ) : (
+          <>
+            {axes.length >= 3 && (
+              <div className="flex justify-center mb-2">
+                <RadarChart part={part} size={110} />
+              </div>
+            )}
+            <div className="mb-3">
+              {hasStats ? (
+                <StatBars part={part} />
+              ) : (
+                <p className="text-[11px] text-gray-600 italic text-center">Sem stats</p>
+              )}
+            </div>
+          </>
         )}
-
-        {/* Stat bars below */}
-        <div className="mb-3">
-          {hasStats ? (
-            <StatBars part={part} />
-          ) : (
-            <p className="text-[11px] text-gray-600 italic text-center">Sem stats</p>
-          )}
-        </div>
 
         <div className="flex gap-2 mt-auto">
           <button onClick={onEdit} className="flex-1 text-xs bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold py-1.5 rounded-lg transition-colors">

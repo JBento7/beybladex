@@ -386,6 +386,10 @@ export async function GET() {
       name: "BeyPartCategory.OVER_BLADE",
       sql: `DO $$ BEGIN ALTER TYPE "BeyPartCategory" ADD VALUE IF NOT EXISTS 'OVER_BLADE'; EXCEPTION WHEN others THEN null; END $$`,
     },
+    {
+      name: "BeyPart.partType",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "partType" TEXT`,
+    },
   ];
 
   for (const migration of migrations) {

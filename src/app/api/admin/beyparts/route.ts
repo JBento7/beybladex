@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
 
-  const { line, category, name, imageUrl, statAttack, statDefense, statStamina, statHeight, statDash, statBurst } = await req.json();
+  const { line, category, name, imageUrl, partType, statAttack, statDefense, statStamina, statHeight, statDash, statBurst } = await req.json();
 
   if (!LINES.includes(line)) {
     return NextResponse.json({ error: "Linha inválida" }, { status: 400 });
@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
         category,
         name: name.trim(),
         imageUrl: imageUrl?.trim() || null,
+        partType: partType?.trim() || null,
         statAttack: statAttack != null ? Number(statAttack) : null,
         statDefense: statDefense != null ? Number(statDefense) : null,
         statStamina: statStamina != null ? Number(statStamina) : null,
