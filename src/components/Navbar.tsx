@@ -73,9 +73,6 @@ export default function Navbar() {
                     <Link href="/beyparts" className={linkClass("/beyparts")}>
                       BeyParts
                     </Link>
-                    <Link href="/test-tournaments" className={linkClass("/test-tournaments")}>
-                      Teste Torneios
-                    </Link>
                   </>
                 )}
               </>
@@ -162,7 +159,6 @@ export default function Navbar() {
                   <>
                     <Link href="/admin" className={mobileLinkClass("/admin")} onClick={() => setMenuOpen(false)}>Admin</Link>
                     <Link href="/beyparts" className={mobileLinkClass("/beyparts")} onClick={() => setMenuOpen(false)}>BeyParts</Link>
-                    <Link href="/test-tournaments" className={mobileLinkClass("/test-tournaments")} onClick={() => setMenuOpen(false)}>Teste Torneios</Link>
                   </>
                 )}
                 <button
