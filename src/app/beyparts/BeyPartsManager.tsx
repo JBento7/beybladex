@@ -21,8 +21,31 @@ const PART_TYPE_IMAGES: Record<PartType, string> = {
   BALANCE: "/equilibrio.png",
 };
 
-// Categories that use a type badge instead of stats
+// Categories that show a type badge (Ataque/Defesa/etc.)
+const TYPE_BADGE_CATEGORIES: Category[] = ["BLADE", "OVER_BLADE", "MAIN_BLADE", "ASSIST_BLADE"];
+// Subset of above where type is set manually (no stats)
 const TYPE_ONLY_CATEGORIES: Category[] = ["OVER_BLADE", "ASSIST_BLADE"];
+// Subset where type is auto-derived from dominant stat
+const AUTO_TYPE_CATEGORIES: Category[] = ["BLADE", "MAIN_BLADE"];
+
+function autoDetectType(part: BeyPart): PartType | null {
+  const atk = part.statAttack ?? 0;
+  const def = part.statDefense ?? 0;
+  const sta = part.statStamina ?? 0;
+  if (atk === 0 && def === 0 && sta === 0) return null;
+  const max = Math.max(atk, def, sta);
+  const threshold = max * 0.85; // within 15% of max = "balanced"
+  const close = [atk, def, sta].filter((v) => v >= threshold).length;
+  if (close >= 3) return "BALANCE";
+  if (atk === max) return "ATTACK";
+  if (def === max) return "DEFENSE";
+  return "STAMINA";
+}
+
+function resolvedType(part: BeyPart): PartType | null {
+  if (AUTO_TYPE_CATEGORIES.includes(part.category)) return autoDetectType(part);
+  return (part.partType as PartType | null) ?? null;
+}
 
 interface BeyPart {
   id: string;
@@ -193,16 +216,16 @@ function StatBars({ part }: { part: BeyPart }) {
   );
 }
 
-function PartTypeBadge({ type }: { type: string | null }) {
-  const pt = type as PartType | null;
-  if (!pt || !PART_TYPE_IMAGES[pt]) {
+function PartTypeBadge({ type, auto = false }: { type: PartType | null; auto?: boolean }) {
+  if (!type) {
     return <p className="text-[11px] text-gray-600 italic text-center py-2">Tipo não definido</p>;
   }
   return (
-    <div className="flex flex-col items-center gap-1.5 py-2">
+    <div className="flex flex-col items-center gap-1 py-1">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={PART_TYPE_IMAGES[pt]} alt={PART_TYPE_LABELS[pt]} className="w-12 h-12 object-contain" />
-      <span className="text-xs font-bold text-gray-300">{PART_TYPE_LABELS[pt]}</span>
+      <img src={PART_TYPE_IMAGES[type]} alt={PART_TYPE_LABELS[type]} className="w-10 h-10 object-contain" />
+      <span className="text-xs font-bold text-gray-300">{PART_TYPE_LABELS[type]}</span>
+      {auto && <span className="text-[9px] text-gray-600 uppercase tracking-wide">automático</span>}
     </div>
   );
 }
@@ -216,6 +239,7 @@ interface EditModalProps {
 function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
   const axes = CATEGORY_STATS[part.category];
   const isTypeOnly = TYPE_ONLY_CATEGORIES.includes(part.category);
+  const isAutoType = AUTO_TYPE_CATEGORIES.includes(part.category);
   const [imageUrl, setImageUrl] = useState(part.imageUrl ?? "");
   const [partType, setPartType] = useState<string>(part.partType ?? "");
   const [stats, setStats] = useState<Partial<Record<StatKey, string>>>(() =>
@@ -232,6 +256,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
     partType: partType || null,
     ...Object.fromEntries(axes.map((k) => [k, stats[k] !== "" && stats[k] != null ? Number(stats[k]) : null])),
   };
+  const previewType = resolvedType(preview);
 
   async function handleSave() {
     setSaving(true);
@@ -280,8 +305,11 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
               <span className="text-gray-700 text-[10px] text-center leading-tight px-1">Sem foto</span>
             )}
           </div>
-          <div className="flex-1 min-w-0">
-            {isTypeOnly ? <PartTypeBadge type={preview.partType} /> : <StatBars part={preview} />}
+          <div className="flex-1 min-w-0 flex flex-col gap-1">
+            {(isTypeOnly || isAutoType) && (
+              <PartTypeBadge type={previewType} auto={isAutoType} />
+            )}
+            {!isTypeOnly && axes.length > 0 && <StatBars part={preview} />}
           </div>
         </div>
 
@@ -320,6 +348,12 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
               ))}
             </div>
           </div>
+        )}
+
+        {isAutoType && axes.length > 0 && (
+          <p className="text-[11px] text-gray-500 mb-4 bg-[#252525] px-3 py-2 rounded-lg">
+            Tipo detectado automaticamente pelo stat dominante.
+          </p>
         )}
 
         <div className="grid grid-cols-2 gap-3 mb-6">
@@ -363,7 +397,9 @@ function PartCard({ part, onEdit, onDelete, deleting }: {
 }) {
   const axes = CATEGORY_STATS[part.category];
   const hasStats = axes.some((k) => part[k] != null);
+  const showBadge = TYPE_BADGE_CATEGORIES.includes(part.category);
   const isTypeOnly = TYPE_ONLY_CATEGORIES.includes(part.category);
+  const partTypeResolved = resolvedType(part);
 
   return (
     <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden flex flex-col">
@@ -388,11 +424,13 @@ function PartCard({ part, onEdit, onDelete, deleting }: {
           </span>
         </div>
 
-        {isTypeOnly ? (
-          <div className="mb-3">
-            <PartTypeBadge type={part.partType} />
+        {showBadge && (
+          <div className="flex justify-center mb-2">
+            <PartTypeBadge type={partTypeResolved} auto={!isTypeOnly} />
           </div>
-        ) : (
+        )}
+
+        {!isTypeOnly && (
           <>
             {axes.length >= 3 && (
               <div className="flex justify-center mb-2">
@@ -402,7 +440,7 @@ function PartCard({ part, onEdit, onDelete, deleting }: {
             <div className="mb-3">
               {hasStats ? (
                 <StatBars part={part} />
-              ) : (
+              ) : axes.length === 0 ? null : (
                 <p className="text-[11px] text-gray-600 italic text-center">Sem stats</p>
               )}
             </div>
