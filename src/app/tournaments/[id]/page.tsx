@@ -649,6 +649,14 @@ export default async function TournamentDetailPage({
                   ✏️ Editar
                 </Link>
               )}
+              {isOrganizerOfThis && tournament.status === "FINISHED" && (
+                <Link
+                  href={`/tournaments/${tournament.id}/certificates`}
+                  className="text-sm bg-[#f0a500] hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-lg transition-colors text-center"
+                >
+                  🏆 Cards de Premiação
+                </Link>
+              )}
               {isOrganizerOfThis && (
                 <Link
                   href="/dashboard"
