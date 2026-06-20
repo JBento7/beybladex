@@ -24,6 +24,28 @@ function sumStats(parts: (Partial<CombinedStats> | null | undefined)[]): Combine
   return r;
 }
 
+const TYPE_IMAGES: Record<string, string> = {
+  ATTACK:  "/ataque.png",
+  DEFENSE: "/defesa.png",
+  STAMINA: "/resistencia.png",
+  BALANCE: "/equilibrio.png",
+};
+
+function detectType(stats: CombinedStats): string | null {
+  const atk = stats.statAttack;
+  const def = stats.statDefense;
+  const sta = stats.statStamina;
+  if (atk === 0 && def === 0 && sta === 0) return null;
+  const max = Math.max(atk, def, sta);
+  const threshold = max * 0.85;
+  const close = [atk, def, sta].filter((v) => v >= threshold).length;
+  if (close >= 3) return "BALANCE";
+  if (atk === max) return "ATTACK";
+  if (def === max) return "DEFENSE";
+  return "STAMINA";
+}
+
+
 function RadarChart({ stats, size = 130 }: { stats: CombinedStats; size?: number }) {
   // HEIGHT excluded from radar display
   const axes = STAT_DEFS.filter((s) => stats[s.key] > 0);
@@ -198,9 +220,20 @@ function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
           </div>
         )}
 
-        <div className="flex justify-center">
-          <RadarChart stats={bey.stats} size={120} />
-        </div>
+        {(() => {
+          const type = detectType(bey.stats);
+          return (
+            <div className="flex items-center justify-center gap-3">
+              <RadarChart stats={bey.stats} size={120} />
+              {type && (
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={TYPE_IMAGES[type]} alt={type} className="w-10 h-10 object-contain" />
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         <StatBars stats={bey.stats} />
       </div>
