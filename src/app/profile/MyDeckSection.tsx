@@ -106,7 +106,7 @@ function isCX(line: string | null) {
 
 function partsList(b: DeckBeyInfo): string {
   if (isCX(b.beyLine)) {
-    return [b.lockChip, b.overBlade, b.metalBlade, b.assistBlade, b.bit].filter(Boolean).join(" / ");
+    return [b.lockChip, b.overBlade, b.metalBlade, b.assistBlade, b.ratchet, b.bit].filter(Boolean).join(" / ");
   }
   return [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
 }
@@ -174,6 +174,7 @@ function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
                   ...(bey.overBlade ? [{ label: "Over", val: bey.overBlade }] : []),
                   { label: "Metal", val: bey.metalBlade },
                   { label: "Assist", val: bey.assistBlade },
+                  { label: "Ratchet", val: bey.ratchet },
                   { label: "Bit", val: bey.bit },
                 ].map(({ label, val }) => val ? (
                   <div key={label} className="flex items-center gap-1">
@@ -278,6 +279,7 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
       if (b.metalBlade) partLookups.push({ name: b.metalBlade, line: cxLine, category: "MAIN_BLADE" });
       if (b.assistBlade) partLookups.push({ name: b.assistBlade, line: "CX", category: "ASSIST_BLADE" });
       if (b.overBlade) partLookups.push({ name: b.overBlade, line: cxLine, category: "OVER_BLADE" });
+      if (b.ratchet) partLookups.push({ name: b.ratchet, line: "RATCHET", category: "RATCHET" });
       if (b.bit) partLookups.push({ name: b.bit, line: "BIT", category: "BIT" });
     }
   }
@@ -304,7 +306,7 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
     const isCX = isCXLine(line);
 
     const bladePart = isCX ? null : findPart(b.blade, line, "BLADE");
-    const ratchetPart = isCX ? null : findPart(b.ratchet, "RATCHET", "RATCHET");
+    const ratchetPart = findPart(b.ratchet, "RATCHET", "RATCHET");
     const bitPart = findPart(b.bit, "BIT", "BIT");
     // lock chip and assist blade shared (always from CX line)
     const lockChipPart = isCX ? findPart(b.lockChip, "CX", "LOCK_CHIP") : null;
@@ -315,7 +317,7 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
     const overBladePart = isCX ? findPart(b.overBlade, cxLine, "OVER_BLADE") : null;
 
     const partsForStats: (CombinedStats | null)[] = (isCX
-      ? [metalBladePart, assistBladePart, overBladePart, bitPart]
+      ? [metalBladePart, assistBladePart, overBladePart, ratchetPart, bitPart]
       : [bladePart, ratchetPart, bitPart]
     ).map((p) => p ? {
       statAttack: p.statAttack ?? 0,

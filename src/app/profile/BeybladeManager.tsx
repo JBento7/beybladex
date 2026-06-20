@@ -240,8 +240,8 @@ export default function BeybladeManager() {
         results.push(beyParts.find((p) => p.name === form.overBlade && p.line === "CX_EXPAND" && p.category === "OVER_BLADE") ?? null);
       }
     }
-    // Ratchet (not for UX_EXPAND, not for CX lines)
-    if (["BX", "UX", "BX_EXPAND"].includes(selectedLine)) {
+    // Ratchet (not for UX_EXPAND)
+    if (["BX", "UX", "BX_EXPAND", "CX", "CX_EXPAND"].includes(selectedLine)) {
       results.push(beyParts.find((p) => p.name === form.ratchet && p.line === "RATCHET" && p.category === "RATCHET") ?? null);
     }
     // Bit
@@ -345,7 +345,7 @@ export default function BeybladeManager() {
 
   function comboParts(b: Beyblade) {
     if (b.beyLine && ["CX", "CX_EXPAND"].includes(b.beyLine)) {
-      return [b.lockChip, b.overBlade, b.metalBlade, b.assistBlade, b.bit].filter(Boolean).join(" / ");
+      return [b.lockChip, b.overBlade, b.metalBlade, b.assistBlade, b.ratchet, b.bit].filter(Boolean).join(" / ");
     }
     return [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
   }
@@ -488,8 +488,8 @@ export default function BeybladeManager() {
                 </>
               )}
 
-              {/* Ratchet — only BX, UX, BX_EXPAND (not UX_EXPAND, not CX lines) */}
-              {["BX", "UX", "BX_EXPAND"].includes(selectedLine) && (
+              {/* Ratchet — BX, UX, BX_EXPAND, CX, CX_EXPAND (not UX_EXPAND) */}
+              {["BX", "UX", "BX_EXPAND", "CX", "CX_EXPAND"].includes(selectedLine) && (
                 <PartSelect
                   label="Ratchet"
                   value={form.ratchet}
