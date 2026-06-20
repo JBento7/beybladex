@@ -9,6 +9,7 @@ import type { FinishType } from "@prisma/client";
 import BeybladeManager from "./BeybladeManager";
 import AvatarUpload from "./AvatarUpload";
 import ProfileEditor from "./ProfileEditor";
+import MyDeckSection from "./MyDeckSection";
 import { getComboStats } from "@/lib/beyblade-stats";
 import type { Metadata } from "next";
 
@@ -200,6 +201,11 @@ export default async function ProfilePage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Deck (beyblades registered in tournaments) */}
+        <div className="mt-6">
+          <MyDeckSection userId={userId} />
         </div>
 
         {/* Combo Manager */}
