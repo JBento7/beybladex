@@ -230,9 +230,12 @@ export default function BeybladeManager() {
       results.push(beyParts.find((p) => p.name === form.blade && p.line === bladeLineFor(selectedLine) && p.category === "BLADE") ?? null);
     }
     if (["CX", "CX_EXPAND"].includes(selectedLine)) {
-      results.push(beyParts.find((p) => p.name === form.lockChip && p.line === bladeLineFor(selectedLine) && p.category === "LOCK_CHIP") ?? null);
+      // lock chip and assist blade are shared (always from CX line)
+      results.push(beyParts.find((p) => p.name === form.lockChip && p.line === "CX" && p.category === "LOCK_CHIP") ?? null);
+      // metal blade is exclusive to each line (CX or CX_EXPAND)
       results.push(beyParts.find((p) => p.name === form.metalBlade && p.line === bladeLineFor(selectedLine) && p.category === "MAIN_BLADE") ?? null);
-      results.push(beyParts.find((p) => p.name === form.assistBlade && p.line === bladeLineFor(selectedLine) && p.category === "ASSIST_BLADE") ?? null);
+      // assist blade shared (always from CX line)
+      results.push(beyParts.find((p) => p.name === form.assistBlade && p.line === "CX" && p.category === "ASSIST_BLADE") ?? null);
       if (selectedLine === "CX_EXPAND") {
         results.push(beyParts.find((p) => p.name === form.overBlade && p.line === "CX_EXPAND" && p.category === "OVER_BLADE") ?? null);
       }
@@ -453,10 +456,11 @@ export default function BeybladeManager() {
               {/* CX / CX_EXPAND */}
               {["CX", "CX_EXPAND"].includes(selectedLine) && (
                 <>
+                  {/* Lock chip and assist blade shared between CX and CX Expand */}
                   <PartSelect
                     label="Lock Chip"
                     value={form.lockChip}
-                    options={partsFor(bladeLineFor(selectedLine), "LOCK_CHIP")}
+                    options={partsFor("CX", "LOCK_CHIP")}
                     onChange={(v) => setForm((f) => ({ ...f, lockChip: v }))}
                   />
                   {selectedLine === "CX_EXPAND" && (
@@ -467,16 +471,18 @@ export default function BeybladeManager() {
                       onChange={(v) => setForm((f) => ({ ...f, overBlade: v }))}
                     />
                   )}
+                  {/* Metal blade exclusive per line */}
                   <PartSelect
                     label="Metal Blade"
                     value={form.metalBlade}
                     options={partsFor(bladeLineFor(selectedLine), "MAIN_BLADE")}
                     onChange={(v) => setForm((f) => ({ ...f, metalBlade: v }))}
                   />
+                  {/* Assist blade shared between CX and CX Expand */}
                   <PartSelect
                     label="Assist Blade"
                     value={form.assistBlade}
-                    options={partsFor(bladeLineFor(selectedLine), "ASSIST_BLADE")}
+                    options={partsFor("CX", "ASSIST_BLADE")}
                     onChange={(v) => setForm((f) => ({ ...f, assistBlade: v }))}
                   />
                 </>

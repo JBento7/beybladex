@@ -274,9 +274,9 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
       if (b.ratchet) partLookups.push({ name: b.ratchet, line: "RATCHET", category: "RATCHET" });
       if (b.bit) partLookups.push({ name: b.bit, line: "BIT", category: "BIT" });
     } else {
-      if (b.lockChip) partLookups.push({ name: b.lockChip, line: cxLine, category: "LOCK_CHIP" });
+      if (b.lockChip) partLookups.push({ name: b.lockChip, line: "CX", category: "LOCK_CHIP" });
       if (b.metalBlade) partLookups.push({ name: b.metalBlade, line: cxLine, category: "MAIN_BLADE" });
-      if (b.assistBlade) partLookups.push({ name: b.assistBlade, line: cxLine, category: "ASSIST_BLADE" });
+      if (b.assistBlade) partLookups.push({ name: b.assistBlade, line: "CX", category: "ASSIST_BLADE" });
       if (b.overBlade) partLookups.push({ name: b.overBlade, line: cxLine, category: "OVER_BLADE" });
       if (b.bit) partLookups.push({ name: b.bit, line: "BIT", category: "BIT" });
     }
@@ -306,9 +306,12 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
     const bladePart = isCX ? null : findPart(b.blade, line, "BLADE");
     const ratchetPart = isCX ? null : findPart(b.ratchet, "RATCHET", "RATCHET");
     const bitPart = findPart(b.bit, "BIT", "BIT");
-    const lockChipPart = isCX ? findPart(b.lockChip, cxLine, "LOCK_CHIP") : null;
+    // lock chip and assist blade shared (always from CX line)
+    const lockChipPart = isCX ? findPart(b.lockChip, "CX", "LOCK_CHIP") : null;
+    // metal blade exclusive to each line
     const metalBladePart = isCX ? findPart(b.metalBlade, cxLine, "MAIN_BLADE") : null;
-    const assistBladePart = isCX ? findPart(b.assistBlade, cxLine, "ASSIST_BLADE") : null;
+    // assist blade shared (always from CX line)
+    const assistBladePart = isCX ? findPart(b.assistBlade, "CX", "ASSIST_BLADE") : null;
     const overBladePart = isCX ? findPart(b.overBlade, cxLine, "OVER_BLADE") : null;
 
     const partsForStats: (CombinedStats | null)[] = (isCX
