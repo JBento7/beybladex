@@ -268,9 +268,14 @@ model Beyblade {
   id          String   @id @default(cuid())
   userId      String
   name        String
+  beyLine     String?
   blade       String?
   ratchet     String?
   bit         String?
+  lockChip    String?
+  metalBlade  String?
+  assistBlade String?
+  overBlade   String?
   model       String?
   wins        Int      @default(0)
   losses      Int      @default(0)

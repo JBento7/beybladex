@@ -436,11 +436,12 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
   );
 }
 
-function PartCard({ part, onEdit, onDelete, deleting }: {
+function PartCard({ part, onEdit, onDelete, deleting, isAdmin }: {
   part: BeyPart;
   onEdit: () => void;
   onDelete: () => void;
   deleting: boolean;
+  isAdmin: boolean;
 }) {
   const axes = CATEGORY_STATS[part.category];
   const hasStats = axes.some((k) => part[k] != null);
@@ -494,20 +495,22 @@ function PartCard({ part, onEdit, onDelete, deleting }: {
           </>
         )}
 
-        <div className="flex gap-2 mt-auto">
-          <button onClick={onEdit} className="flex-1 text-xs bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold py-1.5 rounded-lg transition-colors">
-            Editar
-          </button>
-          <button onClick={onDelete} disabled={deleting} className="flex-1 text-xs bg-red-900/30 hover:bg-red-900/50 text-red-400 font-semibold py-1.5 rounded-lg transition-colors disabled:opacity-50">
-            {deleting ? "..." : "Remover"}
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="flex gap-2 mt-auto">
+            <button onClick={onEdit} className="flex-1 text-xs bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold py-1.5 rounded-lg transition-colors">
+              Editar
+            </button>
+            <button onClick={onDelete} disabled={deleting} className="flex-1 text-xs bg-red-900/30 hover:bg-red-900/50 text-red-400 font-semibold py-1.5 rounded-lg transition-colors disabled:opacity-50">
+              {deleting ? "..." : "Remover"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export default function BeyPartsManager() {
+export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean }) {
   const [parts, setParts] = useState<BeyPart[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeLine, setActiveLine] = useState<Line>("BX");
@@ -523,10 +526,10 @@ export default function BeyPartsManager() {
   const [editingPart, setEditingPart] = useState<BeyPart | null>(null);
 
   const fetchParts = useCallback(async () => {
-    const res = await fetch("/api/admin/beyparts");
+    const res = await fetch(isAdmin ? "/api/admin/beyparts" : "/api/beyparts");
     if (res.ok) setParts(await res.json());
     setLoading(false);
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => { fetchParts(); }, [fetchParts]);
 
@@ -602,7 +605,9 @@ export default function BeyPartsManager() {
         <div className="flex items-center justify-between gap-4 mb-4">
           <div>
             <h2 className="text-lg font-bold text-white">Catálogo de Peças</h2>
-            <p className="text-gray-400 text-sm mt-0.5">Cadastre as peças disponíveis para cada linha de Beyblade.</p>
+            <p className="text-gray-400 text-sm mt-0.5">
+              {isAdmin ? "Cadastre as peças disponíveis para cada linha de Beyblade." : "Peças disponíveis por linha de Beyblade."}
+            </p>
           </div>
           {/* Search */}
           <div className="relative flex-shrink-0 w-52">
@@ -713,30 +718,33 @@ export default function BeyPartsManager() {
               <PartCard
                 key={p.id}
                 part={p}
+                isAdmin={isAdmin}
                 onEdit={() => setEditingPart(p)}
                 onDelete={() => handleDelete(p.id)}
                 deleting={deletingId === p.id}
               />
             ))}
-            {/* Add new card */}
-            <div className="bg-[#111] border border-dashed border-[#333] rounded-xl p-3 flex flex-col justify-between min-h-[80px]">
-              <div className="text-xs font-semibold text-gray-500 mb-2">Novo ratchet</div>
-              <input
-                type="text"
-                value={newNames.RATCHET}
-                onChange={(e) => setNewNames((prev) => ({ ...prev, RATCHET: e.target.value }))}
-                onKeyDown={(e) => { if (e.key === "Enter") handleAdd("RATCHET"); }}
-                placeholder="Ex: 3-60"
-                className="bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
-              />
-              <button
-                onClick={() => handleAdd("RATCHET")}
-                disabled={saving === "RATCHET" || !newNames.RATCHET.trim()}
-                className="bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-40 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
-              >
-                {saving === "RATCHET" ? "..." : "+ Adicionar"}
-              </button>
-            </div>
+            {/* Add new card — admin only */}
+            {isAdmin && (
+              <div className="bg-[#111] border border-dashed border-[#333] rounded-xl p-3 flex flex-col justify-between min-h-[80px]">
+                <div className="text-xs font-semibold text-gray-500 mb-2">Novo ratchet</div>
+                <input
+                  type="text"
+                  value={newNames.RATCHET}
+                  onChange={(e) => setNewNames((prev) => ({ ...prev, RATCHET: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAdd("RATCHET"); }}
+                  placeholder="Ex: 3-60"
+                  className="bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
+                />
+                <button
+                  onClick={() => handleAdd("RATCHET")}
+                  disabled={saving === "RATCHET" || !newNames.RATCHET.trim()}
+                  className="bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-40 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  {saving === "RATCHET" ? "..." : "+ Adicionar"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -753,31 +761,34 @@ export default function BeyPartsManager() {
                     <PartCard
                       key={p.id}
                       part={p}
+                      isAdmin={isAdmin}
                       onEdit={() => setEditingPart(p)}
                       onDelete={() => handleDelete(p.id)}
                       deleting={deletingId === p.id}
                     />
                   ))}
 
-                  {/* Add new card */}
-                  <div className="bg-[#111] border border-dashed border-[#333] rounded-xl p-3 flex flex-col justify-between min-h-[80px]">
-                    <div className="text-xs font-semibold text-gray-500 mb-2">Nova peça</div>
-                    <input
-                      type="text"
-                      value={newNames[category]}
-                      onChange={(e) => setNewNames((prev) => ({ ...prev, [category]: e.target.value }))}
-                      onKeyDown={(e) => { if (e.key === "Enter") handleAdd(category); }}
-                      placeholder="Nome..."
-                      className="bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
-                    />
-                    <button
-                      onClick={() => handleAdd(category)}
-                      disabled={saving === category || !newNames[category].trim()}
-                      className="bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-40 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
-                    >
-                      {saving === category ? "..." : "+ Adicionar"}
-                    </button>
-                  </div>
+                  {/* Add new card — admin only */}
+                  {isAdmin && (
+                    <div className="bg-[#111] border border-dashed border-[#333] rounded-xl p-3 flex flex-col justify-between min-h-[80px]">
+                      <div className="text-xs font-semibold text-gray-500 mb-2">Nova peça</div>
+                      <input
+                        type="text"
+                        value={newNames[category]}
+                        onChange={(e) => setNewNames((prev) => ({ ...prev, [category]: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === "Enter") handleAdd(category); }}
+                        placeholder="Nome..."
+                        className="bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
+                      />
+                      <button
+                        onClick={() => handleAdd(category)}
+                        disabled={saving === category || !newNames[category].trim()}
+                        className="bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-40 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        {saving === category ? "..." : "+ Adicionar"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );

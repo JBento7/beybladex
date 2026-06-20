@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  const { name, blade, ratchet, bit } = await req.json();
+  const { name, beyLine, blade, ratchet, bit, lockChip, metalBlade, assistBlade, overBlade } = await req.json();
 
   if (!name || !name.trim()) {
     return NextResponse.json({ error: "O apelido do combo é obrigatório" }, { status: 400 });
@@ -40,9 +40,14 @@ export async function POST(req: NextRequest) {
     data: {
       userId: session.user.id,
       name: name.trim(),
+      beyLine: beyLine || null,
       blade: blade?.trim() || null,
       ratchet: ratchet?.trim() || null,
       bit: bit?.trim() || null,
+      lockChip: lockChip?.trim() || null,
+      metalBlade: metalBlade?.trim() || null,
+      assistBlade: assistBlade?.trim() || null,
+      overBlade: overBlade?.trim() || null,
     },
   });
 

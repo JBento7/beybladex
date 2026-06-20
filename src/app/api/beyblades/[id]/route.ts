@@ -21,24 +21,23 @@ export async function PATCH(
     return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
   }
 
-  const { name, blade, ratchet, bit, hiddenFromCommunity } = await req.json();
+  const { name, beyLine, blade, ratchet, bit, lockChip, metalBlade, assistBlade, overBlade, hiddenFromCommunity } = await req.json();
 
-  const data: {
-    name?: string;
-    blade?: string | null;
-    ratchet?: string | null;
-    bit?: string | null;
-    hiddenFromCommunity?: boolean;
-  } = {};
+  const data: Record<string, unknown> = {};
 
   if (name !== undefined) {
     if (!name.trim()) {
       return NextResponse.json({ error: "O apelido do combo é obrigatório" }, { status: 400 });
     }
     data.name = name.trim();
+    data.beyLine = beyLine || null;
     data.blade = blade?.trim() || null;
     data.ratchet = ratchet?.trim() || null;
     data.bit = bit?.trim() || null;
+    data.lockChip = lockChip?.trim() || null;
+    data.metalBlade = metalBlade?.trim() || null;
+    data.assistBlade = assistBlade?.trim() || null;
+    data.overBlade = overBlade?.trim() || null;
   }
 
   if (hiddenFromCommunity !== undefined) {

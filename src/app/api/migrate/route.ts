@@ -390,6 +390,26 @@ export async function GET() {
       name: "BeyPart.partType",
       sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "partType" TEXT`,
     },
+    {
+      name: "Beyblade.beyLine",
+      sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "beyLine" TEXT`,
+    },
+    {
+      name: "Beyblade.lockChip",
+      sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "lockChip" TEXT`,
+    },
+    {
+      name: "Beyblade.metalBlade",
+      sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "metalBlade" TEXT`,
+    },
+    {
+      name: "Beyblade.assistBlade",
+      sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "assistBlade" TEXT`,
+    },
+    {
+      name: "Beyblade.overBlade",
+      sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "overBlade" TEXT`,
+    },
   ];
 
   for (const migration of migrations) {

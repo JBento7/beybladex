@@ -65,15 +65,13 @@ export default function Navbar() {
                 <Link href="/tournaments/create" className={linkClass("/tournaments/create")}>
                   Criar
                 </Link>
+                <Link href="/beyparts" className={linkClass("/beyparts")}>
+                  BeyParts
+                </Link>
                 {session.user.role === "ORGANIZER" && (
-                  <>
-                    <Link href="/admin" className={linkClass("/admin")}>
-                      Admin
-                    </Link>
-                    <Link href="/beyparts" className={linkClass("/beyparts")}>
-                      BeyParts
-                    </Link>
-                  </>
+                  <Link href="/admin" className={linkClass("/admin")}>
+                    Admin
+                  </Link>
                 )}
               </>
             )}
@@ -155,10 +153,10 @@ export default function Navbar() {
                 <Link href="/dashboard" className={mobileLinkClass("/dashboard")} onClick={() => setMenuOpen(false)}>Painel</Link>
                 <Link href="/profile" className={mobileLinkClass("/profile")} onClick={() => setMenuOpen(false)}>Perfil</Link>
                 <Link href="/tournaments/create" className={mobileLinkClass("/tournaments/create")} onClick={() => setMenuOpen(false)}>Criar Torneio</Link>
+                <Link href="/beyparts" className={mobileLinkClass("/beyparts")} onClick={() => setMenuOpen(false)}>BeyParts</Link>
                 {session.user.role === "ORGANIZER" && (
                   <>
                     <Link href="/admin" className={mobileLinkClass("/admin")} onClick={() => setMenuOpen(false)}>Admin</Link>
-                    <Link href="/beyparts" className={mobileLinkClass("/beyparts")} onClick={() => setMenuOpen(false)}>BeyParts</Link>
                   </>
                 )}
                 <button

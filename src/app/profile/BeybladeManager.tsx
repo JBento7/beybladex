@@ -2,12 +2,32 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 
+type BeyLine = "BX" | "UX" | "CX" | "BX_EXPAND" | "UX_EXPAND" | "CX_EXPAND";
+
+interface BeyPart {
+  id: string;
+  line: string;
+  category: string;
+  name: string;
+  statAttack: number | null;
+  statDefense: number | null;
+  statStamina: number | null;
+  statHeight: number | null;
+  statDash: number | null;
+  statBurst: number | null;
+}
+
 interface Beyblade {
   id: string;
   name: string;
+  beyLine: string | null;
   blade: string | null;
   ratchet: string | null;
   bit: string | null;
+  lockChip: string | null;
+  metalBlade: string | null;
+  assistBlade: string | null;
+  overBlade: string | null;
   wins: number;
   losses: number;
   points: number;
@@ -15,12 +35,114 @@ interface Beyblade {
   createdAt: string;
 }
 
-const EMPTY = { name: "", blade: "", ratchet: "", bit: "" };
+const LINE_LABELS: Record<BeyLine, string> = {
+  BX: "Linha BX",
+  UX: "Linha UX",
+  CX: "Linha CX",
+  BX_EXPAND: "BX Expand",
+  UX_EXPAND: "UX Expand",
+  CX_EXPAND: "CX Expand",
+};
+
+const ALL_LINES: BeyLine[] = ["BX", "UX", "CX", "BX_EXPAND", "UX_EXPAND", "CX_EXPAND"];
+
+// Which BeyParts lines to pull for each category
+function bladeLineFor(line: BeyLine): string {
+  if (line === "BX") return "BX";
+  if (line === "UX") return "UX";
+  if (line === "BX_EXPAND") return "BX_EXPAND";
+  if (line === "UX_EXPAND") return "UX_EXPAND";
+  if (line === "CX") return "CX";
+  if (line === "CX_EXPAND") return "CX_EXPAND";
+  return "BX";
+}
+
+type StatKey = "statAttack" | "statDefense" | "statStamina" | "statHeight" | "statDash" | "statBurst";
+
+const STAT_DEFS: { key: StatKey; label: string; color: string }[] = [
+  { key: "statAttack",  label: "ATTACK",  color: "#e53e3e" },
+  { key: "statDefense", label: "DEFENSE", color: "#3182ce" },
+  { key: "statStamina", label: "STAMINA", color: "#38a169" },
+  { key: "statHeight",  label: "HEIGHT",  color: "#805ad5" },
+  { key: "statDash",    label: "DASH",    color: "#d69e2e" },
+  { key: "statBurst",   label: "BURST",   color: "#dd6b20" },
+];
+
+function sumStats(parts: (BeyPart | null | undefined)[]): Record<StatKey, number> {
+  const result: Record<StatKey, number> = { statAttack: 0, statDefense: 0, statStamina: 0, statHeight: 0, statDash: 0, statBurst: 0 };
+  for (const p of parts) {
+    if (!p) continue;
+    for (const k of Object.keys(result) as StatKey[]) {
+      result[k] += p[k] ?? 0;
+    }
+  }
+  return result;
+}
+
+function CombinedRadarChart({ stats, size = 150 }: { stats: Record<StatKey, number>; size?: number }) {
+  const axes = STAT_DEFS.filter((s) => stats[s.key] > 0);
+  if (axes.length < 3) {
+    const totalAll = STAT_DEFS.reduce((s, d) => s + stats[d.key], 0);
+    if (totalAll === 0) return <p className="text-xs text-gray-600 italic text-center py-3">Sem stats ainda</p>;
+  }
+  const n = axes.length < 3 ? STAT_DEFS.length : axes.length;
+  const displayAxes = axes.length < 3 ? STAT_DEFS : axes;
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = size * 0.34;
+  const labelR = size * 0.46;
+  const angles = displayAxes.map((_, i) => -Math.PI / 2 + (2 * Math.PI * i) / n);
+  const maxVal = Math.max(...displayAxes.map((s) => stats[s.key]), 1);
+  const vals = displayAxes.map((s) => stats[s.key] / maxVal);
+  const hasData = vals.some((v) => v > 0);
+
+  const polyPts = (frac: number) =>
+    angles.map((a) => `${cx + Math.cos(a) * r * frac},${cy + Math.sin(a) * r * frac}`).join(" ");
+  const dataPath = vals.map((v, i) => `${cx + Math.cos(angles[i]) * r * v},${cy + Math.sin(angles[i]) * r * v}`);
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {[0.25, 0.5, 0.75, 1].map((f) => (
+        <polygon key={f} points={polyPts(f)} fill="none" stroke="#333" strokeWidth="0.8" />
+      ))}
+      {angles.map((a, i) => (
+        <line key={i} x1={cx} y1={cy} x2={cx + Math.cos(a) * r} y2={cy + Math.sin(a) * r} stroke="#444" strokeWidth="0.8" />
+      ))}
+      {hasData && (
+        <path d={`M${dataPath.join("L")}Z`} fill="#f0a500" fillOpacity="0.25" stroke="#f0a500" strokeWidth="1.5" />
+      )}
+      {angles.map((a, i) => {
+        const lx = cx + Math.cos(a) * labelR;
+        const ly = cy + Math.sin(a) * labelR;
+        return (
+          <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="central"
+            fill={displayAxes[i].color} fontSize="7" fontWeight="bold" fontFamily="sans-serif">
+            {displayAxes[i].label}
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
+
+const EMPTY = {
+  name: "",
+  beyLine: "" as BeyLine | "",
+  blade: "",
+  ratchet: "",
+  bit: "",
+  lockChip: "",
+  metalBlade: "",
+  assistBlade: "",
+  overBlade: "",
+};
+type FormState = typeof EMPTY;
 
 export default function BeybladeManager() {
   const [beyblades, setBeyblades] = useState<Beyblade[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState<FormState>(EMPTY);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -32,8 +154,10 @@ export default function BeybladeManager() {
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [confirmResetId, setConfirmResetId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
-
   const [loadError, setLoadError] = useState(false);
+
+  // BeyParts catalog
+  const [beyParts, setBeyParts] = useState<BeyPart[]>([]);
 
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -43,11 +167,7 @@ export default function BeybladeManager() {
     successTimer.current = setTimeout(() => setSuccess(""), 3000);
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (successTimer.current) clearTimeout(successTimer.current);
-    };
-  }, []);
+  useEffect(() => () => { if (successTimer.current) clearTimeout(successTimer.current); }, []);
 
   const fetchBeyblades = useCallback(async () => {
     try {
@@ -65,9 +185,17 @@ export default function BeybladeManager() {
     }
   }, []);
 
+  useEffect(() => { fetchBeyblades(); }, [fetchBeyblades]);
+
   useEffect(() => {
-    fetchBeyblades();
-  }, [fetchBeyblades]);
+    fetch("/api/beyparts").then((r) => r.json()).then(setBeyParts).catch(() => {});
+  }, []);
+
+  function partsFor(line: string, category: string): BeyPart[] {
+    return beyParts
+      .filter((p) => p.line === line && p.category === category)
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }
 
   function openCreate() {
     setForm(EMPTY);
@@ -79,14 +207,46 @@ export default function BeybladeManager() {
   function openEdit(b: Beyblade) {
     setForm({
       name: b.name,
+      beyLine: (b.beyLine as BeyLine) || "",
       blade: b.blade || "",
       ratchet: b.ratchet || "",
       bit: b.bit || "",
+      lockChip: b.lockChip || "",
+      metalBlade: b.metalBlade || "",
+      assistBlade: b.assistBlade || "",
+      overBlade: b.overBlade || "",
     });
     setEditingId(b.id);
     setError("");
     setShowForm(true);
   }
+
+  const selectedLine = form.beyLine as BeyLine | "";
+
+  function getSelectedParts(): (BeyPart | null)[] {
+    if (!selectedLine) return [];
+    const results: (BeyPart | null)[] = [];
+    if (["BX", "UX", "BX_EXPAND", "UX_EXPAND"].includes(selectedLine)) {
+      results.push(beyParts.find((p) => p.name === form.blade && p.line === bladeLineFor(selectedLine) && p.category === "BLADE") ?? null);
+    }
+    if (["CX", "CX_EXPAND"].includes(selectedLine)) {
+      results.push(beyParts.find((p) => p.name === form.lockChip && p.line === bladeLineFor(selectedLine) && p.category === "LOCK_CHIP") ?? null);
+      results.push(beyParts.find((p) => p.name === form.metalBlade && p.line === bladeLineFor(selectedLine) && p.category === "MAIN_BLADE") ?? null);
+      results.push(beyParts.find((p) => p.name === form.assistBlade && p.line === bladeLineFor(selectedLine) && p.category === "ASSIST_BLADE") ?? null);
+      if (selectedLine === "CX_EXPAND") {
+        results.push(beyParts.find((p) => p.name === form.overBlade && p.line === "CX_EXPAND" && p.category === "OVER_BLADE") ?? null);
+      }
+    }
+    // Ratchet (not for UX_EXPAND, not for CX lines)
+    if (["BX", "UX", "BX_EXPAND"].includes(selectedLine)) {
+      results.push(beyParts.find((p) => p.name === form.ratchet && p.line === "RATCHET" && p.category === "RATCHET") ?? null);
+    }
+    // Bit
+    results.push(beyParts.find((p) => p.name === form.bit && p.line === "BIT" && p.category === "BIT") ?? null);
+    return results;
+  }
+
+  const combinedStats = sumStats(getSelectedParts());
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -97,7 +257,17 @@ export default function BeybladeManager() {
     const res = await fetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        name: form.name,
+        beyLine: form.beyLine || null,
+        blade: form.blade || null,
+        ratchet: form.ratchet || null,
+        bit: form.bit || null,
+        lockChip: form.lockChip || null,
+        metalBlade: form.metalBlade || null,
+        assistBlade: form.assistBlade || null,
+        overBlade: form.overBlade || null,
+      }),
     });
     setSaving(false);
     if (res.ok) {
@@ -114,7 +284,6 @@ export default function BeybladeManager() {
 
   async function handleResetStats(id: string) {
     setResettingId(id);
-    setError("");
     try {
       const res = await fetch(`/api/beyblades/${id}/reset-stats`, { method: "POST" });
       if (res.ok) {
@@ -123,10 +292,10 @@ export default function BeybladeManager() {
         fetchBeyblades();
       } else {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || "Erro ao zerar estatísticas. Tente novamente.");
+        setError(data.error || "Erro ao zerar estatísticas.");
       }
     } catch {
-      setError("Erro de conexão. Tente novamente.");
+      setError("Erro de conexão.");
     } finally {
       setResettingId(null);
     }
@@ -138,14 +307,15 @@ export default function BeybladeManager() {
     try {
       const res = await fetch(`/api/beyblades/${id}`, { method: "DELETE" });
       if (!res.ok) {
-        setDeleteError("Erro ao remover combo. Tente novamente.");
+        const data = await res.json().catch(() => ({}));
+        setDeleteError(data.error || "Erro ao remover combo.");
         return;
       }
       setConfirmingId(null);
       flashSuccess("Combo removido!");
       await fetchBeyblades();
     } catch {
-      setDeleteError("Erro ao remover combo. Tente novamente.");
+      setDeleteError("Erro ao remover combo.");
     } finally {
       setDeletingId(null);
     }
@@ -153,7 +323,6 @@ export default function BeybladeManager() {
 
   async function handleToggleHidden(b: Beyblade) {
     setTogglingId(b.id);
-    setError("");
     try {
       const res = await fetch(`/api/beyblades/${b.id}`, {
         method: "PATCH",
@@ -163,19 +332,43 @@ export default function BeybladeManager() {
       if (res.ok) {
         flashSuccess(!b.hiddenFromCommunity ? "Combo trancado!" : "Combo destrancado!");
         fetchBeyblades();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Erro ao atualizar combo. Tente novamente.");
       }
     } catch {
-      setError("Erro de conexão. Tente novamente.");
+      setError("Erro de conexão.");
     } finally {
       setTogglingId(null);
     }
   }
 
   function comboParts(b: Beyblade) {
+    if (b.beyLine && ["CX", "CX_EXPAND"].includes(b.beyLine)) {
+      return [b.lockChip, b.overBlade, b.metalBlade, b.assistBlade, b.bit].filter(Boolean).join(" / ");
+    }
     return [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
+  }
+
+  function PartSelect({ label, value, options, onChange, placeholder }: {
+    label: string;
+    value: string;
+    options: BeyPart[];
+    onChange: (v: string) => void;
+    placeholder?: string;
+  }) {
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-1">{label}</label>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2.5 text-white outline-none transition-colors text-sm"
+        >
+          <option value="">{placeholder ?? "Selecionar..."}</option>
+          {options.map((p) => (
+            <option key={p.id} value={p.name}>{p.name}</option>
+          ))}
+        </select>
+      </div>
+    );
   }
 
   return (
@@ -203,12 +396,14 @@ export default function BeybladeManager() {
       )}
 
       {showForm && (
-        <form onSubmit={handleSave} className="mb-5 bg-[#252525] border border-[#333] rounded-xl p-4 space-y-3">
+        <form onSubmit={handleSave} className="mb-5 bg-[#252525] border border-[#333] rounded-xl p-4 space-y-4">
           {error && (
             <div className="text-red-400 text-sm bg-red-900/20 border border-red-700/30 px-3 py-2 rounded-lg">
               {error}
             </div>
           )}
+
+          {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
               Apelido do Combo <span className="text-red-400">*</span>
@@ -222,38 +417,118 @@ export default function BeybladeManager() {
               className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
             />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Blade</label>
-              <input
-                type="text"
-                value={form.blade}
-                onChange={(e) => setForm({ ...form, blade: e.target.value })}
-                placeholder="ex: Dran Sword"
-                className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Ratchet</label>
-              <input
-                type="text"
-                value={form.ratchet}
-                onChange={(e) => setForm({ ...form, ratchet: e.target.value })}
-                placeholder="ex: 3-60"
-                className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Bit</label>
-              <input
-                type="text"
-                value={form.bit}
-                onChange={(e) => setForm({ ...form, bit: e.target.value })}
-                placeholder="ex: Flat"
-                className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
-              />
+
+          {/* Line selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Linha de Beyblade</label>
+            <div className="flex flex-wrap gap-2">
+              {ALL_LINES.map((line) => (
+                <button
+                  key={line}
+                  type="button"
+                  onClick={() => setForm({ ...EMPTY, name: form.name, beyLine: line })}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    form.beyLine === line ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] border border-[#333] text-gray-400 hover:text-white"
+                  }`}
+                >
+                  {LINE_LABELS[line]}
+                </button>
+              ))}
             </div>
           </div>
+
+          {/* Dynamic part selectors */}
+          {selectedLine && (
+            <div className="space-y-3">
+              {/* BX / UX / BX_EXPAND / UX_EXPAND — Blade */}
+              {["BX", "UX", "BX_EXPAND", "UX_EXPAND"].includes(selectedLine) && (
+                <PartSelect
+                  label="Blade"
+                  value={form.blade}
+                  options={partsFor(bladeLineFor(selectedLine), "BLADE")}
+                  onChange={(v) => setForm((f) => ({ ...f, blade: v }))}
+                />
+              )}
+
+              {/* CX / CX_EXPAND */}
+              {["CX", "CX_EXPAND"].includes(selectedLine) && (
+                <>
+                  <PartSelect
+                    label="Lock Chip"
+                    value={form.lockChip}
+                    options={partsFor(bladeLineFor(selectedLine), "LOCK_CHIP")}
+                    onChange={(v) => setForm((f) => ({ ...f, lockChip: v }))}
+                  />
+                  {selectedLine === "CX_EXPAND" && (
+                    <PartSelect
+                      label="Over Blade"
+                      value={form.overBlade}
+                      options={partsFor("CX_EXPAND", "OVER_BLADE")}
+                      onChange={(v) => setForm((f) => ({ ...f, overBlade: v }))}
+                    />
+                  )}
+                  <PartSelect
+                    label="Metal Blade"
+                    value={form.metalBlade}
+                    options={partsFor(bladeLineFor(selectedLine), "MAIN_BLADE")}
+                    onChange={(v) => setForm((f) => ({ ...f, metalBlade: v }))}
+                  />
+                  <PartSelect
+                    label="Assist Blade"
+                    value={form.assistBlade}
+                    options={partsFor(bladeLineFor(selectedLine), "ASSIST_BLADE")}
+                    onChange={(v) => setForm((f) => ({ ...f, assistBlade: v }))}
+                  />
+                </>
+              )}
+
+              {/* Ratchet — only BX, UX, BX_EXPAND (not UX_EXPAND, not CX lines) */}
+              {["BX", "UX", "BX_EXPAND"].includes(selectedLine) && (
+                <PartSelect
+                  label="Ratchet"
+                  value={form.ratchet}
+                  options={partsFor("RATCHET", "RATCHET")}
+                  onChange={(v) => setForm((f) => ({ ...f, ratchet: v }))}
+                />
+              )}
+
+              {/* Bit — all lines */}
+              <PartSelect
+                label="Bit"
+                value={form.bit}
+                options={partsFor("BIT", "BIT")}
+                onChange={(v) => setForm((f) => ({ ...f, bit: v }))}
+              />
+
+              {/* Combined radar chart preview */}
+              {Object.values(combinedStats).some((v) => v > 0) && (
+                <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4">
+                  <p className="text-xs font-bold text-gray-400 mb-3 text-center uppercase tracking-wider">Stats do Combo</p>
+                  <div className="flex flex-col items-center gap-3">
+                    <CombinedRadarChart stats={combinedStats} size={160} />
+                    <div className="w-full space-y-1.5">
+                      {STAT_DEFS.filter((s) => combinedStats[s.key] > 0).map((s) => (
+                        <div key={s.key} className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold w-14 text-right" style={{ color: s.color }}>{s.label}</span>
+                          <div className="flex-1 h-1.5 bg-[#111] rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${Math.min((combinedStats[s.key] / Math.max(...STAT_DEFS.map((d) => combinedStats[d.key]), 1)) * 100, 100)}%`,
+                                backgroundColor: s.color,
+                              }}
+                            />
+                          </div>
+                          <span className="text-[10px] font-bold text-white w-8">{combinedStats[s.key]}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={saving}
@@ -280,7 +555,7 @@ export default function BeybladeManager() {
         <div className="text-center py-8">
           <div className="mb-3"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
           <p className="text-gray-500 text-sm">Nenhum combo registrado ainda</p>
-          <p className="text-gray-600 text-xs mt-1">Cadastre seus combos (Blade + Ratchet + Bit) para usá-los nos torneios</p>
+          <p className="text-gray-600 text-xs mt-1">Cadastre seus combos para usá-los nos torneios</p>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -300,6 +575,11 @@ export default function BeybladeManager() {
                         </span>
                       )}
                     </div>
+                    {b.beyLine && (
+                      <span className="inline-block text-[10px] font-bold bg-[#f0a500]/15 text-[#f0a500] px-1.5 py-0.5 rounded mt-0.5">
+                        {LINE_LABELS[b.beyLine as BeyLine] ?? b.beyLine}
+                      </span>
+                    )}
                     {parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{parts}</div>}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-2">
@@ -310,18 +590,8 @@ export default function BeybladeManager() {
                         ) : (
                           <>
                             <span className="text-gray-400">Remover?</span>
-                            <button
-                              onClick={() => handleDelete(b.id)}
-                              className="text-red-400 hover:text-red-300 font-semibold transition-colors"
-                            >
-                              Sim
-                            </button>
-                            <button
-                              onClick={() => setConfirmingId(null)}
-                              className="text-gray-400 hover:text-gray-200 font-semibold transition-colors"
-                            >
-                              Não
-                            </button>
+                            <button onClick={() => handleDelete(b.id)} className="text-red-400 hover:text-red-300 font-semibold transition-colors">Sim</button>
+                            <button onClick={() => setConfirmingId(null)} className="text-gray-400 hover:text-gray-200 font-semibold transition-colors">Não</button>
                           </>
                         )}
                       </div>
@@ -341,42 +611,15 @@ export default function BeybladeManager() {
                       <>
                         <button
                           onClick={() => handleToggleHidden(b)}
-                          disabled={deletingId === b.id || togglingId === b.id}
-                          aria-label={b.hiddenFromCommunity ? "Destrancar combo" : "Trancar combo"}
-                          className={`disabled:opacity-50 transition-colors text-xs ${
-                            b.hiddenFromCommunity ? "text-[#f0a500] hover:text-[#d4940a]" : "text-gray-600 hover:text-[#f0a500]"
-                          }`}
-                          title={b.hiddenFromCommunity ? "Destrancar (visível na comunidade)" : "Trancar (ocultar da comunidade)"}
+                          disabled={togglingId === b.id}
+                          className={`disabled:opacity-50 transition-colors text-xs ${b.hiddenFromCommunity ? "text-[#f0a500]" : "text-gray-600 hover:text-[#f0a500]"}`}
+                          title={b.hiddenFromCommunity ? "Destrancar" : "Trancar"}
                         >
                           {b.hiddenFromCommunity ? "🔒" : "🔓"}
                         </button>
-                        <button
-                          onClick={() => openEdit(b)}
-                          disabled={deletingId === b.id}
-                          aria-label="Editar combo"
-                          className="text-gray-600 hover:text-[#f0a500] disabled:opacity-50 transition-colors text-xs"
-                          title="Editar"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          onClick={() => { setDeleteError(""); setConfirmingId(b.id); }}
-                          disabled={deletingId === b.id}
-                          aria-label="Remover combo"
-                          className="text-gray-600 hover:text-red-400 disabled:opacity-50 transition-colors text-xs"
-                          title="Remover"
-                        >
-                          ✕
-                        </button>
-                        <button
-                          onClick={() => { setConfirmResetId(b.id); }}
-                          disabled={deletingId === b.id}
-                          aria-label="Zerar estatísticas"
-                          className="text-gray-600 hover:text-amber-400 disabled:opacity-50 transition-colors text-xs"
-                          title="Zerar estatísticas"
-                        >
-                          ↺
-                        </button>
+                        <button onClick={() => openEdit(b)} disabled={deletingId === b.id} className="text-gray-600 hover:text-[#f0a500] disabled:opacity-50 transition-colors text-xs" title="Editar">✎</button>
+                        <button onClick={() => { setDeleteError(""); setConfirmingId(b.id); }} disabled={deletingId === b.id} className="text-gray-600 hover:text-red-400 disabled:opacity-50 transition-colors text-xs" title="Remover">✕</button>
+                        <button onClick={() => setConfirmResetId(b.id)} disabled={deletingId === b.id} className="text-gray-600 hover:text-amber-400 disabled:opacity-50 transition-colors text-xs" title="Zerar estatísticas">↺</button>
                       </>
                     )}
                   </div>
