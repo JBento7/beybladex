@@ -87,7 +87,11 @@ interface DeckBeyInfo {
   metalBlade: string | null;
   assistBlade: string | null;
   overBlade: string | null;
-  imageUrl: string | null;
+  // images per part
+  bladeImageUrl: string | null;
+  lockChipImageUrl: string | null;
+  metalBladeImageUrl: string | null;
+  overBladeImageUrl: string | null;
   stats: CombinedStats;
 }
 
@@ -105,6 +109,19 @@ function partsList(b: DeckBeyInfo): string {
     return [b.lockChip, b.overBlade, b.metalBlade, b.assistBlade, b.bit].filter(Boolean).join(" / ");
   }
   return [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
+}
+
+function PartThumb({ img, label }: { img: string | null; label: string }) {
+  return (
+    <div className="w-12 h-12 rounded-lg bg-[#1a1a1a] border border-[#333] overflow-hidden flex items-center justify-center flex-shrink-0">
+      {img ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={img} alt={label} className="w-full h-full object-contain p-0.5" />
+      ) : (
+        <span className="text-[8px] text-gray-700 text-center leading-tight px-0.5">{label}</span>
+      )}
+    </div>
+  );
 }
 
 function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
@@ -133,38 +150,65 @@ function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
 
       {/* Main body */}
       <div className="p-3 flex-1 flex flex-col gap-3">
-        {/* Image + stats side by side */}
-        <div className="flex gap-3 items-start">
-          {/* Blade image */}
-          <div className="w-16 h-16 flex-shrink-0 rounded-lg bg-[#1a1a1a] border border-[#333] overflow-hidden flex items-center justify-center">
-            {bey.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={bey.imageUrl} alt={bey.blade ?? bey.metalBlade ?? "blade"} className="w-full h-full object-contain p-1" />
-            ) : (
-              <span className="text-[9px] text-gray-700 text-center leading-tight px-1">
-                {hasCXSplit ? (bey.metalBlade ?? "Metal Blade") : (bey.blade ?? "Blade")}
-              </span>
-            )}
-          </div>
 
-          {/* Parts breakdown for CX */}
-          {hasCXSplit && (
-            <div className="flex-1 min-w-0 space-y-0.5">
+        {/* CX / CX Expand: lock chip + [over blade] + metal blade as a row of images */}
+        {hasCXSplit ? (
+          <>
+            <div className="flex gap-2 items-start">
+              {/* Images row */}
+              <div className="flex gap-1.5 flex-shrink-0">
+                {/* Lock Chip */}
+                <PartThumb img={bey.lockChipImageUrl} label={bey.lockChip ?? "Lock"} />
+                {/* Over Blade (CX Expand only) */}
+                {bey.overBlade && (
+                  <PartThumb img={bey.overBladeImageUrl} label={bey.overBlade} />
+                )}
+                {/* Metal Blade */}
+                <PartThumb img={bey.metalBladeImageUrl} label={bey.metalBlade ?? "Metal"} />
+              </div>
+
+              {/* Parts list */}
+              <div className="flex-1 min-w-0 space-y-0.5 pt-0.5">
+                {[
+                  { label: "Lock", val: bey.lockChip },
+                  ...(bey.overBlade ? [{ label: "Over", val: bey.overBlade }] : []),
+                  { label: "Metal", val: bey.metalBlade },
+                  { label: "Assist", val: bey.assistBlade },
+                  { label: "Bit", val: bey.bit },
+                ].map(({ label, val }) => val ? (
+                  <div key={label} className="flex items-center gap-1">
+                    <span className="text-[9px] text-gray-500 w-8 flex-shrink-0">{label}</span>
+                    <span className="text-[10px] text-gray-300 truncate">{val}</span>
+                  </div>
+                ) : null)}
+              </div>
+            </div>
+          </>
+        ) : (
+          /* BX / UX / Expand: single blade image */
+          <div className="flex gap-3 items-start">
+            <div className="w-14 h-14 flex-shrink-0 rounded-lg bg-[#1a1a1a] border border-[#333] overflow-hidden flex items-center justify-center">
+              {bey.bladeImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={bey.bladeImageUrl} alt={bey.blade ?? "blade"} className="w-full h-full object-contain p-1" />
+              ) : (
+                <span className="text-[9px] text-gray-700 text-center leading-tight px-1">{bey.blade ?? "Blade"}</span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0 space-y-0.5 pt-0.5">
               {[
-                { label: "Lock", val: bey.lockChip },
-                ...(bey.overBlade ? [{ label: "Over", val: bey.overBlade }] : []),
-                { label: "Metal", val: bey.metalBlade },
-                { label: "Assist", val: bey.assistBlade },
+                { label: "Blade", val: bey.blade },
+                { label: "Ratchet", val: bey.ratchet },
                 { label: "Bit", val: bey.bit },
               ].map(({ label, val }) => val ? (
                 <div key={label} className="flex items-center gap-1">
-                  <span className="text-[9px] text-gray-500 w-8 flex-shrink-0">{label}</span>
+                  <span className="text-[9px] text-gray-500 w-10 flex-shrink-0">{label}</span>
                   <span className="text-[10px] text-gray-300 truncate">{val}</span>
                 </div>
               ) : null)}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Radar chart */}
         <div className="flex justify-center">
@@ -279,8 +323,6 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
       statBurst: p.statBurst ?? 0,
     } : null);
 
-    const imageUrl = isCX ? (metalBladePart?.imageUrl ?? null) : (bladePart?.imageUrl ?? null);
-
     return {
       id: b.id,
       name: b.name,
@@ -292,7 +334,10 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
       metalBlade: b.metalBlade,
       assistBlade: b.assistBlade,
       overBlade: b.overBlade,
-      imageUrl,
+      bladeImageUrl: bladePart?.imageUrl ?? null,
+      lockChipImageUrl: lockChipPart?.imageUrl ?? null,
+      metalBladeImageUrl: metalBladePart?.imageUrl ?? null,
+      overBladeImageUrl: overBladePart?.imageUrl ?? null,
       stats: sumStats(partsForStats),
     } satisfies DeckBeyInfo;
   }).filter(Boolean) as DeckBeyInfo[];
