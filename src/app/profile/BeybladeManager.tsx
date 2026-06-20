@@ -63,7 +63,6 @@ const STAT_DEFS: { key: StatKey; label: string; color: string }[] = [
   { key: "statAttack",  label: "ATTACK",  color: "#e53e3e" },
   { key: "statDefense", label: "DEFENSE", color: "#3182ce" },
   { key: "statStamina", label: "STAMINA", color: "#38a169" },
-  { key: "statHeight",  label: "HEIGHT",  color: "#805ad5" },
   { key: "statDash",    label: "DASH",    color: "#d69e2e" },
   { key: "statBurst",   label: "BURST",   color: "#dd6b20" },
 ];
