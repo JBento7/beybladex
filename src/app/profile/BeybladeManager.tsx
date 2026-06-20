@@ -197,6 +197,15 @@ export default function BeybladeManager() {
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }
 
+  // Lock chip and assist blade are shared across CX and CX Expand — pool both lines, dedupe by name
+  function partsForCXShared(category: string): BeyPart[] {
+    const seen = new Set<string>();
+    return beyParts
+      .filter((p) => (p.line === "CX" || p.line === "CX_EXPAND") && p.category === category)
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+      .filter((p) => { if (seen.has(p.name)) return false; seen.add(p.name); return true; });
+  }
+
   function openCreate() {
     setForm(EMPTY);
     setEditingId(null);
@@ -230,12 +239,12 @@ export default function BeybladeManager() {
       results.push(beyParts.find((p) => p.name === form.blade && p.line === bladeLineFor(selectedLine) && p.category === "BLADE") ?? null);
     }
     if (["CX", "CX_EXPAND"].includes(selectedLine)) {
-      // lock chip and assist blade are shared (always from CX line)
-      results.push(beyParts.find((p) => p.name === form.lockChip && p.line === "CX" && p.category === "LOCK_CHIP") ?? null);
+      // lock chip and assist blade are shared across CX and CX_EXPAND — find in either line
+      results.push(beyParts.find((p) => p.name === form.lockChip && (p.line === "CX" || p.line === "CX_EXPAND") && p.category === "LOCK_CHIP") ?? null);
       // metal blade is exclusive to each line (CX or CX_EXPAND)
       results.push(beyParts.find((p) => p.name === form.metalBlade && p.line === bladeLineFor(selectedLine) && p.category === "MAIN_BLADE") ?? null);
-      // assist blade shared (always from CX line)
-      results.push(beyParts.find((p) => p.name === form.assistBlade && p.line === "CX" && p.category === "ASSIST_BLADE") ?? null);
+      // assist blade shared across CX and CX_EXPAND
+      results.push(beyParts.find((p) => p.name === form.assistBlade && (p.line === "CX" || p.line === "CX_EXPAND") && p.category === "ASSIST_BLADE") ?? null);
       if (selectedLine === "CX_EXPAND") {
         results.push(beyParts.find((p) => p.name === form.overBlade && p.line === "CX_EXPAND" && p.category === "OVER_BLADE") ?? null);
       }
@@ -456,11 +465,11 @@ export default function BeybladeManager() {
               {/* CX / CX_EXPAND */}
               {["CX", "CX_EXPAND"].includes(selectedLine) && (
                 <>
-                  {/* Lock chip and assist blade shared between CX and CX Expand */}
+                  {/* Lock chip and assist blade shared across CX and CX Expand */}
                   <PartSelect
                     label="Lock Chip"
                     value={form.lockChip}
-                    options={partsFor("CX", "LOCK_CHIP")}
+                    options={partsForCXShared("LOCK_CHIP")}
                     onChange={(v) => setForm((f) => ({ ...f, lockChip: v }))}
                   />
                   {selectedLine === "CX_EXPAND" && (
@@ -478,11 +487,11 @@ export default function BeybladeManager() {
                     options={partsFor(bladeLineFor(selectedLine), "MAIN_BLADE")}
                     onChange={(v) => setForm((f) => ({ ...f, metalBlade: v }))}
                   />
-                  {/* Assist blade shared between CX and CX Expand */}
+                  {/* Assist blade shared across CX and CX Expand */}
                   <PartSelect
                     label="Assist Blade"
                     value={form.assistBlade}
-                    options={partsFor("CX", "ASSIST_BLADE")}
+                    options={partsForCXShared("ASSIST_BLADE")}
                     onChange={(v) => setForm((f) => ({ ...f, assistBlade: v }))}
                   />
                 </>

@@ -275,9 +275,10 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
       if (b.ratchet) partLookups.push({ name: b.ratchet, line: "RATCHET", category: "RATCHET" });
       if (b.bit) partLookups.push({ name: b.bit, line: "BIT", category: "BIT" });
     } else {
-      if (b.lockChip) partLookups.push({ name: b.lockChip, line: "CX", category: "LOCK_CHIP" });
+      // lock chip and assist blade may exist in either CX or CX_EXPAND — push lookups for both lines
+      if (b.lockChip) { partLookups.push({ name: b.lockChip, line: "CX", category: "LOCK_CHIP" }); partLookups.push({ name: b.lockChip, line: "CX_EXPAND", category: "LOCK_CHIP" }); }
       if (b.metalBlade) partLookups.push({ name: b.metalBlade, line: cxLine, category: "MAIN_BLADE" });
-      if (b.assistBlade) partLookups.push({ name: b.assistBlade, line: "CX", category: "ASSIST_BLADE" });
+      if (b.assistBlade) { partLookups.push({ name: b.assistBlade, line: "CX", category: "ASSIST_BLADE" }); partLookups.push({ name: b.assistBlade, line: "CX_EXPAND", category: "ASSIST_BLADE" }); }
       if (b.overBlade) partLookups.push({ name: b.overBlade, line: cxLine, category: "OVER_BLADE" });
       if (b.ratchet) partLookups.push({ name: b.ratchet, line: "RATCHET", category: "RATCHET" });
       if (b.bit) partLookups.push({ name: b.bit, line: "BIT", category: "BIT" });
@@ -308,12 +309,12 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
     const bladePart = isCX ? null : findPart(b.blade, line, "BLADE");
     const ratchetPart = findPart(b.ratchet, "RATCHET", "RATCHET");
     const bitPart = findPart(b.bit, "BIT", "BIT");
-    // lock chip and assist blade shared (always from CX line)
-    const lockChipPart = isCX ? findPart(b.lockChip, "CX", "LOCK_CHIP") : null;
+    // lock chip and assist blade shared across CX and CX_EXPAND — search either line
+    const lockChipPart = isCX ? (findPart(b.lockChip, "CX", "LOCK_CHIP") ?? findPart(b.lockChip, "CX_EXPAND", "LOCK_CHIP")) : null;
     // metal blade exclusive to each line
     const metalBladePart = isCX ? findPart(b.metalBlade, cxLine, "MAIN_BLADE") : null;
-    // assist blade shared (always from CX line)
-    const assistBladePart = isCX ? findPart(b.assistBlade, "CX", "ASSIST_BLADE") : null;
+    // assist blade shared across CX and CX_EXPAND
+    const assistBladePart = isCX ? (findPart(b.assistBlade, "CX", "ASSIST_BLADE") ?? findPart(b.assistBlade, "CX_EXPAND", "ASSIST_BLADE")) : null;
     const overBladePart = isCX ? findPart(b.overBlade, cxLine, "OVER_BLADE") : null;
 
     const partsForStats: (CombinedStats | null)[] = (isCX
