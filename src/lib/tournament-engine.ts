@@ -549,3 +549,100 @@ export async function updateBeybladeStats(
       : Promise.resolve(),
   ]);
 }
+
+// Rebuild ALL Beyblade wins/losses from scratch, derived from finished matches.
+// Fixes inflated/stale counters left behind by tournament resets, deletions, and
+// walkovers (which never tagged beyblade stats). Non-test tournaments only.
+// Returns a summary of what was applied.
+export async function recalculateAllBeybladeStats() {
+  // Start every beyblade at zero.
+  const tallies: Record<string, { wins: number; losses: number }> = {};
+  const allBeyblades = await prisma.beyblade.findMany({ select: { id: true } });
+  for (const b of allBeyblades) tallies[b.id] = { wins: 0, losses: 0 };
+
+  // All decided matches from real (non-test) tournaments, excluding byes.
+  const matches = await prisma.match.findMany({
+    where: {
+      status: "FINISHED",
+      winnerId: { not: null },
+      tournament: { isTest: false },
+    },
+    select: {
+      id: true,
+      tournamentId: true,
+      player1Id: true,
+      player2Id: true,
+      winnerId: true,
+      isWalkover: true,
+    },
+  });
+
+  // Group all beyblade-tagged points by match for the most-used heuristic.
+  const pointRows = await prisma.matchPoint.findMany({
+    where: { beybladeId: { not: null }, match: { tournament: { isTest: false } } },
+    select: { matchId: true, userId: true, beybladeId: true },
+  });
+  const pointsByMatch: Record<string, { userId: string; beybladeId: string }[]> = {};
+  for (const p of pointRows) {
+    if (!p.beybladeId) continue;
+    (pointsByMatch[p.matchId] ??= []).push({ userId: p.userId, beybladeId: p.beybladeId });
+  }
+
+  // Fallback (W.O. / shutout side): the beyblade a player registered for that tournament.
+  // Cache participants per tournament so we resolve each player's representative beyblade.
+  const participantCache: Record<string, Record<string, string | null>> = {};
+  async function fallbackBeyblade(tournamentId: string, userId: string): Promise<string | null> {
+    if (!participantCache[tournamentId]) {
+      const parts = await prisma.tournamentParticipant.findMany({
+        where: { tournamentId },
+        select: { userId: true, beyblade1: true },
+      });
+      participantCache[tournamentId] = Object.fromEntries(parts.map((p) => [p.userId, p.beyblade1]));
+    }
+    return participantCache[tournamentId][userId] ?? null;
+  }
+
+  function topBeybladeFor(matchId: string, userId: string): string | null {
+    const rows = pointsByMatch[matchId] ?? [];
+    const counts: Record<string, number> = {};
+    for (const r of rows) {
+      if (r.userId === userId) counts[r.beybladeId] = (counts[r.beybladeId] || 0) + 1;
+    }
+    const entries = Object.entries(counts);
+    if (entries.length === 0) return null;
+    return entries.sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  let counted = 0;
+  let skipped = 0;
+  for (const m of matches) {
+    if (!m.winnerId || m.player1Id === m.player2Id) { skipped++; continue; } // skip undecided / byes
+    const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
+
+    let winnerBey = topBeybladeFor(m.id, m.winnerId);
+    let loserBey = topBeybladeFor(m.id, loserId);
+
+    // For walkovers (no points) or a shutout side, fall back to the registered beyblade.
+    if (!winnerBey) winnerBey = await fallbackBeyblade(m.tournamentId, m.winnerId);
+    if (!loserBey) loserBey = await fallbackBeyblade(m.tournamentId, loserId);
+
+    if (winnerBey && tallies[winnerBey]) tallies[winnerBey].wins++;
+    if (loserBey && tallies[loserBey]) tallies[loserBey].losses++;
+    counted++;
+  }
+
+  // Apply: only write beyblades whose totals changed from the current stored values.
+  const current = await prisma.beyblade.findMany({ select: { id: true, wins: true, losses: true } });
+  const currentMap = Object.fromEntries(current.map((b) => [b.id, b]));
+  let updated = 0;
+  await Promise.all(
+    Object.entries(tallies).map(([id, t]) => {
+      const cur = currentMap[id];
+      if (cur && cur.wins === t.wins && cur.losses === t.losses) return Promise.resolve();
+      updated++;
+      return prisma.beyblade.update({ where: { id }, data: { wins: t.wins, losses: t.losses } });
+    })
+  );
+
+  return { matchesCounted: counted, matchesSkipped: skipped, beybladesUpdated: updated, beybladesTotal: allBeyblades.length };
+}

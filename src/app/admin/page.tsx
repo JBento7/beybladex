@@ -9,6 +9,7 @@ import UserManager from "./UserManager";
 import ResetTokenManager from "./ResetTokenManager";
 import TournamentManager from "./TournamentManager";
 import ResetBeybladeStatsButton from "./ResetBeybladeStatsButton";
+import RecalculateBeybladeStatsButton from "./RecalculateBeybladeStatsButton";
 import AnnouncementManager from "./AnnouncementManager";
 import PermissionsManager from "./PermissionsManager";
 import type { TournamentFormat, TournamentStatus } from "@prisma/client";
@@ -130,6 +131,9 @@ export default async function AdminPage() {
 
         {/* Reset Token Management */}
         <ResetTokenManager />
+
+        {/* Recalculate Beyblade Stats (non-destructive) */}
+        <RecalculateBeybladeStatsButton />
 
         {/* Reset Beyblade Stats */}
         <ResetBeybladeStatsButton />
