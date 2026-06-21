@@ -50,26 +50,30 @@ export default async function CommunityPage() {
   });
 
   const playersWithStats = players.map((p) => {
+    const official = p.participations.filter((x) => x.tournament.isOfficial);
     const wins = p.participations.reduce((s, x) => s + x.wins, 0);
     const losses = p.participations.reduce((s, x) => s + x.losses, 0);
-    const officialPoints = p.participations
-      .filter((x) => x.tournament.isOfficial)
-      .reduce((s, x) => s + x.rankingPoints, 0);
+    const officialPoints = official.reduce((s, x) => s + x.rankingPoints, 0);
     const beyPoints = p.participations
       .filter((x) => !x.tournament.isOfficial)
       .reduce((s, x) => s + x.rankingPoints, 0);
     const battlePoints = p.participations.reduce((s, x) => s + x.totalPoints, 0);
+    // Official-only tiebreakers, so the league ranking matches the dashboard
+    // "Ranking Oficial" and the tournament classification (which never count
+    // BeyEncontro results).
+    const officialWins = official.reduce((s, x) => s + x.wins, 0);
+    const officialBattlePoints = official.reduce((s, x) => s + x.totalPoints, 0);
     const matches = wins + losses;
     const winRate = matches > 0 ? Math.round((wins / matches) * 100) : 0;
-    return { ...p, wins, losses, officialPoints, beyPoints, battlePoints, matches, winRate };
+    return { ...p, wins, losses, officialPoints, beyPoints, battlePoints, officialWins, officialBattlePoints, matches, winRate };
   });
 
-  // Same tiebreaker order as the tournament standings:
-  // ranking points (official) → wins → points scored.
+  // Same tiebreaker order as the dashboard ranking and tournament standings:
+  // official ranking points → official wins → official points scored.
   playersWithStats.sort((a, b) =>
     b.officialPoints - a.officialPoints ||
-    b.wins - a.wins ||
-    b.battlePoints - a.battlePoints ||
+    b.officialWins - a.officialWins ||
+    b.officialBattlePoints - a.officialBattlePoints ||
     a.name.localeCompare(b.name)
   );
 
