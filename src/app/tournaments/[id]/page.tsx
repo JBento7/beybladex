@@ -539,9 +539,8 @@ export default async function TournamentDetailPage({
   while (bracketSize < tournament.participants.length) bracketSize *= 2;
   const totalBracketRounds = Math.max(1, Math.log2(bracketSize));
 
-  // Hide standings/participants sidebar while the tournament is in progress to
-  // free up space for match viewing; it reappears once finished (or before starting).
-  const showSidebar = tournament.status !== "IN_PROGRESS";
+  // Always show the sidebar so players can track standings in real-time.
+  const showSidebar = true;
 
   // Admin match editor data: all non-bye matches
   const adminMatchRows = tournament.matches
@@ -878,15 +877,24 @@ export default async function TournamentDetailPage({
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-bold text-amber-400">
-                          {p.totalPoints}V
-                        </div>
-                        <div className="text-xs text-[#f0a500]/80 font-medium">
-                          {battlePointsMap.get(p.userId) ?? 0}pts
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {p.wins}W-{p.losses}L
-                        </div>
+                        {tournament.format === "ROUND_ROBIN" ? (
+                          <>
+                            <div className="text-sm font-bold text-amber-400">{p.totalPoints}V</div>
+                            <div className="text-xs text-[#f0a500]/80 font-medium">{battlePointsMap.get(p.userId) ?? 0}pts</div>
+                            <div className="text-xs text-gray-500">{p.losses}D</div>
+                          </>
+                        ) : tournament.format === "SINGLE_ELIMINATION" ? (
+                          <>
+                            <div className="text-sm font-bold text-amber-400">{p.wins}V</div>
+                            <div className="text-xs text-gray-500">{p.losses}D</div>
+                          </>
+                        ) : (
+                          /* GROUPS / SWISS: primary rank = battle points */
+                          <>
+                            <div className="text-sm font-bold text-amber-400">{p.totalPoints}pts</div>
+                            <div className="text-xs text-[#f0a500]/80 font-medium">{p.wins}V-{p.losses}D</div>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -918,11 +926,11 @@ export default async function TournamentDetailPage({
                               <span className="text-gray-300 flex-1">
                                 {p.user.bladerName || p.user.name}
                               </span>
-                              <span className="text-amber-400 font-medium">
-                                {p.totalPoints}V
+                              <span className="text-amber-400 font-medium text-xs">
+                                {p.totalPoints}pts
                               </span>
                               <span className="text-[#f0a500]/70 text-xs">
-                                {battlePointsMap.get(p.userId) ?? 0}pts
+                                {p.wins}V
                               </span>
                             </div>
                           ))}
