@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import MyDeckEditor from "./MyDeckEditor";
 
 type StatKey = "statAttack" | "statDefense" | "statStamina" | "statDash" | "statBurst";
 
@@ -246,31 +247,64 @@ function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
 function isCXLine(line: string | null) { return line === "CX" || line === "CX_EXPAND"; }
 
 export default async function MyDeckSection({ userId }: { userId: string }) {
-  const participation = await prisma.tournamentParticipant.findFirst({
-    where: { userId, beyblade1: { not: null } },
-    orderBy: { createdAt: "desc" },
-    select: {
-      beyblade1: true, beyblade2: true, beyblade3: true,
-      tournament: { select: { name: true, status: true } },
-    },
-  });
+  // Fetch user's featured deck + all their beyblades (for editor)
+  const [userRecord, allUserBeyblades] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { featuredBey1: true, featuredBey2: true, featuredBey3: true },
+    }),
+    prisma.beyblade.findMany({
+      where: { userId },
+      select: { id: true, name: true, beyLine: true, blade: true, ratchet: true, bit: true, lockChip: true, metalBlade: true },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
-  if (!participation) return null;
+  // Determine source: featured deck or tournament fallback
+  const featuredIds = [userRecord?.featuredBey1, userRecord?.featuredBey2, userRecord?.featuredBey3].filter(Boolean) as string[];
+  let bIds: string[];
+  let deckSource: { type: "featured" } | { type: "tournament"; name: string; status: string } | null = null;
 
-  if (participation.tournament.status === "FINISHED") {
-    const active = await prisma.tournamentParticipant.findFirst({
-      where: { userId, beyblade1: { not: null }, tournament: { status: { in: ["IN_PROGRESS", "REGISTRATION"] } } },
+  if (featuredIds.length > 0) {
+    bIds = featuredIds;
+    deckSource = { type: "featured" };
+  } else {
+    // Fall back to most recent tournament deck
+    let participation = await prisma.tournamentParticipant.findFirst({
+      where: { userId, beyblade1: { not: null } },
       orderBy: { createdAt: "desc" },
       select: {
         beyblade1: true, beyblade2: true, beyblade3: true,
         tournament: { select: { name: true, status: true } },
       },
     });
-    if (active) Object.assign(participation, active);
-  }
 
-  const bIds = [participation.beyblade1, participation.beyblade2, participation.beyblade3].filter(Boolean) as string[];
-  if (bIds.length === 0) return null;
+    if (!participation) return (
+      <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h2 className="text-lg font-bold text-white">Meu Deck</h2>
+          <MyDeckEditor allBeyblades={allUserBeyblades} currentIds={[]} isFeatured={false} />
+        </div>
+        <p className="text-sm text-gray-500 text-center py-4">Nenhum torneio com combo registrado ainda.</p>
+      </div>
+    );
+
+    if (participation.tournament.status === "FINISHED") {
+      const active = await prisma.tournamentParticipant.findFirst({
+        where: { userId, beyblade1: { not: null }, tournament: { status: { in: ["IN_PROGRESS", "REGISTRATION"] } } },
+        orderBy: { createdAt: "desc" },
+        select: {
+          beyblade1: true, beyblade2: true, beyblade3: true,
+          tournament: { select: { name: true, status: true } },
+        },
+      });
+      if (active) participation = active;
+    }
+
+    bIds = [participation.beyblade1, participation.beyblade2, participation.beyblade3].filter(Boolean) as string[];
+    if (bIds.length === 0) return null;
+    deckSource = { type: "tournament", name: participation.tournament.name, status: participation.tournament.status };
+  }
 
   const beyblades = await prisma.beyblade.findMany({ where: { id: { in: bIds } } });
   const beyMap = Object.fromEntries(beyblades.map((b) => [b.id, b]));
@@ -347,22 +381,38 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
     FINISHED: "Finalizado", DRAFT: "Rascunho",
   };
 
+  const isFeatured = deckSource?.type === "featured";
+
   return (
-    <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+    <div className={`bg-[#1a1a1a] border rounded-xl p-6 ${isFeatured ? "border-[#f0a500]/30" : "border-[#2a2a2a]"}`}>
       <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
         <div>
-          <h2 className="text-lg font-bold text-white">Meu Deck</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {participation.tournament.name}
-            <span className={`ml-2 text-xs px-2 py-0.5 rounded-full font-medium ${
-              participation.tournament.status === "IN_PROGRESS"   ? "bg-green-500/20 text-green-400"
-              : participation.tournament.status === "REGISTRATION" ? "bg-[#f0a500]/20 text-[#f0a500]"
-              : "bg-gray-700 text-gray-400"
-            }`}>
-              {statusLabel[participation.tournament.status] ?? participation.tournament.status}
-            </span>
-          </p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold text-white">Meu Deck</h2>
+            {isFeatured && (
+              <span className="text-[10px] font-black bg-[#f0a500] text-black px-2 py-0.5 rounded-full tracking-wider">
+                DESTAQUE
+              </span>
+            )}
+          </div>
+          {deckSource?.type === "tournament" && (
+            <p className="text-sm text-gray-500 mt-0.5">
+              {deckSource.name}
+              <span className={`ml-2 text-xs px-2 py-0.5 rounded-full font-medium ${
+                deckSource.status === "IN_PROGRESS"   ? "bg-green-500/20 text-green-400"
+                : deckSource.status === "REGISTRATION" ? "bg-[#f0a500]/20 text-[#f0a500]"
+                : "bg-gray-700 text-gray-400"
+              }`}>
+                {statusLabel[deckSource.status] ?? deckSource.status}
+              </span>
+            </p>
+          )}
         </div>
+        <MyDeckEditor
+          allBeyblades={allUserBeyblades}
+          currentIds={isFeatured ? featuredIds : []}
+          isFeatured={isFeatured}
+        />
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

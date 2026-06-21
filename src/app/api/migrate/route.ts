@@ -410,6 +410,18 @@ export async function GET() {
       name: "Beyblade.overBlade",
       sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "overBlade" TEXT`,
     },
+    {
+      name: "User.featuredBey1",
+      sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "featuredBey1" TEXT`,
+    },
+    {
+      name: "User.featuredBey2",
+      sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "featuredBey2" TEXT`,
+    },
+    {
+      name: "User.featuredBey3",
+      sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "featuredBey3" TEXT`,
+    },
   ];
 
   for (const migration of migrations) {
