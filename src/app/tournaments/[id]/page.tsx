@@ -238,7 +238,9 @@ function BracketView({
     <div className="overflow-x-auto pb-2">
       <div className="flex" style={{ width: rounds.length * (CARD_WIDTH + GAP) }}>
         {rounds.map(([round, matches], r) => {
-          const slotHeight = BASE_SLOT * Math.pow(2, r);
+          // Cap the slot-height growth so deep brackets don't create huge empty
+          // vertical gaps (e.g. a 16-player final reserving 1400px of space).
+          const slotHeight = BASE_SLOT * Math.pow(2, Math.min(r, 2));
           return (
             <div key={round} className="flex-shrink-0" style={{ width: CARD_WIDTH + GAP }}>
               <h3 className="text-center text-sm font-bold text-gray-400 mb-3">
@@ -828,9 +830,12 @@ export default async function TournamentDetailPage({
             )}
           </div>
 
-          {/* Admin match editor — ORGANIZER only, shown at any tournament status */}
+          {/* Admin match editor — ORGANIZER only, shown at any tournament status.
+              Spans the full grid width so it isn't squeezed into one column. */}
           {isAdminUser && adminMatchRows.length > 0 && (
-            <AdminMatchEditor matches={adminMatchRows} />
+            <div className={showSidebar ? "lg:col-span-3" : ""}>
+              <AdminMatchEditor matches={adminMatchRows} />
+            </div>
           )}
 
           {/* Sidebar: Standings */}
@@ -843,7 +848,7 @@ export default async function TournamentDetailPage({
                   Nenhum participante ainda
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-[32rem] overflow-y-auto">
                   {standingsParticipants.map((p, idx) => (
                     <div
                       key={p.id}

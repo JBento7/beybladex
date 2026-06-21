@@ -132,7 +132,10 @@ export default function ClientJoinButton({
             onClick={(e) => e.stopPropagation()}
             className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col"
           >
-            <h2 className="text-lg font-bold text-white mb-1">Inscrição no Torneio</h2>
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <h2 className="text-lg font-bold text-white">Inscrição no Torneio</h2>
+              <button onClick={() => setShowModal(false)} aria-label="Fechar" className="text-gray-400 hover:text-white text-2xl leading-none p-1 -m-1 flex-shrink-0">✕</button>
+            </div>
 
             {loadingBB ? (
               <p className="text-gray-500 text-sm text-center py-8">Carregando combos...</p>

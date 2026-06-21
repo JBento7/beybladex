@@ -68,6 +68,7 @@ export default function AdminMatchEditor({ matches }: { matches: MatchRow[] }) {
         </div>
         <button
           onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
           className="text-xs font-bold border border-[#c8102e]/40 text-[#c8102e] hover:bg-[#c8102e]/10 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
         >
           {open ? "Fechar ▲" : "Editar Partidas ▼"}

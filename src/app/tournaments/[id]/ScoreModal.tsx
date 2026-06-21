@@ -143,7 +143,7 @@ export default function ScoreModal({
           <div role="dialog" aria-modal="true" className="relative bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold text-white">🏆 Registro de Partida</h3>
-              <button onClick={handleClose} aria-label="Fechar" className="text-gray-400 hover:text-white text-xl">✕</button>
+              <button onClick={handleClose} aria-label="Fechar" className="text-gray-400 hover:text-white text-2xl leading-none p-2 -m-2">✕</button>
             </div>
 
             {err && (
@@ -152,7 +152,12 @@ export default function ScoreModal({
               </div>
             )}
 
+            {!state && (
+              <div className="py-10 text-center text-sm text-gray-500 animate-pulse">Carregando partida...</div>
+            )}
+
             {/* Set tracker */}
+            {state && (
             <div className="bg-[#252525] rounded-xl p-4 mb-5">
               <div className="text-xs text-gray-500 text-center mb-3 font-medium">
                 {maxSets === 1 ? "SET ÚNICO" : `SETS (melhor de ${maxSets} — primeiro a ${setsToWin} sets vence)`}
@@ -185,8 +190,9 @@ export default function ScoreModal({
                 </div>
               </div>
             </div>
+            )}
 
-            {state?.matchFinished ? (
+            {!state ? null : state.matchFinished ? (
               <div className="text-center py-6">
                 <div className="text-4xl mb-3">🏆</div>
                 <div className="text-xl font-black text-[#f0a500] mb-1">
@@ -281,7 +287,7 @@ export default function ScoreModal({
                               key={b.id}
                               type="button"
                               onClick={() => setP1BeybladeId(b.id)}
-                              className={`text-xs px-2 py-1 rounded-lg border text-left transition-all ${
+                              className={`text-xs px-2.5 py-2 min-h-[40px] rounded-lg border text-left transition-all ${
                                 p1BeybladeId === b.id
                                   ? "border-[#f0a500] bg-[#f0a500]/10 text-[#f0a500] font-bold"
                                   : "border-[#333] text-gray-500 hover:border-gray-500"
@@ -320,7 +326,7 @@ export default function ScoreModal({
                               key={b.id}
                               type="button"
                               onClick={() => setP2BeybladeId(b.id)}
-                              className={`text-xs px-2 py-1 rounded-lg border text-left transition-all ${
+                              className={`text-xs px-2.5 py-2 min-h-[40px] rounded-lg border text-left transition-all ${
                                 p2BeybladeId === b.id
                                   ? "border-[#c8102e] bg-[#c8102e]/10 text-[#c8102e] font-bold"
                                   : "border-[#333] text-gray-500 hover:border-gray-500"
@@ -342,14 +348,14 @@ export default function ScoreModal({
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between">
+                <div className="mt-4 flex items-center gap-3">
                   {loading && (
                     <span className="text-xs text-gray-500 animate-pulse">Registrando...</span>
                   )}
                   <button
                     onClick={undoPoint}
                     disabled={loading}
-                    className="ml-auto text-xs text-gray-500 hover:text-red-400 border border-[#333] hover:border-red-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                    className="ml-auto text-sm font-semibold text-gray-300 hover:text-white bg-[#252525] hover:bg-[#303030] border border-[#3a3a3a] hover:border-red-500/50 px-4 py-2.5 rounded-lg transition-colors disabled:opacity-40"
                   >
                     ↩ Desfazer último ponto
                   </button>

@@ -75,7 +75,7 @@ function RadarChart({ stats, size = 130 }: { stats: CombinedStats; size?: number
       {angles.map((a, i) => (
         <text key={i} x={cx + Math.cos(a) * labelR} y={cy + Math.sin(a) * labelR}
           textAnchor="middle" dominantBaseline="central"
-          fill={axes[i].color} fontSize="7" fontWeight="bold" fontFamily="sans-serif">
+          fill={axes[i].color} fontSize="9" fontWeight="bold" fontFamily="sans-serif">
           {axes[i].label}
         </text>
       ))}
@@ -91,11 +91,11 @@ function StatBars({ stats }: { stats: CombinedStats }) {
     <div className="space-y-1">
       {active.map((s) => (
         <div key={s.key} className="flex items-center gap-1.5">
-          <span className="text-[9px] font-bold w-7 text-right" style={{ color: s.color }}>{s.label}</span>
-          <div className="flex-1 h-1 bg-[#111] rounded-full overflow-hidden">
+          <span className="text-[11px] font-bold w-8 text-right" style={{ color: s.color }}>{s.label}</span>
+          <div className="flex-1 h-1.5 bg-[#111] rounded-full overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${(stats[s.key] / maxVal) * 100}%`, backgroundColor: s.color }} />
           </div>
-          <span className="text-[9px] font-bold text-white w-5 text-right">{stats[s.key]}</span>
+          <span className="text-[11px] font-bold text-white w-6 text-right">{stats[s.key]}</span>
         </div>
       ))}
     </div>
@@ -191,9 +191,9 @@ function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
                 { label: "Ratchet", val: bey.ratchet },
                 { label: "Bit",    val: bey.bit },
               ].map(({ label, val }) => val ? (
-                <div key={label} className="flex items-center gap-1">
-                  <span className="text-[9px] text-gray-500 w-10 flex-shrink-0">{label}</span>
-                  <span className="text-[10px] text-gray-300 truncate">{val}</span>
+                <div key={label} className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-gray-500 w-12 flex-shrink-0">{label}</span>
+                  <span className="text-xs text-gray-300 truncate">{val}</span>
                 </div>
               ) : null)}
             </div>
@@ -212,9 +212,9 @@ function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
                 { label: "Ratchet", val: bey.ratchet },
                 { label: "Bit",     val: bey.bit },
               ].map(({ label, val }) => val ? (
-                <div key={label} className="flex items-center gap-1">
-                  <span className="text-[9px] text-gray-500 w-10 flex-shrink-0">{label}</span>
-                  <span className="text-[10px] text-gray-300 truncate">{val}</span>
+                <div key={label} className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-gray-500 w-12 flex-shrink-0">{label}</span>
+                  <span className="text-xs text-gray-300 truncate">{val}</span>
                 </div>
               ) : null)}
             </div>
