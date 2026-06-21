@@ -453,8 +453,8 @@ export default async function TournamentDetailPage({
       ) as string[])
     : [];
 
-  // For Round Robin tournaments, ties in totalPoints are broken by point
-  // differential (points scored - points conceded across finished matches).
+  // For Round Robin tournaments, ties in wins (totalPoints) are broken by total
+  // battle points scored, then by point differential (scored - conceded).
   // battlePointsMap: total battle points scored per player across all finished matches.
   const battlePointsMap = new Map<string, number>();
   for (const m of tournament.matches) {
@@ -476,6 +476,8 @@ export default async function TournamentDetailPage({
     }
     standingsParticipants = [...tournament.participants].sort((a, b) => {
       if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      const bp = (battlePointsMap.get(b.userId) ?? 0) - (battlePointsMap.get(a.userId) ?? 0);
+      if (bp !== 0) return bp;
       return (diff.get(b.userId) ?? 0) - (diff.get(a.userId) ?? 0);
     });
   } else if (tournament.format === "SINGLE_ELIMINATION") {

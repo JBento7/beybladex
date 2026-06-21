@@ -106,14 +106,17 @@ export async function finalizeTournamentRanking(tournamentId: string) {
     }),
   ]);
 
-  // Point differential, ignoring bye self-matches.
+  // Point differential and total battle points scored, ignoring bye self-matches.
   const diff = new Map<string, number>();
+  const scored = new Map<string, number>();
   for (const m of matches) {
     if (m.player1Id === m.player2Id) continue;
     const p1Pts = m.points.filter((p) => p.userId === m.player1Id).reduce((s, p) => s + p.points, 0);
     const p2Pts = m.points.filter((p) => p.userId === m.player2Id).reduce((s, p) => s + p.points, 0);
     diff.set(m.player1Id, (diff.get(m.player1Id) ?? 0) + (p1Pts - p2Pts));
     diff.set(m.player2Id, (diff.get(m.player2Id) ?? 0) + (p2Pts - p1Pts));
+    scored.set(m.player1Id, (scored.get(m.player1Id) ?? 0) + p1Pts);
+    scored.set(m.player2Id, (scored.get(m.player2Id) ?? 0) + p2Pts);
   }
 
   let ranked: typeof participants;
@@ -142,6 +145,8 @@ export async function finalizeTournamentRanking(tournamentId: string) {
   } else {
     ranked = [...participants].sort((a, b) => {
       if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      const bp = (scored.get(b.userId!) ?? 0) - (scored.get(a.userId!) ?? 0);
+      if (bp !== 0) return bp;
       return (diff.get(b.userId!) ?? 0) - (diff.get(a.userId!) ?? 0);
     });
   }
