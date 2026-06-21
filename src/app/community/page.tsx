@@ -49,6 +49,18 @@ export default async function CommunityPage() {
     orderBy: { name: "asc" },
   });
 
+  // Real battle points scored in official tournaments (the classification "pts"
+  // metric). For ROUND_ROBIN, participation.totalPoints holds wins — not battle
+  // points — so we sum MatchPoint.points directly instead. Byes have no points.
+  const battlePointAgg = await prisma.matchPoint.groupBy({
+    by: ["userId"],
+    where: { match: { tournament: { isOfficial: true, isTest: false } } },
+    _sum: { points: true },
+  });
+  const officialBattleByUser = new Map<string, number>(
+    battlePointAgg.map((b) => [b.userId, b._sum.points ?? 0])
+  );
+
   const playersWithStats = players.map((p) => {
     const official = p.participations.filter((x) => x.tournament.isOfficial);
     const wins = p.participations.reduce((s, x) => s + x.wins, 0);
@@ -58,20 +70,19 @@ export default async function CommunityPage() {
       .filter((x) => !x.tournament.isOfficial)
       .reduce((s, x) => s + x.rankingPoints, 0);
     const battlePoints = p.participations.reduce((s, x) => s + x.totalPoints, 0);
-    // Official-only tiebreakers, so the league ranking matches the dashboard
-    // "Ranking Oficial" and the tournament classification (which never count
-    // BeyEncontro results).
+    // Official-only ranking keys, matching the dashboard and the tournament
+    // classification: official wins → official battle points scored.
     const officialWins = official.reduce((s, x) => s + x.wins, 0);
-    const officialBattlePoints = official.reduce((s, x) => s + x.totalPoints, 0);
+    const officialBattlePoints = officialBattleByUser.get(p.id) ?? 0;
     const matches = wins + losses;
     const winRate = matches > 0 ? Math.round((wins / matches) * 100) : 0;
     return { ...p, wins, losses, officialPoints, beyPoints, battlePoints, officialWins, officialBattlePoints, matches, winRate };
   });
 
-  // Same tiebreaker order as the dashboard ranking and tournament standings:
-  // official ranking points → official wins → official points scored.
+  // Same order as the tournament classification and the dashboard ranking:
+  // official wins → official battle points scored. (Placement/league points are
+  // a separate metric shown on the card, not the ranking driver.)
   playersWithStats.sort((a, b) =>
-    b.officialPoints - a.officialPoints ||
     b.officialWins - a.officialWins ||
     b.officialBattlePoints - a.officialBattlePoints ||
     a.name.localeCompare(b.name)

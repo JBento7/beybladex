@@ -82,17 +82,21 @@ export default async function DashboardPage() {
       prisma.tournamentParticipant.groupBy({
         by: ["userId"],
         where: { tournament: { isOfficial: true, isTest: false }, user: { isGuest: false, deleted: false } },
-        _sum: { rankingPoints: true, wins: true, losses: true, totalPoints: true },
-        // Same tiebreaker order as the tournament standings:
-        // ranking points → wins → points scored.
-        orderBy: [
-          { _sum: { rankingPoints: "desc" } },
-          { _sum: { wins: "desc" } },
-          { _sum: { totalPoints: "desc" } },
-        ],
-        take: 10,
+        _sum: { rankingPoints: true, wins: true, losses: true },
       }),
     ]);
+
+  // Battle points scored across official tournaments (same metric as the
+  // tournament classification's "pts"), summed per player. Byes have no
+  // MatchPoint rows, so they're naturally excluded.
+  const battlePointAgg = await prisma.matchPoint.groupBy({
+    by: ["userId"],
+    where: { match: { tournament: { isOfficial: true, isTest: false } } },
+    _sum: { points: true },
+  });
+  const battlePointsByUser = new Map<string, number>(
+    battlePointAgg.map((b: { userId: string; _sum: { points: number | null } }) => [b.userId, b._sum.points ?? 0])
+  );
 
   const currentUser = await prisma.user.findUnique({
     where: { id: userId },
@@ -107,11 +111,20 @@ export default async function DashboardPage() {
   const userMap = Object.fromEntries(rankingUsers.map((u: { id: string; name: string; bladerName: string | null; avatarUrl: string | null }) => [u.id, u]));
   const rankingList = ranking.map((r: { userId: string; _sum: { rankingPoints: number | null; wins: number | null; losses: number | null } }) => ({
     ...userMap[r.userId],
-    points: r._sum.rankingPoints ?? 0,
+    leaguePoints: r._sum.rankingPoints ?? 0,
     wins: r._sum.wins ?? 0,
     losses: r._sum.losses ?? 0,
+    battlePoints: battlePointsByUser.get(r.userId) ?? 0,
     isMe: r.userId === userId,
-  })).filter((r: { id?: string }) => r.id);
+  })).filter((r: { id?: string }) => r.id)
+    // Same order as the tournament classification: official wins → battle
+    // points scored. (Placement points are a separate metric, shown as "Liga".)
+    .sort((a: { wins: number; battlePoints: number; name?: string }, b: { wins: number; battlePoints: number; name?: string }) =>
+      b.wins - a.wins ||
+      b.battlePoints - a.battlePoints ||
+      (a.name ?? "").localeCompare(b.name ?? "")
+    )
+    .slice(0, 10);
 
   const totalPoints = participations.reduce((sum: number, p: { totalPoints: number }) => sum + p.totalPoints, 0);
   const totalWins = participations.reduce((sum: number, p: { wins: number }) => sum + p.wins, 0);
@@ -248,7 +261,7 @@ export default async function DashboardPage() {
               <p className="text-gray-500 text-sm text-center py-6">Nenhum dado ainda</p>
             ) : (
               <div className="space-y-2">
-                {rankingList.map((player: { id: string; name: string; bladerName: string | null; avatarUrl: string | null; points: number; wins: number; losses: number; isMe: boolean }, i: number) => (
+                {rankingList.map((player: { id: string; name: string; bladerName: string | null; avatarUrl: string | null; leaguePoints: number; battlePoints: number; wins: number; losses: number; isMe: boolean }, i: number) => (
                   <Link
                     key={player.id}
                     href={`/community/${player.id}`}
@@ -273,9 +286,12 @@ export default async function DashboardPage() {
                       <div className={`text-xs font-semibold truncate ${player.isMe ? "text-[#f0a500]" : "text-white"}`}>
                         {player.bladerName || player.name}{player.isMe && " (você)"}
                       </div>
-                      <div className="text-[10px] text-gray-500">{player.wins}V · {player.losses}D</div>
+                      <div className="text-[10px] text-gray-500">{player.losses}D · {player.battlePoints} pts{player.leaguePoints > 0 ? ` · Liga ${player.leaguePoints}` : ""}</div>
                     </div>
-                    <div className="text-xs font-black text-[#f0a500] flex-shrink-0">{player.points}</div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-xs font-black text-[#f0a500] leading-none">{player.wins}</div>
+                      <div className="text-[9px] text-gray-500">vit.</div>
+                    </div>
                   </Link>
                 ))}
               </div>
