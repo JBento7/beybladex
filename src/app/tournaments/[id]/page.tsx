@@ -12,6 +12,7 @@ import ClientJoinButton from "./ClientJoinButton";
 import EditBeybladesButton from "./EditBeybladesButton";
 import WOButton from "./WOButton";
 import AdminParticipantManager from "./AdminParticipantManager";
+import AdminMatchEditor from "./AdminMatchEditor";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 import type { Metadata } from "next";
 
@@ -309,6 +310,7 @@ export default async function TournamentDetailPage({
           winner: { select: { id: true, name: true, bladerName: true } },
           judge: { select: { id: true, name: true, bladerName: true } },
           points: { select: { userId: true, points: true } },
+          sets: { select: { winnerId: true } },
           group: true,
         },
         orderBy: [{ round: "asc" }, { slot: "asc" }, { arena: "asc" }],
@@ -548,6 +550,28 @@ export default async function TournamentDetailPage({
   // Hide standings/participants sidebar while the tournament is in progress to
   // free up space for match viewing; it reappears once finished (or before starting).
   const showSidebar = tournament.status !== "IN_PROGRESS";
+
+  // Admin match editor data: all non-bye matches
+  const adminMatchRows = tournament.matches
+    .filter((m) => m.player1.id !== m.player2.id)
+    .map((m) => {
+      const p1Points = m.points.filter((p) => p.userId === m.player1.id).reduce((s, p) => s + p.points, 0);
+      const p2Points = m.points.filter((p) => p.userId === m.player2.id).reduce((s, p) => s + p.points, 0);
+      const p1Sets = m.sets.filter((s) => s.winnerId === m.player1.id).length;
+      const p2Sets = m.sets.filter((s) => s.winnerId === m.player2.id).length;
+      return {
+        id: m.id,
+        round: m.round,
+        player1Name: m.player1.bladerName || m.player1.name,
+        player2Name: m.player2.bladerName || m.player2.name,
+        player1Id: m.player1.id,
+        player2Id: m.player2.id,
+        status: m.status,
+        isWalkover: m.isWalkover,
+        winnerId: m.winner?.id ?? null,
+        p1Sets, p2Sets, p1Points, p2Points,
+      };
+    });
 
   // Group participants by group (for GROUPS format)
   const groupMap = new Map<
@@ -813,6 +837,11 @@ export default async function TournamentDetailPage({
               </div>
             )}
           </div>
+
+          {/* Admin match editor — ORGANIZER only, shown at any tournament status */}
+          {isAdminUser && adminMatchRows.length > 0 && (
+            <AdminMatchEditor matches={adminMatchRows} />
+          )}
 
           {/* Sidebar: Standings */}
           {showSidebar && (

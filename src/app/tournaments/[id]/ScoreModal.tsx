@@ -100,6 +100,20 @@ export default function ScoreModal({
     }
   }
 
+  async function undoPoint() {
+    if (loading) return;
+    setErr(null);
+    setLoading(true);
+    const res = await fetch(`/api/matches/${matchId}/undo-point`, { method: "DELETE" });
+    setLoading(false);
+    if (res.ok) {
+      await fetchState();
+    } else {
+      const data = await res.json();
+      setErr(data.error || "Erro ao desfazer ponto");
+    }
+  }
+
   function handleClose() {
     setOpen(false);
     router.refresh();
@@ -328,9 +342,18 @@ export default function ScoreModal({
                   </div>
                 </div>
 
-                {loading && (
-                  <div className="text-center text-xs text-gray-500 mt-3 animate-pulse">Registrando...</div>
-                )}
+                <div className="mt-4 flex items-center justify-between">
+                  {loading && (
+                    <span className="text-xs text-gray-500 animate-pulse">Registrando...</span>
+                  )}
+                  <button
+                    onClick={undoPoint}
+                    disabled={loading}
+                    className="ml-auto text-xs text-gray-500 hover:text-red-400 border border-[#333] hover:border-red-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                  >
+                    ↩ Desfazer último ponto
+                  </button>
+                </div>
               </>
             )}
           </div>
