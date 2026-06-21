@@ -246,7 +246,17 @@ function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
 
 function isCXLine(line: string | null) { return line === "CX" || line === "CX_EXPAND"; }
 
-export default async function MyDeckSection({ userId }: { userId: string }) {
+export default async function MyDeckSection({
+  userId,
+  readOnly = false,
+  featuredOnly = false,
+  title = "Meu Deck",
+}: {
+  userId: string;
+  readOnly?: boolean;
+  featuredOnly?: boolean;
+  title?: string;
+}) {
   // Fetch user's featured deck + all their beyblades (for editor)
   const [userRecord, allUserBeyblades] = await Promise.all([
     prisma.user.findUnique({
@@ -268,6 +278,9 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
   if (featuredIds.length > 0) {
     bIds = featuredIds;
     deckSource = { type: "featured" };
+  } else if (featuredOnly) {
+    // Community view: only show an explicitly-chosen featured deck.
+    return null;
   } else {
     // Fall back to most recent tournament deck
     let participation = await prisma.tournamentParticipant.findFirst({
@@ -282,8 +295,8 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
     if (!participation) return (
       <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <h2 className="text-lg font-bold text-white">Meu Deck</h2>
-          <MyDeckEditor allBeyblades={allUserBeyblades} currentIds={[]} isFeatured={false} />
+          <h2 className="text-lg font-bold text-white">{title}</h2>
+          {!readOnly && <MyDeckEditor allBeyblades={allUserBeyblades} currentIds={[]} isFeatured={false} />}
         </div>
         <p className="text-sm text-gray-500 text-center py-4">Nenhum torneio com combo registrado ainda.</p>
       </div>
@@ -388,7 +401,7 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
       <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-white">Meu Deck</h2>
+            <h2 className="text-lg font-bold text-white">{title}</h2>
             {isFeatured && (
               <span className="text-[10px] font-black bg-[#f0a500] text-black px-2 py-0.5 rounded-full tracking-wider">
                 DESTAQUE
@@ -408,11 +421,13 @@ export default async function MyDeckSection({ userId }: { userId: string }) {
             </p>
           )}
         </div>
-        <MyDeckEditor
-          allBeyblades={allUserBeyblades}
-          currentIds={isFeatured ? featuredIds : []}
-          isFeatured={isFeatured}
-        />
+        {!readOnly && (
+          <MyDeckEditor
+            allBeyblades={allUserBeyblades}
+            currentIds={isFeatured ? featuredIds : []}
+            isFeatured={isFeatured}
+          />
+        )}
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

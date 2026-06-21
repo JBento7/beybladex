@@ -6,6 +6,7 @@ import { redirect, notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import { FINISH_TYPE_LABELS, FINISH_TYPE_POINTS } from "@/lib/scoring";
+import MyDeckSection from "@/app/profile/MyDeckSection";
 import type { FinishType } from "@prisma/client";
 import type { Metadata } from "next";
 
@@ -161,6 +162,18 @@ export default async function PlayerProfilePage({
             </div>
           </div>
         </div>
+
+        {/* Featured Deck */}
+        {!beybladesHidden && (
+          <div className="mb-6">
+            <MyDeckSection
+              userId={player.id}
+              readOnly
+              featuredOnly
+              title={`Deck Destaque de ${player.bladerName || player.name}`}
+            />
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
