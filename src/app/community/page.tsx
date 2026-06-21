@@ -43,7 +43,7 @@ export default async function CommunityPage() {
       },
       participations: {
         where: { tournament: { isTest: false } },
-        select: { wins: true, losses: true, rankingPoints: true, tournament: { select: { isOfficial: true } } },
+        select: { wins: true, losses: true, totalPoints: true, rankingPoints: true, tournament: { select: { isOfficial: true } } },
       },
     },
     orderBy: { name: "asc" },
@@ -58,13 +58,20 @@ export default async function CommunityPage() {
     const beyPoints = p.participations
       .filter((x) => !x.tournament.isOfficial)
       .reduce((s, x) => s + x.rankingPoints, 0);
+    const battlePoints = p.participations.reduce((s, x) => s + x.totalPoints, 0);
     const matches = wins + losses;
     const winRate = matches > 0 ? Math.round((wins / matches) * 100) : 0;
-    return { ...p, wins, losses, officialPoints, beyPoints, matches, winRate };
+    return { ...p, wins, losses, officialPoints, beyPoints, battlePoints, matches, winRate };
   });
 
-  // sort by wins desc
-  playersWithStats.sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name));
+  // Same tiebreaker order as the tournament standings:
+  // ranking points (official) → wins → points scored.
+  playersWithStats.sort((a, b) =>
+    b.officialPoints - a.officialPoints ||
+    b.wins - a.wins ||
+    b.battlePoints - a.battlePoints ||
+    a.name.localeCompare(b.name)
+  );
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">

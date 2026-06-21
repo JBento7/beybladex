@@ -82,8 +82,14 @@ export default async function DashboardPage() {
       prisma.tournamentParticipant.groupBy({
         by: ["userId"],
         where: { tournament: { isOfficial: true, isTest: false }, user: { isGuest: false, deleted: false } },
-        _sum: { rankingPoints: true, wins: true, losses: true },
-        orderBy: { _sum: { rankingPoints: "desc" } },
+        _sum: { rankingPoints: true, wins: true, losses: true, totalPoints: true },
+        // Same tiebreaker order as the tournament standings:
+        // ranking points → wins → points scored.
+        orderBy: [
+          { _sum: { rankingPoints: "desc" } },
+          { _sum: { wins: "desc" } },
+          { _sum: { totalPoints: "desc" } },
+        ],
         take: 10,
       }),
     ]);
