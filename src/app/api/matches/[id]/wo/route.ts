@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { recalculateStandings, advanceSingleElimination, generateSwissRound, finalizeRoundRobin, finalizeTournamentRanking } from "@/lib/tournament-engine";
+import { recalculateStandings, advanceSingleElimination, generateSwissRound, finalizeRoundRobin, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
 
 // POST — declare a walkover (W.O.): the opponent of `winnerId` didn't show up,
 // so the match is finished without playing any sets.
@@ -53,6 +53,13 @@ export async function POST(
       recalculateStandings(match.tournamentId, match.player1Id),
       recalculateStandings(match.tournamentId, match.player2Id),
     ]);
+
+    // Credit the registered beyblades for the W.O. (resolveMatchBeyblade falls
+    // back to beyblade1 since a walkover has no scored points). Skip test events.
+    if (!match.tournament.isTest) {
+      const loserId = winnerId === match.player1Id ? match.player2Id : match.player1Id;
+      await updateBeybladeStats(params.id, winnerId, loserId);
+    }
 
     // Format-specific post-match logic (same as the regular point/finish flow)
     const tournament = match.tournament;

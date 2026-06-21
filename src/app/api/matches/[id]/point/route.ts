@@ -122,12 +122,19 @@ export async function POST(
       if (p1Sets >= setsToWin || p2Sets >= setsToWin) {
         // Match is over
         matchWinnerId = p1Sets >= setsToWin ? match.player1Id : match.player2Id;
-        matchFinished = true;
 
-        await prisma.match.update({
-          where: { id: params.id },
+        // Only the request that actually flips the match to FINISHED runs the
+        // post-match side effects. If two judges (or a double-click) finish the
+        // match concurrently, the loser of this race gets count === 0 and bails,
+        // preventing double bracket-advance / double beyblade increments.
+        const finishRes = await prisma.match.updateMany({
+          where: { id: params.id, status: { not: "FINISHED" } },
           data: { status: "FINISHED", winnerId: matchWinnerId },
         });
+        if (finishRes.count === 0) {
+          return NextResponse.json({ success: true, matchFinished: true, winnerId: matchWinnerId });
+        }
+        matchFinished = true;
 
         await Promise.all([
           recalculateStandings(match.tournamentId, match.player1Id),

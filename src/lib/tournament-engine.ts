@@ -155,7 +155,8 @@ export async function finalizeTournamentRanking(tournamentId: string) {
     ranked.map((p, idx) =>
       prisma.tournamentParticipant.update({
         where: { id: p.id },
-        data: { rankingPoints: RANKING_POINTS_BY_PLACE[idx] ?? 0 },
+        // placement is 1-based final standing; feeds certificates and profile badges.
+        data: { rankingPoints: RANKING_POINTS_BY_PLACE[idx] ?? 0, placement: idx + 1 },
       })
     )
   );
@@ -511,46 +512,82 @@ export async function recalculateStandings(
   });
 }
 
-// Update Beyblade wins/losses when a match finishes.
-// For each player: the beyblade that scored the most points in this match gets the win/loss.
+// Resolve which beyblade represents a player in a match: the combo they scored
+// the most points with, falling back to their registered beyblade1 for that
+// tournament (covers W.O.s and shutout sides that have no scored points).
+async function resolveMatchBeyblade(
+  matchId: string,
+  tournamentId: string,
+  userId: string
+): Promise<string | null> {
+  const points = await prisma.matchPoint.findMany({
+    where: { matchId, userId, beybladeId: { not: null } },
+    select: { beybladeId: true },
+  });
+  const counts: Record<string, number> = {};
+  for (const p of points) {
+    if (p.beybladeId) counts[p.beybladeId] = (counts[p.beybladeId] || 0) + 1;
+  }
+  const entries = Object.entries(counts);
+  // Deterministic tie-break by id so re-runs are stable.
+  if (entries.length > 0) return entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
+
+  // Fallback: the beyblade this player registered for the tournament.
+  const part = await prisma.tournamentParticipant.findUnique({
+    where: { tournamentId_userId: { tournamentId, userId } },
+    select: { beyblade1: true },
+  });
+  return part?.beyblade1 ?? null;
+}
+
+// Update Beyblade wins/losses when a match finishes. The winner's representative
+// beyblade gets +1 win, the loser's gets +1 loss. Uses the registered-beyblade
+// fallback so shutouts and W.O.s are still credited. Call once per finished match.
 export async function updateBeybladeStats(
   matchId: string,
   winnerId: string,
   loserId: string
 ) {
-  const points = await prisma.matchPoint.findMany({
-    where: { matchId, beybladeId: { not: null } },
-    select: { userId: true, beybladeId: true },
-  });
+  const match = await prisma.match.findUnique({ where: { id: matchId }, select: { tournamentId: true } });
+  if (!match) return;
 
-  // Find most-used beyblade per player
-  function topBeyblade(userId: string): string | null {
-    const counts: Record<string, number> = {};
-    for (const p of points) {
-      if (p.userId === userId && p.beybladeId) {
-        counts[p.beybladeId] = (counts[p.beybladeId] || 0) + 1;
-      }
-    }
-    const entries = Object.entries(counts);
-    if (entries.length === 0) return null;
-    return entries.sort((a, b) => b[1] - a[1])[0][0];
-  }
-
-  const winnerBeyblade = topBeyblade(winnerId);
-  const loserBeyblade = topBeyblade(loserId);
+  const [winnerBey, loserBey] = await Promise.all([
+    resolveMatchBeyblade(matchId, match.tournamentId, winnerId),
+    resolveMatchBeyblade(matchId, match.tournamentId, loserId),
+  ]);
 
   await Promise.all([
-    winnerBeyblade
-      ? prisma.beyblade.update({
-          where: { id: winnerBeyblade },
-          data: { wins: { increment: 1 } },
-        })
+    winnerBey
+      ? prisma.beyblade.updateMany({ where: { id: winnerBey }, data: { wins: { increment: 1 } } })
       : Promise.resolve(),
-    loserBeyblade
-      ? prisma.beyblade.update({
-          where: { id: loserBeyblade },
-          data: { losses: { increment: 1 } },
-        })
+    loserBey
+      ? prisma.beyblade.updateMany({ where: { id: loserBey }, data: { losses: { increment: 1 } } })
+      : Promise.resolve(),
+  ]);
+}
+
+// Reverse the wins/losses applied by updateBeybladeStats for a match. Call this
+// BEFORE deleting the match's points (it reads them to resolve the combos), e.g.
+// when an admin resets a finished match. Guards against going below zero.
+export async function revertBeybladeStats(
+  matchId: string,
+  winnerId: string,
+  loserId: string
+) {
+  const match = await prisma.match.findUnique({ where: { id: matchId }, select: { tournamentId: true } });
+  if (!match) return;
+
+  const [winnerBey, loserBey] = await Promise.all([
+    resolveMatchBeyblade(matchId, match.tournamentId, winnerId),
+    resolveMatchBeyblade(matchId, match.tournamentId, loserId),
+  ]);
+
+  await Promise.all([
+    winnerBey
+      ? prisma.beyblade.updateMany({ where: { id: winnerBey, wins: { gt: 0 } }, data: { wins: { decrement: 1 } } })
+      : Promise.resolve(),
+    loserBey
+      ? prisma.beyblade.updateMany({ where: { id: loserBey, losses: { gt: 0 } }, data: { losses: { decrement: 1 } } })
       : Promise.resolve(),
   ]);
 }

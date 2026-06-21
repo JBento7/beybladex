@@ -40,33 +40,46 @@ export async function DELETE(
 
   if (!lastPoint) return NextResponse.json({ error: "Nenhum ponto para desfazer" }, { status: 400 });
 
+  const pointsToWinSet = match.tournament.pointsToWinSet;
+
   await prisma.$transaction(async (tx) => {
     await tx.matchPoint.delete({ where: { id: lastPoint.id } });
 
     if (lastPoint.setId) {
       // Recalculate set points from remaining MatchPoints
       const remaining = await tx.matchPoint.findMany({ where: { setId: lastPoint.setId } });
-      const set = await tx.matchSet.findUnique({ where: { id: lastPoint.setId }, include: { match: { select: { player1Id: true } } } });
-      if (!set) return;
+      const setPointCount = remaining.length;
+      const p1Pts = remaining.filter((p) => p.userId === match.player1Id).reduce((s, p) => s + p.points, 0);
+      const p2Pts = remaining.filter((p) => p.userId !== match.player1Id).reduce((s, p) => s + p.points, 0);
 
-      const p1Pts = remaining.filter((p) => p.userId === set.match.player1Id).reduce((s, p) => s + p.points, 0);
-      const p2Pts = remaining.filter((p) => p.userId !== set.match.player1Id).reduce((s, p) => s + p.points, 0);
+      if (setPointCount === 0) {
+        // The set is now empty — remove it so the next point recreates set N cleanly.
+        await tx.matchSet.delete({ where: { id: lastPoint.setId } });
+      } else {
+        const p1Won = p1Pts >= pointsToWinSet;
+        const p2Won = p2Pts >= pointsToWinSet;
+        const setWon = p1Won || p2Won;
+        await tx.matchSet.update({
+          where: { id: lastPoint.setId },
+          data: {
+            player1Points: p1Pts,
+            player2Points: p2Pts,
+            // Reopen the set if the deleted point was the winning one.
+            status: setWon ? "FINISHED" : "IN_PROGRESS",
+            // Correctly credit whichever player crossed the threshold (was a bug
+            // that dropped player 2's win and orphaned the set).
+            winnerId: p1Won ? match.player1Id : p2Won ? match.player2Id : null,
+          },
+        });
+      }
+    }
 
-      const pointsToWinSet = match.tournament.pointsToWinSet;
-      const setWon = p1Pts >= pointsToWinSet || p2Pts >= pointsToWinSet;
-
-      await tx.matchSet.update({
-        where: { id: lastPoint.setId },
-        data: {
-          player1Points: p1Pts,
-          player2Points: p2Pts,
-          // Reopen the set if the deleted point was the winning one
-          status: setWon ? "FINISHED" : "IN_PROGRESS",
-          winnerId: setWon
-            ? (p1Pts >= pointsToWinSet ? set.match.player1Id : null)
-            : null,
-        },
-      });
+    // If no points remain in the whole match, send it back to PENDING so it no
+    // longer shows as "Ao Vivo" with an empty scoreboard.
+    const remainingForMatch = await tx.matchPoint.count({ where: { matchId: params.id } });
+    if (remainingForMatch === 0) {
+      await tx.matchSet.deleteMany({ where: { matchId: params.id } });
+      await tx.match.update({ where: { id: params.id }, data: { status: "PENDING", winnerId: null } });
     }
   });
 

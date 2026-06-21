@@ -455,45 +455,33 @@ export default async function TournamentDetailPage({
       ) as string[])
     : [];
 
-  // For Round Robin tournaments, ties in wins (totalPoints) are broken by total
-  // battle points scored, then by point differential (scored - conceded).
-  // battlePointsMap: total battle points scored per player across all finished matches.
+  // Standings tiebreakers, computed from finished matches (byes excluded).
+  // battlePointsMap = total battle points scored; diff = points scored − conceded.
   const battlePointsMap = new Map<string, number>();
+  const diff = new Map<string, number>();
   for (const m of tournament.matches) {
-    if (m.status !== "FINISHED") continue;
-    for (const pt of m.points) {
-      battlePointsMap.set(pt.userId, (battlePointsMap.get(pt.userId) ?? 0) + pt.points);
-    }
+    if (m.status !== "FINISHED" || m.player1.id === m.player2.id) continue;
+    const p1Pts = m.points.filter((p) => p.userId === m.player1.id).reduce((s, p) => s + p.points, 0);
+    const p2Pts = m.points.filter((p) => p.userId === m.player2.id).reduce((s, p) => s + p.points, 0);
+    battlePointsMap.set(m.player1.id, (battlePointsMap.get(m.player1.id) ?? 0) + p1Pts);
+    battlePointsMap.set(m.player2.id, (battlePointsMap.get(m.player2.id) ?? 0) + p2Pts);
+    diff.set(m.player1.id, (diff.get(m.player1.id) ?? 0) + (p1Pts - p2Pts));
+    diff.set(m.player2.id, (diff.get(m.player2.id) ?? 0) + (p2Pts - p1Pts));
   }
 
+  // Shared comparator: wins/points → battle points scored → point differential.
+  const pointsCompare = (a: typeof tournament.participants[number], b: typeof tournament.participants[number]) => {
+    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+    const bp = (battlePointsMap.get(b.userId) ?? 0) - (battlePointsMap.get(a.userId) ?? 0);
+    if (bp !== 0) return bp;
+    return (diff.get(b.userId) ?? 0) - (diff.get(a.userId) ?? 0);
+  };
+
   let standingsParticipants = tournament.participants;
-  if (tournament.format === "ROUND_ROBIN") {
-    const diff = new Map<string, number>();
-    for (const m of tournament.matches) {
-      if (m.status !== "FINISHED") continue;
-      const p1Pts = m.points.filter((p) => p.userId === m.player1.id).reduce((s, p) => s + p.points, 0);
-      const p2Pts = m.points.filter((p) => p.userId === m.player2.id).reduce((s, p) => s + p.points, 0);
-      diff.set(m.player1.id, (diff.get(m.player1.id) ?? 0) + (p1Pts - p2Pts));
-      diff.set(m.player2.id, (diff.get(m.player2.id) ?? 0) + (p2Pts - p1Pts));
-    }
-    standingsParticipants = [...tournament.participants].sort((a, b) => {
-      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-      const bp = (battlePointsMap.get(b.userId) ?? 0) - (battlePointsMap.get(a.userId) ?? 0);
-      if (bp !== 0) return bp;
-      return (diff.get(b.userId) ?? 0) - (diff.get(a.userId) ?? 0);
-    });
-  } else if (tournament.format === "SINGLE_ELIMINATION") {
+  if (tournament.format === "SINGLE_ELIMINATION") {
     // Ranking follows bracket placement: the round a player lost in (later =
     // better), with the champion never losing (treated as infinite). The
     // third-place match settles the tie between the two semifinal losers.
-    const diff = new Map<string, number>();
-    for (const m of tournament.matches) {
-      if (m.player1.id === m.player2.id || m.status !== "FINISHED") continue;
-      const p1Pts = m.points.filter((p) => p.userId === m.player1.id).reduce((s, p) => s + p.points, 0);
-      const p2Pts = m.points.filter((p) => p.userId === m.player2.id).reduce((s, p) => s + p.points, 0);
-      diff.set(m.player1.id, (diff.get(m.player1.id) ?? 0) + (p1Pts - p2Pts));
-      diff.set(m.player2.id, (diff.get(m.player2.id) ?? 0) + (p2Pts - p1Pts));
-    }
     const elimRound = new Map<string, number>();
     for (const m of tournament.matches) {
       if (m.player1.id === m.player2.id || !m.winner || m.status !== "FINISHED" || m.isThirdPlace) continue;
@@ -509,9 +497,11 @@ export default async function TournamentDetailPage({
         if (finishedThirdPlace.winner!.id === a.userId && finishedThirdPlace.winner!.id !== b.userId) return -1;
         if (finishedThirdPlace.winner!.id === b.userId && finishedThirdPlace.winner!.id !== a.userId) return 1;
       }
-      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-      return (diff.get(b.userId) ?? 0) - (diff.get(a.userId) ?? 0);
+      return pointsCompare(a, b);
     });
+  } else {
+    // ROUND_ROBIN, GROUPS, SWISS — all ranked by the same points tiebreaker.
+    standingsParticipants = [...tournament.participants].sort(pointsCompare);
   }
 
   const canJoin =
@@ -910,8 +900,8 @@ export default async function TournamentDetailPage({
                         {group.name}
                       </div>
                       <div className="space-y-1">
-                        {participants
-                          .sort((a, b) => b.totalPoints - a.totalPoints)
+                        {[...participants]
+                          .sort(pointsCompare)
                           .map((p, idx) => (
                             <div
                               key={p.id}
