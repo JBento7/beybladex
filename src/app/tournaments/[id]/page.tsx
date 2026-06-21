@@ -455,6 +455,15 @@ export default async function TournamentDetailPage({
 
   // For Round Robin tournaments, ties in totalPoints are broken by point
   // differential (points scored - points conceded across finished matches).
+  // battlePointsMap: total battle points scored per player across all finished matches.
+  const battlePointsMap = new Map<string, number>();
+  for (const m of tournament.matches) {
+    if (m.status !== "FINISHED") continue;
+    for (const pt of m.points) {
+      battlePointsMap.set(pt.userId, (battlePointsMap.get(pt.userId) ?? 0) + pt.points);
+    }
+  }
+
   let standingsParticipants = tournament.participants;
   if (tournament.format === "ROUND_ROBIN") {
     const diff = new Map<string, number>();
@@ -844,7 +853,10 @@ export default async function TournamentDetailPage({
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-bold text-amber-400">
-                          {p.totalPoints}pts
+                          {p.totalPoints}V
+                        </div>
+                        <div className="text-xs text-[#f0a500]/80 font-medium">
+                          {battlePointsMap.get(p.userId) ?? 0}pts
                         </div>
                         <div className="text-xs text-gray-500">
                           {p.wins}W-{p.losses}L
@@ -881,7 +893,10 @@ export default async function TournamentDetailPage({
                                 {p.user.bladerName || p.user.name}
                               </span>
                               <span className="text-amber-400 font-medium">
-                                {p.totalPoints}pts
+                                {p.totalPoints}V
+                              </span>
+                              <span className="text-[#f0a500]/70 text-xs">
+                                {battlePointsMap.get(p.userId) ?? 0}pts
                               </span>
                             </div>
                           ))}
