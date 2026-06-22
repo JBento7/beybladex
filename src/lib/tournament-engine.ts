@@ -540,6 +540,83 @@ async function resolveMatchBeyblade(
   return part?.beyblade1 ?? null;
 }
 
+// Build finish-type counts from MatchPoint rows for one player in one match.
+function countFinishTypes(points: { finishType: string }[]) {
+  let burstCount = 0, koCount = 0, spinFinishCount = 0, overFinishCount = 0, extremeFinishCount = 0;
+  for (const p of points) {
+    if (p.finishType === "BURST_FINISH") burstCount++;
+    else if (p.finishType === "OVER_FINISH") overFinishCount++;
+    else if (p.finishType === "SPIN_FINISH") spinFinishCount++;
+    else if (p.finishType === "EXTREME_FINISH") extremeFinishCount++;
+  }
+  // KO = any finish that isn't Burst, Survivor or Extreme (compatibility shim)
+  koCount = points.length - burstCount - overFinishCount - spinFinishCount - extremeFinishCount;
+  if (koCount < 0) koCount = 0;
+  return { burstCount, koCount, spinFinishCount, overFinishCount, extremeFinishCount };
+}
+
+// Write one BeybladeMatchRecord per side of a just-finished match.
+async function createBeybladeMatchRecords(
+  matchId: string,
+  winnerId: string,
+  loserId: string
+) {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      tournamentId: true,
+      points: { select: { userId: true, points: true, finishType: true } },
+    },
+  });
+  if (!match) return;
+
+  const [winnerBey, loserBey] = await Promise.all([
+    resolveMatchBeyblade(matchId, match.tournamentId, winnerId),
+    resolveMatchBeyblade(matchId, match.tournamentId, loserId),
+  ]);
+
+  const winnerPts = match.points.filter((p) => p.userId === winnerId);
+  const loserPts  = match.points.filter((p) => p.userId === loserId);
+  const wScored   = winnerPts.reduce((s, p) => s + p.points, 0);
+  const lScored   = loserPts.reduce((s, p) => s + p.points, 0);
+
+  const rows = [];
+  if (winnerBey) {
+    rows.push({
+      beybladeId: winnerBey,
+      matchId,
+      tournamentId: match.tournamentId,
+      userId: winnerId,
+      won: true,
+      pointsScored: wScored,
+      pointsConceded: lScored,
+      opponentBeybladeId: loserBey ?? null,
+      ...countFinishTypes(winnerPts),
+    });
+  }
+  if (loserBey) {
+    rows.push({
+      beybladeId: loserBey,
+      matchId,
+      tournamentId: match.tournamentId,
+      userId: loserId,
+      won: false,
+      pointsScored: lScored,
+      pointsConceded: wScored,
+      opponentBeybladeId: winnerBey ?? null,
+      ...countFinishTypes(loserPts),
+    });
+  }
+  if (rows.length > 0) {
+    await prisma.beybladeMatchRecord.createMany({ data: rows, skipDuplicates: true });
+  }
+}
+
+// Delete the BeybladeMatchRecord rows for a match (call before wiping match data).
+async function revertBeybladeMatchRecord(matchId: string) {
+  await prisma.beybladeMatchRecord.deleteMany({ where: { matchId } });
+}
+
 // Update Beyblade wins/losses when a match finishes. The winner's representative
 // beyblade gets +1 win, the loser's gets +1 loss. Uses the registered-beyblade
 // fallback so shutouts and W.O.s are still credited. Call once per finished match.
@@ -564,6 +641,9 @@ export async function updateBeybladeStats(
       ? prisma.beyblade.updateMany({ where: { id: loserBey }, data: { losses: { increment: 1 } } })
       : Promise.resolve(),
   ]);
+
+  // Write detailed per-match record for the stats page.
+  await createBeybladeMatchRecords(matchId, winnerId, loserId);
 }
 
 // Reverse the wins/losses applied by updateBeybladeStats for a match. Call this
@@ -574,6 +654,8 @@ export async function revertBeybladeStats(
   winnerId: string,
   loserId: string
 ) {
+  // Remove the detailed record first (while match points still exist for resolving).
+  await revertBeybladeMatchRecord(matchId);
   const match = await prisma.match.findUnique({ where: { id: matchId }, select: { tournamentId: true } });
   if (!match) return;
 
@@ -621,13 +703,12 @@ export async function recalculateAllBeybladeStats() {
 
   // Group all beyblade-tagged points by match for the most-used heuristic.
   const pointRows = await prisma.matchPoint.findMany({
-    where: { beybladeId: { not: null }, match: { tournament: { isTest: false } } },
-    select: { matchId: true, userId: true, beybladeId: true },
+    where: { match: { tournament: { isTest: false } } },
+    select: { matchId: true, userId: true, beybladeId: true, points: true, finishType: true },
   });
-  const pointsByMatch: Record<string, { userId: string; beybladeId: string }[]> = {};
+  const pointsByMatch: Record<string, { userId: string; beybladeId: string | null; points: number; finishType: string }[]> = {};
   for (const p of pointRows) {
-    if (!p.beybladeId) continue;
-    (pointsByMatch[p.matchId] ??= []).push({ userId: p.userId, beybladeId: p.beybladeId });
+    (pointsByMatch[p.matchId] ??= []).push({ userId: p.userId, beybladeId: p.beybladeId, points: p.points, finishType: p.finishType });
   }
 
   // Fallback (W.O. / shutout side): the beyblade a player registered for that tournament.
@@ -648,15 +729,24 @@ export async function recalculateAllBeybladeStats() {
     const rows = pointsByMatch[matchId] ?? [];
     const counts: Record<string, number> = {};
     for (const r of rows) {
-      if (r.userId === userId) counts[r.beybladeId] = (counts[r.beybladeId] || 0) + 1;
+      if (r.userId === userId && r.beybladeId) counts[r.beybladeId] = (counts[r.beybladeId] || 0) + 1;
     }
     const entries = Object.entries(counts);
     if (entries.length === 0) return null;
     return entries.sort((a, b) => b[1] - a[1])[0][0];
   }
 
+  // Purge old records; we'll rebuild from scratch below.
+  await prisma.beybladeMatchRecord.deleteMany({});
+
   let counted = 0;
   let skipped = 0;
+  const newRecords: {
+    beybladeId: string; matchId: string; tournamentId: string; userId: string;
+    won: boolean; pointsScored: number; pointsConceded: number; opponentBeybladeId: string | null;
+    burstCount: number; koCount: number; spinFinishCount: number; overFinishCount: number; extremeFinishCount: number;
+  }[] = [];
+
   for (const m of matches) {
     if (!m.winnerId || m.player1Id === m.player2Id) { skipped++; continue; } // skip undecided / byes
     const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
@@ -671,6 +761,37 @@ export async function recalculateAllBeybladeStats() {
     if (winnerBey && tallies[winnerBey]) tallies[winnerBey].wins++;
     if (loserBey && tallies[loserBey]) tallies[loserBey].losses++;
     counted++;
+
+    // Rebuild BeybladeMatchRecord rows.
+    const matchPts = pointsByMatch[m.id] ?? [];
+    const wPts = matchPts.filter((p) => p.userId === m.winnerId!);
+    const lPts = matchPts.filter((p) => p.userId === loserId);
+    const wScored = wPts.reduce((s, p) => s + p.points, 0);
+    const lScored = lPts.reduce((s, p) => s + p.points, 0);
+
+    if (winnerBey) {
+      newRecords.push({
+        beybladeId: winnerBey, matchId: m.id, tournamentId: m.tournamentId,
+        userId: m.winnerId!, won: true,
+        pointsScored: wScored, pointsConceded: lScored,
+        opponentBeybladeId: loserBey ?? null,
+        ...countFinishTypes(wPts as { finishType: string }[]),
+      });
+    }
+    if (loserBey) {
+      newRecords.push({
+        beybladeId: loserBey, matchId: m.id, tournamentId: m.tournamentId,
+        userId: loserId, won: false,
+        pointsScored: lScored, pointsConceded: wScored,
+        opponentBeybladeId: winnerBey ?? null,
+        ...countFinishTypes(lPts as { finishType: string }[]),
+      });
+    }
+  }
+
+  // Bulk-insert all records in batches of 500 to avoid huge single queries.
+  for (let i = 0; i < newRecords.length; i += 500) {
+    await prisma.beybladeMatchRecord.createMany({ data: newRecords.slice(i, i + 500), skipDuplicates: true });
   }
 
   // Apply: only write beyblades whose totals changed from the current stored values.

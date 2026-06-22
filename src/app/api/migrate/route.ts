@@ -422,6 +422,55 @@ export async function GET() {
       name: "User.featuredBey3",
       sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "featuredBey3" TEXT`,
     },
+    {
+      name: "BeybladeMatchRecord table",
+      sql: `CREATE TABLE IF NOT EXISTS "BeybladeMatchRecord" (
+        "id" TEXT NOT NULL,
+        "beybladeId" TEXT NOT NULL,
+        "matchId" TEXT NOT NULL,
+        "tournamentId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "won" BOOLEAN NOT NULL,
+        "pointsScored" INTEGER NOT NULL DEFAULT 0,
+        "pointsConceded" INTEGER NOT NULL DEFAULT 0,
+        "opponentBeybladeId" TEXT,
+        "burstCount" INTEGER NOT NULL DEFAULT 0,
+        "koCount" INTEGER NOT NULL DEFAULT 0,
+        "spinFinishCount" INTEGER NOT NULL DEFAULT 0,
+        "overFinishCount" INTEGER NOT NULL DEFAULT 0,
+        "extremeFinishCount" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "BeybladeMatchRecord_pkey" PRIMARY KEY ("id")
+      )`,
+    },
+    {
+      name: "BeybladeMatchRecord unique beybladeId+matchId",
+      sql: `DO $$ BEGIN ALTER TABLE "BeybladeMatchRecord" ADD CONSTRAINT "BeybladeMatchRecord_beybladeId_matchId_key" UNIQUE ("beybladeId", "matchId"); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "BeybladeMatchRecord.beybladeId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "BeybladeMatchRecord" ADD CONSTRAINT "BeybladeMatchRecord_beybladeId_fkey" FOREIGN KEY ("beybladeId") REFERENCES "Beyblade"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "BeybladeMatchRecord.matchId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "BeybladeMatchRecord" ADD CONSTRAINT "BeybladeMatchRecord_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "Match"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "BeybladeMatchRecord.tournamentId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "BeybladeMatchRecord" ADD CONSTRAINT "BeybladeMatchRecord_tournamentId_fkey" FOREIGN KEY ("tournamentId") REFERENCES "Tournament"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "BeybladeMatchRecord idx userId",
+      sql: `CREATE INDEX IF NOT EXISTS "BeybladeMatchRecord_userId_idx" ON "BeybladeMatchRecord"("userId")`,
+    },
+    {
+      name: "BeybladeMatchRecord idx beybladeId",
+      sql: `CREATE INDEX IF NOT EXISTS "BeybladeMatchRecord_beybladeId_idx" ON "BeybladeMatchRecord"("beybladeId")`,
+    },
+    {
+      name: "BeybladeMatchRecord idx tournamentId",
+      sql: `CREATE INDEX IF NOT EXISTS "BeybladeMatchRecord_tournamentId_idx" ON "BeybladeMatchRecord"("tournamentId")`,
+    },
   ];
 
   for (const migration of migrations) {

@@ -156,11 +156,12 @@ model Tournament {
   pointsToWinSet  Int     @default(4)
   createdAt       DateTime         @default(now())
 
-  organizer    User                   @relation("OrganizerTournaments", fields: [organizerId], references: [id])
-  participants TournamentParticipant[]
-  groups       Group[]
-  matches      Match[]
-  judges       TournamentJudge[]
+  organizer       User                   @relation("OrganizerTournaments", fields: [organizerId], references: [id])
+  participants    TournamentParticipant[]
+  groups          Group[]
+  matches         Match[]
+  judges          TournamentJudge[]
+  beybladeRecords BeybladeMatchRecord[]
 }
 
 model TournamentJudge {
@@ -225,14 +226,15 @@ model Match {
   isThirdPlace Boolean     @default(false)
   createdAt    DateTime    @default(now())
 
-  tournament Tournament  @relation(fields: [tournamentId], references: [id])
-  player1    User        @relation("Player1Matches", fields: [player1Id], references: [id])
-  player2    User        @relation("Player2Matches", fields: [player2Id], references: [id])
-  winner     User?       @relation("WinnerMatches", fields: [winnerId], references: [id])
-  judge      User?       @relation("JudgeMatches", fields: [judgeId], references: [id])
-  group      Group?      @relation(fields: [groupId], references: [id])
-  points     MatchPoint[]
-  sets       MatchSet[]
+  tournament     Tournament            @relation(fields: [tournamentId], references: [id])
+  player1        User                  @relation("Player1Matches", fields: [player1Id], references: [id])
+  player2        User                  @relation("Player2Matches", fields: [player2Id], references: [id])
+  winner         User?                 @relation("WinnerMatches", fields: [winnerId], references: [id])
+  judge          User?                 @relation("JudgeMatches", fields: [judgeId], references: [id])
+  group          Group?                @relation(fields: [groupId], references: [id])
+  points         MatchPoint[]
+  sets           MatchSet[]
+  beybladeRecords BeybladeMatchRecord[]
 }
 
 model MatchSet {
@@ -285,8 +287,9 @@ model Beyblade {
   hiddenFromCommunity Boolean @default(false)
   createdAt   DateTime @default(now())
 
-  user        User         @relation(fields: [userId], references: [id])
-  matchPoints MatchPoint[]
+  user         User                  @relation(fields: [userId], references: [id])
+  matchPoints  MatchPoint[]
+  matchRecords BeybladeMatchRecord[]
 }
 
 model Announcement {
@@ -327,6 +330,33 @@ model EmailVerifyToken {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BeybladeMatchRecord {
+  id                 String     @id @default(cuid())
+  beybladeId         String
+  matchId            String
+  tournamentId       String
+  userId             String
+  won                Boolean
+  pointsScored       Int        @default(0)
+  pointsConceded     Int        @default(0)
+  opponentBeybladeId String?
+  burstCount         Int        @default(0)
+  koCount            Int        @default(0)
+  spinFinishCount    Int        @default(0)
+  overFinishCount    Int        @default(0)
+  extremeFinishCount Int        @default(0)
+  createdAt          DateTime   @default(now())
+
+  beyblade   Beyblade   @relation(fields: [beybladeId], references: [id], onDelete: Cascade)
+  match      Match      @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  @@unique([beybladeId, matchId])
+  @@index([userId])
+  @@index([beybladeId])
+  @@index([tournamentId])
 }
 
 model BeyPart {
