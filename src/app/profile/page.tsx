@@ -309,6 +309,12 @@ export default async function ProfilePage() {
                       </div>
                     </div>
                   )}
+
+                  <div className="mt-3 pt-3 border-t border-[#2a2a2a]">
+                    <Link href={`/beyblade/${b.id}`} className="text-xs text-[#f0a500] hover:underline">
+                      Ver estatísticas detalhadas →
+                    </Link>
+                  </div>
                 </div>
               ))}
             </div>
