@@ -7,6 +7,8 @@ import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import { FINISH_TYPE_LABELS, FINISH_TYPE_POINTS } from "@/lib/scoring";
 import MyDeckSection from "@/app/profile/MyDeckSection";
+import PlayerStatsExplorer from "@/components/PlayerStatsExplorer";
+import { getPlayerMatchRecords } from "@/lib/beyblade-stats";
 import type { FinishType } from "@prisma/client";
 import type { Metadata } from "next";
 
@@ -101,6 +103,10 @@ export default async function PlayerProfilePage({
   });
 
   if (!player) notFound();
+
+  const playerRecords = beybladesHidden
+    ? []
+    : await getPlayerMatchRecords(player.id, { onlyVisible: true });
 
   const totalWins = player.participations.reduce((s, p) => s + p.wins, 0);
   const totalLosses = player.participations.reduce((s, p) => s + p.losses, 0);
@@ -336,6 +342,15 @@ export default async function PlayerProfilePage({
             </div>
           )}
         </div>
+
+        {/* Hierarchical battle stats: torneio/beyencontro → torneio → jogador → beyblade */}
+        {!beybladesHidden && (
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6 mt-6">
+            <h2 className="text-lg font-bold text-white mb-1">Estatísticas de Batalhas</h2>
+            <p className="text-xs text-gray-500 mb-5">Separadas por torneio, depois por jogador e por beyblade.</p>
+            <PlayerStatsExplorer records={playerRecords} />
+          </div>
+        )}
       </main>
     </div>
   );

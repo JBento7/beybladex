@@ -25,6 +25,109 @@ export interface ComboStat {
   matchups: MatchupEntry[];
 }
 
+export interface PlayerRecordRow {
+  id: string;
+  beybladeId: string;
+  beybladeName: string;
+  won: boolean;
+  pointsScored: number;
+  pointsConceded: number;
+  burstCount: number;
+  koCount: number;
+  spinFinishCount: number;
+  overFinishCount: number;
+  extremeFinishCount: number;
+  opponentId: string;
+  opponentName: string;
+  opponentBeybladeName: string | null;
+  tournamentId: string;
+  tournamentName: string;
+  isOfficial: boolean;
+  createdAt: string;
+}
+
+/**
+ * Returns every battle record for a user's beyblades, flattened with the
+ * opponent player, opponent beyblade and tournament metadata attached. Used to
+ * power the hierarchical stats explorer (tournament/beyencontro → tournament →
+ * opponent player → beyblade).
+ *
+ * Test tournaments are always excluded. When `onlyVisible` is true, records for
+ * beyblades the player hid from the community are skipped (used on public
+ * profiles).
+ */
+export async function getPlayerMatchRecords(
+  userId: string,
+  { onlyVisible = false }: { onlyVisible?: boolean } = {}
+): Promise<PlayerRecordRow[]> {
+  const records = await prisma.beybladeMatchRecord.findMany({
+    where: {
+      userId,
+      tournament: { isTest: false },
+      ...(onlyVisible ? { beyblade: { hiddenFromCommunity: false } } : {}),
+    },
+    select: {
+      id: true,
+      beybladeId: true,
+      won: true,
+      pointsScored: true,
+      pointsConceded: true,
+      opponentBeybladeId: true,
+      burstCount: true,
+      koCount: true,
+      spinFinishCount: true,
+      overFinishCount: true,
+      extremeFinishCount: true,
+      createdAt: true,
+      tournamentId: true,
+      beyblade: { select: { name: true } },
+      tournament: { select: { name: true, isOfficial: true } },
+      match: {
+        select: {
+          player1: { select: { id: true, name: true, bladerName: true } },
+          player2: { select: { id: true, name: true, bladerName: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Resolve opponent beyblade names in one query.
+  const opponentBeyIds = [
+    ...new Set(records.map((r) => r.opponentBeybladeId).filter(Boolean) as string[]),
+  ];
+  const opponentBeys = opponentBeyIds.length > 0
+    ? await prisma.beyblade.findMany({ where: { id: { in: opponentBeyIds } }, select: { id: true, name: true } })
+    : [];
+  const opponentBeyMap = new Map(opponentBeys.map((b) => [b.id, b.name]));
+
+  return records.map((r) => {
+    const opponent = r.match.player1.id === userId ? r.match.player2 : r.match.player1;
+    return {
+      id: r.id,
+      beybladeId: r.beybladeId,
+      beybladeName: r.beyblade.name,
+      won: r.won,
+      pointsScored: r.pointsScored,
+      pointsConceded: r.pointsConceded,
+      burstCount: r.burstCount,
+      koCount: r.koCount,
+      spinFinishCount: r.spinFinishCount,
+      overFinishCount: r.overFinishCount,
+      extremeFinishCount: r.extremeFinishCount,
+      opponentId: opponent.id,
+      opponentName: opponent.bladerName ?? opponent.name,
+      opponentBeybladeName: r.opponentBeybladeId
+        ? (opponentBeyMap.get(r.opponentBeybladeId) ?? "Desconhecido")
+        : "Desconhecido",
+      tournamentId: r.tournamentId,
+      tournamentName: r.tournament.name,
+      isOfficial: r.tournament.isOfficial,
+      createdAt: r.createdAt.toISOString(),
+    };
+  });
+}
+
 /**
  * Computes detailed per-beyblade statistics for a user.
  *

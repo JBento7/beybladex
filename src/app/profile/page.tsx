@@ -10,7 +10,8 @@ import BeybladeManager from "./BeybladeManager";
 import AvatarUpload from "./AvatarUpload";
 import ProfileEditor from "./ProfileEditor";
 import MyDeckSection from "./MyDeckSection";
-import { getComboStats } from "@/lib/beyblade-stats";
+import { getComboStats, getPlayerMatchRecords } from "@/lib/beyblade-stats";
+import PlayerStatsExplorer from "@/components/PlayerStatsExplorer";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +48,7 @@ export default async function ProfilePage() {
     }
   }
 
-  const [participations, allPoints, comboStats] = await Promise.all([
+  const [participations, allPoints, comboStats, playerRecords] = await Promise.all([
     prisma.tournamentParticipant.findMany({
       where: { userId, tournament: { isTest: false } },
       include: { tournament: true },
@@ -58,6 +59,7 @@ export default async function ProfilePage() {
       select: { finishType: true, points: true, beybladeId: true },
     }),
     getComboStats(userId),
+    getPlayerMatchRecords(userId),
   ]);
 
   const user = userRows[0] ?? null;
@@ -211,6 +213,13 @@ export default async function ProfilePage() {
         {/* Combo Manager */}
         <div className="mt-6">
           <BeybladeManager />
+        </div>
+
+        {/* Hierarchical battle stats: tournament/beyencontro → tournament → opponent → beyblade */}
+        <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+          <h2 className="text-lg font-bold text-white mb-1">Estatísticas de Batalhas</h2>
+          <p className="text-xs text-gray-500 mb-5">Separadas por torneio, depois por jogador e por beyblade.</p>
+          <PlayerStatsExplorer records={playerRecords} />
         </div>
 
         {/* Per-Combo Stats */}
