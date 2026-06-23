@@ -15,7 +15,6 @@ export async function GET(
           include: { points: { select: { id: true } } },
         },
         tournament: { select: { setsToWin: true, pointsToWinSet: true, deckType: true } },
-        deckOrders: { orderBy: { cycleIndex: "asc" } },
       },
     });
 
@@ -26,8 +25,18 @@ export async function GET(
     const player2Sets = sets.filter((s) => s.winnerId === match.player2Id).length;
     const currentSet = match.sets.find((s) => s.status === "IN_PROGRESS") ?? null;
     const matchFinished = match.status === "FINISHED";
-
     const currentSetBattleCount = currentSet ? currentSet.points.length : 0;
+
+    // Fetch deck orders separately — table may not exist yet if migration hasn't run.
+    let deckOrders: object[] = [];
+    try {
+      deckOrders = await prisma.matchDeckOrder.findMany({
+        where: { matchId: params.id },
+        orderBy: { cycleIndex: "asc" },
+      });
+    } catch {
+      // Table doesn't exist yet; deck order feature will be unavailable until /api/migrate is run.
+    }
 
     return NextResponse.json({
       sets,
@@ -39,7 +48,7 @@ export async function GET(
       setsToWin: match.tournament.setsToWin,
       pointsToWinSet: match.tournament.pointsToWinSet,
       isDeckThreeOnThree: match.tournament.deckType === "THREE_ON_THREE",
-      deckOrders: match.deckOrders,
+      deckOrders,
       currentSetBattleCount,
     });
   } catch (err) {
