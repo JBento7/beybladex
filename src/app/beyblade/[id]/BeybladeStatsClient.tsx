@@ -88,37 +88,77 @@ function SummaryCards({ records }: { records: RecordRow[] }) {
 }
 
 function TournamentAccordion({ records }: { records: RecordRow[] }) {
-  const [open, setOpen] = useState<string | null>(null);
+  // Level 1: which tournament is open
+  const [openTournament, setOpenTournament] = useState<string | null>(null);
+  // Level 2: which opponent (within the open tournament) is expanded
+  // key = tournamentId + ":" + opponentName
+  const [openOpponent, setOpenOpponent] = useState<string | null>(null);
 
-  // Group by tournament
-  const byTournament = new Map<string, { name: string; isOfficial: boolean; records: RecordRow[] }>();
+  // Group: tournament → opponent player → opponent beyblade → records
+  type OppBeyStats = {
+    beyName: string;
+    records: RecordRow[];
+  };
+  type OpponentStats = {
+    name: string;
+    byBey: Map<string, OppBeyStats>;
+    wins: number;
+    losses: number;
+  };
+  type TournamentGroup = {
+    name: string;
+    isOfficial: boolean;
+    wins: number;
+    losses: number;
+    opponents: Map<string, OpponentStats>;
+  };
+
+  const byTournament = new Map<string, TournamentGroup>();
   for (const r of records) {
     if (!byTournament.has(r.tournamentId)) {
-      byTournament.set(r.tournamentId, { name: r.tournamentName, isOfficial: r.isOfficial, records: [] });
+      byTournament.set(r.tournamentId, {
+        name: r.tournamentName,
+        isOfficial: r.isOfficial,
+        wins: 0, losses: 0,
+        opponents: new Map(),
+      });
     }
-    byTournament.get(r.tournamentId)!.records.push(r);
+    const t = byTournament.get(r.tournamentId)!;
+    if (r.won) t.wins++; else t.losses++;
+
+    const oppKey = r.opponentName;
+    if (!t.opponents.has(oppKey)) {
+      t.opponents.set(oppKey, { name: r.opponentName, byBey: new Map(), wins: 0, losses: 0 });
+    }
+    const opp = t.opponents.get(oppKey)!;
+    if (r.won) opp.wins++; else opp.losses++;
+
+    const beyKey = r.opponentBeybladeeName ?? "Desconhecido";
+    if (!opp.byBey.has(beyKey)) {
+      opp.byBey.set(beyKey, { beyName: beyKey, records: [] });
+    }
+    opp.byBey.get(beyKey)!.records.push(r);
   }
-  // Sort: most recent first (first record date)
-  const entries = [...byTournament.entries()].sort((a, b) => {
-    const aDate = a[1].records[0]?.createdAt ?? "";
-    const bDate = b[1].records[0]?.createdAt ?? "";
+
+  const tournamentEntries = [...byTournament.entries()].sort((a, b) => {
+    const aDate = [...a[1].opponents.values()].flatMap((o) => [...o.byBey.values()]).flatMap((b) => b.records)[0]?.createdAt ?? "";
+    const bDate = [...b[1].opponents.values()].flatMap((o) => [...o.byBey.values()]).flatMap((b) => b.records)[0]?.createdAt ?? "";
     return bDate.localeCompare(aDate);
   });
 
-  if (entries.length === 0) {
+  if (tournamentEntries.length === 0) {
     return <p className="text-gray-600 text-sm text-center py-8">Nenhuma batalha registrada.</p>;
   }
 
   return (
     <div className="space-y-2">
-      {entries.map(([tId, t]) => {
-        const isOpen = open === tId;
-        const tWins = t.records.filter((r) => r.won).length;
-        const tLosses = t.records.filter((r) => !r.won).length;
+      {tournamentEntries.map(([tId, t]) => {
+        const tOpen = openTournament === tId;
         return (
           <div key={tId} className="border border-[#2a2a2a] rounded-xl overflow-hidden">
+            {/* Level 1 — Tournament header */}
             <button
-              onClick={() => setOpen(isOpen ? null : tId)}
+              onClick={() => { setOpenTournament(tOpen ? null : tId); setOpenOpponent(null); }}
               className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-[#1a1a1a] hover:bg-[#212121] transition-colors text-left"
             >
               <div className="flex items-center gap-2 min-w-0">
@@ -129,40 +169,123 @@ function TournamentAccordion({ records }: { records: RecordRow[] }) {
                 }
               </div>
               <div className="flex items-center gap-3 flex-shrink-0">
-                <span className="text-xs text-green-400 font-bold">{tWins}V</span>
-                <span className="text-xs text-red-400 font-bold">{tLosses}D</span>
-                <span className="text-gray-500 text-xs">{isOpen ? "▲" : "▼"}</span>
+                <span className="text-xs text-green-400 font-bold">{t.wins}V</span>
+                <span className="text-xs text-red-400 font-bold">{t.losses}D</span>
+                <span className="text-gray-500 text-xs">{tOpen ? "▲" : "▼"}</span>
               </div>
             </button>
 
-            {isOpen && (
-              <div className="px-0 divide-y divide-[#252525]">
-                {t.records.map((r) => {
-                  const finishParts: string[] = [];
-                  if (r.burstCount) finishParts.push(`${r.burstCount}B`);
-                  if (r.koCount) finishParts.push(`${r.koCount}KO`);
-                  if (r.overFinishCount) finishParts.push(`${r.overFinishCount}O`);
-                  if (r.spinFinishCount) finishParts.push(`${r.spinFinishCount}S`);
-                  if (r.extremeFinishCount) finishParts.push(`${r.extremeFinishCount}X`);
+            {tOpen && (
+              <div className="divide-y divide-[#252525]">
+                {[...t.opponents.entries()].map(([oppKey, opp]) => {
+                  const oppOpenKey = `${tId}:${oppKey}`;
+                  const oppOpen = openOpponent === oppOpenKey;
                   return (
-                    <div key={r.id} className="flex items-center gap-3 px-4 py-2.5 bg-[#161616] flex-wrap">
-                      <span className={`text-xs font-black w-5 flex-shrink-0 ${r.won ? "text-green-400" : "text-red-400"}`}>
-                        {r.won ? "V" : "D"}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs text-white truncate">vs {r.opponentName}</div>
-                        <div className="text-[10px] text-gray-500 truncate">
-                          {r.opponentBeybladeeName ?? "Desconhecido"}
+                    <div key={oppKey}>
+                      {/* Level 2 — Opponent player row */}
+                      <button
+                        onClick={() => setOpenOpponent(oppOpen ? null : oppOpenKey)}
+                        className="w-full flex items-center justify-between gap-3 px-5 py-2.5 bg-[#161616] hover:bg-[#1d1d1d] transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[#f0a500]/50 flex-shrink-0" />
+                          <span className="text-sm text-gray-200 font-medium truncate">{opp.name}</span>
+                          <span className="text-[10px] text-gray-600 flex-shrink-0">
+                            {opp.byBey.size} beyblade{opp.byBey.size !== 1 ? "s" : ""}
+                          </span>
                         </div>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <div className={`text-xs font-bold ${r.won ? "text-green-400" : "text-red-400"}`}>
-                          {r.pointsScored}×{r.pointsConceded}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-green-400 font-bold">{opp.wins}V</span>
+                          <span className="text-xs text-red-400 font-bold">{opp.losses}D</span>
+                          <span className="text-gray-600 text-xs">{oppOpen ? "▲" : "▼"}</span>
                         </div>
-                        {finishParts.length > 0 && (
-                          <div className="text-[9px] text-gray-500">{finishParts.join(" ")}</div>
-                        )}
-                      </div>
+                      </button>
+
+                      {oppOpen && (
+                        <div className="bg-[#111] px-5 py-3 space-y-3">
+                          {[...opp.byBey.entries()].map(([beyKey, ob]) => {
+                            const bWins = ob.records.filter((r) => r.won).length;
+                            const bLosses = ob.records.filter((r) => !r.won).length;
+                            const bScored = ob.records.reduce((s, r) => s + r.pointsScored, 0);
+                            const bConceded = ob.records.reduce((s, r) => s + r.pointsConceded, 0);
+                            const bTotal = bWins + bLosses;
+                            const bWR = bTotal > 0 ? Math.round((bWins / bTotal) * 100) : 0;
+
+                            // Aggregate finish types across all matches vs this opponent's bey
+                            const ft = { burst: 0, ko: 0, over: 0, spin: 0, extreme: 0 };
+                            for (const r of ob.records) {
+                              ft.burst += r.burstCount;
+                              ft.ko += r.koCount;
+                              ft.over += r.overFinishCount;
+                              ft.spin += r.spinFinishCount;
+                              ft.extreme += r.extremeFinishCount;
+                            }
+                            const finishParts: string[] = [];
+                            if (ft.burst) finishParts.push(`${ft.burst}B`);
+                            if (ft.ko) finishParts.push(`${ft.ko}KO`);
+                            if (ft.over) finishParts.push(`${ft.over}O`);
+                            if (ft.spin) finishParts.push(`${ft.spin}S`);
+                            if (ft.extreme) finishParts.push(`${ft.extreme}X`);
+
+                            return (
+                              /* Level 3 — Opponent beyblade card */
+                              <div key={beyKey} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-3">
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 mb-0.5">
+                                      <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain flex-shrink-0" />
+                                      <span className="text-xs font-bold text-white truncate">{ob.beyName}</span>
+                                    </div>
+                                    <span className="text-[10px] text-gray-500">{bTotal} batalha{bTotal !== 1 ? "s" : ""}</span>
+                                  </div>
+                                  <div className={`text-xs font-black px-2 py-0.5 rounded-full flex-shrink-0 ${
+                                    bWR >= 60 ? "bg-green-500/20 text-green-400"
+                                    : bWR >= 40 ? "bg-yellow-500/20 text-yellow-400"
+                                    : "bg-red-500/20 text-red-400"
+                                  }`}>
+                                    {bWR}% WR
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2 text-center mb-2">
+                                  <div className="bg-[#252525] rounded-lg py-1.5">
+                                    <div className="text-sm font-black text-green-400">{bWins}</div>
+                                    <div className="text-[9px] text-gray-600">Vitórias</div>
+                                  </div>
+                                  <div className="bg-[#252525] rounded-lg py-1.5">
+                                    <div className="text-sm font-black text-red-400">{bLosses}</div>
+                                    <div className="text-[9px] text-gray-600">Derrotas</div>
+                                  </div>
+                                  <div className="bg-[#252525] rounded-lg py-1.5">
+                                    <div className={`text-sm font-black ${bScored >= bConceded ? "text-green-400" : "text-red-400"}`}>
+                                      {bScored - bConceded >= 0 ? "+" : ""}{bScored - bConceded}
+                                    </div>
+                                    <div className="text-[9px] text-gray-600">Saldo</div>
+                                  </div>
+                                </div>
+
+                                {/* Points scored / conceded */}
+                                <div className="flex items-center gap-2 text-[10px] mb-2">
+                                  <span className="text-green-400">⚔️ {bScored} pts feitos</span>
+                                  <span className="text-gray-700">·</span>
+                                  <span className="text-red-400">🛡️ {bConceded} pts sofridos</span>
+                                </div>
+
+                                {/* Finish types */}
+                                {finishParts.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {ft.burst > 0 && <span className="text-[9px] bg-red-500/10 text-red-400 border border-red-500/20 px-1.5 py-0.5 rounded font-semibold">Burst ×{ft.burst}</span>}
+                                    {ft.ko > 0 && <span className="text-[9px] bg-orange-500/10 text-orange-400 border border-orange-500/20 px-1.5 py-0.5 rounded font-semibold">KO ×{ft.ko}</span>}
+                                    {ft.over > 0 && <span className="text-[9px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded font-semibold">Over ×{ft.over}</span>}
+                                    {ft.spin > 0 && <span className="text-[9px] bg-green-500/10 text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded font-semibold">Survivor ×{ft.spin}</span>}
+                                    {ft.extreme > 0 && <span className="text-[9px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-1.5 py-0.5 rounded font-semibold">Extreme ×{ft.extreme}</span>}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
