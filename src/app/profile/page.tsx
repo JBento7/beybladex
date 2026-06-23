@@ -10,7 +10,8 @@ import BeybladeManager from "./BeybladeManager";
 import AvatarUpload from "./AvatarUpload";
 import ProfileEditor from "./ProfileEditor";
 import MyDeckSection from "./MyDeckSection";
-import { getComboStats } from "@/lib/beyblade-stats";
+import ProfileBeybladeStats, { type BeybladeWithRecords } from "./ProfileBeybladeStats";
+import type { RecordRow } from "@/app/beyblade/[id]/BeybladeStatsClient";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +48,7 @@ export default async function ProfilePage() {
     }
   }
 
-  const [participations, allPoints, comboStats] = await Promise.all([
+  const [participations, allPoints, userBeyblades] = await Promise.all([
     prisma.tournamentParticipant.findMany({
       where: { userId, tournament: { isTest: false } },
       include: { tournament: true },
@@ -57,8 +58,68 @@ export default async function ProfilePage() {
       where: { userId, match: { tournament: { isTest: false } } },
       select: { finishType: true, points: true, beybladeId: true },
     }),
-    getComboStats(userId),
+    prisma.beyblade.findMany({
+      where: { userId },
+      include: {
+        matchRecords: {
+          where: { tournament: { isTest: false } },
+          include: {
+            tournament: { select: { id: true, name: true, isOfficial: true, isTest: true } },
+            match: {
+              include: {
+                player1: { select: { id: true, name: true, bladerName: true } },
+                player2: { select: { id: true, name: true, bladerName: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        },
+      },
+      orderBy: { wins: "desc" },
+    }),
   ]);
+
+  // Fetch opponent beyblade names in one batch query.
+  const opponentIds = [...new Set(
+    userBeyblades.flatMap(b => b.matchRecords.map(r => r.opponentBeybladeId).filter(Boolean) as string[])
+  )];
+  const opponentBeyNames = opponentIds.length > 0
+    ? await prisma.beyblade.findMany({ where: { id: { in: opponentIds } }, select: { id: true, name: true } })
+    : [];
+  const oppBeyMap = new Map(opponentBeyNames.map(b => [b.id, b.name]));
+
+  const comboStats: BeybladeWithRecords[] = userBeyblades.map(b => {
+    const isCX = b.beyLine === "CX" || b.beyLine === "CX_EXPAND";
+    const parts = isCX
+      ? [b.lockChip, b.metalBlade].filter(Boolean).join(" / ")
+      : [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
+
+    const records: RecordRow[] = b.matchRecords.map(r => {
+      const opponentUser = r.match.player1.id === userId ? r.match.player2 : r.match.player1;
+      return {
+        id: r.id,
+        won: r.won,
+        pointsScored: r.pointsScored,
+        pointsConceded: r.pointsConceded,
+        opponentBeybladeId: r.opponentBeybladeId,
+        opponentBeybladeeName: r.opponentBeybladeId ? (oppBeyMap.get(r.opponentBeybladeId) ?? "Desconhecido") : "Desconhecido",
+        burstCount: r.burstCount,
+        koCount: r.koCount,
+        spinFinishCount: r.spinFinishCount,
+        overFinishCount: r.overFinishCount,
+        extremeFinishCount: r.extremeFinishCount,
+        createdAt: r.createdAt.toISOString(),
+        matchId: r.matchId,
+        tournamentId: r.tournamentId,
+        tournamentName: r.tournament.name,
+        isOfficial: r.tournament.isOfficial,
+        isTest: r.tournament.isTest,
+        opponentName: opponentUser.bladerName ?? opponentUser.name,
+      };
+    });
+
+    return { id: b.id, name: b.name, beyLine: b.beyLine, parts, wins: b.wins, losses: b.losses, records };
+  });
 
   const user = userRows[0] ?? null;
   if (!user) redirect("/login");
@@ -213,113 +274,8 @@ export default async function ProfilePage() {
           <BeybladeManager />
         </div>
 
-        {/* Per-Combo Stats */}
-        {comboStats.length > 0 && (
-          <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
-            <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
-              <h2 className="text-lg font-bold text-white">Estatísticas por Combo</h2>
-              <Link href="/profile/stats" className="text-xs font-semibold text-[#f0a500] hover:underline">
-                Ver gráficos detalhados →
-              </Link>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4">
-              {comboStats.map((b) => (
-                <div key={b.id} className="bg-[#252525] border border-[#333] rounded-xl p-4">
-                  <div className="flex items-start justify-between mb-3 gap-2">
-                    <div className="min-w-0">
-                      <div className="font-bold text-white truncate">{b.name}</div>
-                      {b.parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{b.parts}</div>}
-                    </div>
-                    <div className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                      b.pointDiff > 0 ? "bg-green-500/20 text-green-400"
-                      : b.pointDiff < 0 ? "bg-red-500/20 text-red-400"
-                      : "bg-gray-700 text-gray-400"
-                    }`}>
-                      {b.pointDiff > 0 ? "+" : ""}{b.pointDiff}
-                    </div>
-                  </div>
-
-                  {/* Win/Loss/Rate */}
-                  <div className="grid grid-cols-4 gap-2 text-center mb-3">
-                    <div>
-                      <div className="text-base font-black text-gray-300">{b.total}</div>
-                      <div className="text-xs text-gray-500">Batalhas</div>
-                    </div>
-                    <div>
-                      <div className="text-base font-black text-green-400">{b.wins}</div>
-                      <div className="text-xs text-gray-500">Vitórias</div>
-                    </div>
-                    <div>
-                      <div className="text-base font-black text-red-400">{b.losses}</div>
-                      <div className="text-xs text-gray-500">Derrotas</div>
-                    </div>
-                    <div>
-                      <div className="text-base font-black text-[#f0a500]">{b.winRate}%</div>
-                      <div className="text-xs text-gray-500">Taxa V.</div>
-                    </div>
-                  </div>
-
-                  {/* Win rate bar */}
-                  <div className="h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden mb-3">
-                    <div
-                      className="h-full bg-[#f0a500] rounded-full"
-                      style={{ width: `${b.winRate}%` }}
-                    />
-                  </div>
-
-                  {/* Points scored vs suffered */}
-                  <div className="flex items-center gap-3 text-xs mb-3">
-                    <span className="text-green-400 font-semibold">⚔️ {b.pointsScored} feitos</span>
-                    <span className="text-gray-600">·</span>
-                    <span className="text-red-400 font-semibold">🛡️ {b.pointsSuffered} sofridos</span>
-                  </div>
-
-                  {/* Finishes scored */}
-                  {Object.keys(b.finishesScored).length > 0 && (
-                    <div className="mb-2">
-                      <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Aplicados</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {finishOrder.map((type) => {
-                          const count = b.finishesScored[type];
-                          if (!count) return null;
-                          return (
-                            <span key={type} className={`text-xs px-2 py-0.5 rounded-full font-medium ${finishColors[type]}`}>
-                              {FINISH_TYPE_LABELS[type].replace(" Finish", "")} ×{count}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Finishes suffered */}
-                  {Object.keys(b.finishesSuffered).length > 0 && (
-                    <div>
-                      <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Sofridos</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {finishOrder.map((type) => {
-                          const count = b.finishesSuffered[type];
-                          if (!count) return null;
-                          return (
-                            <span key={type} className={`text-xs px-2 py-0.5 rounded-full font-medium ${finishColors[type]} opacity-70`}>
-                              {FINISH_TYPE_LABELS[type].replace(" Finish", "")} ×{count}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="mt-3 pt-3 border-t border-[#2a2a2a]">
-                    <Link href={`/beyblade/${b.id}`} className="text-xs text-[#f0a500] hover:underline">
-                      Ver estatísticas detalhadas →
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Per-Combo Stats — same drill-down as /beyblade/[id] */}
+        <ProfileBeybladeStats beyblades={comboStats} />
       </main>
     </div>
   );
