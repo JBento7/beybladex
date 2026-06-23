@@ -471,6 +471,29 @@ export async function GET() {
       name: "BeybladeMatchRecord idx tournamentId",
       sql: `CREATE INDEX IF NOT EXISTS "BeybladeMatchRecord_tournamentId_idx" ON "BeybladeMatchRecord"("tournamentId")`,
     },
+    {
+      name: "MatchDeckOrder table",
+      sql: `CREATE TABLE IF NOT EXISTS "MatchDeckOrder" (
+        "id" TEXT NOT NULL,
+        "matchId" TEXT NOT NULL,
+        "setNumber" INTEGER NOT NULL,
+        "userId" TEXT NOT NULL,
+        "cycleIndex" INTEGER NOT NULL,
+        "bey1Id" TEXT NOT NULL,
+        "bey2Id" TEXT NOT NULL,
+        "bey3Id" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "MatchDeckOrder_pkey" PRIMARY KEY ("id")
+      )`,
+    },
+    {
+      name: "MatchDeckOrder unique matchId+userId+setNumber+cycleIndex",
+      sql: `DO $$ BEGIN ALTER TABLE "MatchDeckOrder" ADD CONSTRAINT "MatchDeckOrder_matchId_userId_setNumber_cycleIndex_key" UNIQUE ("matchId", "userId", "setNumber", "cycleIndex"); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "MatchDeckOrder.matchId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "MatchDeckOrder" ADD CONSTRAINT "MatchDeckOrder_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "Match"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
   ];
 
   for (const migration of migrations) {

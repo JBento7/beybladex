@@ -235,6 +235,7 @@ model Match {
   points         MatchPoint[]
   sets           MatchSet[]
   beybladeRecords BeybladeMatchRecord[]
+  deckOrders     MatchDeckOrder[]
 }
 
 model MatchSet {
@@ -267,6 +268,22 @@ model MatchPoint {
   user      User      @relation(fields: [userId], references: [id])
   beyblade  Beyblade? @relation(fields: [beybladeId], references: [id])
   set       MatchSet? @relation(fields: [setId], references: [id])
+}
+
+model MatchDeckOrder {
+  id         String   @id @default(cuid())
+  matchId    String
+  setNumber  Int
+  userId     String
+  cycleIndex Int
+  bey1Id     String
+  bey2Id     String
+  bey3Id     String
+  createdAt  DateTime @default(now())
+
+  match Match @relation(fields: [matchId], references: [id])
+
+  @@unique([matchId, userId, setNumber, cycleIndex])
 }
 
 model Beyblade {

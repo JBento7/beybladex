@@ -83,9 +83,11 @@ function MatchCard({
   participantBeyblades,
   arenaCount = 1,
   currentUserId,
+  deckType = "SOLO",
 }: {
   match: MatchWithRelations;
   isOrganizer: boolean;
+  deckType?: string;
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
   arenaCount?: number;
@@ -204,6 +206,7 @@ function MatchCard({
               tournamentId={tournamentId}
               player1Beyblades={participantBeyblades.find(p => p.userId === match.player1.id)?.beyblades ?? []}
               player2Beyblades={participantBeyblades.find(p => p.userId === match.player2.id)?.beyblades ?? []}
+              deckType={deckType}
             />
             <WOButton matchId={match.id} player1={match.player1} player2={match.player2} />
           </>
@@ -221,12 +224,14 @@ function BracketView({
   participantBeyblades,
   arenaCount,
   currentUserId,
+  deckType = "SOLO",
 }: {
   rounds: [number, MatchWithRelations[]][];
   totalRounds: number;
   isOrganizer: boolean;
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
+  deckType?: string;
   arenaCount: number;
   currentUserId?: string;
 }) {
@@ -256,6 +261,7 @@ function BracketView({
                       participantBeyblades={participantBeyblades}
                       arenaCount={arenaCount}
                       currentUserId={currentUserId}
+                      deckType={deckType}
                     />
                   </div>
                   {r < rounds.length - 1 && (
@@ -709,6 +715,7 @@ export default async function TournamentDetailPage({
                     participantBeyblades={participantBeyblades}
                     arenaCount={tournament.arenas ?? 1}
                     currentUserId={session?.user.id}
+                    deckType={tournament.deckType}
                   />
                 </div>
                 {thirdPlaceMatch && (
@@ -722,6 +729,7 @@ export default async function TournamentDetailPage({
                         tournamentId={tournament.id}
                         participantBeyblades={participantBeyblades}
                         currentUserId={session?.user.id}
+                        deckType={tournament.deckType}
                       />
                     </div>
                   </div>
@@ -783,6 +791,7 @@ export default async function TournamentDetailPage({
                                   tournamentId={tournament.id}
                                   participantBeyblades={participantBeyblades}
                                   currentUserId={session?.user.id}
+                                  deckType={tournament.deckType}
                                 />
                               );
                             })}
@@ -799,6 +808,7 @@ export default async function TournamentDetailPage({
                             tournamentId={tournament.id}
                             participantBeyblades={participantBeyblades}
                             currentUserId={session?.user.id}
+                            deckType={tournament.deckType}
                           />
                         ))}
                       </div>
