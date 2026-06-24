@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import MyDeckEditor from "./MyDeckEditor";
+import { LineBadge } from "@/components/LineBadge";
 
 type StatKey = "statAttack" | "statDefense" | "statStamina" | "statDash" | "statBurst";
 
@@ -120,11 +121,6 @@ interface DeckBeyInfo {
   stats: CombinedStats;
 }
 
-const LINE_LABELS: Record<string, string> = {
-  BX: "BX", UX: "UX", CX: "CX",
-  BX_EXPAND: "BX Expand", UX_EXPAND: "UX Expand", CX_EXPAND: "CX Expand",
-};
-
 function isCX(line: string | null) {
   return line === "CX" || line === "CX_EXPAND";
 }
@@ -161,11 +157,7 @@ function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
           <span className={`text-[10px] font-black ${slotAccents[slot]} uppercase tracking-wider`}>
             Bey {slot + 1}
           </span>
-          {bey.beyLine && (
-            <span className="text-[10px] font-bold bg-[#f0a500]/10 text-[#f0a500] px-1.5 py-0.5 rounded">
-              {LINE_LABELS[bey.beyLine] ?? bey.beyLine}
-            </span>
-          )}
+          {bey.beyLine && <LineBadge line={bey.beyLine} />}
         </div>
         <div className="font-bold text-sm text-white truncate">{bey.name}</div>
         {parts && <div className="text-[10px] text-gray-500 mt-0.5 truncate">{parts}</div>}

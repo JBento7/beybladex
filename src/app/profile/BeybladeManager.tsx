@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { LineBadge, LineButtonLabel, LINE_LABELS } from "@/components/LineBadge";
 
 type BeyLine = "BX" | "UX" | "CX" | "BX_EXPAND" | "UX_EXPAND" | "CX_EXPAND";
 
@@ -34,15 +35,6 @@ interface Beyblade {
   hiddenFromCommunity: boolean;
   createdAt: string;
 }
-
-const LINE_LABELS: Record<BeyLine, string> = {
-  BX: "Linha BX",
-  UX: "Linha UX",
-  CX: "Linha CX",
-  BX_EXPAND: "BX Expand",
-  UX_EXPAND: "UX Expand",
-  CX_EXPAND: "CX Expand",
-};
 
 const ALL_LINES: BeyLine[] = ["BX", "UX", "CX", "BX_EXPAND", "UX_EXPAND", "CX_EXPAND"];
 
@@ -476,7 +468,7 @@ export default function BeybladeManager() {
                     form.beyLine === line ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] border border-[#333] text-gray-400 hover:text-white"
                   }`}
                 >
-                  {LINE_LABELS[line]}
+                  <LineButtonLabel line={line} />
                 </button>
               ))}
             </div>
@@ -623,11 +615,7 @@ export default function BeybladeManager() {
                         </span>
                       )}
                     </div>
-                    {b.beyLine && (
-                      <span className="inline-block text-[10px] font-bold bg-[#f0a500]/15 text-[#f0a500] px-1.5 py-0.5 rounded mt-0.5">
-                        {LINE_LABELS[b.beyLine as BeyLine] ?? b.beyLine}
-                      </span>
-                    )}
+                    {b.beyLine && <LineBadge line={b.beyLine} className="mt-0.5" />}
                     {parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{parts}</div>}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-2">

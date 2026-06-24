@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { LineBadge } from "@/components/LineBadge";
 
 interface SimpleBey {
   id: string;
@@ -13,11 +14,6 @@ interface SimpleBey {
   lockChip: string | null;
   metalBlade: string | null;
 }
-
-const LINE_LABELS: Record<string, string> = {
-  BX: "BX", UX: "UX", CX: "CX",
-  BX_EXPAND: "BX Expand", UX_EXPAND: "UX Expand", CX_EXPAND: "CX Expand",
-};
 
 function beyLabel(b: SimpleBey) {
   const isCX = b.beyLine === "CX" || b.beyLine === "CX_EXPAND";
@@ -151,11 +147,7 @@ export default function MyDeckEditor({
                             {b.name}
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            {b.beyLine && (
-                              <span className="text-[9px] font-bold bg-[#333] text-gray-400 px-1.5 py-0.5 rounded">
-                                {LINE_LABELS[b.beyLine] ?? b.beyLine}
-                              </span>
-                            )}
+                            {b.beyLine && <LineBadge line={b.beyLine} />}
                             <span className="text-[10px] text-gray-500 truncate">{beyLabel(b)}</span>
                           </div>
                         </div>

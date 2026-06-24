@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { LineBadge } from "@/components/LineBadge";
 
 interface Beyblade {
   id: string;
@@ -13,11 +14,6 @@ interface Beyblade {
   metalBlade: string | null;
   beyLine: string | null;
 }
-
-const LINE_LABELS: Record<string, string> = {
-  BX: "BX", UX: "UX", CX: "CX",
-  BX_EXPAND: "BX Expand", UX_EXPAND: "UX Expand", CX_EXPAND: "CX Expand",
-};
 
 export default function ClientJoinButton({
   tournamentId,
@@ -163,11 +159,7 @@ export default function ClientJoinButton({
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-sm text-white truncate">{b.name}</div>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            {b.beyLine && (
-                              <span className="text-[9px] font-bold bg-[#333] text-gray-400 px-1.5 py-0.5 rounded">
-                                {LINE_LABELS[b.beyLine] ?? b.beyLine}
-                              </span>
-                            )}
+                            {b.beyLine && <LineBadge line={b.beyLine} />}
                             <span className="text-[10px] text-gray-500 truncate">{comboParts(b)}</span>
                           </div>
                         </div>
@@ -244,11 +236,7 @@ export default function ClientJoinButton({
                                 {b.name}
                               </div>
                               <div className="flex items-center gap-1.5 mt-0.5">
-                                {b.beyLine && (
-                                  <span className="text-[9px] font-bold bg-[#333] text-gray-400 px-1.5 py-0.5 rounded">
-                                    {LINE_LABELS[b.beyLine] ?? b.beyLine}
-                                  </span>
-                                )}
+                                {b.beyLine && <LineBadge line={b.beyLine} />}
                                 {parts && <span className="text-xs text-gray-500 truncate">{parts}</span>}
                               </div>
                             </div>

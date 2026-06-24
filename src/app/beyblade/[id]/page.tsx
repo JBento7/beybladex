@@ -6,11 +6,7 @@ import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import type { Metadata } from "next";
 import BeybladeStatsClient, { type RecordRow } from "./BeybladeStatsClient";
-
-const LINE_LABELS: Record<string, string> = {
-  BX: "BX", UX: "UX", CX: "CX",
-  BX_EXPAND: "BX Expand", UX_EXPAND: "UX Expand", CX_EXPAND: "CX Expand",
-};
+import { LineBadge } from "@/components/LineBadge";
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const b = await prisma.beyblade.findUnique({ where: { id: params.id }, select: { name: true } });
@@ -123,11 +119,7 @@ export default async function BeybladeStatsPage({ params }: { params: { id: stri
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <h1 className="text-xl font-black text-white truncate">{beyblade.name}</h1>
-                {beyblade.beyLine && (
-                  <span className="text-[10px] font-bold bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30 px-2 py-0.5 rounded flex-shrink-0">
-                    {LINE_LABELS[beyblade.beyLine] ?? beyblade.beyLine}
-                  </span>
-                )}
+                {beyblade.beyLine && <LineBadge line={beyblade.beyLine} className="flex-shrink-0" />}
               </div>
               {parts && <p className="text-xs text-gray-500 mb-2">{parts}</p>}
               <Link

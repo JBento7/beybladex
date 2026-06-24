@@ -3,11 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { RecordRow } from "@/app/beyblade/[id]/BeybladeStatsClient";
-
-const LINE_LABELS: Record<string, string> = {
-  BX: "BX", UX: "UX", CX: "CX",
-  BX_EXPAND: "BX Expand", UX_EXPAND: "UX Expand", CX_EXPAND: "CX Expand",
-};
+import { LineBadge } from "@/components/LineBadge";
 
 const FINISH_LABELS = [
   { key: "burstCount" as const,       label: "Burst",    color: "text-red-400",    bg: "bg-red-500/10 border-red-500/20" },
@@ -231,11 +227,7 @@ export default function ProfileBeybladeStats({ beyblades }: { beyblades: Beyblad
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-sm text-white truncate">{b.name}</span>
-                    {b.beyLine && (
-                      <span className="text-[9px] font-bold bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30 px-1.5 py-0.5 rounded flex-shrink-0">
-                        {LINE_LABELS[b.beyLine] ?? b.beyLine}
-                      </span>
-                    )}
+                    {b.beyLine && <LineBadge line={b.beyLine} className="flex-shrink-0" />}
                   </div>
                   {b.parts && <div className="text-[10px] text-gray-500 truncate">{b.parts}</div>}
                 </div>
