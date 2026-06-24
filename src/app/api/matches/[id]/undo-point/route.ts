@@ -16,11 +16,13 @@ export async function DELETE(
 
   const match = await prisma.match.findUnique({
     where: { id: params.id },
-    include: { tournament: { select: { organizerId: true, pointsToWinSet: true } } },
+    include: { tournament: { select: { organizerId: true, pointsToWinSet: true, _count: { select: { judges: true } } } } },
   });
 
   if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
+  const openJudging = match.tournament._count.judges === 0;
   if (
+    !openJudging &&
     match.tournament.organizerId !== session.user.id &&
     session.user.role !== "ORGANIZER" &&
     !session.user.canJudge &&

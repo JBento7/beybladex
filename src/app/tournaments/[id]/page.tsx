@@ -84,18 +84,22 @@ function MatchCard({
   arenaCount = 1,
   currentUserId,
   deckType = "SOLO",
+  openJudging = false,
 }: {
   match: MatchWithRelations;
   isOrganizer: boolean;
   deckType?: string;
+  openJudging?: boolean;
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
   arenaCount?: number;
   currentUserId?: string;
 }) {
-  // The match's assigned judge can score / declare W.O. for their own match,
-  // even if they aren't an admin or global judge.
-  const canScore = isOrganizer || (!!currentUserId && match.judge?.id === currentUserId);
+  // When no judges are assigned (openJudging), any logged-in user can score.
+  // Otherwise: organizers/admins or the match's assigned judge.
+  const canScore = openJudging
+    ? !!currentUserId
+    : isOrganizer || (!!currentUserId && match.judge?.id === currentUserId);
   const isFinished = match.status === "FINISHED";
   const p1Points = match.points
     .filter((p) => p.userId === match.player1.id)
@@ -225,6 +229,7 @@ function BracketView({
   arenaCount,
   currentUserId,
   deckType = "SOLO",
+  openJudging = false,
 }: {
   rounds: [number, MatchWithRelations[]][];
   totalRounds: number;
@@ -232,6 +237,7 @@ function BracketView({
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
   deckType?: string;
+  openJudging?: boolean;
   arenaCount: number;
   currentUserId?: string;
 }) {
@@ -262,6 +268,7 @@ function BracketView({
                       arenaCount={arenaCount}
                       currentUserId={currentUserId}
                       deckType={deckType}
+                      openJudging={openJudging}
                     />
                   </div>
                   {r < rounds.length - 1 && (
@@ -343,6 +350,10 @@ export default async function TournamentDetailPage({
   const canJudge = tournament.isOfficial
     ? isAdminUser || hasJudgePermission
     : isOrganizerOfThis || isAdminUser || hasJudgePermission;
+
+  // When no judges are assigned to the tournament, open judging mode:
+  // any logged-in participant or admin can score any match.
+  const openJudging = tournament.judges.length === 0;
 
   // Editing (name, format, deck type, arenas, etc.) is only allowed before
   // the event starts. Official tournaments: admins only. BeyEncontros: the
@@ -716,6 +727,7 @@ export default async function TournamentDetailPage({
                     arenaCount={tournament.arenas ?? 1}
                     currentUserId={session?.user.id}
                     deckType={tournament.deckType}
+                    openJudging={openJudging}
                   />
                 </div>
                 {thirdPlaceMatch && (
@@ -730,6 +742,7 @@ export default async function TournamentDetailPage({
                         participantBeyblades={participantBeyblades}
                         currentUserId={session?.user.id}
                         deckType={tournament.deckType}
+                        openJudging={openJudging}
                       />
                     </div>
                   </div>
@@ -792,6 +805,7 @@ export default async function TournamentDetailPage({
                                   participantBeyblades={participantBeyblades}
                                   currentUserId={session?.user.id}
                                   deckType={tournament.deckType}
+                                  openJudging={openJudging}
                                 />
                               );
                             })}
@@ -809,6 +823,7 @@ export default async function TournamentDetailPage({
                             participantBeyblades={participantBeyblades}
                             currentUserId={session?.user.id}
                             deckType={tournament.deckType}
+                            openJudging={openJudging}
                           />
                         ))}
                       </div>
