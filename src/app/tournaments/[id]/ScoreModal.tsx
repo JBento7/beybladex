@@ -48,14 +48,6 @@ function comboParts(b: BeybladeInfo) {
   return [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
 }
 
-// Reorder helper: move item at index in direction
-function reorder(arr: string[], from: number, to: number): string[] {
-  const copy = [...arr];
-  const [item] = copy.splice(from, 1);
-  copy.splice(to, 0, item);
-  return copy;
-}
-
 function DeckOrderPicker({
   player,
   beyblades,
@@ -67,65 +59,107 @@ function DeckOrderPicker({
   color: string;
   onConfirm: (order: string[]) => void;
 }) {
-  const [order, setOrder] = useState<string[]>(beyblades.map((b) => b.id));
+  // selected = beyblades tapped in order (up to 3)
+  const [selected, setSelected] = useState<string[]>([]);
   const beyMap = Object.fromEntries(beyblades.map((b) => [b.id, b]));
+  const available = beyblades.filter((b) => !selected.includes(b.id));
+  const complete = selected.length === beyblades.length;
 
-  function move(from: number, direction: -1 | 1) {
-    const to = from + direction;
-    if (to < 0 || to >= order.length) return;
-    setOrder(reorder(order, from, to));
+  function tap(id: string) {
+    if (selected.includes(id)) {
+      // remove from selected (deselect)
+      setSelected(selected.filter((s) => s !== id));
+    } else {
+      setSelected([...selected, id]);
+    }
+  }
+
+  function reset() {
+    setSelected([]);
   }
 
   return (
     <div className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl p-4 mb-3">
-      <div className="text-xs font-bold mb-3" style={{ color }}>
-        {player.bladerName || player.name} — Escolha a ordem
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs font-bold" style={{ color }}>
+          {player.bladerName || player.name} — Toque na ordem desejada
+        </div>
+        {selected.length > 0 && (
+          <button type="button" onClick={reset} className="text-[10px] text-gray-500 hover:text-white underline">
+            limpar
+          </button>
+        )}
       </div>
-      <div className="space-y-2 mb-3">
-        {order.map((id, i) => {
-          const b = beyMap[id];
+
+      {/* Slots: show chosen order */}
+      <div className="flex gap-2 mb-3">
+        {[0, 1, 2].map((i) => {
+          const id = selected[i];
+          const b = id ? beyMap[id] : null;
           return (
-            <div key={id} className="flex items-center gap-2">
-              <span className="text-xs font-black w-5 text-center" style={{ color }}>
+            <button
+              key={i}
+              type="button"
+              onClick={() => id && setSelected(selected.filter((s) => s !== id))}
+              className={`flex-1 rounded-xl border-2 py-2.5 px-1 text-center transition-all ${
+                b
+                  ? "border-current bg-[#252525]"
+                  : "border-dashed border-[#333] bg-transparent"
+              }`}
+              style={{ borderColor: b ? color : undefined }}
+            >
+              <div className="text-[10px] font-black mb-0.5" style={{ color: b ? color : "#555" }}>
                 {i + 1}°
-              </span>
-              <div
-                className="flex-1 bg-[#252525] border border-[#333] rounded-lg px-3 py-2 text-xs text-white font-medium"
-              >
-                {b?.name ?? id}
-                {b && comboParts(b) && (
-                  <span className="text-gray-500 font-normal ml-1">· {comboParts(b)}</span>
-                )}
               </div>
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => move(i, -1)}
-                  disabled={i === 0}
-                  className="text-gray-500 hover:text-white disabled:opacity-20 text-xs leading-none px-1"
-                >
-                  ▲
-                </button>
-                <button
-                  type="button"
-                  onClick={() => move(i, 1)}
-                  disabled={i === order.length - 1}
-                  className="text-gray-500 hover:text-white disabled:opacity-20 text-xs leading-none px-1"
-                >
-                  ▼
-                </button>
+              <div className={`text-[11px] font-bold leading-tight ${b ? "text-white" : "text-[#444]"}`}>
+                {b ? b.name : "—"}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
+
+      {/* Available beyblades to tap */}
+      {!complete && (
+        <div className="space-y-2 mb-3">
+          {beyblades.map((b) => {
+            const idx = selected.indexOf(b.id);
+            const isChosen = idx !== -1;
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => tap(b.id)}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border-2 text-left transition-all active:scale-[0.98] ${
+                  isChosen
+                    ? "opacity-30 border-[#333] bg-[#1a1a1a]"
+                    : "border-[#333] bg-[#252525] hover:border-[#555]"
+                }`}
+              >
+                <span
+                  className="text-sm font-black w-6 text-center flex-shrink-0"
+                  style={{ color: isChosen ? "#555" : color }}
+                >
+                  {isChosen ? `${idx + 1}°` : "·"}
+                </span>
+                <span className="text-sm font-bold text-white">{b.name}</span>
+                {comboParts(b) && (
+                  <span className="text-xs text-gray-500 font-normal ml-auto truncate">{comboParts(b)}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <button
         type="button"
-        onClick={() => onConfirm(order)}
-        className="w-full text-xs font-bold py-2 rounded-lg transition-colors text-white"
-        style={{ backgroundColor: color }}
+        onClick={() => complete && onConfirm(selected)}
+        disabled={!complete}
+        className="w-full text-sm font-black py-3 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed text-white active:scale-[0.98]"
+        style={{ backgroundColor: complete ? color : "#333" }}
       >
-        Confirmar Ordem
+        {complete ? "Confirmar Ordem" : `Toque nas beyblades (${selected.length}/3)`}
       </button>
     </div>
   );
