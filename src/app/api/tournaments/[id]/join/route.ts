@@ -4,16 +4,46 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+type OwnedBey = {
+  blade: string | null;
+  ratchet: string | null;
+  bit: string | null;
+  lockChip: string | null;
+  metalBlade: string | null;
+};
+
+// Returns the list of duplicated part names if any part appears in more than one beyblade.
+function findDuplicateParts(beys: OwnedBey[]): string[] {
+  const PART_LABELS: [keyof OwnedBey, string][] = [
+    ["blade", "Blade"],
+    ["ratchet", "Ratchet"],
+    ["bit", "Bit"],
+    ["lockChip", "Lock Chip"],
+    ["metalBlade", "Metal Blade"],
+  ];
+  const seen = new Map<string, string>(); // key → label
+  const dupes = new Set<string>();
+  for (const bey of beys) {
+    for (const [field, label] of PART_LABELS) {
+      const val = bey[field];
+      if (!val) continue;
+      const key = `${field}:${val.trim().toLowerCase()}`;
+      if (seen.has(key)) {
+        dupes.add(`${label} "${val}"`);
+      } else {
+        seen.set(key, label);
+      }
+    }
+  }
+  return [...dupes];
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-    }
-
     if (!session) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
@@ -85,7 +115,7 @@ export async function POST(
       );
     }
 
-    // No duplicates
+    // No duplicate beyblade IDs
     if (new Set(beybladeIds).size !== beybladeIds.length) {
       return NextResponse.json(
         { error: "Não é possível selecionar o mesmo combo mais de uma vez." },
@@ -103,6 +133,20 @@ export async function POST(
         { error: "Você só pode selecionar combos cadastrados na sua conta." },
         { status: 400 }
       );
+    }
+
+    // Official tournaments: no repeated parts across the deck
+    if (tournament.isOfficial && beybladeIds.length > 1) {
+      const dupes = findDuplicateParts(owned);
+      if (dupes.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Em torneios oficiais as beyblades não podem ter peças repetidas. Peça(s) duplicada(s): ${dupes.join(", ")}.`,
+            duplicateParts: dupes,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const participant = await prisma.tournamentParticipant.create({
@@ -187,7 +231,7 @@ export async function PATCH(
       );
     }
 
-    // No duplicates
+    // No duplicate beyblade IDs
     if (new Set(beybladeIds).size !== beybladeIds.length) {
       return NextResponse.json(
         { error: "Não é possível selecionar o mesmo combo mais de uma vez." },
@@ -205,6 +249,20 @@ export async function PATCH(
         { error: "Você só pode selecionar combos cadastrados na sua conta." },
         { status: 400 }
       );
+    }
+
+    // Official tournaments: no repeated parts across the deck
+    if (tournament.isOfficial && beybladeIds.length > 1) {
+      const dupes = findDuplicateParts(owned);
+      if (dupes.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Em torneios oficiais as beyblades não podem ter peças repetidas. Peça(s) duplicada(s): ${dupes.join(", ")}.`,
+            duplicateParts: dupes,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const updated = await prisma.tournamentParticipant.update({

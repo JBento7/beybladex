@@ -645,7 +645,7 @@ export default async function TournamentDetailPage({
             {/* Actions */}
             <div className="flex flex-col gap-3">
               {canJoin && (
-                <ClientJoinButton tournamentId={tournament.id} deckType={tournament.deckType} />
+                <ClientJoinButton tournamentId={tournament.id} deckType={tournament.deckType} isOfficial={tournament.isOfficial} />
               )}
               {isParticipant && tournament.status === "REGISTRATION" && (
                 <>

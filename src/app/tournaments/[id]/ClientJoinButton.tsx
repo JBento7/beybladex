@@ -15,12 +15,36 @@ interface Beyblade {
   beyLine: string | null;
 }
 
+function findDuplicateParts(beys: Beyblade[]): string[] {
+  const PARTS: [keyof Beyblade, string][] = [
+    ["blade", "Blade"],
+    ["ratchet", "Ratchet"],
+    ["bit", "Bit"],
+    ["lockChip", "Lock Chip"],
+    ["metalBlade", "Metal Blade"],
+  ];
+  const seen = new Map<string, string>();
+  const dupes = new Set<string>();
+  for (const bey of beys) {
+    for (const [field, label] of PARTS) {
+      const val = bey[field];
+      if (!val) continue;
+      const key = `${field}:${(val as string).trim().toLowerCase()}`;
+      if (seen.has(key)) dupes.add(`${label} "${val}"`);
+      else seen.set(key, label);
+    }
+  }
+  return [...dupes];
+}
+
 export default function ClientJoinButton({
   tournamentId,
   deckType = "SOLO",
+  isOfficial = false,
 }: {
   tournamentId: string;
   deckType?: string;
+  isOfficial?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -78,6 +102,15 @@ export default function ClientJoinButton({
       setErr(`Selecione exatamente ${required} combo${required > 1 ? "s" : ""}.`);
       return;
     }
+    // Client-side duplicate parts guard for official tournaments
+    if (isOfficial && ids.length > 1) {
+      const selBeys = beyblades.filter((b) => ids.includes(b.id));
+      const dupes = findDuplicateParts(selBeys);
+      if (dupes.length > 0) {
+        setErr(`Peças repetidas não permitidas: ${dupes.join(", ")}.`);
+        return;
+      }
+    }
     setErr(null);
     setLoading(true);
     const res = await fetch(`/api/tournaments/${tournamentId}/join`, {
@@ -107,6 +140,11 @@ export default function ClientJoinButton({
 
   // Show the "ask featured deck" step only for required > 1 and when featured deck is available
   const showAskStep = deckStep === "ask" && featuredReady && required > 1 && !loadingBB && !loadError;
+
+  // Live duplicate-parts warning for official tournaments
+  const liveDupes = isOfficial && selected.length > 1
+    ? findDuplicateParts(beyblades.filter((b) => selected.includes(b.id)))
+    : [];
 
   return (
     <>
@@ -205,6 +243,18 @@ export default function ClientJoinButton({
                   </div>
                 )}
 
+                {liveDupes.length > 0 && (
+                  <div className="mb-3 text-xs px-3 py-2 rounded-lg bg-yellow-900/20 border border-yellow-600/40 text-yellow-400">
+                    ⚠️ Peças repetidas no deck: <span className="font-bold">{liveDupes.join(", ")}</span>
+                  </div>
+                )}
+
+                {isOfficial && required > 1 && (
+                  <div className="mb-3 text-[10px] text-gray-600 bg-[#252525] rounded-lg px-3 py-2">
+                    Torneio oficial — as 3 beyblades não podem compartilhar nenhuma peça (blade, ratchet, bit).
+                  </div>
+                )}
+
                 <div className="flex-1 overflow-y-auto space-y-2 mb-4">
                   {beyblades.length === 0 ? (
                     <div className="text-center py-6">
@@ -265,7 +315,7 @@ export default function ClientJoinButton({
                   )}
                   <button
                     onClick={() => handleJoin(selected)}
-                    disabled={loading || selected.length !== required}
+                    disabled={loading || selected.length !== required || liveDupes.length > 0}
                     className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold py-2.5 rounded-xl transition-colors"
                   >
                     {loading ? "Inscrevendo..." : `Confirmar (${selected.length}/${required})`}
