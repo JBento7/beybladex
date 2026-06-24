@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { LineBadge, LineButtonLabel } from "@/components/LineBadge";
 
 type Line = "BX" | "UX" | "CX" | "RATCHET" | "BIT" | "BX_EXPAND" | "UX_EXPAND" | "CX_EXPAND";
 type Category = "BLADE" | "RATCHET" | "BIT" | "LOCK_CHIP" | "MAIN_BLADE" | "ASSIST_BLADE" | "OVER_BLADE";
@@ -62,16 +63,8 @@ interface BeyPart {
   statBurst: number | null;
 }
 
-const LINE_LABELS: Record<Line, string> = {
-  BX: "Linha BX",
-  UX: "Linha UX",
-  CX: "Linha CX",
-  RATCHET: "Ratchet",
-  BIT: "Bit",
-  BX_EXPAND: "BX Expand",
-  UX_EXPAND: "UX Expand",
-  CX_EXPAND: "CX Expand",
-};
+const ALL_TAB_LINES = ["BX", "UX", "CX", "BX_EXPAND", "UX_EXPAND", "CX_EXPAND", "RATCHET", "BIT"] as const;
+const LINE_TAB_LABELS: Record<string, string> = { RATCHET: "Ratchet", BIT: "Bit" };
 
 const CATEGORY_LABELS: Record<Category, string> = {
   BLADE: "Blade",
@@ -310,7 +303,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold text-white mb-0.5">{part.name}</h2>
-        <p className="text-sm text-gray-500 mb-4">{CATEGORY_LABELS[part.category]} · {part.line.replace("_", " ")}</p>
+        <p className="text-sm text-gray-500 mb-4 flex items-center gap-1.5">{CATEGORY_LABELS[part.category]} · <LineBadge line={part.line} /></p>
 
         {err && (
           <div className="mb-4 text-sm px-3 py-2 rounded-lg bg-red-900/30 border border-red-700 text-red-400">{err}</div>
@@ -467,8 +460,8 @@ function PartCard({ part, onEdit, onDelete, deleting, isAdmin }: {
             <div className="font-bold text-sm text-white leading-tight truncate">{part.name}</div>
             <div className="text-[11px] text-gray-500 mt-0.5">{CATEGORY_LABELS[part.category]}</div>
           </div>
-          <span className="text-[10px] font-bold bg-[#f0a500]/15 text-[#f0a500] px-1.5 py-0.5 rounded flex-shrink-0">
-            {part.line.replace("_", " ")}
+          <span className="flex-shrink-0">
+            <LineBadge line={part.line} />
           </span>
         </div>
 
@@ -633,7 +626,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
 
         {/* Line tabs */}
         <div className="flex flex-wrap gap-2 mb-2">
-          {(Object.keys(LINE_LABELS) as Line[]).map((line) => (
+          {(ALL_TAB_LINES as unknown as Line[]).map((line) => (
             <button
               key={line}
               onClick={() => {
@@ -646,7 +639,9 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
                 activeLine === line ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 hover:text-white"
               }`}
             >
-              {LINE_LABELS[line]}
+              {["RATCHET", "BIT"].includes(line)
+                ? LINE_TAB_LABELS[line]
+                : <LineButtonLabel line={line} />}
             </button>
           ))}
         </div>
