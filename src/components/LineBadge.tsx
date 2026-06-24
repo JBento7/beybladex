@@ -1,10 +1,10 @@
 const LINE_IMAGES: Record<string, string> = {
-  BX: "/bx.png",
-  UX: "/ux.png",
-  CX: "/cx.png",
-  BX_EXPAND: "/bxe.png",
-  UX_EXPAND: "/uxe.png",
-  CX_EXPAND: "/cxe.png",
+  BX: "/BX.png",
+  UX: "/UX.png",
+  CX: "/CX.png",
+  BX_EXPAND: "/BXE.png",
+  UX_EXPAND: "/UXE.png",
+  CX_EXPAND: "/CXE.png",
 };
 
 export const LINE_LABELS: Record<string, string> = {
