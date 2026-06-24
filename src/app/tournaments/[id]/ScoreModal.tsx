@@ -233,8 +233,7 @@ export default function ScoreModal({
   useEffect(() => {
     if (!state || !isDeck) return;
     const { currentSet, deckOrders, currentSetBattleCount } = state;
-    if (!currentSet) return;
-    const setNum = currentSet.setNumber;
+    const setNum = currentSet?.setNumber ?? 1;
     const cycle = Math.floor(currentSetBattleCount / 3);
     const p1Has = deckOrders.some((d) => d.userId === player1.id && d.setNumber === setNum && d.cycleIndex === cycle);
     const p2Has = deckOrders.some((d) => d.userId === player2.id && d.setNumber === setNum && d.cycleIndex === cycle);
@@ -259,12 +258,17 @@ export default function ScoreModal({
     await fetchState();
   }
 
+  function resolveSetNum() {
+    if (state?.currentSet) return state.currentSet.setNumber;
+    return (state?.sets.filter((s) => s.status === "FINISHED").length ?? 0) + 1;
+  }
+
   async function handleP1OrderConfirm(order: string[]) {
-    if (!state?.currentSet) return;
-    const cycle = Math.floor(state.currentSetBattleCount / 3);
+    const setNum = resolveSetNum();
+    const cycle = Math.floor((state?.currentSetBattleCount ?? 0) / 3);
     setLoading(true);
     try {
-      await saveDeckOrder(player1.id, state.currentSet.setNumber, cycle, order);
+      await saveDeckOrder(player1.id, setNum, cycle, order);
       setP1PendingOrder(order);
     } finally {
       setLoading(false);
@@ -272,11 +276,11 @@ export default function ScoreModal({
   }
 
   async function handleP2OrderConfirm(order: string[]) {
-    if (!state?.currentSet) return;
-    const cycle = Math.floor(state.currentSetBattleCount / 3);
+    const setNum = resolveSetNum();
+    const cycle = Math.floor((state?.currentSetBattleCount ?? 0) / 3);
     setLoading(true);
     try {
-      await saveDeckOrder(player2.id, state.currentSet.setNumber, cycle, order);
+      await saveDeckOrder(player2.id, setNum, cycle, order);
       setP2PendingOrder(order);
     } finally {
       setLoading(false);
@@ -288,12 +292,14 @@ export default function ScoreModal({
     setErr(null);
     let beybladeId: string | undefined;
 
-    if (isDeck && state?.currentSet) {
-      const { deckOrders, currentSetBattleCount, currentSet } = state;
-      const cycle = Math.floor(currentSetBattleCount / 3);
-      const pos = currentSetBattleCount % 3;
-      const order = deckOrders.find(
-        (d) => d.userId === scorerId && d.setNumber === currentSet.setNumber && d.cycleIndex === cycle
+    if (isDeck) {
+      const orders = state?.deckOrders ?? [];
+      const battleCount = state?.currentSetBattleCount ?? 0;
+      const setNum = resolveSetNum();
+      const cycle = Math.floor(battleCount / 3);
+      const pos = battleCount % 3;
+      const order = orders.find(
+        (d) => d.userId === scorerId && d.setNumber === setNum && d.cycleIndex === cycle
       );
       if (order) {
         beybladeId = [order.bey1Id, order.bey2Id, order.bey3Id][pos] || undefined;
@@ -351,7 +357,9 @@ export default function ScoreModal({
   const currentSetBattleCount = state?.currentSetBattleCount ?? 0;
   const cycleIndex = Math.floor(currentSetBattleCount / 3);
   const posInCycle = currentSetBattleCount % 3;
-  const currentSetNum = cur?.setNumber ?? 1;
+  // If no in-progress set, next set number = completed sets + 1
+  const completedSets = state?.sets.filter((s) => s.status === "FINISHED").length ?? 0;
+  const currentSetNum = cur?.setNumber ?? (completedSets + 1);
   const deckOrders = state?.deckOrders ?? [];
 
   const p1Order = isDeck
@@ -364,13 +372,13 @@ export default function ScoreModal({
   const p1OrderArr = p1Order ? [p1Order.bey1Id, p1Order.bey2Id, p1Order.bey3Id] : null;
   const p2OrderArr = p2Order ? [p2Order.bey1Id, p2Order.bey2Id, p2Order.bey3Id] : null;
 
-  // Need deck order if in 3on3 and current set has no order for this cycle yet
-  const needsP1Order = isDeck && cur && !p1Order;
-  const needsP2Order = isDeck && cur && !p2Order;
+  // Need deck order if in 3on3 and no order declared for this cycle yet (even before first point)
+  const needsP1Order = isDeck && !p1Order;
+  const needsP2Order = isDeck && !p2Order;
   const needsDeckOrder = needsP1Order || needsP2Order;
 
-  // Cycle just finished: after 3 battles, check if posInCycle wrapped back to 0
-  const cycleJustDone = isDeck && cur && currentSetBattleCount > 0 && posInCycle === 0 && !p1Order && !p2Order;
+  // Cycle just finished: after 3 battles, posInCycle wraps back to 0
+  const cycleJustDone = isDeck && currentSetBattleCount > 0 && posInCycle === 0 && !p1Order && !p2Order;
 
   return (
     <>
@@ -498,7 +506,7 @@ export default function ScoreModal({
                 )}
 
                 {/* DECK 3ON3: active beyblades display */}
-                {isDeck && cur && p1OrderArr && p2OrderArr && (
+                {isDeck && p1OrderArr && p2OrderArr && (
                   <div className="bg-[#252525] rounded-xl p-4 mb-4">
                     <div className="text-xs text-gray-500 text-center mb-3 font-medium">BEYBLADE ATIVA</div>
                     <div className="flex gap-4 items-start">
@@ -528,7 +536,7 @@ export default function ScoreModal({
                 )}
 
                 {/* DECK 3ON3: order declaration */}
-                {isDeck && cur && needsDeckOrder && (
+                {isDeck && needsDeckOrder && (
                   <div className="mb-4">
                     {cycleJustDone && (
                       <div className="bg-[#f0a500]/10 border border-[#f0a500]/30 rounded-xl px-4 py-3 mb-3 text-center">
