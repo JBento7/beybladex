@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { LineBadge, LineButtonLabel } from "@/components/LineBadge";
+import { lookupPartWeight } from "@/lib/partWeights";
 
 type Line = "BX" | "UX" | "CX" | "RATCHET" | "BIT" | "BX_EXPAND" | "UX_EXPAND" | "CX_EXPAND";
 type Category = "BLADE" | "RATCHET" | "BIT" | "LOCK_CHIP" | "MAIN_BLADE" | "ASSIST_BLADE" | "OVER_BLADE";
@@ -55,6 +56,7 @@ interface BeyPart {
   name: string;
   imageUrl: string | null;
   partType: string | null;
+  weight: number | null;
   statAttack: number | null;
   statDefense: number | null;
   statStamina: number | null;
@@ -235,6 +237,11 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
   const isAutoType = AUTO_TYPE_CATEGORIES.includes(part.category);
   const [imageUrl, setImageUrl] = useState(part.imageUrl ?? "");
   const [partType, setPartType] = useState<string>(part.partType ?? "");
+  // Peso: usa o valor salvo ou, se vazio, sugere o peso de referência pesquisado.
+  const suggestedWeight = part.weight == null ? lookupPartWeight(part.name) : null;
+  const [weight, setWeight] = useState<string>(
+    part.weight != null ? String(part.weight) : suggestedWeight != null ? String(suggestedWeight) : ""
+  );
   const [stats, setStats] = useState<Partial<Record<StatKey, string>>>(() =>
     Object.fromEntries(
       axes.map((k) => [k, part[k] != null ? String(part[k]) : ""])
@@ -278,6 +285,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
     const body: Record<string, unknown> = {
       imageUrl: imageUrl.trim() || null,
       partType: partType || null,
+      weight: weight.trim() !== "" ? Number(weight) : null,
     };
     for (const k of axes) {
       body[k] = stats[k] !== "" && stats[k] != null ? Number(stats[k]) : null;
@@ -362,6 +370,24 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
             placeholder="Ou cole uma URL..."
             className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
           />
+        </div>
+
+        <div className="mb-5">
+          <label className="block text-xs font-semibold text-gray-400 mb-1">Peso (g)</label>
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            value={weight}
+            onChange={(e) => setWeight(e.target.value)}
+            placeholder="—"
+            className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
+          />
+          {suggestedWeight != null && (
+            <p className="text-[11px] text-gray-500 mt-1">
+              Valor de referência pesquisado: {suggestedWeight}g — edite se necessário.
+            </p>
+          )}
         </div>
 
         {isTypeOnly && (
@@ -460,8 +486,13 @@ function PartCard({ part, onEdit, onDelete, deleting, isAdmin }: {
             <div className="font-bold text-sm text-white leading-tight truncate">{part.name}</div>
             <div className="text-[11px] text-gray-500 mt-0.5">{CATEGORY_LABELS[part.category]}</div>
           </div>
-          <span className="flex-shrink-0">
+          <span className="flex-shrink-0 flex flex-col items-end gap-1">
             <LineBadge line={part.line} />
+            {part.weight != null && (
+              <span className="text-[10px] font-bold text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/30 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                {part.weight}g
+              </span>
+            )}
           </span>
         </div>
 
@@ -517,6 +548,8 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
   const [saving, setSaving] = useState<Category | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingPart, setEditingPart] = useState<BeyPart | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState("");
 
   const fetchParts = useCallback(async () => {
     const res = await fetch(isAdmin ? "/api/admin/beyparts" : "/api/beyparts");
@@ -556,6 +589,26 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
       setError("Erro ao remover peça");
     }
     setDeletingId(null);
+  }
+
+  async function handleBackfillWeights() {
+    setBackfilling(true);
+    setBackfillMsg("");
+    setError("");
+    try {
+      const res = await fetch("/api/admin/beyparts/backfill-weights", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        setBackfillMsg(`${data.updated} peça(s) preenchida(s) automaticamente.`);
+        await fetchParts();
+      } else {
+        setError("Erro ao preencher pesos");
+      }
+    } catch {
+      setError("Erro de conexão");
+    } finally {
+      setBackfilling(false);
+    }
   }
 
   function handleSaved(updated: BeyPart) {
@@ -601,6 +654,18 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
             <p className="text-gray-400 text-sm mt-0.5">
               {isAdmin ? "Cadastre as peças disponíveis para cada linha de Beyblade." : "Peças disponíveis por linha de Beyblade."}
             </p>
+            {isAdmin && (
+              <div className="mt-2 flex items-center gap-3">
+                <button
+                  onClick={handleBackfillWeights}
+                  disabled={backfilling}
+                  className="text-xs bg-[#252525] hover:bg-[#333] disabled:opacity-50 text-gray-300 font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  {backfilling ? "Preenchendo..." : "Preencher pesos automaticamente"}
+                </button>
+                {backfillMsg && <span className="text-xs text-green-400">{backfillMsg}</span>}
+              </div>
+            )}
           </div>
           {/* Search */}
           <div className="relative flex-shrink-0 w-52">

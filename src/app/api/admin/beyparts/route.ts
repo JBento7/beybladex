@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { BeyPartLine, BeyPartCategory } from "@prisma/client";
+import { lookupPartWeight } from "@/lib/partWeights";
 
 const LINES: BeyPartLine[] = ["BX", "UX", "CX", "RATCHET", "BIT", "BX_EXPAND", "UX_EXPAND", "CX_EXPAND"];
 const CATEGORIES: BeyPartCategory[] = ["BLADE", "RATCHET", "BIT", "LOCK_CHIP", "MAIN_BLADE", "ASSIST_BLADE", "OVER_BLADE"];
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
 
-  const { line, category, name, imageUrl, partType, statAttack, statDefense, statStamina, statHeight, statDash, statBurst } = await req.json();
+  const { line, category, name, imageUrl, partType, weight, statAttack, statDefense, statStamina, statHeight, statDash, statBurst } = await req.json();
 
   if (!LINES.includes(line)) {
     return NextResponse.json({ error: "Linha inválida" }, { status: 400 });
@@ -47,6 +48,8 @@ export async function POST(req: NextRequest) {
         name: name.trim(),
         imageUrl: imageUrl?.trim() || null,
         partType: partType?.trim() || null,
+        // Peso informado, ou peso de referência pesquisado pelo nome da peça.
+        weight: weight != null ? Number(weight) : lookupPartWeight(name),
         statAttack: statAttack != null ? Number(statAttack) : null,
         statDefense: statDefense != null ? Number(statDefense) : null,
         statStamina: statStamina != null ? Number(statStamina) : null,

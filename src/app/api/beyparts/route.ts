@@ -19,6 +19,7 @@ export async function GET() {
       name: true,
       imageUrl: true,
       partType: true,
+      weight: true,
       statAttack: true,
       statDefense: true,
       statStamina: true,

@@ -391,6 +391,10 @@ export async function GET() {
       sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "partType" TEXT`,
     },
     {
+      name: "BeyPart.weight",
+      sql: `ALTER TABLE "BeyPart" ADD COLUMN IF NOT EXISTS "weight" DOUBLE PRECISION`,
+    },
+    {
       name: "Beyblade.beyLine",
       sql: `ALTER TABLE "Beyblade" ADD COLUMN IF NOT EXISTS "beyLine" TEXT`,
     },
