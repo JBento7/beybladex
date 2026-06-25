@@ -15,11 +15,18 @@ export async function GET() {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
 
-  const parts = await prisma.beyPart.findMany({
-    orderBy: [{ line: "asc" }, { category: "asc" }, { name: "asc" }],
-  });
-
-  return NextResponse.json(parts);
+  try {
+    const parts = await prisma.beyPart.findMany({
+      orderBy: [{ line: "asc" }, { category: "asc" }, { name: "asc" }],
+    });
+    return NextResponse.json(parts);
+  } catch (err) {
+    console.error("[beyparts GET]", err);
+    return NextResponse.json(
+      { error: "Erro ao carregar peças. Pode faltar rodar a migração do banco (/api/migrate)." },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {
