@@ -57,15 +57,27 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: "Apenas o organizador do torneio pode excluí-lo" }, { status: 403 });
   }
 
-  // Delete in dependency order
-  await prisma.$transaction([
-    prisma.matchPoint.deleteMany({ where: { match: { tournamentId: params.id } } }),
-    prisma.matchSet.deleteMany({ where: { match: { tournamentId: params.id } } }),
-    prisma.match.deleteMany({ where: { tournamentId: params.id } }),
-    prisma.tournamentParticipant.deleteMany({ where: { tournamentId: params.id } }),
-    prisma.group.deleteMany({ where: { tournamentId: params.id } }),
-    prisma.tournament.delete({ where: { id: params.id } }),
-  ]);
+  // Delete in dependency order. Includes every table that references the
+  // tournament (or its matches) so a FK with ON DELETE RESTRICT doesn't block it.
+  try {
+    await prisma.$transaction([
+      prisma.beybladeMatchRecord.deleteMany({ where: { tournamentId: params.id } }),
+      prisma.matchPoint.deleteMany({ where: { match: { tournamentId: params.id } } }),
+      prisma.matchSet.deleteMany({ where: { match: { tournamentId: params.id } } }),
+      prisma.matchDeckOrder.deleteMany({ where: { match: { tournamentId: params.id } } }),
+      prisma.match.deleteMany({ where: { tournamentId: params.id } }),
+      prisma.tournamentParticipant.deleteMany({ where: { tournamentId: params.id } }),
+      prisma.tournamentJudge.deleteMany({ where: { tournamentId: params.id } }),
+      prisma.group.deleteMany({ where: { tournamentId: params.id } }),
+      prisma.tournament.delete({ where: { id: params.id } }),
+    ]);
+  } catch (err) {
+    console.error("[tournament DELETE]", err);
+    return NextResponse.json(
+      { error: "Não foi possível excluir o torneio (dados vinculados). Tente novamente." },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({ ok: true });
 }
