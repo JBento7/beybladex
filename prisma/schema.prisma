@@ -381,6 +381,7 @@ model BeyPart {
   line      BeyPartLine
   category  BeyPartCategory
   name      String
+  fullName    String?
   imageUrl    String?
   partType    String?
   weight      Float?

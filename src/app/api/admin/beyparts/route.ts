@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
 
-  const { line, category, name, imageUrl, partType, weight, statAttack, statDefense, statStamina, statHeight, statDash, statBurst } = await req.json();
+  const { line, category, name, fullName, imageUrl, partType, weight, statAttack, statDefense, statStamina, statHeight, statDash, statBurst } = await req.json();
 
   if (!LINES.includes(line)) {
     return NextResponse.json({ error: "Linha inválida" }, { status: 400 });
@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
         line,
         category,
         name: name.trim(),
+        fullName: fullName?.trim() || null,
         imageUrl: imageUrl?.trim() || null,
         partType: partType?.trim() || null,
         // Peso informado, ou peso de referência pesquisado pelo nome da peça.

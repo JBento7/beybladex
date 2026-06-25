@@ -17,6 +17,7 @@ export async function GET() {
       line: true,
       category: true,
       name: true,
+      fullName: true,
       imageUrl: true,
       partType: true,
       weight: true,

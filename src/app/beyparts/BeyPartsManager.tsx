@@ -54,6 +54,7 @@ interface BeyPart {
   line: Line;
   category: Category;
   name: string;
+  fullName: string | null;
   imageUrl: string | null;
   partType: string | null;
   weight: number | null;
@@ -235,6 +236,9 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
   const axes = CATEGORY_STATS[part.category];
   const isTypeOnly = TYPE_ONLY_CATEGORIES.includes(part.category);
   const isAutoType = AUTO_TYPE_CATEGORIES.includes(part.category);
+  const isBit = part.category === "BIT";
+  const [name, setName] = useState(part.name);
+  const [fullName, setFullName] = useState(part.fullName ?? "");
   const [imageUrl, setImageUrl] = useState(part.imageUrl ?? "");
   const [partType, setPartType] = useState<string>(part.partType ?? "");
   // Peso: usa o valor salvo ou, se vazio, sugere o peso de referência pesquisado.
@@ -280,9 +284,15 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
   const previewType = resolvedType(preview);
 
   async function handleSave() {
+    if (!name.trim()) {
+      setErr(isBit ? "O nome simplificado é obrigatório" : "O nome é obrigatório");
+      return;
+    }
     setSaving(true);
     setErr("");
     const body: Record<string, unknown> = {
+      name: name.trim(),
+      fullName: fullName.trim() || null,
       imageUrl: imageUrl.trim() || null,
       partType: partType || null,
       weight: weight.trim() !== "" ? Number(weight) : null,
@@ -303,7 +313,8 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
     if (res.ok) {
       onSaved(await res.json());
     } else {
-      setErr("Erro ao salvar");
+      const data = await res.json().catch(() => ({}));
+      setErr(data.error || "Erro ao salvar");
     }
   }
 
@@ -316,6 +327,35 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
         {err && (
           <div className="mb-4 text-sm px-3 py-2 rounded-lg bg-red-900/30 border border-red-700 text-red-400">{err}</div>
         )}
+
+        {/* Name fields (renaming allowed to fix typos) */}
+        {isBit && (
+          <div className="mb-3">
+            <label className="block text-xs font-semibold text-gray-400 mb-1">Nome</label>
+            <input
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Ex: Low Rush"
+              className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
+            />
+          </div>
+        )}
+        <div className="mb-5">
+          <label className="block text-xs font-semibold text-gray-400 mb-1">
+            {isBit ? "Nome simplificado" : "Nome"}
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={isBit ? "Ex: LR" : "Nome da peça"}
+            className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
+          />
+          {isBit && (
+            <p className="text-[11px] text-gray-500 mt-1">É o que aparece na montagem dos combos no perfil.</p>
+          )}
+        </div>
 
         {/* Live preview */}
         <div className="flex gap-3 mb-5 p-3 bg-[#252525] rounded-xl border border-[#333]">
@@ -467,6 +507,9 @@ function PartCard({ part, onEdit, onDelete, deleting, isAdmin }: {
   const showBadge = TYPE_BADGE_CATEGORIES.includes(part.category);
   const isTypeOnly = TYPE_ONLY_CATEGORIES.includes(part.category);
   const partTypeResolved = resolvedType(part);
+  // Peso salvo, ou valor de referência pesquisado pelo nome (mostrado mais apagado).
+  const displayWeight = part.weight ?? lookupPartWeight(part.name);
+  const weightIsReference = part.weight == null && displayWeight != null;
 
   return (
     <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden flex flex-col">
@@ -483,14 +526,26 @@ function PartCard({ part, onEdit, onDelete, deleting, isAdmin }: {
       <div className="p-3 flex-1 flex flex-col">
         <div className="flex items-start justify-between gap-1 mb-3">
           <div className="min-w-0">
-            <div className="font-bold text-sm text-white leading-tight truncate">{part.name}</div>
-            <div className="text-[11px] text-gray-500 mt-0.5">{CATEGORY_LABELS[part.category]}</div>
+            <div className="font-bold text-sm text-white leading-tight truncate">
+              {part.fullName || part.name}
+            </div>
+            <div className="text-[11px] text-gray-500 mt-0.5">
+              {CATEGORY_LABELS[part.category]}
+              {part.fullName && <span className="text-gray-600"> · {part.name}</span>}
+            </div>
           </div>
           <span className="flex-shrink-0 flex flex-col items-end gap-1">
             <LineBadge line={part.line} />
-            {part.weight != null && (
-              <span className="text-[10px] font-bold text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/30 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                {part.weight}g
+            {displayWeight != null && (
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap border ${
+                  weightIsReference
+                    ? "text-[#f0a500]/70 bg-[#f0a500]/5 border-[#f0a500]/20"
+                    : "text-[#f0a500] bg-[#f0a500]/10 border-[#f0a500]/30"
+                }`}
+                title={weightIsReference ? "Peso de referência (não salvo)" : "Peso"}
+              >
+                {displayWeight}g{weightIsReference ? "*" : ""}
               </span>
             )}
           </span>
@@ -545,6 +600,8 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
   const [newNames, setNewNames] = useState<Record<Category, string>>({
     BLADE: "", RATCHET: "", BIT: "", LOCK_CHIP: "", OVER_BLADE: "", MAIN_BLADE: "", ASSIST_BLADE: "",
   });
+  // Nome completo da peça (usado apenas para BIT, onde "name" é o nome simplificado).
+  const [newBitFullName, setNewBitFullName] = useState("");
   const [saving, setSaving] = useState<Category | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingPart, setEditingPart] = useState<BeyPart | null>(null);
@@ -562,15 +619,17 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
   async function handleAdd(category: Category) {
     const name = newNames[category].trim();
     if (!name) return;
+    const fullName = category === "BIT" ? newBitFullName.trim() || null : null;
     setSaving(category);
     setError("");
     const res = await fetch("/api/admin/beyparts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ line: activeLine, category, name }),
+      body: JSON.stringify({ line: activeLine, category, name, fullName }),
     });
     if (res.ok) {
       setNewNames((prev) => ({ ...prev, [category]: "" }));
+      if (category === "BIT") setNewBitFullName("");
       fetchParts();
     } else {
       const data = await res.json().catch(() => ({}));
@@ -632,16 +691,21 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
 
   const searchTerm = search.trim().toLowerCase();
 
+  const matchesSearch = (p: BeyPart) =>
+    !searchTerm ||
+    p.name.toLowerCase().includes(searchTerm) ||
+    (p.fullName?.toLowerCase().includes(searchTerm) ?? false);
+
   const partsByCategory = (category: Category) =>
     parts
       .filter((p) => p.line === activeLine && p.category === category)
-      .filter((p) => !searchTerm || p.name.toLowerCase().includes(searchTerm))
+      .filter(matchesSearch)
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   const ratchetParts = parts
     .filter((p) => p.line === "RATCHET")
     .filter((p) => activeRatchetSize === null || ratchetSize(p.name) === activeRatchetSize)
-    .filter((p) => !searchTerm || p.name.toLowerCase().includes(searchTerm))
+    .filter(matchesSearch)
     .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
   return (
@@ -832,12 +896,22 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
                   {isAdmin && (
                     <div className="bg-[#111] border border-dashed border-[#333] rounded-xl p-3 flex flex-col justify-between min-h-[80px]">
                       <div className="text-xs font-semibold text-gray-500 mb-2">Nova peça</div>
+                      {category === "BIT" && (
+                        <input
+                          type="text"
+                          value={newBitFullName}
+                          onChange={(e) => setNewBitFullName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") handleAdd(category); }}
+                          placeholder="Nome..."
+                          className="bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
+                        />
+                      )}
                       <input
                         type="text"
                         value={newNames[category]}
                         onChange={(e) => setNewNames((prev) => ({ ...prev, [category]: e.target.value }))}
                         onKeyDown={(e) => { if (e.key === "Enter") handleAdd(category); }}
-                        placeholder="Nome..."
+                        placeholder={category === "BIT" ? "Nome simplificado..." : "Nome..."}
                         className="bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
                       />
                       <button
