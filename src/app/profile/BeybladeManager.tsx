@@ -11,6 +11,7 @@ interface BeyPart {
   line: string;
   category: string;
   name: string;
+  fullName: string | null;
   weight: number | null;
   statAttack: number | null;
   statDefense: number | null;
@@ -480,7 +481,7 @@ export default function BeybladeManager() {
           >
             <option value="">Selecionar...</option>
             {options.map((p) => (
-              <option key={p.id} value={p.name}>{p.name}</option>
+              <option key={p.id} value={p.name}>{p.fullName ? `${p.fullName} (${p.name})` : p.name}</option>
             ))}
           </select>
         ) : (
