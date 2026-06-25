@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { LineBadge, LineButtonLabel, LINE_LABELS } from "@/components/LineBadge";
+import { lookupPartWeight } from "@/lib/partWeights";
 
 type BeyLine = "BX" | "UX" | "CX" | "BX_EXPAND" | "UX_EXPAND" | "CX_EXPAND";
 
@@ -38,6 +39,21 @@ interface Beyblade {
 }
 
 const ALL_LINES: BeyLine[] = ["BX", "UX", "CX", "BX_EXPAND", "UX_EXPAND", "CX_EXPAND"];
+
+const COMBO_TYPE_LABELS: Record<string, string> = {
+  ATTACK: "Ataque", DEFENSE: "Defesa", STAMINA: "Resistência", BALANCE: "Equilíbrio",
+};
+const COMBO_TYPE_COLORS: Record<string, string> = {
+  ATTACK: "#e53e3e", DEFENSE: "#3182ce", STAMINA: "#38a169", BALANCE: "#d69e2e",
+};
+const COMBO_TYPE_ORDER: Record<string, number> = {
+  ATTACK: 0, DEFENSE: 1, STAMINA: 2, BALANCE: 3,
+};
+
+type SortKey = "name" | "type" | "weight";
+const SORT_LABELS: Record<SortKey, string> = {
+  name: "Nome (A-Z)", type: "Tipo", weight: "Peso (maior)",
+};
 
 // Which BeyParts lines to pull for each category
 function bladeLineFor(line: BeyLine): string {
@@ -147,6 +163,7 @@ export default function BeybladeManager() {
   const [confirmResetId, setConfirmResetId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [sortBy, setSortBy] = useState<SortKey>("name");
 
   // BeyParts catalog
   const [beyParts, setBeyParts] = useState<BeyPart[]>([]);
@@ -281,18 +298,52 @@ export default function BeybladeManager() {
   }
 
   // Total weight (g) of a combo, plus how many of its parts had a known weight.
+  // Usa o peso salvo da peça ou, na falta, o peso de referência pesquisado pelo nome.
   function comboWeight(parts: (BeyPart | null)[]): { total: number; known: number; missing: number } {
     let total = 0, known = 0, missing = 0;
     for (const p of parts) {
       if (!p) continue;
-      if (p.weight != null) { total += p.weight; known++; }
+      const w = p.weight ?? lookupPartWeight(p.name);
+      if (w != null) { total += w; known++; }
       else missing++;
     }
     return { total: Math.round(total * 10) / 10, known, missing };
   }
 
+  // Tipo dominante do combo (Ataque/Defesa/Resistência/Equilíbrio) pelos stats somados.
+  type ComboType = "ATTACK" | "DEFENSE" | "STAMINA" | "BALANCE";
+  function comboType(parts: (BeyPart | null)[]): ComboType | null {
+    const s = sumStats(parts);
+    const atk = s.statAttack, def = s.statDefense, sta = s.statStamina;
+    if (atk === 0 && def === 0 && sta === 0) return null;
+    const max = Math.max(atk, def, sta);
+    const close = [atk, def, sta].filter((v) => v >= max * 0.85).length;
+    if (close >= 3) return "BALANCE";
+    if (atk === max) return "ATTACK";
+    if (def === max) return "DEFENSE";
+    return "STAMINA";
+  }
+
   const combinedStats = sumStats(getSelectedParts());
   const formWeight = comboWeight(getSelectedParts());
+
+  const sortedBeyblades = [...beyblades].sort((a, b) => {
+    if (sortBy === "weight") {
+      const wa = comboWeight(partsOf(a)).total;
+      const wb = comboWeight(partsOf(b)).total;
+      if (wb !== wa) return wb - wa; // maior peso primeiro
+      return a.name.localeCompare(b.name, "pt-BR");
+    }
+    if (sortBy === "type") {
+      const ta = comboType(partsOf(a));
+      const tb = comboType(partsOf(b));
+      const oa = ta ? COMBO_TYPE_ORDER[ta] : 99;
+      const ob = tb ? COMBO_TYPE_ORDER[tb] : 99;
+      if (oa !== ob) return oa - ob;
+      return a.name.localeCompare(b.name, "pt-BR");
+    }
+    return a.name.localeCompare(b.name, "pt-BR");
+  });
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -648,12 +699,31 @@ export default function BeybladeManager() {
           <p className="text-gray-600 text-xs mt-1">Cadastre seus combos para usá-los nos torneios</p>
         </div>
       ) : (
+        <>
+        {/* Ordenação dos combos */}
+        <div className="flex items-center justify-end gap-2 mb-3">
+          <span className="text-xs text-gray-500">Ordenar por:</span>
+          <div className="flex gap-1">
+            {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
+              <button
+                key={k}
+                onClick={() => setSortBy(k)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                  sortBy === k ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 hover:text-white"
+                }`}
+              >
+                {SORT_LABELS[k]}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {beyblades.map((b) => {
+          {sortedBeyblades.map((b) => {
             const total = b.wins + b.losses;
             const winRate = total > 0 ? Math.round((b.wins / total) * 100) : 0;
             const parts = comboParts(b);
             const weight = comboWeight(partsOf(b));
+            const type = comboType(partsOf(b));
             return (
               <div key={b.id} className="bg-[#252525] border border-[#333] rounded-xl p-4">
                 <div className="flex items-start justify-between mb-3">
@@ -666,7 +736,17 @@ export default function BeybladeManager() {
                         </span>
                       )}
                     </div>
-                    {b.beyLine && <LineBadge line={b.beyLine} className="mt-0.5" />}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {b.beyLine && <LineBadge line={b.beyLine} />}
+                      {type && (
+                        <span
+                          className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border"
+                          style={{ color: COMBO_TYPE_COLORS[type], borderColor: `${COMBO_TYPE_COLORS[type]}55`, backgroundColor: `${COMBO_TYPE_COLORS[type]}1a` }}
+                        >
+                          {COMBO_TYPE_LABELS[type]}
+                        </span>
+                      )}
+                    </div>
                     {parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{parts}</div>}
                     {weight.known > 0 && (
                       <div className="text-xs mt-1">
@@ -742,6 +822,7 @@ export default function BeybladeManager() {
             );
           })}
         </div>
+        </>
       )}
     </div>
   );

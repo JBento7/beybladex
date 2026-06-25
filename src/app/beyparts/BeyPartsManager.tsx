@@ -467,6 +467,9 @@ function PartCard({ part, onEdit, onDelete, deleting, isAdmin }: {
   const showBadge = TYPE_BADGE_CATEGORIES.includes(part.category);
   const isTypeOnly = TYPE_ONLY_CATEGORIES.includes(part.category);
   const partTypeResolved = resolvedType(part);
+  // Peso salvo, ou valor de referência pesquisado pelo nome (mostrado mais apagado).
+  const displayWeight = part.weight ?? lookupPartWeight(part.name);
+  const weightIsReference = part.weight == null && displayWeight != null;
 
   return (
     <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden flex flex-col">
@@ -488,9 +491,16 @@ function PartCard({ part, onEdit, onDelete, deleting, isAdmin }: {
           </div>
           <span className="flex-shrink-0 flex flex-col items-end gap-1">
             <LineBadge line={part.line} />
-            {part.weight != null && (
-              <span className="text-[10px] font-bold text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/30 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                {part.weight}g
+            {displayWeight != null && (
+              <span
+                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap border ${
+                  weightIsReference
+                    ? "text-[#f0a500]/70 bg-[#f0a500]/5 border-[#f0a500]/20"
+                    : "text-[#f0a500] bg-[#f0a500]/10 border-[#f0a500]/30"
+                }`}
+                title={weightIsReference ? "Peso de referência (não salvo)" : "Peso"}
+              >
+                {displayWeight}g{weightIsReference ? "*" : ""}
               </span>
             )}
           </span>
