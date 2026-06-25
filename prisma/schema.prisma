@@ -383,6 +383,7 @@ model BeyPart {
   name      String
   imageUrl    String?
   partType    String?
+  weight      Float?
   statAttack  Int?
   statDefense Int?
   statStamina Int?

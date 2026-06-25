@@ -10,6 +10,7 @@ interface BeyPart {
   line: string;
   category: string;
   name: string;
+  weight: number | null;
   statAttack: number | null;
   statDefense: number | null;
   statStamina: number | null;
@@ -229,33 +230,69 @@ export default function BeybladeManager() {
 
   const selectedLine = form.beyLine as BeyLine | "";
 
-  function getSelectedParts(): (BeyPart | null)[] {
-    if (!selectedLine) return [];
+  // Resolve the BeyPart objects that make up a combo (by line + part names).
+  function partsOf(combo: {
+    beyLine: string | null;
+    blade: string | null;
+    ratchet: string | null;
+    bit: string | null;
+    lockChip: string | null;
+    metalBlade: string | null;
+    assistBlade: string | null;
+    overBlade: string | null;
+  }): (BeyPart | null)[] {
+    const line = (combo.beyLine || "") as BeyLine | "";
+    if (!line) return [];
     const results: (BeyPart | null)[] = [];
-    if (["BX", "UX", "BX_EXPAND", "UX_EXPAND"].includes(selectedLine)) {
-      results.push(beyParts.find((p) => p.name === form.blade && p.line === bladeLineFor(selectedLine) && p.category === "BLADE") ?? null);
+    if (["BX", "UX", "BX_EXPAND", "UX_EXPAND"].includes(line)) {
+      results.push(beyParts.find((p) => p.name === combo.blade && p.line === bladeLineFor(line) && p.category === "BLADE") ?? null);
     }
-    if (["CX", "CX_EXPAND"].includes(selectedLine)) {
+    if (["CX", "CX_EXPAND"].includes(line)) {
       // lock chip and assist blade are shared across CX and CX_EXPAND — find in either line
-      results.push(beyParts.find((p) => p.name === form.lockChip && (p.line === "CX" || p.line === "CX_EXPAND") && p.category === "LOCK_CHIP") ?? null);
+      results.push(beyParts.find((p) => p.name === combo.lockChip && (p.line === "CX" || p.line === "CX_EXPAND") && p.category === "LOCK_CHIP") ?? null);
       // metal blade is exclusive to each line (CX or CX_EXPAND)
-      results.push(beyParts.find((p) => p.name === form.metalBlade && p.line === bladeLineFor(selectedLine) && p.category === "MAIN_BLADE") ?? null);
+      results.push(beyParts.find((p) => p.name === combo.metalBlade && p.line === bladeLineFor(line) && p.category === "MAIN_BLADE") ?? null);
       // assist blade shared across CX and CX_EXPAND
-      results.push(beyParts.find((p) => p.name === form.assistBlade && (p.line === "CX" || p.line === "CX_EXPAND") && p.category === "ASSIST_BLADE") ?? null);
-      if (selectedLine === "CX_EXPAND") {
-        results.push(beyParts.find((p) => p.name === form.overBlade && p.line === "CX_EXPAND" && p.category === "OVER_BLADE") ?? null);
+      results.push(beyParts.find((p) => p.name === combo.assistBlade && (p.line === "CX" || p.line === "CX_EXPAND") && p.category === "ASSIST_BLADE") ?? null);
+      if (line === "CX_EXPAND") {
+        results.push(beyParts.find((p) => p.name === combo.overBlade && p.line === "CX_EXPAND" && p.category === "OVER_BLADE") ?? null);
       }
     }
     // Ratchet (not for UX_EXPAND)
-    if (["BX", "UX", "BX_EXPAND", "CX", "CX_EXPAND"].includes(selectedLine)) {
-      results.push(beyParts.find((p) => p.name === form.ratchet && p.line === "RATCHET" && p.category === "RATCHET") ?? null);
+    if (["BX", "UX", "BX_EXPAND", "CX", "CX_EXPAND"].includes(line)) {
+      results.push(beyParts.find((p) => p.name === combo.ratchet && p.line === "RATCHET" && p.category === "RATCHET") ?? null);
     }
     // Bit
-    results.push(beyParts.find((p) => p.name === form.bit && p.line === "BIT" && p.category === "BIT") ?? null);
+    results.push(beyParts.find((p) => p.name === combo.bit && p.line === "BIT" && p.category === "BIT") ?? null);
     return results;
   }
 
+  function getSelectedParts(): (BeyPart | null)[] {
+    return partsOf({
+      beyLine: form.beyLine || null,
+      blade: form.blade || null,
+      ratchet: form.ratchet || null,
+      bit: form.bit || null,
+      lockChip: form.lockChip || null,
+      metalBlade: form.metalBlade || null,
+      assistBlade: form.assistBlade || null,
+      overBlade: form.overBlade || null,
+    });
+  }
+
+  // Total weight (g) of a combo, plus how many of its parts had a known weight.
+  function comboWeight(parts: (BeyPart | null)[]): { total: number; known: number; missing: number } {
+    let total = 0, known = 0, missing = 0;
+    for (const p of parts) {
+      if (!p) continue;
+      if (p.weight != null) { total += p.weight; known++; }
+      else missing++;
+    }
+    return { total: Math.round(total * 10) / 10, known, missing };
+  }
+
   const combinedStats = sumStats(getSelectedParts());
+  const formWeight = comboWeight(getSelectedParts());
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -540,6 +577,19 @@ export default function BeybladeManager() {
                 onChange={(v) => setForm((f) => ({ ...f, bit: v }))}
               />
 
+              {/* Total weight preview */}
+              {formWeight.known > 0 && (
+                <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-3 flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Peso total</span>
+                  <span className="text-lg font-black text-[#f0a500]">
+                    {formWeight.total}g
+                    {formWeight.missing > 0 && (
+                      <span className="text-[10px] font-medium text-gray-500 ml-1">(peças sem peso: {formWeight.missing})</span>
+                    )}
+                  </span>
+                </div>
+              )}
+
               {/* Combined radar chart preview */}
               {Object.values(combinedStats).some((v) => v > 0) && (
                 <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4">
@@ -603,6 +653,7 @@ export default function BeybladeManager() {
             const total = b.wins + b.losses;
             const winRate = total > 0 ? Math.round((b.wins / total) * 100) : 0;
             const parts = comboParts(b);
+            const weight = comboWeight(partsOf(b));
             return (
               <div key={b.id} className="bg-[#252525] border border-[#333] rounded-xl p-4">
                 <div className="flex items-start justify-between mb-3">
@@ -617,6 +668,15 @@ export default function BeybladeManager() {
                     </div>
                     {b.beyLine && <LineBadge line={b.beyLine} className="mt-0.5" />}
                     {parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{parts}</div>}
+                    {weight.known > 0 && (
+                      <div className="text-xs mt-1">
+                        <span className="text-gray-500">Peso total: </span>
+                        <span className="font-bold text-[#f0a500]">{weight.total}g</span>
+                        {weight.missing > 0 && (
+                          <span className="text-gray-600"> (+{weight.missing} sem peso)</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                     {confirmingId === b.id ? (
