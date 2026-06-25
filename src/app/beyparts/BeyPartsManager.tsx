@@ -650,15 +650,19 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
     setDeletingId(null);
   }
 
-  async function handleBackfillWeights() {
+  async function handleBackfillWeights(overwrite = false) {
     setBackfilling(true);
     setBackfillMsg("");
     setError("");
     try {
-      const res = await fetch("/api/admin/beyparts/backfill-weights", { method: "POST" });
+      const res = await fetch(`/api/admin/beyparts/backfill-weights${overwrite ? "?overwrite=1" : ""}`, { method: "POST" });
       if (res.ok) {
         const data = await res.json();
-        setBackfillMsg(`${data.updated} peça(s) preenchida(s) automaticamente.`);
+        setBackfillMsg(
+          overwrite
+            ? `${data.updated} peça(s) atualizada(s) pela tabela oficial.`
+            : `${data.updated} peça(s) preenchida(s) automaticamente.`
+        );
         await fetchParts();
       } else {
         setError("Erro ao preencher pesos");
@@ -719,13 +723,21 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
               {isAdmin ? "Cadastre as peças disponíveis para cada linha de Beyblade." : "Peças disponíveis por linha de Beyblade."}
             </p>
             {isAdmin && (
-              <div className="mt-2 flex items-center gap-3">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
-                  onClick={handleBackfillWeights}
+                  onClick={() => handleBackfillWeights(false)}
                   disabled={backfilling}
                   className="text-xs bg-[#252525] hover:bg-[#333] disabled:opacity-50 text-gray-300 font-semibold px-3 py-1.5 rounded-lg transition-colors"
                 >
-                  {backfilling ? "Preenchendo..." : "Preencher pesos automaticamente"}
+                  {backfilling ? "Processando..." : "Preencher pesos (só vazios)"}
+                </button>
+                <button
+                  onClick={() => handleBackfillWeights(true)}
+                  disabled={backfilling}
+                  className="text-xs bg-[#f0a500]/15 hover:bg-[#f0a500]/25 border border-[#f0a500]/40 disabled:opacity-50 text-[#f0a500] font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                  title="Aplica os pesos da tabela oficial, sobrescrevendo os existentes"
+                >
+                  {backfilling ? "Processando..." : "Atualizar pela tabela oficial"}
                 </button>
                 {backfillMsg && <span className="text-xs text-green-400">{backfillMsg}</span>}
               </div>
