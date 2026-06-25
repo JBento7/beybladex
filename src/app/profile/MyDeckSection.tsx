@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import MyDeckEditor from "./MyDeckEditor";
 import { LineBadge } from "@/components/LineBadge";
+import { lookupPartWeight } from "@/lib/partWeights";
 
 type StatKey = "statAttack" | "statDefense" | "statStamina" | "statDash" | "statBurst";
 
@@ -119,6 +120,8 @@ interface DeckBeyInfo {
   metalBladeImageUrl: string | null;
   overBladeImageUrl: string | null;
   stats: CombinedStats;
+  weight: number | null;
+  weightMissing: number;
 }
 
 function isCX(line: string | null) {
@@ -161,6 +164,13 @@ function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
         </div>
         <div className="font-bold text-sm text-white truncate">{bey.name}</div>
         {parts && <div className="text-[10px] text-gray-500 mt-0.5 truncate">{parts}</div>}
+        {bey.weight != null && (
+          <div className="text-[10px] mt-0.5">
+            <span className="text-gray-500">Peso total: </span>
+            <span className="font-bold text-[#f0a500]">{bey.weight}g</span>
+            {bey.weightMissing > 0 && <span className="text-gray-600"> (+{bey.weightMissing} sem peso)</span>}
+          </div>
+        )}
       </div>
 
       {/* Body */}
@@ -358,6 +368,18 @@ export default async function MyDeckSection({
     const assistBladePart = cx ? (findPart(b.assistBlade, "CX", "ASSIST_BLADE") ?? findPart(b.assistBlade, "CX_EXPAND", "ASSIST_BLADE")) : null;
     const overBladePart  = cx ? findPart(b.overBlade, "CX_EXPAND", "OVER_BLADE") : null;
 
+    // Peso total: soma do peso de cada peça (peso salvo ou valor de referência pelo nome).
+    const weightParts: [{ weight: number | null } | null, string | null][] = cx
+      ? [[lockChipPart, b.lockChip], [metalBladePart, b.metalBlade], [assistBladePart, b.assistBlade], [overBladePart, b.overBlade], [ratchetPart, b.ratchet], [bitPart, b.bit]]
+      : [[bladePart, b.blade], [ratchetPart, b.ratchet], [bitPart, b.bit]];
+    let totalWeight = 0, knownWeight = 0, missingWeight = 0;
+    for (const [p, name] of weightParts) {
+      if (!name) continue;
+      const w = p?.weight ?? lookupPartWeight(name);
+      if (w != null) { totalWeight += w; knownWeight++; }
+      else missingWeight++;
+    }
+
     const partsForStats = (cx
       ? [metalBladePart, assistBladePart, overBladePart, ratchetPart, bitPart]
       : [bladePart, ratchetPart, bitPart]
@@ -376,6 +398,8 @@ export default async function MyDeckSection({
       metalBladeImageUrl: metalBladePart?.imageUrl ?? null,
       overBladeImageUrl:  overBladePart?.imageUrl  ?? null,
       stats: sumStats(partsForStats),
+      weight: knownWeight > 0 ? Math.round(totalWeight * 10) / 10 : null,
+      weightMissing: missingWeight,
     } satisfies DeckBeyInfo;
   }).filter(Boolean) as DeckBeyInfo[];
 
