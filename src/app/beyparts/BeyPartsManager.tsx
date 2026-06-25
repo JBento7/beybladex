@@ -607,6 +607,8 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
   const [editingPart, setEditingPart] = useState<BeyPart | null>(null);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState("");
+  const [typeFilter, setTypeFilter] = useState<PartType | null>(null);
+  const [sortBy, setSortBy] = useState<"name" | "weightDesc" | "weightAsc">("name");
 
   const fetchParts = useCallback(async () => {
     const res = await fetch(isAdmin ? "/api/admin/beyparts" : "/api/beyparts");
@@ -700,17 +702,36 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
     p.name.toLowerCase().includes(searchTerm) ||
     (p.fullName?.toLowerCase().includes(searchTerm) ?? false);
 
+  const matchesType = (p: BeyPart) => typeFilter === null || resolvedType(p) === typeFilter;
+
+  const partWeight = (p: BeyPart) => p.weight ?? lookupPartWeight(p.name);
+
+  const sortParts = (a: BeyPart, b: BeyPart) => {
+    if (sortBy === "weightDesc" || sortBy === "weightAsc") {
+      const wa = partWeight(a), wb = partWeight(b);
+      // Peças sem peso vão para o fim
+      if (wa == null && wb == null) return a.name.localeCompare(b.name, "pt-BR");
+      if (wa == null) return 1;
+      if (wb == null) return -1;
+      if (wa !== wb) return sortBy === "weightDesc" ? wb - wa : wa - wb;
+      return a.name.localeCompare(b.name, "pt-BR");
+    }
+    return a.name.localeCompare(b.name, "pt-BR");
+  };
+
   const partsByCategory = (category: Category) =>
     parts
       .filter((p) => p.line === activeLine && p.category === category)
       .filter(matchesSearch)
-      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+      .filter(matchesType)
+      .sort(sortParts);
 
   const ratchetParts = parts
     .filter((p) => p.line === "RATCHET")
     .filter((p) => activeRatchetSize === null || ratchetSize(p.name) === activeRatchetSize)
     .filter(matchesSearch)
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    .filter(matchesType)
+    .sort(sortParts);
 
   return (
     <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl">
@@ -836,6 +857,52 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
             ))}
           </div>
         )}
+
+        {/* Filtro por tipo + ordenação */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3 mt-2 border-t border-[#2a2a2a]">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Tipo</span>
+            <button
+              onClick={() => setTypeFilter(null)}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                typeFilter === null ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              Todos
+            </button>
+            {(Object.keys(PART_TYPE_LABELS) as PartType[]).map((pt) => (
+              <button
+                key={pt}
+                onClick={() => setTypeFilter(typeFilter === pt ? null : pt)}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  typeFilter === pt ? "bg-[#f0a500] text-black" : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={PART_TYPE_IMAGES[pt]} alt="" className="w-4 h-4 object-contain" />
+                {PART_TYPE_LABELS[pt]}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Ordenar</span>
+            {([
+              ["name", "Nome"],
+              ["weightDesc", "Peso ↓"],
+              ["weightAsc", "Peso ↑"],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setSortBy(key)}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  sortBy === key ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="px-6 pb-6 pt-5">
