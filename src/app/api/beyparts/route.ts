@@ -10,25 +10,32 @@ export async function GET() {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  const parts = await prisma.beyPart.findMany({
-    orderBy: [{ line: "asc" }, { category: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      line: true,
-      category: true,
-      name: true,
-      fullName: true,
-      imageUrl: true,
-      partType: true,
-      weight: true,
-      statAttack: true,
-      statDefense: true,
-      statStamina: true,
-      statHeight: true,
-      statDash: true,
-      statBurst: true,
-    },
-  });
-
-  return NextResponse.json(parts);
+  try {
+    const parts = await prisma.beyPart.findMany({
+      orderBy: [{ line: "asc" }, { category: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        line: true,
+        category: true,
+        name: true,
+        fullName: true,
+        imageUrl: true,
+        partType: true,
+        weight: true,
+        statAttack: true,
+        statDefense: true,
+        statStamina: true,
+        statHeight: true,
+        statDash: true,
+        statBurst: true,
+      },
+    });
+    return NextResponse.json(parts);
+  } catch (err) {
+    console.error("[beyparts GET]", err);
+    return NextResponse.json(
+      { error: "Erro ao carregar peças. Pode faltar rodar a migração do banco (/api/migrate)." },
+      { status: 500 }
+    );
+  }
 }

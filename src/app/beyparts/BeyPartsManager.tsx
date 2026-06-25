@@ -610,10 +610,23 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
   const [typeFilter, setTypeFilter] = useState<PartType | null>(null);
   const [sortBy, setSortBy] = useState<"name" | "weightDesc" | "weightAsc">("name");
 
+  const [loadError, setLoadError] = useState("");
+
   const fetchParts = useCallback(async () => {
-    const res = await fetch(isAdmin ? "/api/admin/beyparts" : "/api/beyparts");
-    if (res.ok) setParts(await res.json());
-    setLoading(false);
+    setLoadError("");
+    try {
+      const res = await fetch(isAdmin ? "/api/admin/beyparts" : "/api/beyparts");
+      if (res.ok) {
+        setParts(await res.json());
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setLoadError(data.error || `Não foi possível carregar as peças (erro ${res.status}). Se o erro mencionar uma coluna inexistente, rode /api/migrate.`);
+      }
+    } catch {
+      setLoadError("Erro de conexão ao carregar as peças. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   }, [isAdmin]);
 
   useEffect(() => { fetchParts(); }, [fetchParts]);
@@ -914,6 +927,16 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
 
       {loading ? (
         <p className="text-gray-500 text-sm text-center py-4">Carregando...</p>
+      ) : loadError ? (
+        <div className="text-center py-8">
+          <p className="text-red-400 text-sm mb-3">{loadError}</p>
+          <button
+            onClick={() => { setLoading(true); fetchParts(); }}
+            className="text-[#f0a500] hover:underline text-sm font-medium"
+          >
+            Tentar novamente
+          </button>
+        </div>
       ) : activeLine === "RATCHET" ? (
         <div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
