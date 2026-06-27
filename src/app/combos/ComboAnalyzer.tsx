@@ -22,9 +22,18 @@ type Analysis = {
   percentile: number;
   rank: number;
   totalCombos: number;
+  metaScore: number | null;
+  metaParts: { name: string; tier: "S" | "A" | "B" | "C"; note?: string }[];
   verdict: "EXCELENTE" | "BOM" | "MEDIANO" | "FRACO";
   worthIt: boolean;
   reasons: string[];
+};
+
+const TIER_COLOR: Record<"S" | "A" | "B" | "C", string> = {
+  S: "#f0a500",
+  A: "#22c55e",
+  B: "#3b82f6",
+  C: "#6b7280",
 };
 
 const STYLE_LABEL = { ATTACK: "Ataque", DEFENSE: "Defesa", STAMINA: "Stamina" } as const;
@@ -254,6 +263,37 @@ export default function ComboAnalyzer() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* Meta mundial (tier list) */}
+            <div className="mb-4 bg-[#252525] border border-[#2a2a2a] rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-400 uppercase tracking-wide">🌍 Meta mundial</span>
+                {analysis.metaScore !== null && (
+                  <span className="text-sm font-bold text-[#f0a500]">
+                    {analysis.metaScore.toFixed(0)}/100
+                  </span>
+                )}
+              </div>
+              {analysis.metaParts.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {analysis.metaParts.map((m) => (
+                    <span
+                      key={m.name}
+                      title={m.note}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md"
+                      style={{ backgroundColor: `${TIER_COLOR[m.tier]}22`, color: TIER_COLOR[m.tier] }}
+                    >
+                      <b>{m.tier}</b>
+                      <span className="text-gray-300">{m.name}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  Nenhuma destas peças está no tier list do meta competitivo ainda.
+                </p>
+              )}
             </div>
 
             {/* Win rate */}

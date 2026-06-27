@@ -5,6 +5,8 @@
 // e damos um bônus baseado no desempenho real da comunidade (win rate) das peças
 // que já apareceram em partidas registradas.
 
+import { metaForPart, META_TIER_SCORE, type MetaTier } from "@/lib/meta-tiers";
+
 export type ComboStyle = "ATTACK" | "DEFENSE" | "STAMINA";
 
 export type SuggesterPart = {
@@ -31,9 +33,24 @@ export type ComboSuggestion = {
   score: number; // 0-100
   styleScore: number; // contribuição dos stats (0-100)
   communityScore: number; // contribuição do win rate (0-100)
+  metaScore: number | null; // contribuição do meta mundial (0-100)
   sampleSize: number; // total de partidas das peças usadas
   totals: { attack: number; defense: number; stamina: number; burst: number };
 };
+
+// Pontuação de meta (0-100) de um conjunto de peças; null se nenhuma reconhecida.
+function partsMetaScore(parts: SuggesterPart[]): number | null {
+  let sum = 0;
+  let count = 0;
+  for (const p of parts) {
+    const entry = metaForPart(p.name);
+    if (entry) {
+      sum += META_TIER_SCORE[entry.tier];
+      count++;
+    }
+  }
+  return count > 0 ? sum / count : null;
+}
 
 // Peso de cada stat por estilo. Soma dos pesos = 1 dentro de cada estilo.
 const STYLE_WEIGHTS: Record<ComboStyle, Partial<Record<keyof SuggesterPart, number>>> = {
@@ -68,6 +85,8 @@ function partCommunity(name: string, rates: PartWinRates) {
   return { rate: smoothedWinRate(r.wins, r.losses), sample: r.wins + r.losses };
 }
 
+export type ComboMetaPart = { name: string; tier: MetaTier; note?: string };
+
 export type ComboAnalysis = {
   totals: { attack: number; defense: number; stamina: number; burst: number };
   styleScores: Record<ComboStyle, number>; // 0-100 por estilo
@@ -78,6 +97,8 @@ export type ComboAnalysis = {
   percentile: number; // 0-100: quão bom é vs todos os combos no melhor estilo
   rank: number; // posição entre todos os combos possíveis (1 = melhor)
   totalCombos: number;
+  metaScore: number | null; // 0-100 baseado no tier list do meta mundial
+  metaParts: ComboMetaPart[]; // peças reconhecidas no meta competitivo
   verdict: "EXCELENTE" | "BOM" | "MEDIANO" | "FRACO";
   worthIt: boolean;
   reasons: string[];
@@ -149,19 +170,70 @@ export function analyzeComboParts(
   const sorted = [...allScores].sort((a, b) => b - a);
   const rank = allScores.length > 0 ? sorted.findIndex((x) => x <= bestStyleScore) + 1 || totalCombos : 1;
 
-  // Veredito combinando percentil de stats + win rate (quando há dados).
+  // Meta score: tier list do meta competitivo mundial (forums/torneios/vídeos).
+  const metaParts: ComboMetaPart[] = [];
+  let metaSum = 0;
+  for (const p of parts) {
+    const entry = metaForPart(p.name);
+    if (entry) {
+      metaParts.push({ name: p.name, tier: entry.tier, note: entry.note });
+      metaSum += META_TIER_SCORE[entry.tier];
+    }
+  }
+  // Cobertura = fração das peças reconhecidas no meta. Pondera a confiança.
+  const metaCoverage = metaParts.length / n;
+  const metaScore = metaParts.length > 0 ? Math.round((metaSum / metaParts.length) * 10) / 10 : null;
+
+  // Veredito combinando: stats (percentil) + win rate da comunidade + meta mundial.
   const reasons: string[] = [];
-  let verdictScore = percentile; // base nos stats
 
   reasons.push(
     `Otimizado para ${STYLE_LABEL[bestStyle]} (${bestStyleScore.toFixed(0)} pts), ` +
       `melhor que ${percentile}% dos combos possíveis.`
   );
 
+  // Pesos dinâmicos: meta (até 0.45) e comunidade (até 0.30) crescem com a
+  // confiança; o restante fica com os stats.
+  const communityConfident = communityScore !== null && sampleSize >= 10;
+  const metaWeight = 0.45 * metaCoverage;
+  const communityWeight = communityConfident ? Math.min(sampleSize / 30, 1) * 0.3 : 0;
+  const statsWeight = Math.max(0, 1 - metaWeight - communityWeight);
+
+  let verdictScore = percentile * statsWeight;
+  if (metaScore !== null) verdictScore += metaScore * metaWeight;
+  if (communityConfident) verdictScore += (communityScore as number) * communityWeight;
+  // Renormaliza caso meta/comunidade estejam ausentes.
+  const usedWeight = statsWeight + (metaScore !== null ? metaWeight : 0) + communityWeight;
+  if (usedWeight > 0) verdictScore = verdictScore / usedWeight;
+
+  if (metaScore !== null) {
+    const best = [...metaParts].sort((a, b) => META_TIER_SCORE[b.tier] - META_TIER_SCORE[a.tier]);
+    const sTier = best.filter((m) => m.tier === "S");
+    if (sTier.length > 0) {
+      reasons.push(
+        `Meta mundial: ${sTier.map((m) => m.name).join(", ")} ${
+          sTier.length > 1 ? "são peças S-tier" : "é peça S-tier"
+        } (staple de torneio).`
+      );
+    } else {
+      reasons.push(
+        `Meta mundial: peça(s) destaque ${best
+          .slice(0, 2)
+          .map((m) => `${m.name} (${m.tier})`)
+          .join(", ")}.`
+      );
+    }
+    if (metaCoverage < 1) {
+      reasons.push(
+        `${metaParts.length} de ${n} peças reconhecidas no meta competitivo — as demais não têm dados.`
+      );
+    }
+  } else {
+    reasons.push("Nenhuma destas peças aparece no tier list do meta competitivo ainda.");
+  }
+
   if (communityScore !== null) {
     if (sampleSize >= 10) {
-      // Mistura: 60% stats, 40% win rate real.
-      verdictScore = percentile * 0.6 + communityScore * 0.4;
       reasons.push(
         `Win rate real de ${communityScore.toFixed(0)}% em ${sampleSize} partidas da comunidade.`
       );
@@ -173,7 +245,7 @@ export function analyzeComboParts(
       );
     }
   } else {
-    reasons.push("Sem histórico de partidas para estas peças ainda — análise baseada só nos stats.");
+    reasons.push("Sem histórico de partidas para estas peças ainda.");
   }
 
   // Avisa se as peças estão "espalhadas" (combo sem identidade clara).
@@ -203,6 +275,8 @@ export function analyzeComboParts(
     percentile,
     rank,
     totalCombos,
+    metaScore,
+    metaParts,
     verdict,
     worthIt: verdictScore >= 55,
     reasons,
@@ -218,10 +292,16 @@ export function suggestCombos(
   limit = 12
 ): ComboSuggestion[] {
   // Para não explodir em blades×ratchets×bits, pegamos os melhores candidatos
-  // de cada categoria pelo style score antes de combinar.
+  // de cada categoria antes de combinar — considerando style score + meta mundial
+  // para não descartar peças que são staple de torneio mesmo com stat menor.
   const TOP = 8;
+  const candScore = (p: SuggesterPart) => {
+    const entry = metaForPart(p.name);
+    const metaBonus = entry ? META_TIER_SCORE[entry.tier] * 0.4 : 0;
+    return partStyleScore(p, style) + metaBonus;
+  };
   const topBy = (arr: SuggesterPart[]) =>
-    [...arr].sort((a, b) => partStyleScore(b, style) - partStyleScore(a, style)).slice(0, TOP);
+    [...arr].sort((a, b) => candScore(b) - candScore(a)).slice(0, TOP);
 
   const bl = topBy(blades);
   const rt = topBy(ratchets);
@@ -243,10 +323,20 @@ export function suggestCombos(
         const sampleSize = comm.reduce((acc, c) => acc + c.sample, 0);
         const communityScore = avgRate * 100;
 
-        // Quanto mais partidas, mais peso o win rate ganha (até 35%).
-        const confidence = Math.min(sampleSize / 30, 1);
-        const communityWeight = 0.35 * confidence;
-        const score = styleScore * (1 - communityWeight) + communityScore * communityWeight;
+        // Meta mundial das peças do combo (0-100), se reconhecidas.
+        const metaScore = partsMetaScore(parts);
+        const metaCoverage = parts.filter((p) => metaForPart(p.name)).length / 3;
+
+        // Pesos: meta (até 0.4) e win rate (até 0.3) crescem com a confiança;
+        // o restante fica com os stats de estilo.
+        const communityWeight = 0.3 * Math.min(sampleSize / 30, 1);
+        const metaWeight = metaScore !== null ? 0.4 * metaCoverage : 0;
+        const styleWeight = Math.max(0, 1 - communityWeight - metaWeight);
+        const score =
+          (styleScore * styleWeight +
+            communityScore * communityWeight +
+            (metaScore ?? 0) * metaWeight) /
+          (styleWeight + communityWeight + (metaScore !== null ? metaWeight : 0) || 1);
 
         out.push({
           blade,
@@ -255,6 +345,7 @@ export function suggestCombos(
           score: Math.round(score * 10) / 10,
           styleScore: Math.round(styleScore * 10) / 10,
           communityScore: Math.round(communityScore * 10) / 10,
+          metaScore: metaScore !== null ? Math.round(metaScore * 10) / 10 : null,
           sampleSize,
           totals: {
             attack: parts.reduce((a, p) => a + s(p, "statAttack"), 0),

@@ -17,6 +17,7 @@ type Suggestion = {
   score: number;
   styleScore: number;
   communityScore: number;
+  metaScore: number | null;
   sampleSize: number;
   totals: { attack: number; defense: number; stamina: number; burst: number };
 };
@@ -157,6 +158,9 @@ export default function ComboSuggester() {
                 <span>🛡️ Def <b className="text-gray-200">{sug.totals.defense}</b></span>
                 <span>🔄 Sta <b className="text-gray-200">{sug.totals.stamina}</b></span>
                 <span>💥 Burst <b className="text-gray-200">{sug.totals.burst}</b></span>
+                {sug.metaScore !== null && (
+                  <span className="text-[#22c55e]">🌍 Meta {sug.metaScore.toFixed(0)}</span>
+                )}
                 {sug.sampleSize > 0 && (
                   <span className="text-[#f0a500]">
                     📊 {sug.communityScore.toFixed(0)}% win ({sug.sampleSize} partidas)
