@@ -89,22 +89,26 @@ const STYLE_LABEL: Record<ComboStyle, string> = {
   STAMINA: "Stamina",
 };
 
-// Analisa um combo específico montado pelo usuário e estima se vale a pena.
-export function analyzeCombo(
-  blade: SuggesterPart,
-  ratchet: SuggesterPart,
-  bit: SuggesterPart,
-  rates: PartWinRates,
-  allBlades: SuggesterPart[],
-  allRatchets: SuggesterPart[],
-  allBits: SuggesterPart[]
+// Média do style score de um conjunto de peças para um estilo (0-100).
+function partsStyleAvg(parts: SuggesterPart[], style: ComboStyle): number {
+  if (parts.length === 0) return 0;
+  return parts.reduce((acc, p) => acc + partStyleScore(p, style), 0) / parts.length;
+}
+
+// Analisa um combo montado pelo usuário (qualquer linha / nº de peças) e estima
+// se vale a pena. `slotPools` traz as opções candidatas de cada slot — usadas
+// para calcular o percentil contra os combos possíveis daquela linha.
+export function analyzeComboParts(
+  selected: SuggesterPart[],
+  slotPools: SuggesterPart[][],
+  rates: PartWinRates
 ): ComboAnalysis {
-  const parts = [blade, ratchet, bit];
+  const parts = selected;
+  const n = parts.length || 1;
 
   const styleScores = {} as Record<ComboStyle, number>;
   for (const style of ["ATTACK", "DEFENSE", "STAMINA"] as ComboStyle[]) {
-    styleScores[style] =
-      Math.round((parts.reduce((acc, p) => acc + partStyleScore(p, style), 0) / 3) * 10) / 10;
+    styleScores[style] = Math.round(partsStyleAvg(parts, style) * 10) / 10;
   }
 
   let bestStyle: ComboStyle = "ATTACK";
@@ -116,26 +120,34 @@ export function analyzeCombo(
   // Win rate da comunidade para as peças deste combo.
   const comm = parts.map((p) => partCommunity(p.name, rates));
   const sampleSize = comm.reduce((acc, c) => acc + c.sample, 0);
-  const avgRate = comm.reduce((acc, c) => acc + c.rate, 0) / 3;
+  const avgRate = comm.reduce((acc, c) => acc + c.rate, 0) / n;
   const communityScore = sampleSize > 0 ? Math.round(avgRate * 1000) / 10 : null;
 
-  // Percentil: gera o style score de todos os combos possíveis no melhor estilo
-  // e vê quantos esse combo supera.
+  // Percentil: enumera os combos possíveis (produto cartesiano dos pools, com
+  // cada slot limitado aos melhores candidatos no estilo) e conta quantos esse
+  // combo supera. O cap mantém a enumeração rápida mesmo para CX (6 slots).
+  const CAP = 7;
+  const cappedPools = slotPools.map((pool) =>
+    [...pool]
+      .sort((a, b) => partStyleScore(b, bestStyle) - partStyleScore(a, bestStyle))
+      .slice(0, CAP)
+      .map((p) => partStyleScore(p, bestStyle))
+  );
   const allScores: number[] = [];
-  for (const bl of allBlades) {
-    const blS = partStyleScore(bl, bestStyle);
-    for (const rt of allRatchets) {
-      const rtS = partStyleScore(rt, bestStyle);
-      for (const bt of allBits) {
-        allScores.push((blS + rtS + partStyleScore(bt, bestStyle)) / 3);
-      }
+  const walk = (idx: number, sum: number) => {
+    if (idx === cappedPools.length) {
+      allScores.push(sum / cappedPools.length);
+      return;
     }
-  }
+    for (const v of cappedPools[idx]) walk(idx + 1, sum + v);
+  };
+  if (cappedPools.length > 0 && cappedPools.every((p) => p.length > 0)) walk(0, 0);
+
   const totalCombos = allScores.length || 1;
   const beaten = allScores.filter((x) => bestStyleScore >= x).length;
-  const percentile = Math.round((beaten / totalCombos) * 100);
+  const percentile = allScores.length > 0 ? Math.round((beaten / totalCombos) * 100) : 50;
   const sorted = [...allScores].sort((a, b) => b - a);
-  const rank = sorted.findIndex((x) => x <= bestStyleScore) + 1 || totalCombos;
+  const rank = allScores.length > 0 ? sorted.findIndex((x) => x <= bestStyleScore) + 1 || totalCombos : 1;
 
   // Veredito combinando percentil de stats + win rate (quando há dados).
   const reasons: string[] = [];

@@ -2,8 +2,24 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { analyzeCombo } from "@/lib/combo-suggester";
-import { loadComboParts, loadPartWinRates } from "@/lib/combo-data";
+import { prisma } from "@/lib/prisma";
+import { analyzeComboParts, type SuggesterPart } from "@/lib/combo-suggester";
+import { loadPartWinRates } from "@/lib/combo-data";
+import { slotsForLine, COMBO_LINES, type ComboLine } from "@/lib/combo-lines";
+
+const PART_SELECT = {
+  id: true,
+  line: true,
+  category: true,
+  name: true,
+  imageUrl: true,
+  statAttack: true,
+  statDefense: true,
+  statStamina: true,
+  statBurst: true,
+  statDash: true,
+  statHeight: true,
+};
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -11,40 +27,65 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  let body: { bladeId?: string; ratchetId?: string; bitId?: string } = {};
+  let body: { line?: string; partIds?: string[] } = {};
   try {
     body = await req.json();
   } catch {
     // optional
   }
 
-  const { bladeId, ratchetId, bitId } = body;
-  if (!bladeId || !ratchetId || !bitId) {
+  const line = body.line as ComboLine | undefined;
+  if (!line || !COMBO_LINES.includes(line)) {
+    return NextResponse.json({ error: "Escolha uma linha válida." }, { status: 400 });
+  }
+
+  const slots = slotsForLine(line);
+  const partIds = Array.isArray(body.partIds) ? body.partIds : [];
+
+  if (partIds.length !== slots.length || partIds.some((id) => !id)) {
     return NextResponse.json(
-      { error: "Selecione blade, ratchet e bit para analisar." },
+      { error: "Selecione todas as peças do combo antes de analisar." },
       { status: 400 }
     );
   }
 
-  const { blades, ratchets, bits } = await loadComboParts();
+  const allParts = (await prisma.beyPart.findMany({ select: PART_SELECT })) as SuggesterPart[];
 
-  const blade = blades.find((p) => p.id === bladeId);
-  const ratchet = ratchets.find((p) => p.id === ratchetId);
-  const bit = bits.find((p) => p.id === bitId);
+  // Pools por slot (opções candidatas) e a peça escolhida em cada slot.
+  const slotPools: SuggesterPart[][] = [];
+  const selected: SuggesterPart[] = [];
+  const comboParts: { key: string; label: string; part: SuggesterPart }[] = [];
 
-  if (!blade || !ratchet || !bit) {
-    return NextResponse.json({ error: "Peça inválida selecionada." }, { status: 400 });
+  for (let i = 0; i < slots.length; i++) {
+    const slot = slots[i];
+    const pool = allParts.filter(
+      (p) => p.category === slot.category && slot.lines.includes(p.line)
+    );
+    const chosen = pool.find((p) => p.id === partIds[i]);
+    if (!chosen) {
+      return NextResponse.json(
+        { error: `Peça inválida para o slot "${slot.label}".` },
+        { status: 400 }
+      );
+    }
+    slotPools.push(pool);
+    selected.push(chosen);
+    comboParts.push({ key: slot.key, label: slot.label, part: chosen });
   }
 
   const rates = await loadPartWinRates();
-  const analysis = analyzeCombo(blade, ratchet, bit, rates, blades, ratchets, bits);
+  const analysis = analyzeComboParts(selected, slotPools, rates);
 
   return NextResponse.json({
-    combo: {
-      blade: { id: blade.id, name: blade.name, line: blade.line, imageUrl: blade.imageUrl },
-      ratchet: { id: ratchet.id, name: ratchet.name, line: ratchet.line, imageUrl: ratchet.imageUrl },
-      bit: { id: bit.id, name: bit.name, line: bit.line, imageUrl: bit.imageUrl },
-    },
+    line,
+    combo: comboParts.map((c) => ({
+      key: c.key,
+      label: c.label,
+      id: c.part.id,
+      name: c.part.name,
+      line: c.part.line,
+      imageUrl: c.part.imageUrl,
+    })),
     analysis,
   });
 }
