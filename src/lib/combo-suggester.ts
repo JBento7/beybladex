@@ -68,6 +68,135 @@ function partCommunity(name: string, rates: PartWinRates) {
   return { rate: smoothedWinRate(r.wins, r.losses), sample: r.wins + r.losses };
 }
 
+export type ComboAnalysis = {
+  totals: { attack: number; defense: number; stamina: number; burst: number };
+  styleScores: Record<ComboStyle, number>; // 0-100 por estilo
+  bestStyle: ComboStyle;
+  bestStyleScore: number;
+  communityScore: number | null; // win rate % (null se sem partidas)
+  sampleSize: number;
+  percentile: number; // 0-100: quão bom é vs todos os combos no melhor estilo
+  rank: number; // posição entre todos os combos possíveis (1 = melhor)
+  totalCombos: number;
+  verdict: "EXCELENTE" | "BOM" | "MEDIANO" | "FRACO";
+  worthIt: boolean;
+  reasons: string[];
+};
+
+const STYLE_LABEL: Record<ComboStyle, string> = {
+  ATTACK: "Ataque",
+  DEFENSE: "Defesa",
+  STAMINA: "Stamina",
+};
+
+// Analisa um combo específico montado pelo usuário e estima se vale a pena.
+export function analyzeCombo(
+  blade: SuggesterPart,
+  ratchet: SuggesterPart,
+  bit: SuggesterPart,
+  rates: PartWinRates,
+  allBlades: SuggesterPart[],
+  allRatchets: SuggesterPart[],
+  allBits: SuggesterPart[]
+): ComboAnalysis {
+  const parts = [blade, ratchet, bit];
+
+  const styleScores = {} as Record<ComboStyle, number>;
+  for (const style of ["ATTACK", "DEFENSE", "STAMINA"] as ComboStyle[]) {
+    styleScores[style] =
+      Math.round((parts.reduce((acc, p) => acc + partStyleScore(p, style), 0) / 3) * 10) / 10;
+  }
+
+  let bestStyle: ComboStyle = "ATTACK";
+  for (const style of ["DEFENSE", "STAMINA"] as ComboStyle[]) {
+    if (styleScores[style] > styleScores[bestStyle]) bestStyle = style;
+  }
+  const bestStyleScore = styleScores[bestStyle];
+
+  // Win rate da comunidade para as peças deste combo.
+  const comm = parts.map((p) => partCommunity(p.name, rates));
+  const sampleSize = comm.reduce((acc, c) => acc + c.sample, 0);
+  const avgRate = comm.reduce((acc, c) => acc + c.rate, 0) / 3;
+  const communityScore = sampleSize > 0 ? Math.round(avgRate * 1000) / 10 : null;
+
+  // Percentil: gera o style score de todos os combos possíveis no melhor estilo
+  // e vê quantos esse combo supera.
+  const allScores: number[] = [];
+  for (const bl of allBlades) {
+    const blS = partStyleScore(bl, bestStyle);
+    for (const rt of allRatchets) {
+      const rtS = partStyleScore(rt, bestStyle);
+      for (const bt of allBits) {
+        allScores.push((blS + rtS + partStyleScore(bt, bestStyle)) / 3);
+      }
+    }
+  }
+  const totalCombos = allScores.length || 1;
+  const beaten = allScores.filter((x) => bestStyleScore >= x).length;
+  const percentile = Math.round((beaten / totalCombos) * 100);
+  const sorted = [...allScores].sort((a, b) => b - a);
+  const rank = sorted.findIndex((x) => x <= bestStyleScore) + 1 || totalCombos;
+
+  // Veredito combinando percentil de stats + win rate (quando há dados).
+  const reasons: string[] = [];
+  let verdictScore = percentile; // base nos stats
+
+  reasons.push(
+    `Otimizado para ${STYLE_LABEL[bestStyle]} (${bestStyleScore.toFixed(0)} pts), ` +
+      `melhor que ${percentile}% dos combos possíveis.`
+  );
+
+  if (communityScore !== null) {
+    if (sampleSize >= 10) {
+      // Mistura: 60% stats, 40% win rate real.
+      verdictScore = percentile * 0.6 + communityScore * 0.4;
+      reasons.push(
+        `Win rate real de ${communityScore.toFixed(0)}% em ${sampleSize} partidas da comunidade.`
+      );
+    } else {
+      reasons.push(
+        `Poucos dados de partidas (${sampleSize}) — win rate de ${communityScore.toFixed(
+          0
+        )}% ainda é pouco confiável.`
+      );
+    }
+  } else {
+    reasons.push("Sem histórico de partidas para estas peças ainda — análise baseada só nos stats.");
+  }
+
+  // Avisa se as peças estão "espalhadas" (combo sem identidade clara).
+  const spread = Math.max(...Object.values(styleScores)) - Math.min(...Object.values(styleScores));
+  if (spread < 8) {
+    reasons.push("Stats equilibrados, sem um ponto forte claro — combo versátil, porém sem foco.");
+  }
+
+  let verdict: ComboAnalysis["verdict"];
+  if (verdictScore >= 80) verdict = "EXCELENTE";
+  else if (verdictScore >= 60) verdict = "BOM";
+  else if (verdictScore >= 35) verdict = "MEDIANO";
+  else verdict = "FRACO";
+
+  return {
+    totals: {
+      attack: parts.reduce((a, p) => a + s(p, "statAttack"), 0),
+      defense: parts.reduce((a, p) => a + s(p, "statDefense"), 0),
+      stamina: parts.reduce((a, p) => a + s(p, "statStamina"), 0),
+      burst: parts.reduce((a, p) => a + s(p, "statBurst"), 0),
+    },
+    styleScores,
+    bestStyle,
+    bestStyleScore,
+    communityScore,
+    sampleSize,
+    percentile,
+    rank,
+    totalCombos,
+    verdict,
+    worthIt: verdictScore >= 55,
+    reasons,
+  };
+}
+
 export function suggestCombos(
   blades: SuggesterPart[],
   ratchets: SuggesterPart[],

@@ -3,12 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  suggestCombos,
-  type ComboStyle,
-  type SuggesterPart,
-  type PartWinRates,
-} from "@/lib/combo-suggester";
+import { suggestCombos, type ComboStyle } from "@/lib/combo-suggester";
+import { loadComboParts, loadPartWinRates } from "@/lib/combo-data";
 
 const VALID_STYLES: ComboStyle[] = ["ATTACK", "DEFENSE", "STAMINA"];
 
@@ -26,27 +22,8 @@ export async function GET(req: NextRequest) {
   // "owned" = sugerir só com as peças que o usuário tem cadastradas.
   const ownedOnly = req.nextUrl.searchParams.get("owned") === "1";
 
-  const select = {
-    id: true,
-    line: true,
-    category: true,
-    name: true,
-    imageUrl: true,
-    statAttack: true,
-    statDefense: true,
-    statStamina: true,
-    statBurst: true,
-    statDash: true,
-    statHeight: true,
-  };
+  let { blades, ratchets, bits } = await loadComboParts();
 
-  const allParts = (await prisma.beyPart.findMany({ select })) as SuggesterPart[];
-
-  let blades = allParts.filter((p) => p.category === "BLADE");
-  let ratchets = allParts.filter((p) => p.category === "RATCHET");
-  let bits = allParts.filter((p) => p.category === "BIT");
-
-  // Filtro "só minhas peças": restringe aos nomes que o usuário possui.
   if (ownedOnly) {
     const myBeys = await prisma.beyblade.findMany({
       where: { userId: session.user.id },
@@ -60,26 +37,7 @@ export async function GET(req: NextRequest) {
     bits = bits.filter((p) => ownedBits.has(p.name));
   }
 
-  // Win rate por peça: agrega Beyblade.wins/losses por campo (blade/ratchet/bit).
-  // Só conta combos com pelo menos uma partida para não diluir os dados.
-  const beys = await prisma.beyblade.findMany({
-    where: { OR: [{ wins: { gt: 0 } }, { losses: { gt: 0 } }] },
-    select: { blade: true, ratchet: true, bit: true, wins: true, losses: true },
-  });
-
-  const rates: PartWinRates = {};
-  const tally = (name: string | null, wins: number, losses: number) => {
-    if (!name) return;
-    const r = (rates[name] ??= { wins: 0, losses: 0 });
-    r.wins += wins;
-    r.losses += losses;
-  };
-  for (const b of beys) {
-    tally(b.blade, b.wins, b.losses);
-    tally(b.ratchet, b.wins, b.losses);
-    tally(b.bit, b.wins, b.losses);
-  }
-
+  const rates = await loadPartWinRates();
   const suggestions = suggestCombos(blades, ratchets, bits, rates, style);
 
   return NextResponse.json({
