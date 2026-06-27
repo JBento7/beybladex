@@ -68,6 +68,9 @@ export default function Navbar() {
                 <Link href="/beyparts" className={linkClass("/beyparts")}>
                   BeyParts
                 </Link>
+                <Link href="/combos" className={linkClass("/combos")}>
+                  Combos
+                </Link>
                 {session.user.role === "ORGANIZER" && (
                   <Link href="/admin" className={linkClass("/admin")}>
                     Admin
@@ -154,6 +157,7 @@ export default function Navbar() {
                 <Link href="/profile" className={mobileLinkClass("/profile")} onClick={() => setMenuOpen(false)}>Perfil</Link>
                 <Link href="/tournaments/create" className={mobileLinkClass("/tournaments/create")} onClick={() => setMenuOpen(false)}>Criar Torneio</Link>
                 <Link href="/beyparts" className={mobileLinkClass("/beyparts")} onClick={() => setMenuOpen(false)}>BeyParts</Link>
+                <Link href="/combos" className={mobileLinkClass("/combos")} onClick={() => setMenuOpen(false)}>Combos</Link>
                 {session.user.role === "ORGANIZER" && (
                   <>
                     <Link href="/admin" className={mobileLinkClass("/admin")} onClick={() => setMenuOpen(false)}>Admin</Link>
