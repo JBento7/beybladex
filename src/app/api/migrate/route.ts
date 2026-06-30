@@ -502,6 +502,34 @@ export async function GET() {
       name: "MatchDeckOrder.matchId FK",
       sql: `DO $$ BEGIN ALTER TABLE "MatchDeckOrder" ADD CONSTRAINT "MatchDeckOrder_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "Match"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
     },
+    {
+      name: "Tournament.bannerUrl",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "bannerUrl" TEXT`,
+    },
+    {
+      name: "Tournament.location",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "location" TEXT`,
+    },
+    {
+      name: "Tournament.venueName",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "venueName" TEXT`,
+    },
+    {
+      name: "Tournament.address",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "address" TEXT`,
+    },
+    {
+      name: "Tournament.entryFee",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "entryFee" DOUBLE PRECISION`,
+    },
+    {
+      name: "Tournament.regulation",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "regulation" TEXT`,
+    },
+    {
+      name: "Tournament.registrationDeadline",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "registrationDeadline" TIMESTAMP(3)`,
+    },
   ];
 
   for (const migration of migrations) {

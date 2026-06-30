@@ -82,8 +82,11 @@ export async function PATCH(
       }
     }
 
-    const { name, description, format, maxParticipants, startDate, deckType, prize, arenas, eventType, setsToWin, pointsToWinSet } =
-      await req.json();
+    const {
+      name, description, format, maxParticipants, startDate, deckType, prize, arenas,
+      eventType, setsToWin, pointsToWinSet,
+      bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
+    } = await req.json();
 
     if (!name || !format) {
       return NextResponse.json({ error: "Nome e formato são obrigatórios" }, { status: 400 });
@@ -100,6 +103,13 @@ export async function PATCH(
       arenas: arenas ? Math.max(1, parseInt(arenas)) : 1,
       setsToWin: setsToWin ? Math.min(2, Math.max(1, parseInt(setsToWin))) : 2,
       pointsToWinSet: pointsToWinSet ? Math.min(7, Math.max(4, parseInt(pointsToWinSet))) : 4,
+      bannerUrl: bannerUrl || null,
+      location: location || null,
+      venueName: venueName || null,
+      address: address || null,
+      entryFee: entryFee !== undefined && entryFee !== null && entryFee !== "" ? parseFloat(entryFee) : null,
+      regulation: regulation || null,
+      registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : null,
     };
 
     // Only admins can change whether a tournament counts as official.

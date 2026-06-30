@@ -31,6 +31,13 @@ export default async function EditTournamentPage({
       status: true,
       setsToWin: true,
       pointsToWinSet: true,
+      bannerUrl: true,
+      location: true,
+      venueName: true,
+      address: true,
+      entryFee: true,
+      regulation: true,
+      registrationDeadline: true,
     },
   });
 
@@ -63,6 +70,13 @@ export default async function EditTournamentPage({
         isOfficial: tournament.isOfficial,
         setsToWin: tournament.setsToWin,
         pointsToWinSet: tournament.pointsToWinSet,
+        bannerUrl: tournament.bannerUrl,
+        location: tournament.location,
+        venueName: tournament.venueName,
+        address: tournament.address,
+        entryFee: tournament.entryFee,
+        regulation: tournament.regulation,
+        registrationDeadline: tournament.registrationDeadline ? tournament.registrationDeadline.toISOString() : null,
       }}
       canChangeEventType={isAdmin}
     />

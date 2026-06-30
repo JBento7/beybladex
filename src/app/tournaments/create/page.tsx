@@ -42,6 +42,13 @@ export default function CreateTournamentPage() {
     eventType: "TORNEIO",
     setsToWin: "2",
     pointsToWinSet: "4",
+    bannerUrl: "",
+    location: "",
+    venueName: "",
+    address: "",
+    entryFee: "",
+    regulation: "",
+    registrationDeadline: "",
   });
   const [isTest, setIsTest] = useState(false);
   const [dateTBD, setDateTBD] = useState(false);
@@ -77,6 +84,13 @@ export default function CreateTournamentPage() {
         isTest: isAdmin ? isTest : false,
         setsToWin: form.setsToWin,
         pointsToWinSet: form.pointsToWinSet,
+        bannerUrl: form.bannerUrl || undefined,
+        location: form.location || undefined,
+        venueName: form.venueName || undefined,
+        address: form.address || undefined,
+        entryFee: form.entryFee ? parseFloat(form.entryFee) : undefined,
+        regulation: form.regulation || undefined,
+        registrationDeadline: form.registrationDeadline || undefined,
       }),
     });
 
@@ -289,6 +303,112 @@ export default function CreateTournamentPage() {
                   />
                   Data a definir
                 </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Location & Registration */}
+          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+            <h2 className="text-base font-bold text-white mb-4">Local & Inscrição</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Imagem/Banner <span className="text-gray-500 font-normal">(URL, opcional)</span>
+                </label>
+                <input
+                  name="bannerUrl"
+                  type="text"
+                  value={form.bannerUrl}
+                  onChange={handleChange}
+                  placeholder="https://..."
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                    Cidade/Estado <span className="text-gray-500 font-normal">(opcional)</span>
+                  </label>
+                  <input
+                    name="location"
+                    type="text"
+                    value={form.location}
+                    onChange={handleChange}
+                    placeholder="ex: Recife, PE"
+                    className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                    Taxa de Inscrição <span className="text-gray-500 font-normal">(R$, opcional)</span>
+                  </label>
+                  <input
+                    name="entryFee"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.entryFee}
+                    onChange={handleChange}
+                    placeholder="0,00"
+                    className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Nome do Local/Arena <span className="text-gray-500 font-normal">(opcional)</span>
+                </label>
+                <input
+                  name="venueName"
+                  type="text"
+                  value={form.venueName}
+                  onChange={handleChange}
+                  placeholder="ex: HiraBistro"
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Endereço Completo <span className="text-gray-500 font-normal">(opcional)</span>
+                </label>
+                <input
+                  name="address"
+                  type="text"
+                  value={form.address}
+                  onChange={handleChange}
+                  placeholder="ex: Av. Mal. Mascarenhas de Morais, 4989"
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Prazo de Inscrição <span className="text-gray-500 font-normal">(opcional)</span>
+                </label>
+                <input
+                  name="registrationDeadline"
+                  type="datetime-local"
+                  value={form.registrationDeadline}
+                  onChange={handleChange}
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Regulamento <span className="text-gray-500 font-normal">(opcional)</span>
+                </label>
+                <textarea
+                  name="regulation"
+                  value={form.regulation}
+                  onChange={handleChange}
+                  rows={3}
+                  placeholder="ex: Formato 3on3. Somente peças originais. Regras oficiais."
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors resize-none"
+                />
               </div>
             </div>
           </div>

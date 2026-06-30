@@ -13,6 +13,7 @@ import EditBeybladesButton from "./EditBeybladesButton";
 import WOButton from "./WOButton";
 import AdminParticipantManager from "./AdminParticipantManager";
 import AdminMatchEditor from "./AdminMatchEditor";
+import ShareButton from "@/components/ShareButton";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 import type { Metadata } from "next";
 
@@ -605,7 +606,15 @@ export default async function TournamentDetailPage({
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 mb-6">
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden mb-6">
+          {tournament.bannerUrl && (
+            <img
+              src={tournament.bannerUrl}
+              alt=""
+              className="w-full h-40 sm:h-56 object-cover"
+            />
+          )}
+          <div className="p-8">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="flex-1">
               <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -622,6 +631,7 @@ export default async function TournamentDetailPage({
                     🎮 BeyEncontro
                   </span>
                 )}
+                <ShareButton url={`/tournaments/${tournament.id}`} title={tournament.name} className="ml-auto px-2 py-1" />
               </div>
               {!tournament.isOfficial && (
                 <div className="bg-blue-900/20 border border-blue-600/30 text-blue-300 text-sm px-4 py-2.5 rounded-lg mb-3">
@@ -636,13 +646,12 @@ export default async function TournamentDetailPage({
               )}
               <div className="flex flex-wrap gap-4 mt-4 text-sm text-gray-500">
                 <span>👑 Organizado por {tournament.organizer.name}</span>
-                <span>
-                  👥 {tournament.participants.length}
-                  {tournament.maxParticipants
-                    ? ` / ${tournament.maxParticipants}`
-                    : ""}{" "}
-                  participantes
-                </span>
+                {tournament.location && <span>📍 {tournament.location}</span>}
+                {tournament.entryFee !== null && tournament.entryFee !== undefined && (
+                  <span className="text-green-400">
+                    💵 R$ {tournament.entryFee.toFixed(2).replace(".", ",")}
+                  </span>
+                )}
                 {tournament.startDate ? (
                   <span>
                     📅 {new Date(tournament.startDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
@@ -650,7 +659,52 @@ export default async function TournamentDetailPage({
                 ) : (tournament.status === "DRAFT" || tournament.status === "REGISTRATION") && (
                   <span>📅 Data a definir</span>
                 )}
+                {tournament.registrationDeadline && (
+                  <span>⏳ Inscrições até {new Date(tournament.registrationDeadline).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}</span>
+                )}
               </div>
+
+              {/* Participants progress */}
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
+                  <span>
+                    👥 {tournament.participants.length}
+                    {tournament.maxParticipants ? ` / ${tournament.maxParticipants}` : ""} participantes
+                  </span>
+                  {tournament.maxParticipants && (
+                    <span>
+                      {Math.min(100, Math.round((tournament.participants.length / tournament.maxParticipants) * 100))}% preenchido
+                    </span>
+                  )}
+                </div>
+                {tournament.maxParticipants && (
+                  <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#f0a500] rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(100, Math.round((tournament.participants.length / tournament.maxParticipants) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Venue */}
+              {(tournament.venueName || tournament.address) && (
+                <div className="mt-4 bg-[#141414] border border-gray-800 rounded-xl px-4 py-3">
+                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Local</div>
+                  {tournament.venueName && <div className="text-sm text-white font-semibold">{tournament.venueName}</div>}
+                  {tournament.address && <div className="text-xs text-gray-400 mt-0.5">{tournament.address}</div>}
+                </div>
+              )}
+
+              {/* Regulation */}
+              {tournament.regulation && (
+                <div className="mt-4 bg-[#141414] border border-gray-800 rounded-xl px-4 py-3">
+                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Regulamento</div>
+                  <p className="text-sm text-gray-300 whitespace-pre-line">{tournament.regulation}</p>
+                </div>
+              )}
             </div>
 
             {/* Actions */}
@@ -709,6 +763,7 @@ export default async function TournamentDetailPage({
                 </Link>
               )}
             </div>
+          </div>
           </div>
         </div>
 

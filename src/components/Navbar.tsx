@@ -71,6 +71,9 @@ export default function Navbar() {
                 <Link href="/combos" className={linkClass("/combos")}>
                   Combos
                 </Link>
+                <Link href="/rankings" className={linkClass("/rankings")}>
+                  Rankings
+                </Link>
                 {session.user.role === "ORGANIZER" && (
                   <Link href="/admin" className={linkClass("/admin")}>
                     Admin
@@ -158,6 +161,7 @@ export default function Navbar() {
                 <Link href="/tournaments/create" className={mobileLinkClass("/tournaments/create")} onClick={() => setMenuOpen(false)}>Criar Torneio</Link>
                 <Link href="/beyparts" className={mobileLinkClass("/beyparts")} onClick={() => setMenuOpen(false)}>BeyParts</Link>
                 <Link href="/combos" className={mobileLinkClass("/combos")} onClick={() => setMenuOpen(false)}>Combos</Link>
+                <Link href="/rankings" className={mobileLinkClass("/rankings")} onClick={() => setMenuOpen(false)}>Rankings</Link>
                 {session.user.role === "ORGANIZER" && (
                   <>
                     <Link href="/admin" className={mobileLinkClass("/admin")} onClick={() => setMenuOpen(false)}>Admin</Link>

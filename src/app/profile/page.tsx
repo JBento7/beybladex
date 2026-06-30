@@ -3,7 +3,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
-import Link from "next/link";
+import ShareButton from "@/components/ShareButton";
+import TournamentHistory from "./TournamentHistory";
 import { FINISH_TYPE_LABELS, FINISH_TYPE_POINTS } from "@/lib/scoring";
 import type { FinishType } from "@prisma/client";
 import BeybladeManager from "./BeybladeManager";
@@ -138,6 +139,12 @@ export default async function ProfilePage() {
   const totalMatches = totalWins + totalLosses;
   const winRate = totalMatches > 0 ? Math.round((totalWins / totalMatches) * 100) : 0;
 
+  // Aggregate podium finishes across all tournaments the user participated in.
+  const first = participations.filter((p) => p.placement === 1).length;
+  const second = participations.filter((p) => p.placement === 2).length;
+  const third = participations.filter((p) => p.placement === 3).length;
+  const podiums = first + second + third;
+
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
       <Navbar />
@@ -155,12 +162,13 @@ export default async function ProfilePage() {
               }`}>
                 {user.role === "ORGANIZER" ? "Admin" : "Jogador"}
               </span>
+              <ShareButton url={`/community/${user.id}`} title={user.bladerName ?? user.name} className="w-9 h-9 shrink-0" />
             </div>
           </div>
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
           {[
             { label: "Pontos Totais", value: totalPoints, color: "text-[#f0a500]", icon: "⭐" },
             { label: "Taxa de Vitória", value: `${winRate}%`, color: "text-green-400", icon: "📈" },
@@ -169,6 +177,22 @@ export default async function ProfilePage() {
           ].map((stat) => (
             <div key={stat.label} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 text-center">
               <div className="flex justify-center mb-2">{stat.icon.startsWith("/") ? <img src={stat.icon} alt="" className="w-6 h-6 object-contain" /> : <span className="text-2xl">{stat.icon}</span>}</div>
+              <div className={`text-2xl font-black ${stat.color} mb-1`}>{stat.value}</div>
+              <div className="text-xs text-gray-500">{stat.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Podium breakdown */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          {[
+            { label: "Pódios", value: podiums, icon: "🏅", border: "border-purple-500/40", bg: "bg-purple-500/10", color: "text-purple-300" },
+            { label: "1º Lugar", value: first, icon: "🥇", border: "border-[#f0a500]/40", bg: "bg-[#f0a500]/10", color: "text-[#f0a500]" },
+            { label: "2º Lugar", value: second, icon: "🥈", border: "border-gray-400/40", bg: "bg-gray-400/10", color: "text-gray-300" },
+            { label: "3º Lugar", value: third, icon: "🥉", border: "border-orange-500/40", bg: "bg-orange-500/10", color: "text-orange-400" },
+          ].map((stat) => (
+            <div key={stat.label} className={`border ${stat.border} ${stat.bg} rounded-xl p-5 text-center`}>
+              <div className="text-2xl mb-2">{stat.icon}</div>
               <div className={`text-2xl font-black ${stat.color} mb-1`}>{stat.value}</div>
               <div className="text-xs text-gray-500">{stat.label}</div>
             </div>
@@ -218,49 +242,16 @@ export default async function ProfilePage() {
           {/* Tournament History */}
           <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-5">Histórico de Torneios</h2>
-            {participations.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-500 text-sm mb-4">Nenhum torneio ainda</p>
-                <Link href="/tournaments" className="text-[#f0a500] hover:text-[#d4940a] text-sm font-medium">
-                  Ver Torneios →
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-80 overflow-y-auto">
-                {participations.map((p) => (
-                  <Link
-                    key={p.id}
-                    href={`/tournaments/${p.tournament.id}`}
-                    className="block bg-[#252525] hover:bg-[#2d2d2d] border border-[#333] hover:border-[#f0a500]/30 rounded-lg p-4 transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <span className="font-semibold text-white text-sm">{p.tournament.name}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        p.tournament.status === "FINISHED" ? "bg-gray-700 text-gray-400"
-                        : p.tournament.status === "IN_PROGRESS" ? "bg-green-500/20 text-green-400"
-                        : "bg-[#f0a500]/20 text-[#f0a500]"
-                      }`}>
-                        {p.tournament.status === "FINISHED" ? "Finalizado"
-                          : p.tournament.status === "IN_PROGRESS" ? "Em Andamento"
-                          : "Inscrições"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="text-[#f0a500] font-bold">{p.totalPoints} pts</span>
-                      <span className="text-gray-600">·</span>
-                      <span className="text-green-400">{p.wins}V</span>
-                      <span className="text-red-400">{p.losses}D</span>
-                      {p.placement && (
-                        <>
-                          <span className="text-gray-600">·</span>
-                          <span className="text-amber-300">#{p.placement}º lugar</span>
-                        </>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
+            <TournamentHistory
+              participations={participations.map((p) => ({
+                id: p.id,
+                totalPoints: p.totalPoints,
+                wins: p.wins,
+                losses: p.losses,
+                placement: p.placement,
+                tournament: { id: p.tournament.id, name: p.tournament.name, status: p.tournament.status },
+              }))}
+            />
           </div>
         </div>
 

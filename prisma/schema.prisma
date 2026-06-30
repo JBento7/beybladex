@@ -154,6 +154,13 @@ model Tournament {
   isTest          Boolean @default(false)
   setsToWin       Int     @default(2)
   pointsToWinSet  Int     @default(4)
+  bannerUrl       String?
+  location        String?
+  venueName       String?
+  address         String?
+  entryFee        Float?
+  regulation      String?
+  registrationDeadline DateTime?
   createdAt       DateTime         @default(now())
 
   organizer       User                   @relation("OrganizerTournaments", fields: [organizerId], references: [id])

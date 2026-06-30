@@ -29,8 +29,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
     }
 
-    const { name, description, format, maxParticipants, startDate, deckType, prize, arenas, eventType, isTest, setsToWin, pointsToWinSet } =
-      await req.json();
+    const {
+      name, description, format, maxParticipants, startDate, deckType, prize, arenas,
+      eventType, isTest, setsToWin, pointsToWinSet,
+      bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
+    } = await req.json();
 
     if (!name || !format) {
       return NextResponse.json(
@@ -55,6 +58,13 @@ export async function POST(req: NextRequest) {
         isTest: session.user.role === "ORGANIZER" && !!isTest,
         setsToWin: setsToWin ? Math.min(2, Math.max(1, parseInt(setsToWin))) : 2,
         pointsToWinSet: pointsToWinSet ? Math.min(7, Math.max(4, parseInt(pointsToWinSet))) : 4,
+        bannerUrl: bannerUrl || null,
+        location: location || null,
+        venueName: venueName || null,
+        address: address || null,
+        entryFee: entryFee !== undefined && entryFee !== null && entryFee !== "" ? parseFloat(entryFee) : null,
+        regulation: regulation || null,
+        registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : null,
       },
     });
 
