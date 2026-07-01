@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 
 type NewsItem = { id: string; title: string; content: string; createdAt: string };
+type Question = { id: string; text: string; type: "TEXT" | "CHECKBOX"; options: string[] };
 type PollItem = {
   id: string;
   title: string;
   content: string;
-  pollType: "TEXT" | "CHECKBOX";
-  options: string[];
+  questions: Question[];
   createdAt: string;
 };
 type TournamentItem = { id: string; name: string; status: string; isOfficial: boolean };
@@ -26,9 +26,11 @@ export default function NewsPopup() {
   const [polls, setPolls] = useState<PollItem[]>([]);
   const [tournaments, setTournaments] = useState<TournamentItem[]>([]);
   const [open, setOpen] = useState(false);
-  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  // answers[pollId][questionId] = string (TEXT) | string[] (CHECKBOX)
+  const [answers, setAnswers] = useState<Record<string, Record<string, string | string[]>>>({});
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<Record<string, boolean>>({});
+  const [pollErrors, setPollErrors] = useState<Record<string, string>>({});
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -94,27 +96,49 @@ export default function NewsPopup() {
     }
   }
 
-  function setTextAnswer(pollId: string, value: string) {
-    setAnswers((prev) => ({ ...prev, [pollId]: value }));
+  function setTextAnswer(pollId: string, questionId: string, value: string) {
+    setAnswers((prev) => ({
+      ...prev,
+      [pollId]: { ...(prev[pollId] || {}), [questionId]: value },
+    }));
   }
 
-  function toggleOption(pollId: string, option: string) {
+  function toggleOption(pollId: string, questionId: string, option: string) {
     setAnswers((prev) => {
-      const current = (prev[pollId] as string[] | undefined) || [];
+      const current = (prev[pollId]?.[questionId] as string[] | undefined) || [];
       const next = current.includes(option)
         ? current.filter((o) => o !== option)
         : [...current, option];
-      return { ...prev, [pollId]: next };
+      return { ...prev, [pollId]: { ...(prev[pollId] || {}), [questionId]: next } };
     });
   }
 
   async function submitPoll(poll: PollItem) {
+    const pollAnswers = answers[poll.id] || {};
+
+    for (const q of poll.questions) {
+      const a = pollAnswers[q.id];
+      if (q.type === "TEXT") {
+        if (!a || !String(a).trim()) {
+          setPollErrors((prev) => ({ ...prev, [poll.id]: `Responda a pergunta "${q.text}"` }));
+          return;
+        }
+      } else if (!Array.isArray(a) || a.length === 0) {
+        setPollErrors((prev) => ({ ...prev, [poll.id]: `Selecione ao menos uma opção em "${q.text}"` }));
+        return;
+      }
+    }
+
+    setPollErrors((prev) => ({ ...prev, [poll.id]: "" }));
     setSubmitting(poll.id);
-    const value = answers[poll.id];
-    const body =
-      poll.pollType === "TEXT"
-        ? { answerText: value || "" }
-        : { selectedOptions: value || [] };
+
+    const body = {
+      answers: poll.questions.map((q) => ({
+        questionId: q.id,
+        answerText: q.type === "TEXT" ? (pollAnswers[q.id] as string) : undefined,
+        selectedOptions: q.type === "CHECKBOX" ? (pollAnswers[q.id] as string[]) : undefined,
+      })),
+    };
 
     const res = await fetch(`/api/announcements/${poll.id}/respond`, {
       method: "POST",
@@ -124,6 +148,9 @@ export default function NewsPopup() {
     setSubmitting(null);
     if (res.ok) {
       setSubmitted((prev) => ({ ...prev, [poll.id]: true }));
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setPollErrors((prev) => ({ ...prev, [poll.id]: data.error || "Erro ao enviar" }));
     }
   }
 
@@ -201,33 +228,47 @@ export default function NewsPopup() {
               {remainingPolls.map((p) => (
                 <div key={p.id} className="p-3 rounded-xl border border-[#2a2a2a] bg-[#252525]">
                   <div className="text-sm font-bold text-white">{p.title}</div>
-                  <div className="text-xs text-gray-400 mt-1 mb-2 whitespace-pre-wrap">{p.content}</div>
+                  <div className="text-xs text-gray-400 mt-1 mb-3 whitespace-pre-wrap">{p.content}</div>
 
-                  {p.pollType === "TEXT" ? (
-                    <textarea
-                      value={(answers[p.id] as string) || ""}
-                      onChange={(e) => setTextAnswer(p.id, e.target.value)}
-                      placeholder="Sua resposta..."
-                      className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#f0a500]"
-                      rows={3}
-                    />
-                  ) : (
-                    <div className="flex flex-col gap-1.5">
-                      {p.options.map((opt) => {
-                        const selected = ((answers[p.id] as string[]) || []).includes(opt);
-                        return (
-                          <label key={opt} className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={selected}
-                              onChange={() => toggleOption(p.id, opt)}
-                              className="accent-[#f0a500]"
-                            />
-                            {opt}
-                          </label>
-                        );
-                      })}
-                    </div>
+                  <div className="flex flex-col gap-3">
+                    {p.questions.map((q, qi) => (
+                      <div key={q.id}>
+                        <div className="text-xs font-semibold text-gray-300 mb-1.5">
+                          {p.questions.length > 1 ? `${qi + 1}. ` : ""}
+                          {q.text}
+                        </div>
+                        {q.type === "TEXT" ? (
+                          <textarea
+                            value={(answers[p.id]?.[q.id] as string) || ""}
+                            onChange={(e) => setTextAnswer(p.id, q.id, e.target.value)}
+                            placeholder="Sua resposta..."
+                            className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#f0a500]"
+                            rows={3}
+                          />
+                        ) : (
+                          <div className="flex flex-col gap-1.5">
+                            {q.options.map((opt) => {
+                              const selected = ((answers[p.id]?.[q.id] as string[]) || []).includes(opt);
+                              return (
+                                <label key={opt} className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() => toggleOption(p.id, q.id, opt)}
+                                    className="accent-[#f0a500]"
+                                  />
+                                  {opt}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {pollErrors[p.id] && (
+                    <div className="mt-2 text-xs text-red-400">{pollErrors[p.id]}</div>
                   )}
 
                   <button

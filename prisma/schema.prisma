@@ -321,29 +321,58 @@ model Announcement {
   type      AnnouncementType
   title     String
   content   String
-  pollType  PollType?
-  options   String[]         @default([])
   active    Boolean          @default(true)
   createdBy String
   createdAt DateTime         @default(now())
 
   creator   User           @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+  questions PollQuestion[]
   responses PollResponse[]
 }
 
+// One question within a (possibly multi-question) poll. `order` controls
+// display order; `type` lets each question independently be free text or
+// multiple choice (with its own `options`).
+model PollQuestion {
+  id             String   @id @default(cuid())
+  announcementId String
+  order          Int      @default(0)
+  text           String
+  type           PollType
+  options        String[] @default([])
+  createdAt      DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  answers      PollAnswer[]
+}
+
+// One user's full submission to a poll (one row per announcement+user).
 model PollResponse {
   id             String   @id @default(cuid())
   announcementId String
   userId         String
-  answerText     String?
-  selectedOptions String[] @default([])
   validated      Boolean  @default(false)
   createdAt      DateTime @default(now())
 
   announcement Announcement @relation(fields: [announcementId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
+  answers      PollAnswer[]
 
   @@unique([announcementId, userId])
+}
+
+// One answer to one question within a PollResponse.
+model PollAnswer {
+  id              String  @id @default(cuid())
+  responseId      String
+  questionId      String
+  answerText      String?
+  selectedOptions String[] @default([])
+
+  response PollResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question PollQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([responseId, questionId])
 }
 
 model EmailVerifyToken {

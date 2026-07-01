@@ -2,27 +2,45 @@
 
 import { useEffect, useState } from "react";
 
+type Question = {
+  id: string;
+  order: number;
+  text: string;
+  type: "TEXT" | "CHECKBOX";
+  options: string[];
+};
+
 type Announcement = {
   id: string;
   type: "NEWS" | "POLL";
   title: string;
   content: string;
-  pollType: "TEXT" | "CHECKBOX" | null;
-  options: string[];
+  questions: Question[];
   active: boolean;
   createdAt: string;
   creator: { name: string };
   _count: { responses: number };
 };
 
-type PollResponse = {
+type Answer = {
   id: string;
   answerText: string | null;
   selectedOptions: string[];
+  question: { id: string; text: string; order: number };
+};
+
+type PollResponse = {
+  id: string;
   validated: boolean;
   createdAt: string;
   user: { name: string; bladerName: string | null };
+  answers: Answer[];
 };
+
+// A question being drafted in the form — no id yet.
+type DraftQuestion = { text: string; type: "TEXT" | "CHECKBOX"; options: string[] };
+
+const EMPTY_QUESTION: DraftQuestion = { text: "", type: "TEXT", options: ["", ""] };
 
 export default function AnnouncementManager() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -34,8 +52,7 @@ export default function AnnouncementManager() {
   const [type, setType] = useState<"NEWS" | "POLL">("NEWS");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [pollType, setPollType] = useState<"TEXT" | "CHECKBOX">("TEXT");
-  const [options, setOptions] = useState<string[]>(["", ""]);
+  const [questions, setQuestions] = useState<DraftQuestion[]>([{ ...EMPTY_QUESTION }]);
 
   const [responsesFor, setResponsesFor] = useState<string | null>(null);
   const [responses, setResponses] = useState<PollResponse[]>([]);
@@ -56,9 +73,38 @@ export default function AnnouncementManager() {
     setType("NEWS");
     setTitle("");
     setContent("");
-    setPollType("TEXT");
-    setOptions(["", ""]);
+    setQuestions([{ ...EMPTY_QUESTION }]);
     setErr(null);
+  }
+
+  function updateQuestion(index: number, patch: Partial<DraftQuestion>) {
+    setQuestions((prev) => prev.map((q, i) => (i === index ? { ...q, ...patch } : q)));
+  }
+
+  function addQuestion() {
+    setQuestions((prev) => [...prev, { ...EMPTY_QUESTION }]);
+  }
+
+  function removeQuestion(index: number) {
+    setQuestions((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateOption(qIndex: number, optIndex: number, value: string) {
+    setQuestions((prev) =>
+      prev.map((q, i) =>
+        i === qIndex ? { ...q, options: q.options.map((o, j) => (j === optIndex ? value : o)) } : q
+      )
+    );
+  }
+
+  function addOption(qIndex: number) {
+    setQuestions((prev) => prev.map((q, i) => (i === qIndex ? { ...q, options: [...q.options, ""] } : q)));
+  }
+
+  function removeOption(qIndex: number, optIndex: number) {
+    setQuestions((prev) =>
+      prev.map((q, i) => (i === qIndex ? { ...q, options: q.options.filter((_, j) => j !== optIndex) } : q))
+    );
   }
 
   async function handleSubmit() {
@@ -67,6 +113,23 @@ export default function AnnouncementManager() {
       setErr("Preencha o título e o conteúdo");
       return;
     }
+    if (type === "POLL") {
+      if (questions.length === 0) {
+        setErr("Adicione ao menos uma pergunta");
+        return;
+      }
+      for (const q of questions) {
+        if (!q.text.trim()) {
+          setErr("Toda pergunta precisa de um texto");
+          return;
+        }
+        if (q.type === "CHECKBOX" && q.options.filter((o) => o.trim()).length < 2) {
+          setErr(`A pergunta "${q.text}" precisa de ao menos duas opções`);
+          return;
+        }
+      }
+    }
+
     setSaving(true);
     const res = await fetch("/api/admin/announcements", {
       method: "POST",
@@ -75,8 +138,7 @@ export default function AnnouncementManager() {
         type,
         title: title.trim(),
         content: content.trim(),
-        pollType: type === "POLL" ? pollType : undefined,
-        options: type === "POLL" && pollType === "CHECKBOX" ? options : undefined,
+        questions: type === "POLL" ? questions : undefined,
       }),
     });
     setSaving(false);
@@ -125,18 +187,6 @@ export default function AnnouncementManager() {
       body: JSON.stringify({ validated }),
     });
     setResponses((prev) => prev.map((r) => (r.id === responseId ? { ...r, validated } : r)));
-  }
-
-  function updateOption(index: number, value: string) {
-    setOptions((prev) => prev.map((o, i) => (i === index ? value : o)));
-  }
-
-  function addOption() {
-    setOptions((prev) => [...prev, ""]);
-  }
-
-  function removeOption(index: number) {
-    setOptions((prev) => prev.filter((_, i) => i !== index));
   }
 
   return (
@@ -190,67 +240,97 @@ export default function AnnouncementManager() {
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder={type === "NEWS" ? "Conteúdo do recado" : "Pergunta da enquete"}
+            placeholder={type === "NEWS" ? "Conteúdo do recado" : "Descrição/introdução da enquete"}
             rows={3}
             className="w-full mb-2 bg-[#1a1a1a] border border-[#333] rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#f0a500]"
           />
 
           {type === "POLL" && (
-            <>
-              <div className="flex gap-2 mb-2">
-                <button
-                  onClick={() => setPollType("TEXT")}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                    pollType === "TEXT" ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-400 border border-[#333]"
-                  }`}
-                >
-                  Texto livre
-                </button>
-                <button
-                  onClick={() => setPollType("CHECKBOX")}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                    pollType === "CHECKBOX" ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-400 border border-[#333]"
-                  }`}
-                >
-                  Múltipla escolha
-                </button>
-              </div>
+            <div className="flex flex-col gap-3 mt-2">
+              {questions.map((q, qi) => (
+                <div key={qi} className="rounded-lg border border-[#333] bg-[#1a1a1a] p-3">
+                  <div className="flex items-start gap-2 mb-2">
+                    <span className="mt-2 text-xs font-bold text-gray-500 shrink-0">#{qi + 1}</span>
+                    <input
+                      value={q.text}
+                      onChange={(e) => updateQuestion(qi, { text: e.target.value })}
+                      placeholder="Texto da pergunta"
+                      className="flex-1 bg-[#252525] border border-[#333] rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#f0a500]"
+                    />
+                    {questions.length > 1 && (
+                      <button
+                        onClick={() => removeQuestion(qi)}
+                        className="px-3 py-2 rounded-lg bg-[#252525] border border-[#333] text-gray-400 hover:text-red-400 transition-colors shrink-0"
+                        title="Remover pergunta"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
 
-              {pollType === "CHECKBOX" && (
-                <div className="flex flex-col gap-1.5 mb-2">
-                  {options.map((opt, i) => (
-                    <div key={i} className="flex gap-2">
-                      <input
-                        value={opt}
-                        onChange={(e) => updateOption(i, e.target.value)}
-                        placeholder={`Opção ${i + 1}`}
-                        className="flex-1 bg-[#1a1a1a] border border-[#333] rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#f0a500]"
-                      />
-                      {options.length > 2 && (
-                        <button
-                          onClick={() => removeOption(i)}
-                          className="px-3 rounded-lg bg-[#1a1a1a] border border-[#333] text-gray-400 hover:text-red-400 transition-colors"
-                        >
-                          ×
-                        </button>
-                      )}
+                  <div className="flex gap-2 mb-2 ml-6">
+                    <button
+                      onClick={() => updateQuestion(qi, { type: "TEXT" })}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                        q.type === "TEXT" ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 border border-[#333]"
+                      }`}
+                    >
+                      Texto descritivo
+                    </button>
+                    <button
+                      onClick={() => updateQuestion(qi, { type: "CHECKBOX" })}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                        q.type === "CHECKBOX" ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 border border-[#333]"
+                      }`}
+                    >
+                      Múltipla escolha
+                    </button>
+                  </div>
+
+                  {q.type === "CHECKBOX" && (
+                    <div className="flex flex-col gap-1.5 ml-6">
+                      {q.options.map((opt, oi) => (
+                        <div key={oi} className="flex gap-2">
+                          <input
+                            value={opt}
+                            onChange={(e) => updateOption(qi, oi, e.target.value)}
+                            placeholder={`Opção ${oi + 1}`}
+                            className="flex-1 bg-[#252525] border border-[#333] rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#f0a500]"
+                          />
+                          {q.options.length > 2 && (
+                            <button
+                              onClick={() => removeOption(qi, oi)}
+                              className="px-3 rounded-lg bg-[#252525] border border-[#333] text-gray-400 hover:text-red-400 transition-colors"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => addOption(qi)}
+                        className="text-xs text-[#f0a500] hover:text-[#d4940a] font-bold self-start"
+                      >
+                        + Adicionar opção
+                      </button>
                     </div>
-                  ))}
-                  <button
-                    onClick={addOption}
-                    className="text-xs text-[#f0a500] hover:text-[#d4940a] font-bold self-start"
-                  >
-                    + Adicionar opção
-                  </button>
+                  )}
                 </div>
-              )}
-            </>
+              ))}
+
+              <button
+                onClick={addQuestion}
+                className="text-sm text-[#f0a500] hover:text-[#d4940a] font-bold self-start"
+              >
+                + Adicionar pergunta
+              </button>
+            </div>
           )}
 
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="w-full mt-2 bg-[#c8102e] hover:bg-[#a50d26] disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-colors"
+            className="w-full mt-4 bg-[#c8102e] hover:bg-[#a50d26] disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-colors"
           >
             {saving ? "Salvando..." : "Publicar"}
           </button>
@@ -273,6 +353,11 @@ export default function AnnouncementManager() {
                     }`}>
                       {a.type === "POLL" ? "ENQUETE" : "RECADO"}
                     </span>
+                    {a.type === "POLL" && a.questions.length > 1 && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-900/40 text-purple-300">
+                        {a.questions.length} PERGUNTAS
+                      </span>
+                    )}
                     {!a.active && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-700 text-gray-400">
                         INATIVO
@@ -320,10 +405,15 @@ export default function AnnouncementManager() {
                     <div className="flex flex-col gap-2">
                       {responses.map((r) => (
                         <div key={r.id} className="p-2 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] flex items-start justify-between gap-2">
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="text-xs font-bold text-white">{r.user.bladerName || r.user.name}</div>
-                            <div className="text-xs text-gray-400 mt-0.5">
-                              {a.pollType === "TEXT" ? r.answerText : r.selectedOptions.join(", ")}
+                            <div className="flex flex-col gap-1 mt-1">
+                              {[...r.answers].sort((x, y) => x.question.order - y.question.order).map((ans) => (
+                                <div key={ans.id} className="text-xs text-gray-400">
+                                  <span className="text-gray-500">{ans.question.text}: </span>
+                                  {ans.answerText || ans.selectedOptions.join(", ") || "—"}
+                                </div>
+                              ))}
                             </div>
                           </div>
                           <button

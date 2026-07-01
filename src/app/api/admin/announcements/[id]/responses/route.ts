@@ -15,7 +15,10 @@ export async function GET(
 
   const responses = await prisma.pollResponse.findMany({
     where: { announcementId: params.id },
-    include: { user: { select: { name: true, bladerName: true } } },
+    include: {
+      user: { select: { name: true, bladerName: true } },
+      answers: { include: { question: { select: { id: true, text: true, order: true } } } },
+    },
     orderBy: { createdAt: "desc" },
   });
 

@@ -530,6 +530,68 @@ export async function GET() {
       name: "Tournament.registrationDeadline",
       sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "registrationDeadline" TIMESTAMP(3)`,
     },
+    {
+      name: "PollQuestion table",
+      sql: `CREATE TABLE IF NOT EXISTS "PollQuestion" (
+        "id" TEXT NOT NULL,
+        "announcementId" TEXT NOT NULL,
+        "order" INTEGER NOT NULL DEFAULT 0,
+        "text" TEXT NOT NULL,
+        "type" "PollType" NOT NULL,
+        "options" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "PollQuestion_pkey" PRIMARY KEY ("id")
+      )`,
+    },
+    {
+      name: "PollQuestion.announcementId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "PollQuestion" ADD CONSTRAINT "PollQuestion_announcementId_fkey" FOREIGN KEY ("announcementId") REFERENCES "Announcement"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "PollAnswer table",
+      sql: `CREATE TABLE IF NOT EXISTS "PollAnswer" (
+        "id" TEXT NOT NULL,
+        "responseId" TEXT NOT NULL,
+        "questionId" TEXT NOT NULL,
+        "answerText" TEXT,
+        "selectedOptions" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+        CONSTRAINT "PollAnswer_pkey" PRIMARY KEY ("id")
+      )`,
+    },
+    {
+      name: "PollAnswer unique responseId+questionId",
+      sql: `DO $$ BEGIN ALTER TABLE "PollAnswer" ADD CONSTRAINT "PollAnswer_responseId_questionId_key" UNIQUE ("responseId", "questionId"); EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "PollAnswer.responseId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "PollAnswer" ADD CONSTRAINT "PollAnswer_responseId_fkey" FOREIGN KEY ("responseId") REFERENCES "PollResponse"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      name: "PollAnswer.questionId FK",
+      sql: `DO $$ BEGIN ALTER TABLE "PollAnswer" ADD CONSTRAINT "PollAnswer_questionId_fkey" FOREIGN KEY ("questionId") REFERENCES "PollQuestion"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    },
+    {
+      // Backfill: turn each legacy single-question poll (Announcement.pollType/
+      // options) into its PollQuestion #0, only if it doesn't have one yet.
+      // The old columns are no longer in the Prisma schema but still exist in
+      // the DB, so we read them via raw SQL here.
+      name: "Backfill legacy poll questions",
+      sql: `INSERT INTO "PollQuestion" (id, "announcementId", "order", text, type, options, "createdAt")
+        SELECT 'legacyq_' || substr(md5(a.id), 1, 20), a.id, 0, a.content, a."pollType", a.options, a."createdAt"
+        FROM "Announcement" a
+        WHERE a.type = 'POLL' AND a."pollType" IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM "PollQuestion" q WHERE q."announcementId" = a.id)`,
+    },
+    {
+      // Backfill: move each legacy PollResponse.answerText/selectedOptions
+      // into a PollAnswer row pointing at the question created above.
+      name: "Backfill legacy poll answers",
+      sql: `INSERT INTO "PollAnswer" (id, "responseId", "questionId", "answerText", "selectedOptions")
+        SELECT 'legacya_' || substr(md5(r.id), 1, 20), r.id, q.id, r."answerText", r."selectedOptions"
+        FROM "PollResponse" r
+        JOIN "PollQuestion" q ON q."announcementId" = r."announcementId" AND q."order" = 0
+        WHERE NOT EXISTS (SELECT 1 FROM "PollAnswer" pa WHERE pa."responseId" = r.id AND pa."questionId" = q.id)`,
+    },
   ];
 
   for (const migration of migrations) {

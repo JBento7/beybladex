@@ -24,7 +24,16 @@ export async function GET() {
         responses: { none: { userId } },
       },
       orderBy: { createdAt: "desc" },
-      select: { id: true, title: true, content: true, pollType: true, options: true, createdAt: true },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        createdAt: true,
+        questions: {
+          orderBy: { order: "asc" },
+          select: { id: true, text: true, type: true, options: true },
+        },
+      },
     }),
     prisma.tournament.findMany({
       where: { status: { in: ["REGISTRATION", "IN_PROGRESS"] } },
