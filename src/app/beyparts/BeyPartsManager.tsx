@@ -142,6 +142,11 @@ function RadarChart({ part, size = 130 }: { part: BeyPart; size?: number }) {
 
   if (n < 3) return null;
 
+  // Extra room around the drawing so axis labels (STAMINA / DEFENSE, etc.)
+  // aren't clipped by the viewBox — labels extend horizontally past the poly.
+  const padX = size * 0.22;
+  const padY = size * 0.12;
+
   const angles = axes.map((_, i) => -Math.PI / 2 + (2 * Math.PI * i) / n);
   const vals = axes.map((k) => Math.min((part[k] ?? 0) / STAT_MAX[k], 1));
   const hasData = vals.some((v) => v > 0);
@@ -157,7 +162,12 @@ function RadarChart({ part, size = 130 }: { part: BeyPart; size?: number }) {
   };
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <svg
+      width={size}
+      height={size}
+      viewBox={`${-padX} ${-padY} ${size + padX * 2} ${size + padY * 2}`}
+      className="max-w-full h-auto"
+    >
       {[0.25, 0.5, 0.75, 1].map((frac) => (
         <polygon key={frac} points={polyPts(frac)} fill="none" stroke="#333" strokeWidth="0.8" />
       ))}
@@ -749,9 +759,9 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
   return (
     <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl">
       {/* Sticky header + tabs */}
-      <div className="sticky top-[64px] md:top-[100px] z-30 bg-[#1a1a1a] border-b border-[#2a2a2a] px-6 pt-5 pb-3">
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <div>
+      <div className="sticky top-[64px] md:top-[100px] z-30 bg-[#1a1a1a] border-b border-[#2a2a2a] px-4 sm:px-6 pt-5 pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <div className="min-w-0">
             <h2 className="text-lg font-bold text-white">Catálogo de Peças</h2>
             <p className="text-gray-400 text-sm mt-0.5">
               {isAdmin ? "Cadastre as peças disponíveis para cada linha de Beyblade." : "Peças disponíveis por linha de Beyblade."}
@@ -778,7 +788,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
             )}
           </div>
           {/* Search */}
-          <div className="relative flex-shrink-0 w-52">
+          <div className="relative flex-shrink-0 w-full sm:w-52">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
@@ -918,7 +928,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
         </div>
       </div>
 
-      <div className="px-6 pb-6 pt-5">
+      <div className="px-4 sm:px-6 pb-6 pt-5">
       {error && (
         <div className="mb-4 text-red-400 text-sm bg-red-900/20 border border-red-700/30 px-3 py-2 rounded-lg">
           {error}
