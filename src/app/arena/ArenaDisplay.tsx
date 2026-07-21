@@ -72,10 +72,11 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       const d: ArenaData = await res.json();
       setData(d);
 
-      // New countdown signalled by the judge → play the video once.
-      if (d.countdown && d.countdown.key !== playedKeyRef.current) {
+      // New countdown signalled by the judge → play the whole clip from the
+      // start (no offset seek, so the "3" isn't cut). Only for fresh triggers.
+      if (d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 3000) {
         playedKeyRef.current = d.countdown.key;
-        setCountdown({ offsetMs: d.countdown.elapsedMs });
+        setCountdown({ offsetMs: 0 });
       }
     } catch {
       setError("Sem conexão");
