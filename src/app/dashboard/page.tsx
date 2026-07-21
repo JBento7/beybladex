@@ -22,6 +22,7 @@ const STATUS_LABELS: Record<string, string> = {
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
+  if (/^arena\d+@/i.test(session.user.email ?? "")) redirect("/arena");
 
   const userId = session.user.id;
 

@@ -6,7 +6,11 @@ import QuickTournamentBanner from "@/components/QuickTournamentBanner";
 
 export default async function LandingPage() {
   const session = await getServerSession(authOptions);
-  if (session) redirect("/dashboard");
+  if (session) {
+    // Arena display users go straight to their fullscreen scoreboard.
+    if (/^arena\d+@/i.test(session.user.email ?? "")) redirect("/arena");
+    redirect("/dashboard");
+  }
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
       <nav className="border-b border-[#2a2a2a] bg-[#1a1a1a]/80 backdrop-blur-sm sticky top-0 z-50">
