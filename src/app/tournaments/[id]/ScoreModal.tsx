@@ -167,11 +167,11 @@ export default function ScoreModal({
 
   const bothOrders = !isDeck || (!!p1Order && !!p2Order);
   const gateReady = !isDeck || bothOrders; // 3on3 needs both deck orders first
-  // In 3-on-3 every battle (point) gets its own countdown — the active beyblade
-  // switches each battle. A battle is identified by set + points already scored.
-  // In solo the countdown plays once at the start of the match.
+  // Every battle (point) gets its own countdown — in 3-on-3 the active beyblade
+  // switches each battle, and in solo the countdown must also play before each
+  // point. A battle is identified by set + points already scored in it.
   const battleKey = `${currentSetNum}:${currentSetBattleCount}`;
-  const startKey = isDeck ? battleKey : "solo-start";
+  const startKey = battleKey;
   const revealScoring = gateReady && startedKey === startKey;
   const showStart = gateReady && startedKey !== startKey;
   const waitingOrders = isDeck && !bothOrders;
@@ -427,7 +427,7 @@ export default function ScoreModal({
                     onClick={() => setCounting(true)}
                     className="w-full mb-3 bg-[#22c55e] hover:bg-[#1ea34d] text-black font-black text-lg py-4 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
                   >
-                    ▶ Iniciar {!isDeck || currentSetBattleCount === 0 ? "partida" : `batalha ${currentSetBattleCount + 1}`}
+                    ▶ Iniciar {currentSetBattleCount === 0 ? "partida" : `batalha ${currentSetBattleCount + 1}`}
                   </button>
                 )}
 

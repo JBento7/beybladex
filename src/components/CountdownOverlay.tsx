@@ -2,21 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// Full-screen "3 · 2 · 1 · GO · SHOOT" countdown with browser speech narration,
-// matching the Beyblade X match-start call. Calls onDone when finished.
+// Full-screen "3 · 2 · 1 · GO · SHOOT" countdown that plays the real audio clip
+// (public/countdown.mp3) and switches the on-screen number at each word's onset
+// so the visuals stay in sync with the audio. Calls onDone when finished.
 
-type Step = { label: string; say: string; kind: "num" | "go" | "shoot" };
+type Step = { label: string; at: number; kind: "num" | "go" | "shoot" };
 
+// Word onsets (seconds) measured from the audio energy envelope, nudged slightly
+// early so the number never lands after the sound.
 const STEPS: Step[] = [
-  { label: "3", say: "3", kind: "num" },
-  { label: "2", say: "2", kind: "num" },
-  { label: "1", say: "1", kind: "num" },
-  { label: "GO", say: "go", kind: "go" },
-  { label: "SHOOT", say: "shoot", kind: "shoot" },
+  { label: "3", at: 0.15, kind: "num" },
+  { label: "2", at: 2.15, kind: "num" },
+  { label: "1", at: 3.4, kind: "num" },
+  { label: "GO", at: 4.3, kind: "go" },
+  { label: "SHOOT", at: 5.3, kind: "shoot" },
 ];
-
-const STEP_MS = 750;
-const SHOOT_MS = 1100;
+const END_AT = 6.8;
 
 export default function CountdownOverlay({ onDone }: { onDone: () => void }) {
   const [idx, setIdx] = useState(0);
@@ -25,7 +26,6 @@ export default function CountdownOverlay({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
-    const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
 
     function finish() {
       if (!doneRef.current && !cancelled) {
@@ -34,65 +34,27 @@ export default function CountdownOverlay({ onDone }: { onDone: () => void }) {
       }
     }
 
-    // Pure-timer fallback: advance visuals on a fixed cadence (used when speech
-    // is unavailable or never starts).
-    function runTimers(fromStep = 0) {
-      let acc = 0;
-      for (let i = fromStep; i < STEPS.length; i++) {
-        const step = STEPS[i];
-        timers.push(setTimeout(() => { if (!cancelled) setIdx(i); }, acc));
-        acc += step.kind === "shoot" ? SHOOT_MS : STEP_MS;
-      }
-      timers.push(setTimeout(finish, acc));
-    }
-
-    if (!synth) {
-      runTimers();
-      return () => { cancelled = true; timers.forEach(clearTimeout); };
-    }
-
-    // Speech-driven: the visual for each step is shown exactly when that step's
-    // utterance actually *starts* speaking (onstart), so audio and numbers stay
-    // in sync instead of the audio lagging behind timer-driven visuals.
-    try { synth.cancel(); } catch { /* ignore */ }
-
-    let anyStarted = false;
-
+    // Schedule the visual steps on the audio timeline.
     STEPS.forEach((step, i) => {
-      const u = new SpeechSynthesisUtterance(step.say);
-      u.lang = "en-US";
-      u.rate = 1.05;
-      u.pitch = 1;
-      u.volume = 1;
-      u.onstart = () => {
-        anyStarted = true;
-        if (!cancelled) setIdx(i);
-      };
-      if (i === STEPS.length - 1) {
-        // Hold SHOOT briefly after it's spoken, then finish.
-        u.onend = () => { timers.push(setTimeout(finish, 450)); };
-      }
-      try { synth.speak(u); } catch { /* ignore */ }
+      timers.push(setTimeout(() => { if (!cancelled) setIdx(i); }, step.at * 1000));
     });
+    timers.push(setTimeout(finish, END_AT * 1000));
 
-    // If speech never actually starts (blocked/muted/autoplay policy), fall back
-    // to the timer cadence so the countdown still runs.
-    timers.push(
-      setTimeout(() => {
-        if (!anyStarted && !cancelled) {
-          try { synth.cancel(); } catch { /* ignore */ }
-          runTimers();
-        }
-      }, 500)
-    );
-
-    // Absolute safety net so onDone always fires even if speech stalls mid-way.
-    timers.push(setTimeout(finish, 7000));
+    // Play the real audio clip. Triggered by the judge's click, so autoplay
+    // policies allow it. If playback fails, the visual timeline still runs.
+    const audio = new Audio("/countdown.mp3");
+    audio.volume = 1;
+    audio.play().catch(() => { /* audio best-effort */ });
 
     return () => {
       cancelled = true;
       timers.forEach(clearTimeout);
-      try { synth.cancel(); } catch { /* ignore */ }
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -103,7 +65,6 @@ export default function CountdownOverlay({ onDone }: { onDone: () => void }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#eef2f0] select-none">
       <div className="flex items-center gap-6 sm:gap-10">
-        {/* left arrow for numbers/go */}
         {step.kind !== "shoot" && (
           <Arrow dir="right" color={arrowColor} dim={step.kind === "num" && step.label !== "3"} />
         )}
