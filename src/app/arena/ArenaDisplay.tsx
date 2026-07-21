@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import CountdownOverlay from "@/components/CountdownOverlay";
 
 // Bump this on every arena change so we can confirm which build a tablet runs.
-const ARENA_BUILD = "v8-cd-inline";
+const ARENA_BUILD = "v9-fit-wake";
 
 type Match = {
   player1: string;
@@ -57,6 +57,37 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   // autoplay policy — required for the countdown to have sound, esp. on iOS).
   const [started, setStarted] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const noSleepRef = useRef<HTMLVideoElement | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wakeLockRef = useRef<any>(null);
+
+  // Keep the screen awake while the display is running.
+  async function acquireWakeLock() {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const nav = navigator as any;
+      if (nav.wakeLock?.request) {
+        wakeLockRef.current = await nav.wakeLock.request("screen");
+      }
+    } catch {
+      /* not supported — the looping video fallback handles it */
+    }
+    // Fallback for browsers without Wake Lock (older iOS): a looping muted video
+    // keeps the screen on.
+    try {
+      await noSleepRef.current?.play();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible" && started) acquireWakeLock();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [started]);
 
   // Countdown playback state
   const [countdown, setCountdown] = useState<{ offsetMs: number } | null>(null);
@@ -110,6 +141,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         /* will still try to play on countdown */
       }
     }
+    await acquireWakeLock();
     setStarted(true);
   }
 
@@ -143,6 +175,16 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       {/* Persistent, pre-unlocked audio element reused by the countdown */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio ref={audioRef} src="/countdown.mp3" preload="auto" playsInline />
+      {/* Hidden looping video keeps the screen awake on iOS without Wake Lock */}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        ref={noSleepRef}
+        src="/nosleep.mp4"
+        muted
+        loop
+        playsInline
+        style={{ position: "fixed", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+      />
 
       {/* Start gate: tap once to go fullscreen + unlock audio */}
       {!started && (

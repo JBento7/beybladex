@@ -23,11 +23,12 @@ const END_AT = 6.8;
 const YELLOW = "#f0a500";
 const RED = "#e5122e";
 
-// Font size per token — min(vw, vh) so the number is huge but always fits.
+// Font size per token — sized so even the widest word (with arrows) never gets
+// clipped horizontally. Wider words use a smaller font.
 const FONT: Record<Step["kind"], string> = {
-  num: "min(58vw, 80vh)",
-  go: "min(46vw, 62vh)",
-  shoot: "min(27vw, 40vh)",
+  num: "min(50vw, 78vh)",
+  go: "min(34vw, 52vh)",
+  shoot: "min(17vw, 32vh)",
 };
 
 export default function CountdownOverlay({
@@ -83,7 +84,7 @@ export default function CountdownOverlay({
   const showLeftArrow = step.kind !== "shoot";
   const showRightArrow = step.kind === "go" || step.label === "1";
 
-  const arrowSize = "min(15vw, 20vh)";
+  const arrowSize = "min(12vw, 18vh)";
 
   return (
     <div
@@ -116,6 +117,8 @@ export default function CountdownOverlay({
           fontSize: FONT[step.kind],
           color: RED,
           textShadow: `0 0 6vmin ${RED}88`,
+          whiteSpace: "nowrap",
+          maxWidth: "96vw",
         }}
       >
         {step.label}

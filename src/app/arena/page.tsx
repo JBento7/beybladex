@@ -8,6 +8,10 @@ export const metadata = {
   title: "Arena",
   // When added to the iOS/iPadOS Home Screen, launch chromeless (no URL bar).
   appleWebApp: { capable: true, statusBarStyle: "black-translucent" as const, title: "LBL Arena" },
+  icons: {
+    apple: "/arena-icon-180.png",
+    icon: "/arena-icon-512.png",
+  },
 };
 export const viewport = {
   width: "device-width",
