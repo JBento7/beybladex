@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CountdownOverlay from "@/components/CountdownOverlay";
 
+// Bump this on every arena change so we can confirm which build a tablet runs.
+const ARENA_BUILD = "v7-gate";
+
 type Match = {
   player1: string;
   player2: string;
@@ -173,6 +176,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       <div className="absolute top-3 left-4 z-10 text-xs font-bold tracking-widest uppercase text-[#f0a500]">
         Arena {arena}
         {data?.tournamentName && <span className="text-gray-500 ml-2 normal-case font-normal">· {data.tournamentName}</span>}
+        <span className="text-gray-700 ml-2 normal-case font-normal">[{ARENA_BUILD}]</span>
       </div>
 
       {error && <div className="absolute bottom-3 left-4 z-20 text-xs text-red-400">{error}</div>}
