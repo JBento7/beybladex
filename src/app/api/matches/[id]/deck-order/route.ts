@@ -23,13 +23,20 @@ export async function POST(
     });
     if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
 
-    const canEdit =
+    // A judge/organizer can set any player's order; a player can set their OWN
+    // order (choosing their deck sequence on their own phone).
+    const isJudge =
       match.tournament.organizerId === session.user.id ||
       session.user.role === "ORGANIZER" ||
       session.user.canJudge ||
       match.judgeId === session.user.id;
+    const isOwnOrder =
+      userId === session.user.id &&
+      (session.user.id === match.player1Id || session.user.id === match.player2Id);
 
-    if (!canEdit) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+    if (!isJudge && !isOwnOrder) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+    }
 
     await prisma.matchDeckOrder.upsert({
       where: {

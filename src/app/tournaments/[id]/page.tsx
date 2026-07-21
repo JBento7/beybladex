@@ -8,6 +8,7 @@ import StartTournamentButton from "./StartTournamentButton";
 import FinishTournamentButton from "./FinishTournamentButton";
 import ResetTournamentButton from "./ResetTournamentButton";
 import ScoreModal from "./ScoreModal";
+import PlayerDeckOrder from "./PlayerDeckOrder";
 import ClientJoinButton from "./ClientJoinButton";
 import EditBeybladesButton from "./EditBeybladesButton";
 import WOButton from "./WOButton";
@@ -216,6 +217,16 @@ function MatchCard({
             <WOButton matchId={match.id} player1={match.player1} player2={match.player2} />
           </>
         )}
+        {/* Player picks their own deck order on their phone (3-on-3 only) */}
+        {deckType === "THREE_ON_THREE" && !isFinished && currentUserId &&
+          (currentUserId === match.player1.id || currentUserId === match.player2.id) && (
+            <PlayerDeckOrder
+              matchId={match.id}
+              userId={currentUserId}
+              beyblades={participantBeyblades.find((p) => p.userId === currentUserId)?.beyblades ?? []}
+              color={currentUserId === match.player1.id ? "#f0a500" : "#c8102e"}
+            />
+          )}
       </div>
     </div>
   );
