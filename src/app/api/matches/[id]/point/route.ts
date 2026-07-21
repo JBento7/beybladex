@@ -185,6 +185,16 @@ export async function POST(
     return NextResponse.json({ success: true, matchFinished, winnerId: matchWinnerId });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Erro no servidor" }, { status: 500 });
+    const detail = String(err);
+    const missingColumn = /column .*(countdown|does not exist)/i.test(detail);
+    return NextResponse.json(
+      {
+        error: missingColumn
+          ? "Banco desatualizado — rode /api/migrate (colunas novas ausentes)."
+          : "Erro no servidor",
+        detail: detail.slice(0, 300),
+      },
+      { status: 500 }
+    );
   }
 }

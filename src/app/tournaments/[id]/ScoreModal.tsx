@@ -227,8 +227,8 @@ export default function ScoreModal({
       const data = await res.json();
       if (data.matchFinished) router.refresh();
     } else {
-      const data = await res.json();
-      setErr(data.error || "Erro ao registrar ponto");
+      const data = await res.json().catch(() => ({}));
+      setErr((data.error || "Erro ao registrar ponto") + (data.detail ? ` — ${data.detail}` : ""));
     }
   }
 

@@ -11,10 +11,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const match = await prisma.match.findUnique({
-    where: { id: params.id },
-    include: { tournament: { include: { _count: { select: { judges: true } } } } },
-  });
+  let match;
+  try {
+    match = await prisma.match.findUnique({
+      where: { id: params.id },
+      select: {
+        judgeId: true,
+        tournament: { select: { organizerId: true, _count: { select: { judges: true } } } },
+      },
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: "Banco desatualizado — rode /api/migrate", detail: String(e).slice(0, 200) },
+      { status: 500 }
+    );
+  }
   if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
 
   const openJudging = match.tournament._count.judges === 0;
