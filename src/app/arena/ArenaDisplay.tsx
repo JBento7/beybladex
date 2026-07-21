@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import CountdownOverlay from "@/components/CountdownOverlay";
 
 // Bump this on every arena change so we can confirm which build a tablet runs.
-const ARENA_BUILD = "v7-gate";
+const ARENA_BUILD = "v8-cd-inline";
 
 type Match = {
   player1: string;

@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from "react";
 
 // Full-screen "3 · 2 · 1 · GO · SHOOT" countdown. Plays the real audio clip
 // (public/countdown.mp3) and switches the on-screen number at each word's
-// measured onset so the visuals stay locked to the audio. Calls onDone when
-// finished. LBL identity: black background, yellow arrows, red text.
+// measured onset. LBL identity: black background, yellow arrows, red text.
+//
+// All critical layout/size uses INLINE styles (not Tailwind arbitrary values)
+// so it renders identically on every browser, including iOS/iPadOS Safari.
 
 type Step = { label: string; at: number; kind: "num" | "go" | "shoot" };
 
-// Word onsets (seconds) measured from the audio energy envelope. GO and SHOOT
-// hold long to match the drawn-out "GOooo"/"SHOOoot" in the clip.
 const STEPS: Step[] = [
   { label: "3", at: 0.15, kind: "num" },
   { label: "2", at: 2.3, kind: "num" },
@@ -23,6 +23,13 @@ const END_AT = 6.8;
 const YELLOW = "#f0a500";
 const RED = "#e5122e";
 
+// Font size per token — min(vw, vh) so the number is huge but always fits.
+const FONT: Record<Step["kind"], string> = {
+  num: "min(58vw, 80vh)",
+  go: "min(46vw, 62vh)",
+  shoot: "min(27vw, 40vh)",
+};
+
 export default function CountdownOverlay({
   onDone,
   offsetMs = 0,
@@ -30,12 +37,8 @@ export default function CountdownOverlay({
 }: {
   onDone: () => void;
   offsetMs?: number;
-  // A pre-unlocked <audio> element to reuse (required for sound on iOS Safari,
-  // where a freshly-created Audio() is blocked even after a prior gesture).
   audioEl?: HTMLAudioElement | null;
 }) {
-  // Start at whichever step the offset lands in (for the arena, which may begin
-  // the countdown a fraction of a second after the judge triggered it).
   const initialIdx = STEPS.reduce((acc, s, i) => (s.at * 1000 <= offsetMs ? i : acc), 0);
   const [idx, setIdx] = useState(initialIdx);
   const doneRef = useRef(false);
@@ -56,8 +59,7 @@ export default function CountdownOverlay({
       const delay = step.at * 1000 - off;
       if (delay > 0) timers.push(setTimeout(() => { if (!cancelled) setIdx(i); }, delay));
     });
-    const endDelay = END_AT * 1000 - off;
-    timers.push(setTimeout(finish, Math.max(0, endDelay)));
+    timers.push(setTimeout(finish, Math.max(0, END_AT * 1000 - off)));
 
     const audio = audioEl ?? new Audio("/countdown.mp3");
     audio.volume = 1;
@@ -78,52 +80,64 @@ export default function CountdownOverlay({
   }, []);
 
   const step = STEPS[idx];
+  const showLeftArrow = step.kind !== "shoot";
+  const showRightArrow = step.kind === "go" || step.label === "1";
+
+  const arrowSize = "min(15vw, 20vh)";
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black select-none">
-      <div className="flex items-center gap-6 sm:gap-10">
-        {step.kind !== "shoot" && (
-          <Arrow dir="right" color={YELLOW} dim={step.kind === "num" && step.label !== "3"} />
-        )}
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "3vw",
+        background: "#000",
+        zIndex: 70,
+        userSelect: "none",
+        overflow: "hidden",
+      }}
+    >
+      {showLeftArrow && (
+        <Arrow color={YELLOW} size={arrowSize} flip={false} dim={step.kind === "num" && step.label !== "3"} />
+      )}
 
-        <span
-          key={step.label}
-          className={`font-black leading-none animate-[pop_0.25s_ease-out] ${
-            step.kind === "shoot"
-              ? "text-[26vmin] tracking-tight"
-              : step.kind === "go"
-              ? "text-[40vmin]"
-              : "text-[52vmin]"
-          }`}
-          style={{ color: RED, textShadow: `0 0 6vmin ${RED}77` }}
-        >
-          {step.label}
-        </span>
+      <span
+        key={step.label}
+        style={{
+          fontWeight: 900,
+          lineHeight: 1,
+          fontFamily: "system-ui, sans-serif",
+          fontSize: FONT[step.kind],
+          color: RED,
+          textShadow: `0 0 6vmin ${RED}88`,
+        }}
+      >
+        {step.label}
+      </span>
 
-        {(step.kind === "go" || step.label === "1") && step.kind !== "shoot" && (
-          <Arrow dir="left" color={YELLOW} dim={false} />
-        )}
-      </div>
-
-      <style>{`
-        @keyframes pop {
-          0% { transform: scale(0.6); opacity: 0; }
-          60% { transform: scale(1.08); opacity: 1; }
-          100% { transform: scale(1); opacity: 1; }
-        }
-      `}</style>
+      {showRightArrow && <Arrow color={YELLOW} size={arrowSize} flip dim={false} />}
     </div>
   );
 }
 
-function Arrow({ dir, color, dim }: { dir: "left" | "right"; color: string; dim: boolean }) {
+function Arrow({ color, size, flip, dim }: { color: string; size: string; flip: boolean; dim: boolean }) {
   return (
     <svg
-      width="70"
-      height="90"
       viewBox="0 0 70 90"
-      className="w-[13vmin] h-auto"
-      style={{ opacity: dim ? 0 : 1, transform: dir === "left" ? "scaleX(-1)" : undefined, filter: `drop-shadow(0 0 2vmin ${color}88)` }}
+      style={{
+        width: size,
+        height: "auto",
+        opacity: dim ? 0 : 1,
+        transform: flip ? "scaleX(-1)" : undefined,
+        filter: `drop-shadow(0 0 2vmin ${color}88)`,
+        flexShrink: 0,
+      }}
     >
       <polygon points="0,0 70,45 0,90" fill={color} />
     </svg>
