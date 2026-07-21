@@ -23,42 +23,76 @@ export default function CountdownOverlay({ onDone }: { onDone: () => void }) {
   const doneRef = useRef(false);
 
   useEffect(() => {
-    // Cancel any queued speech from a previous run.
-    try {
-      window.speechSynthesis?.cancel();
-    } catch {
-      /* speechSynthesis unavailable */
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const synth = typeof window !== "undefined" ? window.speechSynthesis : undefined;
+
+    function finish() {
+      if (!doneRef.current && !cancelled) {
+        doneRef.current = true;
+        onDone();
+      }
     }
 
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    let acc = 0;
+    // Pure-timer fallback: advance visuals on a fixed cadence (used when speech
+    // is unavailable or never starts).
+    function runTimers(fromStep = 0) {
+      let acc = 0;
+      for (let i = fromStep; i < STEPS.length; i++) {
+        const step = STEPS[i];
+        timers.push(setTimeout(() => { if (!cancelled) setIdx(i); }, acc));
+        acc += step.kind === "shoot" ? SHOOT_MS : STEP_MS;
+      }
+      timers.push(setTimeout(finish, acc));
+    }
+
+    if (!synth) {
+      runTimers();
+      return () => { cancelled = true; timers.forEach(clearTimeout); };
+    }
+
+    // Speech-driven: the visual for each step is shown exactly when that step's
+    // utterance actually *starts* speaking (onstart), so audio and numbers stay
+    // in sync instead of the audio lagging behind timer-driven visuals.
+    try { synth.cancel(); } catch { /* ignore */ }
+
+    let anyStarted = false;
 
     STEPS.forEach((step, i) => {
-      timers.push(
-        setTimeout(() => {
-          setIdx(i);
-          speak(step.say, step.kind === "num" ? "en-US" : "en-US");
-        }, acc)
-      );
-      acc += step.kind === "shoot" ? SHOOT_MS : STEP_MS;
+      const u = new SpeechSynthesisUtterance(step.say);
+      u.lang = "en-US";
+      u.rate = 1.05;
+      u.pitch = 1;
+      u.volume = 1;
+      u.onstart = () => {
+        anyStarted = true;
+        if (!cancelled) setIdx(i);
+      };
+      if (i === STEPS.length - 1) {
+        // Hold SHOOT briefly after it's spoken, then finish.
+        u.onend = () => { timers.push(setTimeout(finish, 450)); };
+      }
+      try { synth.speak(u); } catch { /* ignore */ }
     });
 
+    // If speech never actually starts (blocked/muted/autoplay policy), fall back
+    // to the timer cadence so the countdown still runs.
     timers.push(
       setTimeout(() => {
-        if (!doneRef.current) {
-          doneRef.current = true;
-          onDone();
+        if (!anyStarted && !cancelled) {
+          try { synth.cancel(); } catch { /* ignore */ }
+          runTimers();
         }
-      }, acc)
+      }, 500)
     );
 
+    // Absolute safety net so onDone always fires even if speech stalls mid-way.
+    timers.push(setTimeout(finish, 7000));
+
     return () => {
+      cancelled = true;
       timers.forEach(clearTimeout);
-      try {
-        window.speechSynthesis?.cancel();
-      } catch {
-        /* ignore */
-      }
+      try { synth.cancel(); } catch { /* ignore */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -115,19 +149,4 @@ function Arrow({ dir, color, dim }: { dir: "left" | "right"; color: string; dim:
       <polygon points="0,0 70,45 0,90" fill={color} />
     </svg>
   );
-}
-
-function speak(text: string, lang: string) {
-  try {
-    const synth = window.speechSynthesis;
-    if (!synth) return;
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = lang;
-    u.rate = 1;
-    u.pitch = 1;
-    u.volume = 1;
-    synth.speak(u);
-  } catch {
-    /* narration is best-effort */
-  }
 }

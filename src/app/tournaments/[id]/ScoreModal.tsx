@@ -166,10 +166,14 @@ export default function ScoreModal({
   const p2OrderArr = p2Order ? [p2Order.bey1Id, p2Order.bey2Id, p2Order.bey3Id] : null;
 
   const bothOrders = !isDeck || (!!p1Order && !!p2Order);
-  const cycleHasProgress = posInCycle > 0; // a battle was already scored this cycle
-  const cycleKey = `${currentSetNum}:${cycleIndex}`;
-  const revealScoring = !isDeck || (bothOrders && (cycleHasProgress || startedKey === cycleKey));
-  const showStart = isDeck && bothOrders && !cycleHasProgress && startedKey !== cycleKey;
+  const gateReady = !isDeck || bothOrders; // 3on3 needs both deck orders first
+  // In 3-on-3 every battle (point) gets its own countdown — the active beyblade
+  // switches each battle. A battle is identified by set + points already scored.
+  // In solo the countdown plays once at the start of the match.
+  const battleKey = `${currentSetNum}:${currentSetBattleCount}`;
+  const startKey = isDeck ? battleKey : "solo-start";
+  const revealScoring = gateReady && startedKey === startKey;
+  const showStart = gateReady && startedKey !== startKey;
   const waitingOrders = isDeck && !bothOrders;
 
   // Poll while waiting for players to submit their deck orders.
@@ -285,7 +289,7 @@ export default function ScoreModal({
         Placar
       </button>
 
-      {counting && <CountdownOverlay onDone={() => { setStartedKey(cycleKey); setCounting(false); }} />}
+      {counting && <CountdownOverlay onDone={() => { setStartedKey(startKey); setCounting(false); }} />}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
@@ -423,7 +427,7 @@ export default function ScoreModal({
                     onClick={() => setCounting(true)}
                     className="w-full mb-3 bg-[#22c55e] hover:bg-[#1ea34d] text-black font-black text-lg py-4 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
                   >
-                    ▶ Iniciar partida
+                    ▶ Iniciar {!isDeck || currentSetBattleCount === 0 ? "partida" : `batalha ${currentSetBattleCount + 1}`}
                   </button>
                 )}
 
