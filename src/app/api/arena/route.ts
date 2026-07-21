@@ -21,8 +21,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Arena não identificada", arena: null }, { status: 400 });
   }
 
-  // Prefer a live match; fall back to the next pending match in this arena.
-  const baseWhere = { arena: arenaNum, tournament: { status: "IN_PROGRESS" as const, isTest: false } };
   const include = {
     player1: { select: { id: true, name: true, bladerName: true } },
     player2: { select: { id: true, name: true, bladerName: true } },
@@ -30,23 +28,53 @@ export async function GET(req: NextRequest) {
     sets: { orderBy: { setNumber: "asc" as const }, include: { points: { select: { id: true } } } },
   };
 
-  let match = await prisma.match.findFirst({
-    where: { ...baseWhere, status: "IN_PROGRESS" },
-    orderBy: { createdAt: "desc" },
-    include,
-  });
-  let live = true;
-  if (!match) {
-    match = await prisma.match.findFirst({
-      where: { ...baseWhere, status: "PENDING" },
-      orderBy: { createdAt: "asc" },
+  // Match this arena. In a single-arena tournament matches may be arena 1 or
+  // (defensively) null, so arena 1 also picks up null-arena matches.
+  const arenaWhere =
+    arenaNum === 1 ? { OR: [{ arena: 1 }, { arena: null }] } : { arena: arenaNum };
+
+  // Look for the current match, preferring: live real tournament → pending real
+  // tournament → live/pending test tournament (so testing works too).
+  const tournamentTiers = [
+    { status: "IN_PROGRESS" as const, isTest: false },
+    { status: "IN_PROGRESS" as const },
+  ];
+  const statusTiers = ["IN_PROGRESS" as const, "PENDING" as const];
+
+  type MatchRow = Awaited<ReturnType<typeof findOne>>;
+  async function findOne(tournament: object, status: "IN_PROGRESS" | "PENDING") {
+    return prisma.match.findFirst({
+      where: { ...arenaWhere, status, tournament },
+      orderBy: status === "IN_PROGRESS" ? { createdAt: "desc" } : { createdAt: "asc" },
       include,
     });
-    live = false;
   }
 
-  if (!match || match.player1Id === match.player2Id) {
-    return NextResponse.json({ arena: arenaNum, status: "idle", match: null });
+  let match: MatchRow = null;
+  let live = false;
+  outer: for (const tournament of tournamentTiers) {
+    for (const status of statusTiers) {
+      const found = await findOne(tournament, status);
+      if (found && found.player1Id !== found.player2Id) {
+        match = found;
+        live = status === "IN_PROGRESS";
+        break outer;
+      }
+    }
+  }
+
+  if (!match) {
+    // Diagnostics to make "nothing shows" debuggable.
+    const inProgressTournaments = await prisma.tournament.count({ where: { status: "IN_PROGRESS" } });
+    const matchesThisArena = await prisma.match.count({
+      where: { ...arenaWhere, tournament: { status: "IN_PROGRESS" } },
+    });
+    return NextResponse.json({
+      arena: arenaNum,
+      status: "idle",
+      match: null,
+      debug: { inProgressTournaments, matchesThisArena },
+    });
   }
 
   const setsToWin = match.tournament.setsToWin;

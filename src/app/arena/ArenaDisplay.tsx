@@ -25,6 +25,7 @@ type ArenaData = {
   status: "live" | "pending" | "idle";
   tournamentName?: string;
   match: Match | null;
+  debug?: { inProgressTournaments: number; matchesThisArena: number };
 };
 
 const NEON = "#2bd964"; // LBL neon green
@@ -118,6 +119,17 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           <div className="text-6xl">🅰️</div>
           <div className="text-4xl font-black" style={{ color: NEON }}>ARENA {arena}</div>
           <div className="text-gray-500 text-lg">Aguardando partida...</div>
+          {data?.debug && (
+            <div className="text-gray-700 text-xs mt-2 text-center">
+              torneios em andamento: {data.debug.inProgressTournaments} · partidas nesta arena: {data.debug.matchesThisArena}
+              {data.debug.inProgressTournaments === 0 && (
+                <div className="text-gray-600 mt-1">Nenhum torneio iniciado. Inicie um torneio para aparecer aqui.</div>
+              )}
+              {data.debug.inProgressTournaments > 0 && data.debug.matchesThisArena === 0 && (
+                <div className="text-gray-600 mt-1">Há torneio em andamento, mas nenhuma partida na arena {arena}.</div>
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="h-screen flex flex-col justify-center px-[3vw] py-[3vh]">
