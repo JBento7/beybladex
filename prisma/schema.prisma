@@ -231,6 +231,8 @@ model Match {
   status       MatchStatus @default(PENDING)
   isWalkover   Boolean     @default(false)
   isThirdPlace Boolean     @default(false)
+  countdownAt  DateTime?
+  countdownKey String?
   createdAt    DateTime    @default(now())
 
   tournament     Tournament            @relation(fields: [tournamentId], references: [id])

@@ -23,13 +23,17 @@ const END_AT = 6.8;
 const YELLOW = "#f0a500";
 const RED = "#e5122e";
 
-export default function CountdownOverlay({ onDone }: { onDone: () => void }) {
-  const [idx, setIdx] = useState(0);
+export default function CountdownOverlay({ onDone, offsetMs = 0 }: { onDone: () => void; offsetMs?: number }) {
+  // Start at whichever step the offset lands in (for the arena, which may begin
+  // the countdown a fraction of a second after the judge triggered it).
+  const initialIdx = STEPS.reduce((acc, s, i) => (s.at * 1000 <= offsetMs ? i : acc), 0);
+  const [idx, setIdx] = useState(initialIdx);
   const doneRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
+    const off = Math.max(0, offsetMs);
 
     function finish() {
       if (!doneRef.current && !cancelled) {
@@ -39,12 +43,17 @@ export default function CountdownOverlay({ onDone }: { onDone: () => void }) {
     }
 
     STEPS.forEach((step, i) => {
-      timers.push(setTimeout(() => { if (!cancelled) setIdx(i); }, step.at * 1000));
+      const delay = step.at * 1000 - off;
+      if (delay > 0) timers.push(setTimeout(() => { if (!cancelled) setIdx(i); }, delay));
     });
-    timers.push(setTimeout(finish, END_AT * 1000));
+    const endDelay = END_AT * 1000 - off;
+    timers.push(setTimeout(finish, Math.max(0, endDelay)));
 
     const audio = new Audio("/countdown.mp3");
     audio.volume = 1;
+    if (off > 0) {
+      try { audio.currentTime = off / 1000; } catch { /* ignore */ }
+    }
     audio.play().catch(() => { /* best-effort; visual timeline still runs */ });
 
     return () => {

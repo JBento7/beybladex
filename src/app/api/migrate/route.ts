@@ -592,6 +592,14 @@ export async function GET() {
         JOIN "PollQuestion" q ON q."announcementId" = r."announcementId" AND q."order" = 0
         WHERE NOT EXISTS (SELECT 1 FROM "PollAnswer" pa WHERE pa."responseId" = r.id AND pa."questionId" = q.id)`,
     },
+    {
+      name: "Match.countdownAt",
+      sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "countdownAt" TIMESTAMP(3)`,
+    },
+    {
+      name: "Match.countdownKey",
+      sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "countdownKey" TEXT`,
+    },
   ];
 
   for (const migration of migrations) {

@@ -22,8 +22,8 @@ export async function GET(req: NextRequest) {
   }
 
   const include = {
-    player1: { select: { id: true, name: true, bladerName: true } },
-    player2: { select: { id: true, name: true, bladerName: true } },
+    player1: { select: { id: true, name: true, bladerName: true, avatarUrl: true } },
+    player2: { select: { id: true, name: true, bladerName: true, avatarUrl: true } },
     tournament: { select: { name: true, setsToWin: true, pointsToWinSet: true, deckType: true } },
     sets: { orderBy: { setNumber: "asc" as const }, include: { points: { select: { id: true } } } },
   };
@@ -96,9 +96,25 @@ export async function GET(req: NextRequest) {
   const completedSets = sets.filter((s) => s.status === "FINISHED").length;
   const currentSetNum = currentSet?.setNumber ?? completedSets + 1;
 
-  // 3on3: resolve active beyblade names for the current battle.
+  // Resolve the image of a blade part name (from BeyParts), if any.
+  async function bladeImage(bladeName: string | null): Promise<string | null> {
+    if (!bladeName) return null;
+    try {
+      const part = await prisma.beyPart.findFirst({
+        where: { name: bladeName, category: { in: ["BLADE", "MAIN_BLADE"] }, imageUrl: { not: null } },
+        select: { imageUrl: true },
+      });
+      return part?.imageUrl ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  // 3on3: resolve active beyblade name + blade photo for the current battle.
   let p1ActiveBey: string | null = null;
   let p2ActiveBey: string | null = null;
+  let p1BeyImg: string | null = null;
+  let p2BeyImg: string | null = null;
   if (isDeck) {
     try {
       const cycleIndex = Math.floor(currentSetBattleCount / 3);
@@ -108,15 +124,30 @@ export async function GET(req: NextRequest) {
       });
       const beyIds = orders.flatMap((o) => [o.bey1Id, o.bey2Id, o.bey3Id]);
       const beys = beyIds.length
-        ? await prisma.beyblade.findMany({ where: { id: { in: beyIds } }, select: { id: true, name: true } })
+        ? await prisma.beyblade.findMany({ where: { id: { in: beyIds } }, select: { id: true, name: true, blade: true } })
         : [];
-      const nameOf = (id: string) => beys.find((b) => b.id === id)?.name ?? null;
+      const beyOf = (id: string) => beys.find((b) => b.id === id) ?? null;
       const o1 = orders.find((o) => o.userId === match.player1Id);
       const o2 = orders.find((o) => o.userId === match.player2Id);
-      if (o1) p1ActiveBey = nameOf([o1.bey1Id, o1.bey2Id, o1.bey3Id][pos]);
-      if (o2) p2ActiveBey = nameOf([o2.bey1Id, o2.bey2Id, o2.bey3Id][pos]);
+      const b1 = o1 ? beyOf([o1.bey1Id, o1.bey2Id, o1.bey3Id][pos]) : null;
+      const b2 = o2 ? beyOf([o2.bey1Id, o2.bey2Id, o2.bey3Id][pos]) : null;
+      p1ActiveBey = b1?.name ?? null;
+      p2ActiveBey = b2?.name ?? null;
+      [p1BeyImg, p2BeyImg] = await Promise.all([bladeImage(b1?.blade ?? null), bladeImage(b2?.blade ?? null)]);
     } catch {
       /* deck order table may be missing */
+    }
+  }
+
+  // Countdown signal from the judge (plays the 3-2-1 video on this display).
+  // Key is unique per press (match id + timestamp) so consecutive battles — and
+  // different matches that share a battle label like "1:0" — each replay.
+  let countdown: { key: string; elapsedMs: number } | null = null;
+  if (match.countdownAt) {
+    const ts = new Date(match.countdownAt).getTime();
+    const elapsed = Date.now() - ts;
+    if (elapsed >= 0 && elapsed < 7000) {
+      countdown = { key: `${match.id}:${ts}`, elapsedMs: elapsed };
     }
   }
 
@@ -124,9 +155,12 @@ export async function GET(req: NextRequest) {
     arena: arenaNum,
     status: live ? "live" : "pending",
     tournamentName: match.tournament.name,
+    countdown,
     match: {
       player1: match.player1.bladerName || match.player1.name,
       player2: match.player2.bladerName || match.player2.name,
+      p1Avatar: match.player1.avatarUrl ?? null,
+      p2Avatar: match.player2.avatarUrl ?? null,
       p1Sets,
       p2Sets,
       setsToWin,
@@ -140,6 +174,8 @@ export async function GET(req: NextRequest) {
       currentSetBattleCount,
       p1ActiveBey,
       p2ActiveBey,
+      p1BeyImg,
+      p2BeyImg,
     },
   });
 }

@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
 import type { FinishType } from "@prisma/client";
-import CountdownOverlay from "@/components/CountdownOverlay";
 import DeckOrderPicker, { type BeybladeInfo, comboParts } from "./DeckOrderPicker";
 
 // Finish buttons in the Beyblade X scoreboard order.
@@ -118,9 +117,10 @@ export default function ScoreModal({
   // Judge manual-order fallback toggle
   const [showManual, setShowManual] = useState(false);
 
-  // Countdown state
-  const [counting, setCounting] = useState(false);
+  // Which battle the judge has started (reveals the scoring board). The 3-2-1
+  // countdown plays on the ARENA display, not here.
   const [startedKey, setStartedKey] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
 
   const router = useRouter();
   const isDeck = deckType === "THREE_ON_THREE";
@@ -245,6 +245,25 @@ export default function ScoreModal({
     }
   }
 
+  // Judge starts the battle: fire the countdown on the arena display and reveal
+  // the scoring board here (no countdown on the judge's screen).
+  async function startBattle() {
+    if (starting) return;
+    setStarting(true);
+    try {
+      await fetch(`/api/matches/${matchId}/countdown`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: startKey }),
+      });
+    } catch {
+      /* arena signal is best-effort */
+    } finally {
+      setStarting(false);
+      setStartedKey(startKey);
+    }
+  }
+
   function handleClose() {
     setOpen(false);
     router.refresh();
@@ -289,7 +308,6 @@ export default function ScoreModal({
         Placar
       </button>
 
-      {counting && <CountdownOverlay onDone={() => { setStartedKey(startKey); setCounting(false); }} />}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
@@ -421,14 +439,20 @@ export default function ScoreModal({
                   </div>
                 )}
 
-                {/* Start button (plays countdown) */}
+                {/* Start button: fires the countdown on the arena display */}
                 {showStart && (
                   <button
-                    onClick={() => setCounting(true)}
-                    className="w-full mb-3 bg-[#22c55e] hover:bg-[#1ea34d] text-black font-black text-lg py-4 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
+                    onClick={startBattle}
+                    disabled={starting}
+                    className="w-full mb-1 bg-[#22c55e] hover:bg-[#1ea34d] disabled:opacity-60 text-black font-black text-lg py-4 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
                   >
                     ▶ Iniciar {currentSetBattleCount === 0 ? "partida" : `batalha ${currentSetBattleCount + 1}`}
                   </button>
+                )}
+                {showStart && (
+                  <div className="text-center text-[11px] text-gray-500 mb-3">
+                    A contagem 3-2-1 aparece no telão da arena.
+                  </div>
                 )}
 
                 {/* Scoring buttons (video layout) */}

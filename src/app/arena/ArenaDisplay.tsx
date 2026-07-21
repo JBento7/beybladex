@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import CountdownOverlay from "@/components/CountdownOverlay";
 
 type Match = {
   player1: string;
   player2: string;
+  p1Avatar: string | null;
+  p2Avatar: string | null;
   p1Sets: number;
   p2Sets: number;
   setsToWin: number;
@@ -18,17 +21,22 @@ type Match = {
   currentSetBattleCount: number;
   p1ActiveBey: string | null;
   p2ActiveBey: string | null;
+  p1BeyImg: string | null;
+  p2BeyImg: string | null;
 };
 
 type ArenaData = {
   arena: number;
   status: "live" | "pending" | "idle";
   tournamentName?: string;
+  countdown?: { key: string; elapsedMs: number } | null;
   match: Match | null;
   debug?: { inProgressTournaments: number; matchesThisArena: number };
 };
 
-const NEON = "#2bd964"; // LBL neon green
+// LBL identity: black bg, amber (player 1) + red (player 2).
+const P1 = "#f0a500";
+const P2 = "#c8102e";
 const FINISHES: [string, number][] = [
   ["SPIN", 1],
   ["OVER", 2],
@@ -42,6 +50,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const wrapRef = useRef<HTMLDivElement>(null);
   const [isFs, setIsFs] = useState(false);
 
+  // Countdown playback state
+  const [countdown, setCountdown] = useState<{ offsetMs: number } | null>(null);
+  const playedKeyRef = useRef<string | null>(null);
+
   const load = useCallback(async () => {
     try {
       const url = previewParam ? `/api/arena?n=${previewParam}` : "/api/arena";
@@ -52,7 +64,14 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         return;
       }
       setError(null);
-      setData(await res.json());
+      const d: ArenaData = await res.json();
+      setData(d);
+
+      // New countdown signalled by the judge → play the video once.
+      if (d.countdown && d.countdown.key !== playedKeyRef.current) {
+        playedKeyRef.current = d.countdown.key;
+        setCountdown({ offsetMs: d.countdown.elapsedMs });
+      }
     } catch {
       setError("Sem conexão");
     }
@@ -61,7 +80,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   useEffect(() => {
     if (arena == null) return;
     load();
-    const t = setInterval(load, 2500);
+    const t = setInterval(load, 1000);
     return () => clearInterval(t);
   }, [arena, load]);
 
@@ -72,11 +91,8 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   }, []);
 
   function toggleFullscreen() {
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    } else {
-      wrapRef.current?.requestFullscreen?.().catch(() => {});
-    }
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else wrapRef.current?.requestFullscreen?.().catch(() => {});
   }
 
   if (arena == null) {
@@ -95,7 +111,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 
   return (
     <div ref={wrapRef} className="min-h-screen bg-black text-white overflow-hidden relative">
-      {/* Fullscreen toggle (hidden in fullscreen) */}
+      {countdown && (
+        <CountdownOverlay offsetMs={countdown.offsetMs} onDone={() => setCountdown(null)} />
+      )}
+
       {!isFs && (
         <button
           onClick={toggleFullscreen}
@@ -105,19 +124,17 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         </button>
       )}
 
-      <div className="absolute top-3 left-4 z-10 text-xs font-bold tracking-widest uppercase" style={{ color: NEON }}>
+      <div className="absolute top-3 left-4 z-10 text-xs font-bold tracking-widest uppercase text-[#f0a500]">
         Arena {arena}
         {data?.tournamentName && <span className="text-gray-500 ml-2 normal-case font-normal">· {data.tournamentName}</span>}
       </div>
 
-      {error && (
-        <div className="absolute bottom-3 left-4 z-20 text-xs text-red-400">{error}</div>
-      )}
+      {error && <div className="absolute bottom-3 left-4 z-20 text-xs text-red-400">{error}</div>}
 
       {!match ? (
         <div className="h-screen flex flex-col items-center justify-center gap-4">
           <div className="text-6xl">🅰️</div>
-          <div className="text-4xl font-black" style={{ color: NEON }}>ARENA {arena}</div>
+          <div className="text-4xl font-black text-[#f0a500]">ARENA {arena}</div>
           <div className="text-gray-500 text-lg">Aguardando partida...</div>
           {data?.debug && (
             <div className="text-gray-700 text-xs mt-2 text-center">
@@ -135,59 +152,43 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         <div className="h-screen flex flex-col justify-center px-[3vw] py-[3vh]">
           {/* Header: name tags + round */}
           <div className="grid grid-cols-[1fr_auto_1fr] gap-[2vw] items-center mb-[3vh]">
-            <NameTag name={match.player1} side="left" />
+            <NameTag name={match.player1} avatar={match.p1Avatar} color={P1} side="left" />
             <div className="text-center">
-              <div className="font-black leading-none" style={{ fontSize: "6vw", color: "#fff" }}>R{match.currentSetNum}</div>
+              <div className="font-black leading-none text-white" style={{ fontSize: "6vw" }}>R{match.currentSetNum}</div>
               <div className="text-gray-500" style={{ fontSize: "1.4vw" }}>
                 {match.maxSets === 1 ? "set único" : `melhor de ${match.maxSets}`}
               </div>
               {data?.status === "pending" && (
-                <div className="mt-1 font-bold" style={{ color: NEON, fontSize: "1.3vw" }}>PRÓXIMA</div>
+                <div className="mt-1 font-bold text-[#f0a500]" style={{ fontSize: "1.3vw" }}>PRÓXIMA</div>
               )}
             </div>
-            <NameTag name={match.player2} side="right" />
+            <NameTag name={match.player2} avatar={match.p2Avatar} color={P2} side="right" />
           </div>
 
           {/* Main row: finish legend | score boxes | finish legend */}
           <div className="grid grid-cols-[1fr_auto_1fr] gap-[2vw] items-center">
-            <FinishLegend side="left" />
+            <FinishLegend side="left" color={P1} />
 
-            <div className="flex items-center gap-[2.5vw]">
-              <ScoreBox
-                points={match.p1Points}
-                sets={match.p1Sets}
-                setsToWin={match.setsToWin}
-                bey={match.isDeck ? match.p1ActiveBey : null}
-              />
+            <div className="flex items-center gap-[2vw]">
+              <ScoreBox points={match.p1Points} sets={match.p1Sets} setsToWin={match.setsToWin}
+                bey={match.isDeck ? match.p1ActiveBey : null} beyImg={match.isDeck ? match.p1BeyImg : null} color={P1} />
               <div className="font-black text-gray-700" style={{ fontSize: "4vw" }}>×</div>
-              <ScoreBox
-                points={match.p2Points}
-                sets={match.p2Sets}
-                setsToWin={match.setsToWin}
-                bey={match.isDeck ? match.p2ActiveBey : null}
-              />
+              <ScoreBox points={match.p2Points} sets={match.p2Sets} setsToWin={match.setsToWin}
+                bey={match.isDeck ? match.p2ActiveBey : null} beyImg={match.isDeck ? match.p2BeyImg : null} color={P2} />
             </div>
 
-            <FinishLegend side="right" />
+            <FinishLegend side="right" color={P2} />
           </div>
 
           {/* Set pips */}
           <div className="flex items-center justify-center gap-[1vw] mt-[3vh]">
             {Array.from({ length: match.maxSets }).map((_, i) => {
               const s = match.sets[i];
-              const won = s?.status === "FINISHED" ? s.winnerId : null;
+              const won = s?.status === "FINISHED" && !!s.winnerId;
               const on = !!s && s.status !== "FINISHED";
               return (
-                <div
-                  key={i}
-                  className="rounded-full border-2"
-                  style={{
-                    width: "2.2vw",
-                    height: "2.2vw",
-                    borderColor: won ? NEON : "#333",
-                    background: won ? NEON : on ? `${NEON}55` : "transparent",
-                  }}
-                />
+                <div key={i} className="rounded-full border-2"
+                  style={{ width: "2.2vw", height: "2.2vw", borderColor: won ? "#fff" : on ? "#f0a500" : "#333", background: won ? "#fff" : on ? "#f0a50055" : "transparent" }} />
               );
             })}
           </div>
@@ -202,35 +203,38 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   );
 }
 
-function NameTag({ name, side }: { name: string; side: "left" | "right" }) {
+function NameTag({ name, avatar, color, side }: { name: string; avatar: string | null; color: string; side: "left" | "right" }) {
   return (
-    <div
-      className={`bg-[#0a0a0a] px-[2vw] py-[1.4vh] ${side === "right" ? "text-right" : "text-left"}`}
-      style={{
-        borderBottom: `0.5vh solid ${NEON}`,
-        clipPath: side === "left" ? "polygon(0 0,100% 0,94% 100%,0 100%)" : "polygon(6% 0,100% 0,100% 100%,0 100%)",
-        boxShadow: `0 0 20px ${NEON}44`,
-      }}
-    >
-      <div className="font-black text-white truncate" style={{ fontSize: "3vw" }}>{name}</div>
+    <div className={`flex items-center gap-[1.2vw] ${side === "right" ? "flex-row-reverse" : ""}`}>
+      <div className="rounded-full overflow-hidden border-2 flex-shrink-0 bg-[#111]"
+        style={{ width: "5vw", height: "5vw", borderColor: color, boxShadow: `0 0 18px ${color}66` }}>
+        {avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatar} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center font-black text-white" style={{ fontSize: "2.4vw" }}>
+            {name.charAt(0).toUpperCase()}
+          </div>
+        )}
+      </div>
+      <div className={`flex-1 min-w-0 bg-[#0a0a0a] px-[1.6vw] py-[1.2vh] ${side === "right" ? "text-right" : "text-left"}`}
+        style={{ borderBottom: `0.5vh solid ${color}`, clipPath: side === "left" ? "polygon(0 0,100% 0,94% 100%,0 100%)" : "polygon(6% 0,100% 0,100% 100%,0 100%)", boxShadow: `0 0 20px ${color}44` }}>
+        <div className="font-black text-white truncate" style={{ fontSize: "2.8vw" }}>{name}</div>
+      </div>
     </div>
   );
 }
 
-function FinishLegend({ side }: { side: "left" | "right" }) {
+function FinishLegend({ side, color }: { side: "left" | "right"; color: string }) {
   return (
-    <div className="flex flex-col gap-[1.4vh]">
+    <div className="flex flex-col gap-[1.2vh]">
       {FINISHES.map(([label, pts]) => (
-        <div
-          key={label}
-          className={`flex items-center gap-[1vw] px-[1.2vw] py-[1vh] rounded-lg border-2 bg-[#060906] ${
-            side === "right" ? "flex-row-reverse text-right" : ""
-          }`}
-          style={{ borderColor: NEON, boxShadow: `inset 0 0 14px ${NEON}22` }}
-        >
-          <span className="font-black" style={{ color: NEON, fontSize: "2vw" }}>+{pts}</span>
+        <div key={label}
+          className={`flex items-center gap-[1vw] px-[1.2vw] py-[1vh] rounded-lg border-2 bg-[#0a0a0a] ${side === "right" ? "flex-row-reverse text-right" : ""}`}
+          style={{ borderColor: color, boxShadow: `inset 0 0 14px ${color}22` }}>
+          <span className="font-black" style={{ color, fontSize: "2vw" }}>+{pts}</span>
           <span className="flex-1">
-            <span className="block font-black text-white leading-none" style={{ fontSize: "1.8vw" }}>{label}</span>
+            <span className="block font-black text-white leading-none" style={{ fontSize: "1.7vw" }}>{label}</span>
             <span className="block text-gray-500 uppercase" style={{ fontSize: "0.9vw" }}>Finish</span>
           </span>
         </div>
@@ -239,19 +243,25 @@ function FinishLegend({ side }: { side: "left" | "right" }) {
   );
 }
 
-function ScoreBox({ points, sets, setsToWin, bey }: { points: number; sets: number; setsToWin: number; bey: string | null }) {
+function ScoreBox({ points, sets, setsToWin, bey, beyImg, color }: {
+  points: number; sets: number; setsToWin: number; bey: string | null; beyImg: string | null; color: string;
+}) {
   return (
-    <div
-      className="rounded-2xl border-2 flex flex-col items-center justify-center bg-[#050805]"
-      style={{ width: "16vw", height: "16vw", borderColor: NEON, boxShadow: `0 0 30px ${NEON}55, inset 0 0 30px ${NEON}22` }}
-    >
-      <div className="font-black tabular-nums leading-none" style={{ fontSize: "9vw", color: "#fff" }}>{points}</div>
-      <div className="flex gap-[0.5vw] mt-[1vh]">
+    <div className="rounded-2xl border-2 flex flex-col items-center justify-center bg-[#050505] relative"
+      style={{ width: "17vw", height: "17vw", borderColor: color, boxShadow: `0 0 30px ${color}55, inset 0 0 30px ${color}22` }}>
+      {beyImg && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={beyImg} alt="" className="absolute inset-0 w-full h-full object-contain opacity-15 p-[2vw] pointer-events-none" />
+      )}
+      <div className="font-black tabular-nums leading-none relative z-10 text-white" style={{ fontSize: "9vw" }}>{points}</div>
+      <div className="flex gap-[0.5vw] mt-[1vh] relative z-10">
         {Array.from({ length: setsToWin }).map((_, i) => (
-          <div key={i} className="rounded-full" style={{ width: "1vw", height: "1vw", background: i < sets ? NEON : "#333" }} />
+          <div key={i} className="rounded-full" style={{ width: "1vw", height: "1vw", background: i < sets ? color : "#333" }} />
         ))}
       </div>
-      {bey && <div className="mt-[0.6vh] font-bold truncate max-w-[15vw] px-1" style={{ color: NEON, fontSize: "1.2vw" }}>{bey}</div>}
+      {bey && (
+        <div className="mt-[0.6vh] font-bold truncate max-w-[16vw] px-1 relative z-10" style={{ color, fontSize: "1.2vw" }}>{bey}</div>
+      )}
     </div>
   );
 }
