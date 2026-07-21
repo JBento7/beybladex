@@ -50,6 +50,11 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const wrapRef = useRef<HTMLDivElement>(null);
   const [isFs, setIsFs] = useState(false);
 
+  // The operator must tap once to enter fullscreen and unlock audio (browser
+  // autoplay policy — required for the countdown to have sound, esp. on iOS).
+  const [started, setStarted] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   // Countdown playback state
   const [countdown, setCountdown] = useState<{ offsetMs: number } | null>(null);
   const playedKeyRef = useRef<string | null>(null);
@@ -78,11 +83,31 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   }, [previewParam]);
 
   useEffect(() => {
-    if (arena == null) return;
+    if (arena == null || !started) return;
     load();
     const t = setInterval(load, 1000);
     return () => clearInterval(t);
-  }, [arena, load]);
+  }, [arena, started, load]);
+
+  async function startDisplay() {
+    // Enter fullscreen (hides the browser URL bar).
+    try { await wrapRef.current?.requestFullscreen?.(); } catch { /* not supported */ }
+    // Prime/unlock the audio element within this user gesture so later
+    // countdowns (triggered by polling) can play with sound.
+    const a = audioRef.current;
+    if (a) {
+      try {
+        a.muted = true;
+        await a.play();
+        a.pause();
+        a.currentTime = 0;
+        a.muted = false;
+      } catch {
+        /* will still try to play on countdown */
+      }
+    }
+    setStarted(true);
+  }
 
   useEffect(() => {
     const onFs = () => setIsFs(!!document.fullscreenElement);
@@ -111,8 +136,28 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 
   return (
     <div ref={wrapRef} className="min-h-screen bg-black text-white overflow-hidden relative">
+      {/* Persistent, pre-unlocked audio element reused by the countdown */}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <audio ref={audioRef} src="/countdown.mp3" preload="auto" playsInline />
+
+      {/* Start gate: tap once to go fullscreen + unlock audio */}
+      {!started && (
+        <div className="absolute inset-0 z-[80] bg-black flex flex-col items-center justify-center gap-6 p-6 text-center">
+          <div className="text-3xl font-black text-[#f0a500]">ARENA {arena}</div>
+          <button
+            onClick={startDisplay}
+            className="bg-[#f0a500] hover:bg-[#d4940a] text-black font-black text-xl px-10 py-5 rounded-2xl active:scale-95 transition"
+          >
+            ▶ Toque para iniciar o telão
+          </button>
+          <div className="text-gray-500 text-sm max-w-sm">
+            Ativa tela cheia e o som da contagem. Deixe o tablet nesta tela durante o evento.
+          </div>
+        </div>
+      )}
+
       {countdown && (
-        <CountdownOverlay offsetMs={countdown.offsetMs} onDone={() => setCountdown(null)} />
+        <CountdownOverlay offsetMs={countdown.offsetMs} audioEl={audioRef.current} onDone={() => setCountdown(null)} />
       )}
 
       {!isFs && (

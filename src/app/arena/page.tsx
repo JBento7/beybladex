@@ -4,7 +4,19 @@ import { redirect } from "next/navigation";
 import ArenaDisplay from "./ArenaDisplay";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Arena" };
+export const metadata = {
+  title: "Arena",
+  // When added to the iOS/iPadOS Home Screen, launch chromeless (no URL bar).
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent" as const, title: "LBL Arena" },
+};
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover" as const,
+  themeColor: "#000000",
+};
 
 export default async function ArenaPage({
   searchParams,

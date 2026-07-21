@@ -23,7 +23,17 @@ const END_AT = 6.8;
 const YELLOW = "#f0a500";
 const RED = "#e5122e";
 
-export default function CountdownOverlay({ onDone, offsetMs = 0 }: { onDone: () => void; offsetMs?: number }) {
+export default function CountdownOverlay({
+  onDone,
+  offsetMs = 0,
+  audioEl = null,
+}: {
+  onDone: () => void;
+  offsetMs?: number;
+  // A pre-unlocked <audio> element to reuse (required for sound on iOS Safari,
+  // where a freshly-created Audio() is blocked even after a prior gesture).
+  audioEl?: HTMLAudioElement | null;
+}) {
   // Start at whichever step the offset lands in (for the arena, which may begin
   // the countdown a fraction of a second after the judge triggered it).
   const initialIdx = STEPS.reduce((acc, s, i) => (s.at * 1000 <= offsetMs ? i : acc), 0);
@@ -49,11 +59,9 @@ export default function CountdownOverlay({ onDone, offsetMs = 0 }: { onDone: () 
     const endDelay = END_AT * 1000 - off;
     timers.push(setTimeout(finish, Math.max(0, endDelay)));
 
-    const audio = new Audio("/countdown.mp3");
+    const audio = audioEl ?? new Audio("/countdown.mp3");
     audio.volume = 1;
-    if (off > 0) {
-      try { audio.currentTime = off / 1000; } catch { /* ignore */ }
-    }
+    try { audio.currentTime = off > 0 ? off / 1000 : 0; } catch { /* ignore */ }
     audio.play().catch(() => { /* best-effort; visual timeline still runs */ });
 
     return () => {
@@ -82,12 +90,12 @@ export default function CountdownOverlay({ onDone, offsetMs = 0 }: { onDone: () 
           key={step.label}
           className={`font-black leading-none animate-[pop_0.25s_ease-out] ${
             step.kind === "shoot"
-              ? "text-[22vw] sm:text-[190px] tracking-tight"
+              ? "text-[26vmin] tracking-tight"
               : step.kind === "go"
-              ? "text-[26vw] sm:text-[210px]"
-              : "text-[34vw] sm:text-[250px]"
+              ? "text-[40vmin]"
+              : "text-[52vmin]"
           }`}
-          style={{ color: RED, textShadow: `0 0 40px ${RED}66` }}
+          style={{ color: RED, textShadow: `0 0 6vmin ${RED}77` }}
         >
           {step.label}
         </span>
@@ -114,8 +122,8 @@ function Arrow({ dir, color, dim }: { dir: "left" | "right"; color: string; dim:
       width="70"
       height="90"
       viewBox="0 0 70 90"
-      className="w-[10vw] max-w-[80px] h-auto"
-      style={{ opacity: dim ? 0 : 1, transform: dir === "left" ? "scaleX(-1)" : undefined, filter: `drop-shadow(0 0 12px ${color}88)` }}
+      className="w-[13vmin] h-auto"
+      style={{ opacity: dim ? 0 : 1, transform: dir === "left" ? "scaleX(-1)" : undefined, filter: `drop-shadow(0 0 2vmin ${color}88)` }}
     >
       <polygon points="0,0 70,45 0,90" fill={color} />
     </svg>
