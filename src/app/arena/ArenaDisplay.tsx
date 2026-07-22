@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v18-nest";
+const ARENA_BUILD = "v19-refresh";
 
 const RED = "#c8102e"; // player 1 (left)
 const AMBER = "#f0a500"; // player 2 (right)
@@ -226,9 +226,20 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       {started && !isFs && (
         <button
           onClick={toggleFullscreen}
-          style={{ position: "absolute", top: "0.6vh", right: "1.5vw", zIndex: 20, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}
+          style={{ position: "absolute", top: "0.6vh", right: "12vw", zIndex: 20, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}
         >
           ⛶ Tela cheia
+        </button>
+      )}
+
+      {/* Refresh — reloads the page to pick up the latest deploy WITHOUT leaving
+          fullscreen. Stays visible even in fullscreen. */}
+      {started && (
+        <button
+          onClick={() => window.location.reload()}
+          style={{ position: "absolute", top: "0.6vh", right: "1.5vw", zIndex: 20, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}
+        >
+          ↻ Atualizar
         </button>
       )}
 
