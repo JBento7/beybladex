@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v12-tab";
+const ARENA_BUILD = "v13-fit";
 
 const RED = "#c8102e"; // player 1 (left)
 const AMBER = "#f0a500"; // player 2 (right)
@@ -223,11 +223,11 @@ function Scoreboard({ arena, data, match, build }: { arena: number; data: ArenaD
   return (
     <div style={{ position: "relative", width: "100%", height: "100vh" }}>
       {/* Top-left: arena / match number */}
-      <div style={{ position: "absolute", top: "2vh", left: "2vw", lineHeight: 1.15 }}>
+      <div style={{ position: "absolute", top: "2vh", left: "2vw", lineHeight: 1.1, zIndex: 5 }}>
         <div style={{ color: "#fff", fontWeight: 900, fontSize: "2vw" }}>ARENA {arena}</div>
         {data.matchNumber ? <div style={{ color: "#9ca3af", fontWeight: 700, fontSize: "1.4vw" }}>PARTIDA {data.matchNumber}</div> : null}
-        <div style={{ color: "#374151", fontSize: "0.9vw" }}>[{build}]</div>
       </div>
+      <div style={{ position: "absolute", bottom: "0.6vh", right: "1vw", color: "#374151", fontSize: "0.9vw" }}>[{build}]</div>
 
       {/* Top-center: LBL logo */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -278,7 +278,8 @@ function PlayerHead({ side, name, avatar, color }: { side: "left" | "right"; nam
   );
   const style: React.CSSProperties = {
     position: "absolute",
-    top: "5vh",
+    // Below the arena/match label so the left player never covers it.
+    top: "9vh",
     display: "flex",
     alignItems: "center",
     flexDirection: side === "right" ? "row-reverse" : "row",
