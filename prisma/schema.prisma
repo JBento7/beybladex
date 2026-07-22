@@ -233,6 +233,7 @@ model Match {
   isThirdPlace Boolean     @default(false)
   countdownAt  DateTime?
   countdownKey String?
+  onAirAt      DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @default(now()) @updatedAt
 

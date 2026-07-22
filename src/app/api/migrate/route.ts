@@ -604,6 +604,10 @@ export async function GET() {
       name: "Match.updatedAt",
       sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`,
     },
+    {
+      name: "Match.onAirAt",
+      sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "onAirAt" TIMESTAMP(3)`,
+    },
   ];
 
   for (const migration of migrations) {

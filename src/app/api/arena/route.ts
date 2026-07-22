@@ -36,21 +36,41 @@ export async function GET(req: NextRequest) {
   // How long a just-finished match stays on the winner screen before the arena
   // falls back to the next match / "aguardando".
   const FINISHED_WINDOW_MS = 10500;
+  // A match only shows while a judge keeps the scoreboard open (heartbeat every
+  // 3s). If no heartbeat lands within this window, the arena goes to "aguardando".
+  const ONAIR_WINDOW_MS = 8000;
+  const onAirSince = new Date(Date.now() - ONAIR_WINDOW_MS);
 
   // Tournament-level filter, preferring real tournaments over test ones.
   const tournamentTiers = [{ isTest: false }, {}];
 
   type MatchRow = Awaited<ReturnType<typeof findOne>>;
   async function findOne(tournament: object, status: "IN_PROGRESS" | "PENDING" | "FINISHED") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = { ...arenaWhere, status, tournament };
-    if (status === "FINISHED") where.updatedAt = { gte: new Date(Date.now() - FINISHED_WINDOW_MS) };
-    return prisma.match.findFirst({
-      where,
-      orderBy:
-        status === "PENDING" ? { createdAt: "asc" } : status === "FINISHED" ? { updatedAt: "desc" } : { createdAt: "desc" },
-      include,
-    });
+    const order =
+      status === "PENDING"
+        ? ({ createdAt: "asc" } as const)
+        : status === "FINISHED"
+          ? ({ updatedAt: "desc" } as const)
+          : ({ createdAt: "desc" } as const);
+    if (status === "FINISHED") {
+      return prisma.match.findFirst({
+        where: { ...arenaWhere, status, tournament, updatedAt: { gte: new Date(Date.now() - FINISHED_WINDOW_MS) } },
+        orderBy: order,
+        include,
+      });
+    }
+    // Live/pending: require a fresh on-air heartbeat (judge has "Placar" open).
+    try {
+      return await prisma.match.findFirst({
+        where: { ...arenaWhere, status, tournament, onAirAt: { gte: onAirSince } },
+        orderBy: order,
+        include,
+      });
+    } catch {
+      // onAirAt column missing (pre-migration) — degrade to unfiltered so the
+      // arena still works until /api/migrate is run.
+      return prisma.match.findFirst({ where: { ...arenaWhere, status, tournament }, orderBy: order, include });
+    }
   }
 
   // Preference: live in-progress → just-finished (winner screen) → next pending.

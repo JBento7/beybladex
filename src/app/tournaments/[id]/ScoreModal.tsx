@@ -134,6 +134,30 @@ export default function ScoreModal({
     if (open) fetchState();
   }, [open, fetchState]);
 
+  // On-air heartbeat: while this scoreboard is open, keep stamping the match so
+  // the arena display shows it. When closed, clear it so the arena goes back to
+  // "aguardando partida".
+  useEffect(() => {
+    if (!open) return;
+    const beat = () =>
+      fetch(`/api/matches/${matchId}/onair`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }).catch(() => {});
+    beat();
+    const id = setInterval(beat, 3000);
+    return () => {
+      clearInterval(id);
+      fetch(`/api/matches/${matchId}/onair`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clear: true }),
+        keepalive: true,
+      }).catch(() => {});
+    };
+  }, [open, matchId]);
+
   useEffect(() => {
     if (!p1BeybladeId && player1Beyblades.length > 0) setP1BeybladeId(player1Beyblades[0].id);
     if (!p2BeybladeId && player2Beyblades.length > 0) setP2BeybladeId(player2Beyblades[0].id);
