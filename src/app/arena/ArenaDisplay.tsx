@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v14-xsep";
+const ARENA_BUILD = "v15-fill";
 
 const RED = "#c8102e"; // player 1 (left)
 const AMBER = "#f0a500"; // player 2 (right)
@@ -81,7 +81,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       setError(null);
       const d: ArenaData = await res.json();
       setData(d);
-      if (d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 3000) {
+      if (d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
         playedKeyRef.current = d.countdown.key;
         setCountdownOn(true);
       }
@@ -102,8 +102,13 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     if (!countdownOn) return;
     const v = cdVideoRef.current;
     if (!v) return;
-    try { v.muted = false; v.currentTime = 0; } catch { /* ignore */ }
-    v.play().catch(() => {});
+    try { v.currentTime = 0; } catch { /* ignore */ }
+    v.muted = false;
+    // Try with sound; if the browser blocks it, retry muted so at least the
+    // visual plays.
+    v.play().catch(() => {
+      try { v.muted = true; v.play().catch(() => {}); } catch { /* ignore */ }
+    });
     const done = () => setCountdownOn(false);
     v.addEventListener("ended", done);
     const safety = setTimeout(done, 12000);
@@ -236,13 +241,13 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           )}
         </div>
       ) : (
-        <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} />
+        <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} onTest={() => setCountdownOn(true)} />
       )}
     </div>
   );
 }
 
-function Scoreboard({ arena, data, match, build }: { arena: number; data: ArenaData; match: Match; build: string }) {
+function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data: ArenaData; match: Match; build: string; onTest: () => void }) {
   return (
     <div style={{ position: "relative", width: "100%", height: "100vh" }}>
       {/* Top-left: arena / match number */}
@@ -252,9 +257,9 @@ function Scoreboard({ arena, data, match, build }: { arena: number; data: ArenaD
       </div>
       <div style={{ position: "absolute", bottom: "0.6vh", right: "1vw", color: "#374151", fontSize: "0.9vw" }}>[{build}]</div>
 
-      {/* Top-center: LBL logo */}
+      {/* Top-center: LBL logo (tap it to test the countdown video) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/lbl-logo.png" alt="LBL" style={{ position: "absolute", top: "1.5vh", left: "50%", marginLeft: "-7vh", height: "14vh", width: "auto" }} />
+      <img src="/lbl-logo.png" alt="LBL" onClick={onTest} style={{ position: "absolute", top: "1.5vh", left: "50%", marginLeft: "-7vh", height: "14vh", width: "auto", cursor: "pointer" }} />
 
       {/* Players */}
       <PlayerHead side="left" name={match.player1} avatar={match.p1Avatar} color={RED} />
@@ -267,7 +272,7 @@ function Scoreboard({ arena, data, match, build }: { arena: number; data: ArenaD
 
       {/* Center: green X in the middle, score triangles on each side with clear
           gaps so nothing overlaps and it stays symmetric. */}
-      <div style={{ position: "absolute", top: "33vh", left: "50%", marginLeft: "-21vw", width: "42vw", height: "46vh" }}>
+      <div style={{ position: "absolute", top: "30vh", left: "50%", marginLeft: "-21vw", width: "42vw", height: "60vh" }}>
         {/* Green X — centered, does not touch the triangles */}
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: "14vw", width: "14vw", height: "100%" }}>
           <polygon points="16,0 50,30 84,0 100,0 100,16 70,50 100,84 100,100 84,100 50,70 16,100 0,100 0,84 30,50 0,16 0,0" fill={GREEN} />
@@ -325,7 +330,7 @@ function ScoreArrow({ dir, color, points, sets, setsToWin }: {
   // Triangle sits on its side of the center block (left/right edge), pointing
   // toward the middle. There is a gap to the green X (which is 14vw wide and
   // centered), so they never overlap and stay symmetric.
-  const style: React.CSSProperties = { position: "absolute", top: "8vh", width: "12vw", height: "30vh" };
+  const style: React.CSSProperties = { position: "absolute", top: "14vh", width: "12vw", height: "32vh" };
   if (dir === "right") style.left = "0";
   else style.right = "0";
   const poly = dir === "right" ? "0,0 100,50 0,100" : "100,0 0,50 100,100";
@@ -352,27 +357,27 @@ function ScoreArrow({ dir, color, points, sets, setsToWin }: {
 function FinishColumn({ side, color, counts, beyName, beyImg }: {
   side: "left" | "right"; color: string; counts: FinishCounts; beyName: string | null; beyImg: string | null;
 }) {
-  const style: React.CSSProperties = { position: "absolute", top: "33vh", width: "27vw" };
+  const style: React.CSSProperties = { position: "absolute", top: "30vh", width: "26vw" };
   if (side === "left") style.left = "1.5vw";
   else style.right = "1.5vw";
   return (
     <div style={style}>
       {FINISH_ROWS.map((r) => (
-        <div key={r.key} style={{ display: "flex", flexDirection: side === "right" ? "row-reverse" : "row", marginBottom: "1.2vh" }}>
-          <div style={{ flex: 1, background: color, color: "#fff", fontWeight: 800, fontSize: "1.2vw", borderRadius: 6, padding: "1.1vh 0.8vw", display: "flex", alignItems: "center", justifyContent: side === "right" ? "flex-end" : "flex-start", margin: side === "right" ? "0 0.6vw 0 0" : "0 0.6vw 0 0" }}>
+        <div key={r.key} style={{ display: "flex", flexDirection: side === "right" ? "row-reverse" : "row", marginBottom: "1.6vh" }}>
+          <div style={{ flex: 1, background: color, color: "#fff", fontWeight: 800, fontSize: "1.35vw", borderRadius: 6, padding: "1.9vh 0.9vw", display: "flex", alignItems: "center", justifyContent: side === "right" ? "flex-end" : "flex-start", margin: side === "right" ? "0 0.6vw 0 0" : "0 0.6vw 0 0" }}>
             {r.label}
           </div>
-          <div style={{ width: "5vw", background: color, color: "#fff", fontWeight: 900, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.2vw" }}>
+          <div style={{ width: "5.2vw", background: color, color: "#fff", fontWeight: 900, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.6vw" }}>
             {counts[r.key]}
           </div>
         </div>
       ))}
-      <div style={{ background: color, borderRadius: 8, padding: "1vh 0.8vw", display: "flex", alignItems: "center", flexDirection: side === "right" ? "row-reverse" : "row", minHeight: "8vh" }}>
+      <div style={{ background: color, borderRadius: 8, padding: "1vh 0.9vw", display: "flex", alignItems: "center", flexDirection: side === "right" ? "row-reverse" : "row", minHeight: "13vh" }}>
         {beyImg ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={beyImg} alt="" style={{ width: "6vh", height: "6vh", objectFit: "contain", flexShrink: 0, margin: side === "right" ? "0 0 0 0.8vw" : "0 0.8vw 0 0" }} />
+          <img src={beyImg} alt="" style={{ width: "9vh", height: "9vh", objectFit: "contain", flexShrink: 0, margin: side === "right" ? "0 0 0 0.8vw" : "0 0.8vw 0 0" }} />
         ) : null}
-        <div style={{ color: "#fff", fontWeight: 800, fontSize: "1.15vw", textAlign: side === "right" ? "right" : "left" }}>
+        <div style={{ color: "#fff", fontWeight: 800, fontSize: "1.3vw", textAlign: side === "right" ? "right" : "left" }}>
           {beyName || "—"}
         </div>
       </div>
