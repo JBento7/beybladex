@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v17-tri";
+const ARENA_BUILD = "v18-nest";
 
 const RED = "#c8102e"; // player 1 (left)
 const AMBER = "#f0a500"; // player 2 (right)
@@ -275,14 +275,9 @@ function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data
         RODADA {data.round ?? match.currentSetNum}
       </div>
 
-      {/* Center: red triangle · (2px) · open green X · (2px) · amber triangle */}
-      <div style={{ position: "absolute", top: `${MAIN_TOP}vh`, left: 0, right: 0, height: `${MAIN_H}vh`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <ScoreTriangle dir="right" color={RED} points={match.p1Points} />
-        <svg viewBox="0 0 100 100" style={{ width: `${MAIN_H * 0.82}vh`, height: `${MAIN_H * 0.82}vh`, margin: "0 2px", flexShrink: 0 }}>
-          <polygon points="18,4 50,32 82,4 96,4 96,18 68,50 96,82 96,96 82,96 50,68 18,96 4,96 4,82 32,50 4,18 4,4" fill={GREEN} />
-        </svg>
-        <ScoreTriangle dir="left" color={AMBER} points={match.p2Points} />
-      </div>
+      {/* Center: red triangle · green X · amber triangle drawn in ONE svg so each
+          triangle apex nests into the X's notch with a uniform ~2px gap. */}
+      <CenterX p1={match.p1Points} p2={match.p2Points} />
 
       {/* Finish columns */}
       <FinishColumn side="left" color={RED} counts={match.p1Finishes} beyName={match.isDeck ? match.p1ActiveBey : null} beyImg={match.isDeck ? match.p1BeyImg : null} />
@@ -295,37 +290,38 @@ function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data
   );
 }
 
-// Score triangle pointing toward the center X. dir="right" is the red (left)
-// triangle whose apex points right into the X; dir="left" is the amber (right)
-// one. The number sits over the wide base so it reads cleanly, and the apex
-// nests into the X with the flex 2px gap set by the parent.
-function ScoreTriangle({ dir, color, points }: { dir: "right" | "left"; color: string; points: number }) {
-  const h = MAIN_H * 0.82; // same height as the X
-  const w = MAIN_H * 0.5;
-  const poly = dir === "right" ? "0,0 100,50 0,100" : "100,0 0,50 100,100";
+// Center scoreboard: red triangle (p1) — green X — amber triangle (p2), all in
+// one viewBox so the triangle apexes nest into the X's left/right notches with a
+// uniform ~2px gap that follows the notch edges. viewBox aspect (1.3) matches the
+// displayed box aspect so the diagonal edges stay parallel (true angles).
+// Green X: square 90×90 centred in the box; notch vertices at x=48.8 / 81.2.
+// Triangles: edges parallel to the notch edges (slope ±1.143), apex 0.6u (~2px)
+// short of each notch vertex, base spanning almost the full height.
+function CenterX({ p1, p2 }: { p1: number; p2: number }) {
+  const GREEN_PTS =
+    "36.2,8.6 65,33.8 93.8,8.6 106.4,8.6 106.4,21.2 81.2,50 106.4,78.8 106.4,91.4 93.8,91.4 65,66.2 36.2,91.4 23.6,91.4 23.6,78.8 48.8,50 23.6,21.2 23.6,8.6";
   return (
-    <div style={{ position: "relative", width: `${w}vh`, height: `${h}vh`, flexShrink: 0 }}>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "100%", display: "block" }}>
-        <polygon points={poly} fill={color} />
+    <div
+      style={{
+        position: "absolute",
+        top: `${MAIN_TOP}vh`,
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: `${MAIN_H * 1.3}vh`,
+        height: `${MAIN_H}vh`,
+      }}
+    >
+      <svg viewBox="0 0 130 100" preserveAspectRatio="none" style={{ width: "100%", height: "100%", display: "block" }}>
+        <polygon points="6,1.8 48.2,50 6,98.2" fill={RED} />
+        <polygon points="124,1.8 81.8,50 124,98.2" fill={AMBER} />
+        <polygon points={GREEN_PTS} fill={GREEN} />
       </svg>
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          // Center the number over the wide base (away from the apex).
-          left: dir === "right" ? "6%" : "28%",
-          right: dir === "right" ? "28%" : "6%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#fff",
-          fontWeight: 900,
-          fontSize: `${MAIN_H * 0.42}vh`,
-          lineHeight: 1,
-        }}
-      >
-        {points}
+      {/* Score numbers over each triangle's wide base. */}
+      <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "37%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: `${MAIN_H * 0.4}vh`, lineHeight: 1 }}>
+        {p1}
+      </div>
+      <div style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: "37%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: `${MAIN_H * 0.4}vh`, lineHeight: 1 }}>
+        {p2}
       </div>
     </div>
   );
