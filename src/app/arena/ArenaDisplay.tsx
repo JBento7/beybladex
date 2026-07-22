@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v20-rodada";
+const ARENA_BUILD = "v21-winner";
 
 const RED = "#c8102e"; // player 1 (left)
 const AMBER = "#f0a500"; // player 2 (right)
@@ -43,7 +43,8 @@ type Match = {
 
 type ArenaData = {
   arena: number;
-  status: "live" | "pending" | "idle";
+  status: "live" | "pending" | "idle" | "finished";
+  winnerSide?: "p1" | "p2" | null;
   tournamentName?: string;
   matchNumber?: number;
   round?: number;
@@ -243,7 +244,9 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         </button>
       )}
 
-      {!match ? (
+      {match && data?.status === "finished" ? (
+        <WinnerScreen match={match} winnerSide={data.winnerSide ?? "p1"} />
+      ) : !match ? (
         <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/lbl-logo.png" alt="LBL" style={{ height: "16vh", width: "auto", opacity: 0.9, marginBottom: "2vh" }} />
@@ -259,6 +262,38 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       ) : (
         <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} onTest={() => setCountdownOn(true)} />
       )}
+    </div>
+  );
+}
+
+// Shown for ~10s after a match finishes (driven by the API's finished window):
+// VENCEDOR on top, the winner's photo, and the set score below.
+function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | "p2" }) {
+  const isP1 = winnerSide === "p1";
+  const name = isP1 ? match.player1 : match.player2;
+  const avatar = isP1 ? match.p1Avatar : match.p2Avatar;
+  const color = isP1 ? RED : AMBER;
+  const winSets = isP1 ? match.p1Sets : match.p2Sets;
+  const loseSets = isP1 ? match.p2Sets : match.p1Sets;
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2vh 4vw" }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/lbl-logo.png" alt="LBL" style={{ height: "14vh", width: "auto", marginBottom: "1vh" }} />
+      <div style={{ fontSize: "7vh", fontWeight: 900, color: "#fff", letterSpacing: "0.04em", lineHeight: 1, marginBottom: "2.5vh" }}>VENCEDOR</div>
+      <div style={{ width: "30vh", height: "30vh", borderRadius: "50%", background: color, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <span style={{ color: "#000", fontWeight: 900, fontSize: "12vh" }}>{name.charAt(0).toUpperCase()}</span>
+        )}
+      </div>
+      <div style={{ color, fontWeight: 900, fontSize: "4.5vh", marginTop: "2vh", maxWidth: "80vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+      <div style={{ marginTop: "1.5vh", background: color, color: "#fff", fontWeight: 900, fontSize: "4vh", padding: "1.2vh 4vw", borderRadius: 12, display: "flex", alignItems: "center", gap: "1.5vw" }}>
+        <span>{winSets}</span>
+        <span style={{ opacity: 0.7, fontSize: "3vh" }}>×</span>
+        <span>{loseSets}</span>
+      </div>
     </div>
   );
 }

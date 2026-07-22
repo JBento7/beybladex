@@ -600,6 +600,10 @@ export async function GET() {
       name: "Match.countdownKey",
       sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "countdownKey" TEXT`,
     },
+    {
+      name: "Match.updatedAt",
+      sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP`,
+    },
   ];
 
   for (const migration of migrations) {

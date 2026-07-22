@@ -33,35 +33,52 @@ export async function GET(req: NextRequest) {
   const arenaWhere =
     arenaNum === 1 ? { OR: [{ arena: 1 }, { arena: null }] } : { arena: arenaNum };
 
-  // Look for the current match, preferring: live real tournament → pending real
-  // tournament → live/pending test tournament (so testing works too).
-  const tournamentTiers = [
-    { status: "IN_PROGRESS" as const, isTest: false },
-    { status: "IN_PROGRESS" as const },
-  ];
-  const statusTiers = ["IN_PROGRESS" as const, "PENDING" as const];
+  // How long a just-finished match stays on the winner screen before the arena
+  // falls back to the next match / "aguardando".
+  const FINISHED_WINDOW_MS = 10500;
+
+  // Tournament-level filter, preferring real tournaments over test ones.
+  const tournamentTiers = [{ isTest: false }, {}];
 
   type MatchRow = Awaited<ReturnType<typeof findOne>>;
-  async function findOne(tournament: object, status: "IN_PROGRESS" | "PENDING") {
+  async function findOne(tournament: object, status: "IN_PROGRESS" | "PENDING" | "FINISHED") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = { ...arenaWhere, status, tournament };
+    if (status === "FINISHED") where.updatedAt = { gte: new Date(Date.now() - FINISHED_WINDOW_MS) };
     return prisma.match.findFirst({
-      where: { ...arenaWhere, status, tournament },
-      orderBy: status === "IN_PROGRESS" ? { createdAt: "desc" } : { createdAt: "asc" },
+      where,
+      orderBy:
+        status === "PENDING" ? { createdAt: "asc" } : status === "FINISHED" ? { updatedAt: "desc" } : { createdAt: "desc" },
       include,
     });
   }
 
+  // Preference: live in-progress → just-finished (winner screen) → next pending.
+  const passes = [
+    { status: "IN_PROGRESS" as const, phase: "live" as const },
+    { status: "FINISHED" as const, phase: "finished" as const },
+    { status: "PENDING" as const, phase: "pending" as const },
+  ];
+
   let match: MatchRow = null;
-  let live = false;
-  outer: for (const tournament of tournamentTiers) {
-    for (const status of statusTiers) {
-      const found = await findOne(tournament, status);
+  let phase: "live" | "finished" | "pending" = "pending";
+  outer: for (const pass of passes) {
+    for (const tournament of tournamentTiers) {
+      let found: MatchRow = null;
+      try {
+        found = await findOne(tournament, pass.status);
+      } catch {
+        // updatedAt column may be missing pre-migration — skip finished lookups.
+        continue;
+      }
       if (found && found.player1Id !== found.player2Id) {
         match = found;
-        live = status === "IN_PROGRESS";
+        phase = pass.phase;
         break outer;
       }
     }
   }
+  const live = phase === "live";
 
   if (!match) {
     // Diagnostics to make "nothing shows" debuggable.
@@ -191,9 +208,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  const winnerSide: "p1" | "p2" | null =
+    phase === "finished" ? (match.winnerId === match.player2Id ? "p2" : "p1") : null;
+
   return NextResponse.json({
     arena: arenaNum,
-    status: live ? "live" : "pending",
+    status: phase,
+    winnerSide,
     tournamentName: match.tournament.name,
     matchNumber,
     round: match.round,
