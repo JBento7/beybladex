@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v13-fit";
+const ARENA_BUILD = "v14-xsep";
 
 const RED = "#c8102e"; // player 1 (left)
 const AMBER = "#f0a500"; // player 2 (right)
@@ -60,6 +60,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const [started, setStarted] = useState(false);
+  const [isFs, setIsFs] = useState(false);
   const noSleepRef = useRef<HTMLVideoElement | null>(null);
   const cdVideoRef = useRef<HTMLVideoElement | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -132,7 +133,19 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [started]);
 
+  useEffect(() => {
+    const onFs = () => setIsFs(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else wrapRef.current?.requestFullscreen?.().catch(() => {});
+  }
+
   async function startDisplay() {
+    try { await wrapRef.current?.requestFullscreen?.(); } catch { /* not supported (iOS) */ }
     // Prime BOTH videos within the user gesture (iOS autoplay unlock).
     const v = cdVideoRef.current;
     if (v) {
@@ -199,6 +212,16 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 
       {error && <div style={{ position: "absolute", bottom: 8, left: 12, zIndex: 20, fontSize: 12, color: "#f87171" }}>{error}</div>}
 
+      {/* Fullscreen toggle (works on Android Chrome; hides the URL bar) */}
+      {started && !isFs && (
+        <button
+          onClick={toggleFullscreen}
+          style={{ position: "absolute", top: "0.6vh", right: "1.5vw", zIndex: 20, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}
+        >
+          ⛶ Tela cheia
+        </button>
+      )}
+
       {!match ? (
         <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -242,9 +265,11 @@ function Scoreboard({ arena, data, match, build }: { arena: number; data: ArenaD
         RODADA {data.round ?? match.currentSetNum}
       </div>
 
-      {/* Center: green X with score arrows (kept clear of the finish columns) */}
-      <div style={{ position: "absolute", top: "32vh", left: "50%", marginLeft: "-20vw", width: "40vw", height: "50vh" }}>
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}>
+      {/* Center: green X in the middle, score triangles on each side with clear
+          gaps so nothing overlaps and it stays symmetric. */}
+      <div style={{ position: "absolute", top: "33vh", left: "50%", marginLeft: "-21vw", width: "42vw", height: "46vh" }}>
+        {/* Green X — centered, does not touch the triangles */}
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: "14vw", width: "14vw", height: "100%" }}>
           <polygon points="16,0 50,30 84,0 100,0 100,16 70,50 100,84 100,100 84,100 50,70 16,100 0,100 0,84 30,50 0,16 0,0" fill={GREEN} />
         </svg>
         <ScoreArrow dir="right" color={RED} points={match.p1Points} sets={match.p1Sets} setsToWin={match.setsToWin} />
@@ -297,19 +322,23 @@ function PlayerHead({ side, name, avatar, color }: { side: "left" | "right"; nam
 function ScoreArrow({ dir, color, points, sets, setsToWin }: {
   dir: "left" | "right"; color: string; points: number; sets: number; setsToWin: number;
 }) {
-  // Arrows live inside the 40vw center block and point toward the middle, so
-  // they never reach the finish columns at the screen edges.
-  const style: React.CSSProperties = { position: "absolute", top: "11vh", width: "17vw", height: "28vh" };
+  // Triangle sits on its side of the center block (left/right edge), pointing
+  // toward the middle. There is a gap to the green X (which is 14vw wide and
+  // centered), so they never overlap and stay symmetric.
+  const style: React.CSSProperties = { position: "absolute", top: "8vh", width: "12vw", height: "30vh" };
   if (dir === "right") style.left = "0";
   else style.right = "0";
   const poly = dir === "right" ? "0,0 100,50 0,100" : "100,0 0,50 100,100";
+  // Keep the score in the wide (base) half of the triangle.
+  const numBox: React.CSSProperties = { position: "absolute", top: 0, bottom: 0, width: "70%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" };
+  if (dir === "right") numBox.left = 0; else numBox.right = 0;
   return (
     <div style={style}>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}>
         <polygon points={poly} fill={color} />
       </svg>
-      <div style={{ position: "absolute", top: 0, left: dir === "right" ? "-14%" : "14%", right: 0, bottom: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ color: "#fff", fontWeight: 900, fontSize: "17vh", lineHeight: 1 }}>{points}</div>
+      <div style={numBox}>
+        <div style={{ color: "#fff", fontWeight: 900, fontSize: "15vh", lineHeight: 1 }}>{points}</div>
         <div style={{ display: "flex", marginTop: "0.6vh" }}>
           {Array.from({ length: setsToWin }).map((_, i) => (
             <div key={i} style={{ width: "1.1vw", height: "1.1vw", borderRadius: "50%", background: i < sets ? "#fff" : "rgba(255,255,255,0.35)", margin: "0 0.3vw" }} />
