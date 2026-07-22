@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v19-refresh";
+const ARENA_BUILD = "v20-rodada";
 
 const RED = "#c8102e"; // player 1 (left)
 const AMBER = "#f0a500"; // player 2 (right)
@@ -283,7 +283,7 @@ function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data
 
       {/* RODADA */}
       <div style={{ position: "absolute", top: "18vh", left: "50%", marginLeft: "-8vw", width: "16vw", textAlign: "center", background: RED, color: "#fff", fontWeight: 900, padding: "0.9vh 0", borderRadius: 8, fontSize: "1.7vw" }}>
-        RODADA {data.round ?? match.currentSetNum}
+        RODADA {match.currentSetNum}
       </div>
 
       {/* Center: red triangle · green X · amber triangle drawn in ONE svg so each
