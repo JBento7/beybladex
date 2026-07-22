@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // Bump on every arena change so we can confirm which build a tablet runs.
-const ARENA_BUILD = "v10-layout";
+// NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
+// `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
+const ARENA_BUILD = "v11-ios12";
 
 const RED = "#c8102e"; // player 1 (left)
 const AMBER = "#f0a500"; // player 2 (right)
@@ -56,7 +58,6 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const [data, setData] = useState<ArenaData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [isFs, setIsFs] = useState(false);
 
   const [started, setStarted] = useState(false);
   const noSleepRef = useRef<HTMLVideoElement | null>(null);
@@ -100,23 +101,17 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     if (!countdownOn) return;
     const v = cdVideoRef.current;
     if (!v) return;
-    v.muted = false;
-    v.currentTime = 0;
+    try { v.muted = false; v.currentTime = 0; } catch { /* ignore */ }
     v.play().catch(() => {});
     const done = () => setCountdownOn(false);
     v.addEventListener("ended", done);
-    const safety = setTimeout(done, 11000);
+    const safety = setTimeout(done, 12000);
     return () => {
       v.removeEventListener("ended", done);
       clearTimeout(safety);
+      try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
     };
   }, [countdownOn]);
-
-  useEffect(() => {
-    const onFs = () => setIsFs(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
-  }, []);
 
   async function acquireWakeLock() {
     try {
@@ -137,15 +132,8 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [started]);
 
-  function toggleFullscreen() {
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    else wrapRef.current?.requestFullscreen?.().catch(() => {});
-  }
-
   async function startDisplay() {
-    try { await wrapRef.current?.requestFullscreen?.(); } catch { /* not supported */ }
-    // Prime the countdown video within the user gesture so it can play with
-    // sound later (iOS autoplay policy).
+    // Prime BOTH videos within the user gesture (iOS autoplay unlock).
     const v = cdVideoRef.current;
     if (v) {
       try { v.muted = true; await v.play(); v.pause(); v.currentTime = 0; } catch { /* ignore */ }
@@ -156,11 +144,11 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 
   if (arena == null) {
     return (
-      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-3 p-6 text-center">
-        <div className="text-2xl font-black">Usuário sem arena</div>
-        <div className="text-gray-400 text-sm max-w-md">
-          Faça login com um usuário de arena (arena1@lbl.arena … arena5@lbl.arena). Se for admin,
-          use <code className="text-[#f0a500]">/arena?n=1</code> para pré-visualizar.
+      <div style={{ minHeight: "100vh", background: "#000", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
+        <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 12 }}>Usuário sem arena</div>
+        <div style={{ color: "#9ca3af", fontSize: 14, maxWidth: 420 }}>
+          Faça login com um usuário de arena (arena1@lbl.arena … arena5@lbl.arena). Se for admin, use{" "}
+          <code style={{ color: AMBER }}>/arena?n=1</code> para pré-visualizar.
         </div>
       </div>
     );
@@ -169,15 +157,19 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const match = data?.match ?? null;
 
   return (
-    <div ref={wrapRef} className="min-h-screen bg-black text-white overflow-hidden relative" style={{ height: "100vh" }}>
-      {/* Hidden media: nosleep + countdown video */}
+    <div ref={wrapRef} style={{ height: "100vh", width: "100vw", background: "#000", color: "#fff", overflow: "hidden", position: "relative" }}>
+      {/* nosleep loop (offscreen) */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <video ref={noSleepRef} src="/nosleep.mp4" muted loop playsInline style={{ position: "fixed", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} />
+      <video ref={noSleepRef} src="/nosleep.mp4" muted loop playsInline style={{ position: "fixed", width: 2, height: 2, opacity: 0, top: 0, left: 0, pointerEvents: "none" }} />
+
+      {/* Countdown video — always mounted (iOS 12 won't play a display:none video),
+          hidden behind everything until it fires. */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={cdVideoRef}
         src="/countdown.mp4"
         playsInline
+        preload="auto"
         style={{
           position: "fixed",
           top: 0,
@@ -186,41 +178,36 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           height: "100vh",
           objectFit: "cover",
           background: "#000",
-          zIndex: 70,
-          display: countdownOn ? "block" : "none",
+          zIndex: countdownOn ? 70 : -1,
+          opacity: countdownOn ? 1 : 0,
+          pointerEvents: "none",
         }}
       />
 
       {/* Start gate */}
       {!started && (
-        <div className="absolute inset-0 z-[80] bg-black flex flex-col items-center justify-center gap-6 p-6 text-center">
-          <div className="text-3xl font-black text-[#f0a500]">ARENA {arena}</div>
-          <button onClick={startDisplay} className="bg-[#f0a500] hover:bg-[#d4940a] text-black font-black text-xl px-10 py-5 rounded-2xl active:scale-95 transition">
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 80, background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
+          <div style={{ fontSize: 34, fontWeight: 900, color: AMBER, marginBottom: 24 }}>ARENA {arena}</div>
+          <button onClick={startDisplay} style={{ background: AMBER, color: "#000", fontWeight: 900, fontSize: 22, padding: "18px 40px", borderRadius: 18, border: "none", marginBottom: 24 }}>
             ▶ Toque para iniciar o telão
           </button>
-          <div className="text-gray-500 text-sm max-w-sm">
-            Ativa tela cheia, o som da contagem e mantém a tela ligada. Deixe o tablet nesta tela durante o evento.
+          <div style={{ color: "#6b7280", fontSize: 14, maxWidth: 380 }}>
+            Ativa som e mantém a tela ligada. Para tela cheia sem barra: Compartilhar → Adicionar à Tela de Início, e abra pelo ícone.
           </div>
         </div>
       )}
 
-      {!isFs && (
-        <button onClick={toggleFullscreen} className="absolute top-2 right-2 z-20 text-[11px] bg-white/10 hover:bg-white/20 text-white px-2 py-1 rounded">
-          ⛶ Tela cheia
-        </button>
-      )}
-
-      {error && <div className="absolute bottom-2 left-3 z-20 text-xs text-red-400">{error}</div>}
+      {error && <div style={{ position: "absolute", bottom: 8, left: 12, zIndex: 20, fontSize: 12, color: "#f87171" }}>{error}</div>}
 
       {!match ? (
-        <div className="h-full flex flex-col items-center justify-center gap-4">
+        <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/lbl-logo.png" alt="LBL" style={{ height: "16vh", width: "auto", opacity: 0.9 }} />
-          <div className="text-4xl font-black text-[#f0a500]">ARENA {arena}</div>
-          <div className="text-gray-500 text-lg">Aguardando partida...</div>
-          <div className="text-gray-700 text-[10px]">[{ARENA_BUILD}]</div>
+          <img src="/lbl-logo.png" alt="LBL" style={{ height: "16vh", width: "auto", opacity: 0.9, marginBottom: "2vh" }} />
+          <div style={{ fontSize: "4vw", fontWeight: 900, color: AMBER }}>ARENA {arena}</div>
+          <div style={{ color: "#6b7280", fontSize: "2vw", marginTop: "1vh" }}>Aguardando partida...</div>
+          <div style={{ color: "#374151", fontSize: 10, marginTop: 6 }}>[{ARENA_BUILD}]</div>
           {data?.debug && (
-            <div className="text-gray-700 text-xs mt-1 text-center">
+            <div style={{ color: "#374151", fontSize: 12, marginTop: 6, textAlign: "center" }}>
               torneios em andamento: {data.debug.inProgressTournaments} · partidas nesta arena: {data.debug.matchesThisArena}
             </div>
           )}
@@ -234,46 +221,42 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 
 function Scoreboard({ arena, data, match, build }: { arena: number; data: ArenaData; match: Match; build: string }) {
   return (
-    <div className="relative w-full" style={{ height: "100vh", padding: "1.5vh 2vw" }}>
+    <div style={{ position: "relative", width: "100%", height: "100vh" }}>
       {/* Top-left: arena / match number */}
-      <div className="absolute" style={{ top: "1.5vh", left: "2vw", lineHeight: 1.15 }}>
-        <div style={{ color: "#fff", fontWeight: 900, fontSize: "1.7vw" }}>ARENA {arena}</div>
-        {data.matchNumber ? <div style={{ color: "#9ca3af", fontWeight: 700, fontSize: "1.2vw" }}>PARTIDA {data.matchNumber}</div> : null}
-        <div style={{ color: "#4b5563", fontSize: "0.8vw" }}>[{build}]</div>
+      <div style={{ position: "absolute", top: "2vh", left: "2vw", lineHeight: 1.15 }}>
+        <div style={{ color: "#fff", fontWeight: 900, fontSize: "2vw" }}>ARENA {arena}</div>
+        {data.matchNumber ? <div style={{ color: "#9ca3af", fontWeight: 700, fontSize: "1.4vw" }}>PARTIDA {data.matchNumber}</div> : null}
+        <div style={{ color: "#374151", fontSize: "0.9vw" }}>[{build}]</div>
       </div>
 
       {/* Top-center: LBL logo */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/lbl-logo.png" alt="LBL" style={{ position: "absolute", top: "1vh", left: "50%", transform: "translateX(-50%)", height: "13vh", width: "auto" }} />
+      <img src="/lbl-logo.png" alt="LBL" style={{ position: "absolute", top: "1.5vh", left: "50%", marginLeft: "-7vh", height: "14vh", width: "auto" }} />
 
-      {/* Players row: circles + names */}
+      {/* Players */}
       <PlayerHead side="left" name={match.player1} avatar={match.p1Avatar} color={RED} />
       <PlayerHead side="right" name={match.player2} avatar={match.p2Avatar} color={AMBER} />
 
-      {/* RODADA box (center, under logo) */}
-      <div style={{ position: "absolute", top: "16vh", left: "50%", transform: "translateX(-50%)", background: RED, color: "#fff", fontWeight: 900, padding: "0.6vh 1.6vw", borderRadius: 6, fontSize: "1.4vw" }}>
+      {/* RODADA */}
+      <div style={{ position: "absolute", top: "18vh", left: "50%", marginLeft: "-7vw", width: "14vw", textAlign: "center", background: RED, color: "#fff", fontWeight: 900, padding: "0.8vh 0", borderRadius: 8, fontSize: "1.5vw" }}>
         RODADA {data.round ?? match.currentSetNum}
       </div>
 
       {/* Center: green X with score arrows */}
-      <div style={{ position: "absolute", top: "30vh", left: "50%", transform: "translateX(-50%)", width: "44vw", height: "46vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {/* Green X */}
-        <svg viewBox="0 0 100 100" style={{ position: "absolute", width: "100%", height: "100%" }} preserveAspectRatio="none">
-          <polygon points="18,0 50,32 82,0 100,0 100,18 68,50 100,82 100,100 82,100 50,68 18,100 0,100 0,82 32,50 0,18 0,0" fill={GREEN} />
+      <div style={{ position: "absolute", top: "34vh", left: "50%", marginLeft: "-24vw", width: "48vw", height: "44vh" }}>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}>
+          <polygon points="16,0 50,30 84,0 100,0 100,16 70,50 100,84 100,100 84,100 50,70 16,100 0,100 0,84 30,50 0,16 0,0" fill={GREEN} />
         </svg>
-        {/* Red arrow (points right) with P1 score */}
-        <ScoreArrow dir="right" color={RED} points={match.p1Points} pointsToWin={match.pointsToWinSet} sets={match.p1Sets} setsToWin={match.setsToWin} />
-        {/* Amber arrow (points left) with P2 score */}
-        <ScoreArrow dir="left" color={AMBER} points={match.p2Points} pointsToWin={match.pointsToWinSet} sets={match.p2Sets} setsToWin={match.setsToWin} />
+        <ScoreArrow dir="right" color={RED} points={match.p1Points} sets={match.p1Sets} setsToWin={match.setsToWin} />
+        <ScoreArrow dir="left" color={AMBER} points={match.p2Points} sets={match.p2Sets} setsToWin={match.setsToWin} />
       </div>
 
-      {/* Left finishes + bey */}
+      {/* Finish columns */}
       <FinishColumn side="left" color={RED} counts={match.p1Finishes} beyName={match.isDeck ? match.p1ActiveBey : null} beyImg={match.isDeck ? match.p1BeyImg : null} />
-      {/* Right finishes + bey */}
       <FinishColumn side="right" color={AMBER} counts={match.p2Finishes} beyName={match.isDeck ? match.p2ActiveBey : null} beyImg={match.isDeck ? match.p2BeyImg : null} />
 
       {data.status === "pending" && (
-        <div style={{ position: "absolute", bottom: "1vh", left: "50%", transform: "translateX(-50%)", color: AMBER, fontWeight: 900, fontSize: "1.2vw" }}>PRÓXIMA PARTIDA</div>
+        <div style={{ position: "absolute", bottom: "1vh", left: "50%", marginLeft: "-8vw", width: "16vw", textAlign: "center", color: AMBER, fontWeight: 900, fontSize: "1.3vw" }}>PRÓXIMA PARTIDA</div>
       )}
     </div>
   );
@@ -281,7 +264,7 @@ function Scoreboard({ arena, data, match, build }: { arena: number; data: ArenaD
 
 function PlayerHead({ side, name, avatar, color }: { side: "left" | "right"; name: string; avatar: string | null; color: string }) {
   const circle = (
-    <div style={{ width: "13vw", height: "13vw", borderRadius: "50%", background: color, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: `0 0 3vh ${color}55` }}>
+    <div style={{ width: "12vw", height: "12vw", borderRadius: "50%", background: color, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
       {avatar ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -291,27 +274,42 @@ function PlayerHead({ side, name, avatar, color }: { side: "left" | "right"; nam
     </div>
   );
   const nameEl = (
-    <div style={{ color, fontWeight: 900, fontSize: "2.4vw", maxWidth: "22vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+    <div style={{ color, fontWeight: 900, fontSize: "2.4vw", maxWidth: "20vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", margin: side === "right" ? "0 1.2vw 0 0" : "0 0 0 1.2vw" }}>{name}</div>
   );
+  const style: React.CSSProperties = {
+    position: "absolute",
+    top: "5vh",
+    display: "flex",
+    alignItems: "center",
+    flexDirection: side === "right" ? "row-reverse" : "row",
+  };
+  if (side === "left") style.left = "1.5vw";
+  else style.right = "1.5vw";
   return (
-    <div style={{ position: "absolute", top: "5vh", [side]: "1.5vw", display: "flex", alignItems: "center", gap: "1.2vw", flexDirection: side === "right" ? "row-reverse" : "row" } as React.CSSProperties}>
+    <div style={style}>
       {circle}
       {nameEl}
     </div>
   );
 }
 
-function ScoreArrow({ dir, color, points, pointsToWin, sets, setsToWin }: {
-  dir: "left" | "right"; color: string; points: number; pointsToWin: number; sets: number; setsToWin: number;
+function ScoreArrow({ dir, color, points, sets, setsToWin }: {
+  dir: "left" | "right"; color: string; points: number; sets: number; setsToWin: number;
 }) {
-  const clip = dir === "right" ? "polygon(0 0, 100% 50%, 0 100%)" : "polygon(100% 0, 0 50%, 100% 100%)";
+  const style: React.CSSProperties = { position: "absolute", top: "7vh", width: "22vw", height: "30vh" };
+  if (dir === "right") style.left = "-6vw";
+  else style.right = "-6vw";
+  const poly = dir === "right" ? "0,0 100,50 0,100" : "100,0 0,50 100,100";
   return (
-    <div style={{ position: "absolute", [dir === "right" ? "left" : "right"]: "-6vw", width: "22vw", height: "30vh", background: color, clipPath: clip, display: "flex", alignItems: "center", justifyContent: "center" } as React.CSSProperties}>
-      <div style={{ textAlign: "center", transform: dir === "right" ? "translateX(-15%)" : "translateX(15%)" }}>
-        <div style={{ color: "#fff", fontWeight: 900, fontSize: "11vh", lineHeight: 1 }}>{points}</div>
-        <div style={{ display: "flex", gap: "0.4vw", justifyContent: "center", marginTop: "0.6vh" }}>
+    <div style={style}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}>
+        <polygon points={poly} fill={color} />
+      </svg>
+      <div style={{ position: "absolute", top: 0, left: dir === "right" ? "-8%" : "8%", right: 0, bottom: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ color: "#fff", fontWeight: 900, fontSize: "12vh", lineHeight: 1 }}>{points}</div>
+        <div style={{ display: "flex", marginTop: "0.6vh" }}>
           {Array.from({ length: setsToWin }).map((_, i) => (
-            <div key={i} style={{ width: "1vw", height: "1vw", borderRadius: "50%", background: i < sets ? "#fff" : "rgba(255,255,255,0.3)" }} />
+            <div key={i} style={{ width: "1vw", height: "1vw", borderRadius: "50%", background: i < sets ? "#fff" : "rgba(255,255,255,0.35)", margin: "0 0.3vw" }} />
           ))}
         </div>
       </div>
@@ -322,25 +320,27 @@ function ScoreArrow({ dir, color, points, pointsToWin, sets, setsToWin }: {
 function FinishColumn({ side, color, counts, beyName, beyImg }: {
   side: "left" | "right"; color: string; counts: FinishCounts; beyName: string | null; beyImg: string | null;
 }) {
+  const style: React.CSSProperties = { position: "absolute", top: "34vh", width: "25vw" };
+  if (side === "left") style.left = "1.5vw";
+  else style.right = "1.5vw";
   return (
-    <div style={{ position: "absolute", top: "30vh", [side]: "1.5vw", width: "24vw", display: "flex", flexDirection: "column", gap: "1vh" } as React.CSSProperties}>
+    <div style={style}>
       {FINISH_ROWS.map((r) => (
-        <div key={r.key} style={{ display: "flex", gap: "0.6vw", flexDirection: side === "right" ? "row-reverse" : "row" }}>
-          <div style={{ flex: 1, background: color, color: "#fff", fontWeight: 800, fontSize: "1.15vw", borderRadius: 6, padding: "1vh 0.8vw", display: "flex", alignItems: "center", justifyContent: side === "right" ? "flex-end" : "flex-start" }}>
+        <div key={r.key} style={{ display: "flex", flexDirection: side === "right" ? "row-reverse" : "row", marginBottom: "1.2vh" }}>
+          <div style={{ flex: 1, background: color, color: "#fff", fontWeight: 800, fontSize: "1.2vw", borderRadius: 6, padding: "1.1vh 0.8vw", display: "flex", alignItems: "center", justifyContent: side === "right" ? "flex-end" : "flex-start", margin: side === "right" ? "0 0.6vw 0 0" : "0 0.6vw 0 0" }}>
             {r.label}
           </div>
-          <div style={{ width: "5vw", background: color, color: "#fff", fontWeight: 900, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2vw" }}>
+          <div style={{ width: "5vw", background: color, color: "#fff", fontWeight: 900, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.2vw" }}>
             {counts[r.key]}
           </div>
         </div>
       ))}
-      {/* Bey in use */}
-      <div style={{ background: color, borderRadius: 8, padding: "1vh 0.8vw", display: "flex", alignItems: "center", gap: "0.8vw", flexDirection: side === "right" ? "row-reverse" : "row", minHeight: "8vh" }}>
+      <div style={{ background: color, borderRadius: 8, padding: "1vh 0.8vw", display: "flex", alignItems: "center", flexDirection: side === "right" ? "row-reverse" : "row", minHeight: "8vh" }}>
         {beyImg ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={beyImg} alt="" style={{ width: "6vh", height: "6vh", objectFit: "contain", flexShrink: 0 }} />
+          <img src={beyImg} alt="" style={{ width: "6vh", height: "6vh", objectFit: "contain", flexShrink: 0, margin: side === "right" ? "0 0 0 0.8vw" : "0 0.8vw 0 0" }} />
         ) : null}
-        <div style={{ color: "#fff", fontWeight: 800, fontSize: "1.1vw", textAlign: side === "right" ? "right" : "left" }}>
+        <div style={{ color: "#fff", fontWeight: 800, fontSize: "1.15vw", textAlign: side === "right" ? "right" : "left" }}>
           {beyName || "—"}
         </div>
       </div>
