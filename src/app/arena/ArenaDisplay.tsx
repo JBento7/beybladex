@@ -5,11 +5,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v15-fill";
+const ARENA_BUILD = "v17-tri";
 
 const RED = "#c8102e"; // player 1 (left)
 const AMBER = "#f0a500"; // player 2 (right)
 const GREEN = "#22b14c"; // center X
+
+// Main row (finish columns + center) — shared top/height so the finish blocks
+// and the score triangles line up at exactly the same height.
+const MAIN_TOP = 30; // vh
+const MAIN_H = 56; // vh
 
 type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
 
@@ -270,15 +275,13 @@ function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data
         RODADA {data.round ?? match.currentSetNum}
       </div>
 
-      {/* Center: green X in the middle, score triangles on each side with clear
-          gaps so nothing overlaps and it stays symmetric. */}
-      <div style={{ position: "absolute", top: "30vh", left: "50%", marginLeft: "-21vw", width: "42vw", height: "60vh" }}>
-        {/* Green X — centered, does not touch the triangles */}
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: "14vw", width: "14vw", height: "100%" }}>
-          <polygon points="16,0 50,30 84,0 100,0 100,16 70,50 100,84 100,100 84,100 50,70 16,100 0,100 0,84 30,50 0,16 0,0" fill={GREEN} />
+      {/* Center: red triangle · (2px) · open green X · (2px) · amber triangle */}
+      <div style={{ position: "absolute", top: `${MAIN_TOP}vh`, left: 0, right: 0, height: `${MAIN_H}vh`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <ScoreTriangle dir="right" color={RED} points={match.p1Points} />
+        <svg viewBox="0 0 100 100" style={{ width: `${MAIN_H * 0.82}vh`, height: `${MAIN_H * 0.82}vh`, margin: "0 2px", flexShrink: 0 }}>
+          <polygon points="18,4 50,32 82,4 96,4 96,18 68,50 96,82 96,96 82,96 50,68 18,96 4,96 4,82 32,50 4,18 4,4" fill={GREEN} />
         </svg>
-        <ScoreArrow dir="right" color={RED} points={match.p1Points} sets={match.p1Sets} setsToWin={match.setsToWin} />
-        <ScoreArrow dir="left" color={AMBER} points={match.p2Points} sets={match.p2Sets} setsToWin={match.setsToWin} />
+        <ScoreTriangle dir="left" color={AMBER} points={match.p2Points} />
       </div>
 
       {/* Finish columns */}
@@ -288,6 +291,42 @@ function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data
       {data.status === "pending" && (
         <div style={{ position: "absolute", bottom: "1vh", left: "50%", marginLeft: "-8vw", width: "16vw", textAlign: "center", color: AMBER, fontWeight: 900, fontSize: "1.3vw" }}>PRÓXIMA PARTIDA</div>
       )}
+    </div>
+  );
+}
+
+// Score triangle pointing toward the center X. dir="right" is the red (left)
+// triangle whose apex points right into the X; dir="left" is the amber (right)
+// one. The number sits over the wide base so it reads cleanly, and the apex
+// nests into the X with the flex 2px gap set by the parent.
+function ScoreTriangle({ dir, color, points }: { dir: "right" | "left"; color: string; points: number }) {
+  const h = MAIN_H * 0.82; // same height as the X
+  const w = MAIN_H * 0.5;
+  const poly = dir === "right" ? "0,0 100,50 0,100" : "100,0 0,50 100,100";
+  return (
+    <div style={{ position: "relative", width: `${w}vh`, height: `${h}vh`, flexShrink: 0 }}>
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "100%", display: "block" }}>
+        <polygon points={poly} fill={color} />
+      </svg>
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          // Center the number over the wide base (away from the apex).
+          left: dir === "right" ? "6%" : "28%",
+          right: dir === "right" ? "28%" : "6%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          fontWeight: 900,
+          fontSize: `${MAIN_H * 0.42}vh`,
+          lineHeight: 1,
+        }}
+      >
+        {points}
+      </div>
     </div>
   );
 }
@@ -324,47 +363,26 @@ function PlayerHead({ side, name, avatar, color }: { side: "left" | "right"; nam
   );
 }
 
-function ScoreArrow({ dir, color, points, sets, setsToWin }: {
-  dir: "left" | "right"; color: string; points: number; sets: number; setsToWin: number;
-}) {
-  // Triangle sits on its side of the center block (left/right edge), pointing
-  // toward the middle. There is a gap to the green X (which is 14vw wide and
-  // centered), so they never overlap and stay symmetric.
-  const style: React.CSSProperties = { position: "absolute", top: "14vh", width: "12vw", height: "32vh" };
-  if (dir === "right") style.left = "0";
-  else style.right = "0";
-  const poly = dir === "right" ? "0,0 100,50 0,100" : "100,0 0,50 100,100";
-  // Keep the score in the wide (base) half of the triangle.
-  const numBox: React.CSSProperties = { position: "absolute", top: 0, bottom: 0, width: "70%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" };
-  if (dir === "right") numBox.left = 0; else numBox.right = 0;
-  return (
-    <div style={style}>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}>
-        <polygon points={poly} fill={color} />
-      </svg>
-      <div style={numBox}>
-        <div style={{ color: "#fff", fontWeight: 900, fontSize: "15vh", lineHeight: 1 }}>{points}</div>
-        <div style={{ display: "flex", marginTop: "0.6vh" }}>
-          {Array.from({ length: setsToWin }).map((_, i) => (
-            <div key={i} style={{ width: "1.1vw", height: "1.1vw", borderRadius: "50%", background: i < sets ? "#fff" : "rgba(255,255,255,0.35)", margin: "0 0.3vw" }} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function FinishColumn({ side, color, counts, beyName, beyImg }: {
   side: "left" | "right"; color: string; counts: FinishCounts; beyName: string | null; beyImg: string | null;
 }) {
-  const style: React.CSSProperties = { position: "absolute", top: "30vh", width: "26vw" };
+  // Full-height flex column so the whole block is exactly MAIN_H tall — the same
+  // height as the score triangles next to it.
+  const style: React.CSSProperties = {
+    position: "absolute",
+    top: `${MAIN_TOP}vh`,
+    height: `${MAIN_H}vh`,
+    width: "26vw",
+    display: "flex",
+    flexDirection: "column",
+  };
   if (side === "left") style.left = "1.5vw";
   else style.right = "1.5vw";
   return (
     <div style={style}>
       {FINISH_ROWS.map((r) => (
-        <div key={r.key} style={{ display: "flex", flexDirection: side === "right" ? "row-reverse" : "row", marginBottom: "1.6vh" }}>
-          <div style={{ flex: 1, background: color, color: "#fff", fontWeight: 800, fontSize: "1.35vw", borderRadius: 6, padding: "1.9vh 0.9vw", display: "flex", alignItems: "center", justifyContent: side === "right" ? "flex-end" : "flex-start", margin: side === "right" ? "0 0.6vw 0 0" : "0 0.6vw 0 0" }}>
+        <div key={r.key} style={{ flex: 1, display: "flex", flexDirection: side === "right" ? "row-reverse" : "row", marginBottom: "1.4vh" }}>
+          <div style={{ flex: 1, background: color, color: "#fff", fontWeight: 800, fontSize: "1.35vw", borderRadius: 6, padding: "0 0.9vw", display: "flex", alignItems: "center", justifyContent: side === "right" ? "flex-end" : "flex-start", margin: side === "right" ? "0 0.6vw 0 0" : "0 0.6vw 0 0" }}>
             {r.label}
           </div>
           <div style={{ width: "5.2vw", background: color, color: "#fff", fontWeight: 900, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.6vw" }}>
@@ -372,7 +390,7 @@ function FinishColumn({ side, color, counts, beyName, beyImg }: {
           </div>
         </div>
       ))}
-      <div style={{ background: color, borderRadius: 8, padding: "1vh 0.9vw", display: "flex", alignItems: "center", flexDirection: side === "right" ? "row-reverse" : "row", minHeight: "13vh" }}>
+      <div style={{ flex: 1.4, background: color, borderRadius: 8, padding: "0 0.9vw", display: "flex", alignItems: "center", flexDirection: side === "right" ? "row-reverse" : "row" }}>
         {beyImg ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={beyImg} alt="" style={{ width: "9vh", height: "9vh", objectFit: "contain", flexShrink: 0, margin: side === "right" ? "0 0 0 0.8vw" : "0 0.8vw 0 0" }} />
