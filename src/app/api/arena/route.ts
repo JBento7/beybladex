@@ -139,6 +139,46 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Per-player count of each finish type in this match (QTD FINISH).
+  type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
+  const emptyCounts = (): FinishCounts => ({ SPIN: 0, BURST: 0, OVER: 0, EXTREME: 0 });
+  const p1Finishes = emptyCounts();
+  const p2Finishes = emptyCounts();
+  try {
+    const pts = await prisma.matchPoint.findMany({
+      where: { matchId: match.id },
+      select: { userId: true, finishType: true },
+    });
+    const keyOf: Record<string, keyof FinishCounts> = {
+      SPIN_FINISH: "SPIN",
+      BURST_FINISH: "BURST",
+      OVER_FINISH: "OVER",
+      EXTREME_FINISH: "EXTREME",
+    };
+    for (const p of pts) {
+      const k = keyOf[p.finishType];
+      if (!k) continue;
+      if (p.userId === match.player1Id) p1Finishes[k]++;
+      else if (p.userId === match.player2Id) p2Finishes[k]++;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // Match number: index of this match among the tournament's matches.
+  let matchNumber = 0;
+  try {
+    const all = await prisma.match.findMany({
+      where: { tournamentId: match.tournamentId },
+      orderBy: [{ round: "asc" }, { bracketPos: "asc" }, { createdAt: "asc" }],
+      select: { id: true },
+    });
+    const idx = all.findIndex((m) => m.id === match.id);
+    matchNumber = idx >= 0 ? idx + 1 : 0;
+  } catch {
+    /* ignore */
+  }
+
   // Countdown signal from the judge (plays the 3-2-1 video on this display).
   // Key is unique per press (match id + timestamp) so consecutive battles — and
   // different matches that share a battle label like "1:0" — each replay.
@@ -155,6 +195,8 @@ export async function GET(req: NextRequest) {
     arena: arenaNum,
     status: live ? "live" : "pending",
     tournamentName: match.tournament.name,
+    matchNumber,
+    round: match.round,
     countdown,
     match: {
       player1: match.player1.bladerName || match.player1.name,
@@ -176,6 +218,8 @@ export async function GET(req: NextRequest) {
       p2ActiveBey,
       p1BeyImg,
       p2BeyImg,
+      p1Finishes,
+      p2Finishes,
     },
   });
 }
