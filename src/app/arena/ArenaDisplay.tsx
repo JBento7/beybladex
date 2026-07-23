@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v22-onair";
+const ARENA_BUILD = "v23-ipadfs";
 
 const RED = "#c8102e"; // player 1 (left)
 const AMBER = "#f0a500"; // player 2 (right)
@@ -145,18 +145,48 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   }, [started]);
 
   useEffect(() => {
-    const onFs = () => setIsFs(!!document.fullscreenElement);
+    // Safari (incl. iPadOS) exposes the fullscreen element/events with a webkit
+    // prefix, so listen for both.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const onFs = () => setIsFs(!!(document.fullscreenElement || (document as any).webkitFullscreenElement));
     document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
+    document.addEventListener("webkitfullscreenchange", onFs);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      document.removeEventListener("webkitfullscreenchange", onFs);
+    };
   }, []);
 
+  function isFullscreen() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+  }
+  async function enterFullscreen() {
+    const el = wrapRef.current as unknown as {
+      requestFullscreen?: () => Promise<void>;
+      webkitRequestFullscreen?: () => void;
+    } | null;
+    try {
+      if (el?.requestFullscreen) await el.requestFullscreen();
+      else el?.webkitRequestFullscreen?.(); // iPadOS Safari
+    } catch {
+      /* not supported (iPhone Safari) — Add to Home Screen gives chromeless */
+    }
+  }
+  function exitFullscreen() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const d = document as any;
+    if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    else d.webkitExitFullscreen?.();
+  }
+
   function toggleFullscreen() {
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    else wrapRef.current?.requestFullscreen?.().catch(() => {});
+    if (isFullscreen()) exitFullscreen();
+    else enterFullscreen();
   }
 
   async function startDisplay() {
-    try { await wrapRef.current?.requestFullscreen?.(); } catch { /* not supported (iOS) */ }
+    await enterFullscreen();
     // Prime BOTH videos within the user gesture (iOS autoplay unlock).
     const v = cdVideoRef.current;
     if (v) {
