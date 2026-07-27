@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v27-greenx";
+const ARENA_BUILD = "v28-finishes";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
@@ -384,7 +384,7 @@ function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data
 
       {/* Main body: panel | points+arena+points | panel */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "stretch", gap: "1.2vw" }}>
-        <PlayerPanel name={match.player1} avatar={match.p1Avatar} bey={match.p1ActiveBey} beyImg={match.p1BeyImg} sets={match.p1Sets} maxSets={match.maxSets} color={BLUE} />
+        <PlayerPanel name={match.player1} avatar={match.p1Avatar} bey={match.p1ActiveBey} beyImg={match.p1BeyImg} sets={match.p1Sets} maxSets={match.maxSets} finishes={match.p1Finishes} color={BLUE} />
 
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "stretch", gap: "1vw" }}>
           <PointsColumn points={match.p1Points} total={match.pointsToWinSet} color={BLUE} />
@@ -392,7 +392,7 @@ function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data
           <PointsColumn points={match.p2Points} total={match.pointsToWinSet} color={RED} />
         </div>
 
-        <PlayerPanel name={match.player2} avatar={match.p2Avatar} bey={match.p2ActiveBey} beyImg={match.p2BeyImg} sets={match.p2Sets} maxSets={match.maxSets} color={RED} />
+        <PlayerPanel name={match.player2} avatar={match.p2Avatar} bey={match.p2ActiveBey} beyImg={match.p2BeyImg} sets={match.p2Sets} maxSets={match.maxSets} finishes={match.p2Finishes} color={RED} />
       </div>
 
       {/* Info strip */}
@@ -438,9 +438,42 @@ function HeaderPill({ name, color }: { name: string; color: string }) {
   );
 }
 
-function PlayerPanel({ name, avatar, bey, beyImg, sets, maxSets, color }: {
-  name: string; avatar: string | null; bey: string | null; beyImg: string | null; sets: number; maxSets: number; color: string;
+// Finish badges: art lives in /public/finishes/{spin,over,burst,xtreme}.png. If a
+// file is missing, we fall back to a colored text badge so it still works.
+const FINISH_META: Record<keyof FinishCounts, { file: string; label: string; pts: string; bg: string; fg: string }> = {
+  SPIN: { file: "spin", label: "SPIN", pts: "+1", bg: "#3a4048", fg: "#e6eef5" },
+  OVER: { file: "over", label: "OVER", pts: "+2", bg: "#0e5aa0", fg: "#bfe3ff" },
+  BURST: { file: "burst", label: "BURST", pts: "+2", bg: "#b8720a", fg: "#ffe6ad" },
+  EXTREME: { file: "xtreme", label: "XTREME", pts: "+3", bg: "#b01818", fg: "#ffd6d6" },
+};
+const FINISH_ORDER: (keyof FinishCounts)[] = ["SPIN", "OVER", "BURST", "EXTREME"];
+
+function FinishBadge({ type, count }: { type: keyof FinishCounts; count: number }) {
+  const m = FINISH_META[type];
+  const [imgOk, setImgOk] = useState(true);
+  return (
+    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+      {imgOk ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/finishes/${m.file}.png`} alt={m.label} onError={() => setImgOk(false)} style={{ height: "5.5vh", width: "auto", objectFit: "contain" }} />
+      ) : (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3vw", background: m.bg, color: m.fg, fontWeight: 900, fontSize: "1.4vh", padding: "0.4vh 0.7vw", borderRadius: 6, letterSpacing: "0.03em", whiteSpace: "nowrap", border: "1px solid rgba(255,255,255,0.15)" }}>
+          {m.label} {m.pts}
+        </span>
+      )}
+      {count > 1 && (
+        <span style={{ position: "absolute", top: "-0.8vh", right: "-0.9vw", background: "#000", color: "#fff", border: "1px solid rgba(255,255,255,0.7)", borderRadius: 999, fontSize: "1.2vh", fontWeight: 900, padding: "0 0.4vw", lineHeight: 1.5 }}>
+          ×{count}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PlayerPanel({ name, avatar, bey, beyImg, sets, maxSets, finishes, color }: {
+  name: string; avatar: string | null; bey: string | null; beyImg: string | null; sets: number; maxSets: number; finishes: FinishCounts; color: string;
 }) {
+  const earned = FINISH_ORDER.filter((k) => finishes[k] > 0);
   return (
     <div style={{ width: "20vw", display: "flex", flexDirection: "column", gap: "1.2vh", minHeight: 0 }}>
       {/* Photo (smaller — fixed height, top-aligned) */}
@@ -475,6 +508,14 @@ function PlayerPanel({ name, avatar, bey, beyImg, sets, maxSets, color }: {
           ))}
         </div>
       </div>
+      {/* Finishes earned this match */}
+      {earned.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "0.8vw", rowGap: "0.8vh", marginTop: "0.4vh", flexShrink: 0 }}>
+          {earned.map((k) => (
+            <FinishBadge key={k} type={k} count={finishes[k]} />
+          ))}
+        </div>
+      )}
       <div style={{ flex: 1 }} />
     </div>
   );
