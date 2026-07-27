@@ -185,15 +185,20 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Per-player count of each finish type in this match (QTD FINISH).
+  // Per-player count of each finish type — both a match total and a per-set
+  // breakdown (so the arena can group finishes under SET 1, SET 2, ...).
   type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
   const emptyCounts = (): FinishCounts => ({ SPIN: 0, BURST: 0, OVER: 0, EXTREME: 0 });
   const p1Finishes = emptyCounts();
   const p2Finishes = emptyCounts();
+  type FinishSet = { setNumber: number; counts: FinishCounts };
+  let p1FinishesBySet: FinishSet[] = [];
+  let p2FinishesBySet: FinishSet[] = [];
   try {
+    const setNumById = new Map(match.sets.map((s) => [s.id, s.setNumber]));
     const pts = await prisma.matchPoint.findMany({
       where: { matchId: match.id },
-      select: { userId: true, finishType: true },
+      select: { userId: true, finishType: true, setId: true },
     });
     const keyOf: Record<string, keyof FinishCounts> = {
       SPIN_FINISH: "SPIN",
@@ -201,12 +206,24 @@ export async function GET(req: NextRequest) {
       OVER_FINISH: "OVER",
       EXTREME_FINISH: "EXTREME",
     };
+    const bySet1 = new Map<number, FinishCounts>();
+    const bySet2 = new Map<number, FinishCounts>();
     for (const p of pts) {
       const k = keyOf[p.finishType];
       if (!k) continue;
-      if (p.userId === match.player1Id) p1Finishes[k]++;
-      else if (p.userId === match.player2Id) p2Finishes[k]++;
+      // Legacy points without setId fall back to the current set number.
+      const sn = (p.setId ? setNumById.get(p.setId) : undefined) ?? currentSetNum;
+      const flat = p.userId === match.player1Id ? p1Finishes : p.userId === match.player2Id ? p2Finishes : null;
+      const bucket = p.userId === match.player1Id ? bySet1 : p.userId === match.player2Id ? bySet2 : null;
+      if (!flat || !bucket) continue;
+      flat[k]++;
+      if (!bucket.has(sn)) bucket.set(sn, emptyCounts());
+      bucket.get(sn)![k]++;
     }
+    const toArr = (m: Map<number, FinishCounts>): FinishSet[] =>
+      [...m.entries()].sort((a, b) => a[0] - b[0]).map(([setNumber, counts]) => ({ setNumber, counts }));
+    p1FinishesBySet = toArr(bySet1);
+    p2FinishesBySet = toArr(bySet2);
   } catch {
     /* ignore */
   }
@@ -300,6 +317,8 @@ export async function GET(req: NextRequest) {
       p2BeyImg,
       p1Finishes,
       p2Finishes,
+      p1FinishesBySet,
+      p2FinishesBySet,
     },
   });
 }

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v28-finishes";
+const ARENA_BUILD = "v29-finset";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
@@ -45,6 +45,8 @@ type Match = {
   p2BeyImg: string | null;
   p1Finishes: FinishCounts;
   p2Finishes: FinishCounts;
+  p1FinishesBySet: { setNumber: number; counts: FinishCounts }[];
+  p2FinishesBySet: { setNumber: number; counts: FinishCounts }[];
 };
 
 type ArenaData = {
@@ -384,7 +386,7 @@ function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data
 
       {/* Main body: panel | points+arena+points | panel */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "stretch", gap: "1.2vw" }}>
-        <PlayerPanel name={match.player1} avatar={match.p1Avatar} bey={match.p1ActiveBey} beyImg={match.p1BeyImg} sets={match.p1Sets} maxSets={match.maxSets} finishes={match.p1Finishes} color={BLUE} />
+        <PlayerPanel name={match.player1} avatar={match.p1Avatar} bey={match.p1ActiveBey} beyImg={match.p1BeyImg} sets={match.p1Sets} maxSets={match.maxSets} finishesBySet={match.p1FinishesBySet} color={BLUE} />
 
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "stretch", gap: "1vw" }}>
           <PointsColumn points={match.p1Points} total={match.pointsToWinSet} color={BLUE} />
@@ -392,7 +394,7 @@ function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data
           <PointsColumn points={match.p2Points} total={match.pointsToWinSet} color={RED} />
         </div>
 
-        <PlayerPanel name={match.player2} avatar={match.p2Avatar} bey={match.p2ActiveBey} beyImg={match.p2BeyImg} sets={match.p2Sets} maxSets={match.maxSets} finishes={match.p2Finishes} color={RED} />
+        <PlayerPanel name={match.player2} avatar={match.p2Avatar} bey={match.p2ActiveBey} beyImg={match.p2BeyImg} sets={match.p2Sets} maxSets={match.maxSets} finishesBySet={match.p2FinishesBySet} color={RED} />
       </div>
 
       {/* Info strip */}
@@ -470,10 +472,14 @@ function FinishBadge({ type, count }: { type: keyof FinishCounts; count: number 
   );
 }
 
-function PlayerPanel({ name, avatar, bey, beyImg, sets, maxSets, finishes, color }: {
-  name: string; avatar: string | null; bey: string | null; beyImg: string | null; sets: number; maxSets: number; finishes: FinishCounts; color: string;
+function PlayerPanel({ name, avatar, bey, beyImg, sets, maxSets, finishesBySet, color }: {
+  name: string; avatar: string | null; bey: string | null; beyImg: string | null; sets: number; maxSets: number;
+  finishesBySet: { setNumber: number; counts: FinishCounts }[]; color: string;
 }) {
-  const earned = FINISH_ORDER.filter((k) => finishes[k] > 0);
+  // Only sets that actually have finishes, most recent last.
+  const finishGroups = finishesBySet
+    .map((g) => ({ setNumber: g.setNumber, earned: FINISH_ORDER.filter((k) => g.counts[k] > 0), counts: g.counts }))
+    .filter((g) => g.earned.length > 0);
   return (
     <div style={{ width: "20vw", display: "flex", flexDirection: "column", gap: "1.2vh", minHeight: 0 }}>
       {/* Photo (smaller — fixed height, top-aligned) */}
@@ -508,15 +514,17 @@ function PlayerPanel({ name, avatar, bey, beyImg, sets, maxSets, finishes, color
           ))}
         </div>
       </div>
-      {/* Finishes earned this match */}
-      {earned.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "0.8vw", rowGap: "0.8vh", marginTop: "0.4vh", flexShrink: 0 }}>
-          {earned.map((k) => (
-            <FinishBadge key={k} type={k} count={finishes[k]} />
-          ))}
-        </div>
-      )}
-      <div style={{ flex: 1 }} />
+      {/* Finishes earned, grouped by set (SET 1, SET 2, ...) */}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6vh", marginTop: "0.4vh", overflow: "hidden" }}>
+        {finishGroups.map((g) => (
+          <div key={g.setNumber} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "0.7vw", rowGap: "0.6vh", width: "100%" }}>
+            <span style={{ fontSize: "1.3vh", fontWeight: 900, color: MUTED, letterSpacing: "0.1em", flexShrink: 0 }}>SET {g.setNumber}</span>
+            {g.earned.map((k) => (
+              <FinishBadge key={k} type={k} count={g.counts[k]} />
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
