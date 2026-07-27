@@ -5,12 +5,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v26-frame";
+const ARENA_BUILD = "v27-greenx";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
 const BLUE = "#00aaff";
 const RED = "#ff3b3b";
+const GREEN = "#2ecc40";
 const YELLOW = "#ffd400";
 const TEXT = "#e6f1ff";
 const MUTED = "#9aa7b2";
@@ -387,7 +388,7 @@ function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data
 
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "stretch", gap: "1vw" }}>
           <PointsColumn points={match.p1Points} total={match.pointsToWinSet} color={BLUE} />
-          <CenterArena p1={match.p1Points} p2={match.p2Points} />
+          <CenterArena p1={match.p1Points} p2={match.p2Points} onTest={onTest} />
           <PointsColumn points={match.p2Points} total={match.pointsToWinSet} color={RED} />
         </div>
 
@@ -492,14 +493,18 @@ function PointsColumn({ points, total, color }: { points: number; total: number;
   );
 }
 
-function CenterArena({ p1, p2 }: { p1: number; p2: number }) {
+function CenterArena({ p1, p2, onTest }: { p1: number; p2: number; onTest: () => void }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "2.2vh" }}>
-      {/* Arena ring with the neon X */}
-      <div style={{ width: "30vh", height: "30vh", borderRadius: "50%", border: `3px solid ${PANEL_BORDER}`, boxShadow: `0 0 25px rgba(0,170,255,0.18), inset 0 0 25px rgba(0,0,0,0.6)`, background: "radial-gradient(circle, #0f141a 0%, #070b10 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <svg viewBox="0 0 100 100" style={{ width: "68%", height: "68%" }}>
-          <line x1="20" y1="20" x2="80" y2="80" stroke={BLUE} strokeWidth="11" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 4px ${BLUE})` }} />
-          <line x1="80" y1="20" x2="20" y2="80" stroke={RED} strokeWidth="11" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 4px ${RED})` }} />
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1.6vh" }}>
+      {/* LBL logo (tap to test the countdown video) */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/lbl-logo.png" alt="LBL" onClick={onTest} style={{ height: "9vh", width: "auto", cursor: "pointer", flexShrink: 0 }} />
+
+      {/* Arena ring with the green X */}
+      <div style={{ width: "24vh", height: "24vh", borderRadius: "50%", border: `3px solid ${PANEL_BORDER}`, boxShadow: `0 0 25px rgba(46,204,64,0.2), inset 0 0 25px rgba(0,0,0,0.6)`, background: "radial-gradient(circle, #0f141a 0%, #070b10 100%)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <svg viewBox="0 0 100 100" style={{ width: "70%", height: "70%" }}>
+          <line x1="20" y1="20" x2="80" y2="80" stroke={GREEN} strokeWidth="13" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 5px ${GREEN})` }} />
+          <line x1="80" y1="20" x2="20" y2="80" stroke={GREEN} strokeWidth="13" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 5px ${GREEN})` }} />
         </svg>
       </div>
       {/* Score display (bigger, inside a framed panel) */}
