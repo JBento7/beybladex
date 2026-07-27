@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v29-finset";
+const ARENA_BUILD = "v30-newvid";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
