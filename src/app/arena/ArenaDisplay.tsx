@@ -5,12 +5,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v24-lblcard";
+const ARENA_BUILD = "v25-neonx";
 
-// New "Beyblade X broadcast" palette: player 1 = orange, player 2 = cyan/blue,
-// on a dark navy background.
-const ORANGE = "#ff6a1a"; // player 1 (left)
-const BLUE = "#26a9e0"; // player 2 (right)
+// "Beyblade X" neon palette (from the reference component): player 1 = blue
+// (left), player 2 = red (right), yellow accent, on a near-black background.
+const BLUE = "#00aaff";
+const RED = "#ff3b3b";
+const YELLOW = "#ffd400";
+const TEXT = "#e6f1ff";
+const MUTED = "#9aa7b2";
+const PANEL_BG = "#0f141a";
+const PANEL_BORDER = "#1e2a36";
 
 type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
 
@@ -53,15 +58,6 @@ type ArenaData = {
   match: Match | null;
   debug?: { inProgressTournaments: number; matchesThisArena: number };
 };
-
-// Finish legend, in the broadcast layout order, with the app's real point values.
-const FINISH_LEGEND: { key: HistRow["finish"]; icon: string; label: string; points: number }[] = [
-  { key: "S", icon: "S", label: "SOBREVIVÊNCIA", points: 1 },
-  { key: "KO", icon: "K.O.", label: "RING-OUT", points: 2 },
-  { key: "B", icon: "B", label: "BURST", points: 2 },
-  { key: "X", icon: "X", label: "XTREME", points: 3 },
-];
-const FINISH_NAME: Record<HistRow["finish"], string> = { S: "S", KO: "K.O.", B: "Burst", X: "Xtreme" };
 
 export default function ArenaDisplay({ arena, previewParam }: { arena: number | null; previewParam: string | null }) {
   const [data, setData] = useState<ArenaData | null>(null);
@@ -305,7 +301,7 @@ function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | 
   const isP1 = winnerSide === "p1";
   const name = isP1 ? match.player1 : match.player2;
   const avatar = isP1 ? match.p1Avatar : match.p2Avatar;
-  const color = isP1 ? ORANGE : BLUE;
+  const color = isP1 ? BLUE : RED;
   const winSets = isP1 ? match.p1Sets : match.p2Sets;
   const loseSets = isP1 ? match.p2Sets : match.p1Sets;
   return (
@@ -331,12 +327,12 @@ function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | 
   );
 }
 
-// LBL broadcast scoreboard (matches the reference art): header with logo +
-// tournament name, two framed player portraits, big POINTS score, the round's
-// battle history, the finish legend and the footer bar.
+// Neon "Beyblade X" scoreboard, ported from the reference component:
+// header pills (blue/red) + yellow championship title, side panels (photo, BEY,
+// bey image ring, VITÓRIAS dots), center arena ring with the X and score, an
+// info strip and a bottom bar.
 function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data: ArenaData; match: Match; build: string; onTest: () => void }) {
-  const history = data.history ?? [];
-  const battleNum = match.currentSetBattleCount + 1;
+  const statusText = data.status === "live" ? "AO VIVO" : data.status === "pending" ? "AGUARDANDO" : "—";
   return (
     <div
       style={{
@@ -345,130 +341,193 @@ function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data
         height: "100vh",
         display: "flex",
         flexDirection: "column",
-        background: "radial-gradient(120% 90% at 50% 0%, #123049 0%, #0b1f33 55%, #071523 100%)",
-        color: "#fff",
-        fontFamily: "system-ui, sans-serif",
-        padding: "2vh 2.5vw",
+        gap: "1.3vh",
+        background: "radial-gradient(ellipse at center, #0d1117 0%, #070b10 100%)",
+        color: TEXT,
+        fontFamily: "'Orbitron', 'Segoe UI', Roboto, Arial, sans-serif",
+        padding: "1.8vh 2vw",
         boxSizing: "border-box",
       }}
     >
-      <div style={{ position: "absolute", bottom: "0.5vh", right: "1vw", color: "#2c4a63", fontSize: "0.9vw", zIndex: 5 }}>[{build}]</div>
+      <div style={{ position: "absolute", bottom: "0.4vh", right: "0.8vw", color: "#26333f", fontSize: "0.85vw", zIndex: 5 }}>[{build}]</div>
 
-      {/* Header: logo (tap to test countdown) + tournament name */}
-      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/lbl-logo.png" alt="LBL" onClick={onTest} style={{ height: "12vh", width: "auto", cursor: "pointer" }} />
-        <div style={{ marginTop: "0.4vh", fontSize: "2.1vh", fontWeight: 900, letterSpacing: "0.12em", color: "#8fd3f4", textTransform: "uppercase", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "60vw" }}>
-          {data.tournamentName || `ARENA ${arena}`}
+      {/* Top header: player 01 (blue) · championship title (yellow) · player 02 (red) */}
+      <div style={{ flexShrink: 0, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: "1vw" }}>
+        <HeaderPill name={match.player1} color={BLUE} />
+        <div
+          onClick={onTest}
+          style={{
+            cursor: "pointer",
+            justifySelf: "center",
+            padding: "1vh 1.6vw",
+            fontWeight: 900,
+            fontSize: "2.1vh",
+            letterSpacing: "0.12em",
+            color: YELLOW,
+            textTransform: "uppercase",
+            border: `2px solid ${YELLOW}`,
+            borderRadius: 12,
+            textShadow: `0 0 10px ${YELLOW}aa`,
+            boxShadow: `0 0 14px ${YELLOW}44`,
+            whiteSpace: "nowrap",
+            textAlign: "center",
+            maxWidth: "42vw",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {data.tournamentName || "CAMPEONATO BEYBLADE X"}
         </div>
+        <HeaderPill name={match.player2} color={RED} />
       </div>
 
-      {/* Middle: player | center | player */}
-      <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "stretch", gap: "2vw", marginTop: "1.5vh" }}>
-        <PlayerCard side="left" name={match.player1} avatar={match.p1Avatar} bey={match.p1ActiveBey} combo={match.p1Combo} color={ORANGE} />
+      {/* Main body: panel | points+arena+points | panel */}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "stretch", gap: "1.2vw" }}>
+        <PlayerPanel name={match.player1} avatar={match.p1Avatar} bey={match.p1ActiveBey} beyImg={match.p1BeyImg} sets={match.p1Sets} maxSets={match.maxSets} color={BLUE} />
 
-        {/* Center column */}
-        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
-          {/* Battle pips */}
-          <div style={{ display: "flex", gap: "0.6vw", marginBottom: "1vh", flexWrap: "wrap", justifyContent: "center" }}>
-            {history.map((h, i) => (
-              <span key={i} style={{ width: "1.1vh", height: "1.1vh", borderRadius: "50%", background: h.side === "p1" ? ORANGE : BLUE }} />
-            ))}
-          </div>
-
-          {/* Score */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "2.2vw", lineHeight: 0.9 }}>
-            <span style={{ fontSize: "16vh", fontWeight: 900, color: ORANGE, textShadow: `0 0 3vh ${ORANGE}66` }}>{match.p1Points}</span>
-            <span style={{ fontSize: "3.2vh", fontWeight: 900, letterSpacing: "0.15em", color: "#cfe8f7" }}>POINTS</span>
-            <span style={{ fontSize: "16vh", fontWeight: 900, color: BLUE, textShadow: `0 0 3vh ${BLUE}66` }}>{match.p2Points}</span>
-          </div>
-
-          {/* Legend + history + legend */}
-          <div style={{ width: "100%", display: "flex", alignItems: "stretch", justifyContent: "center", gap: "1vw", marginTop: "1vh", minHeight: 0 }}>
-            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "1vh" }}>
-              {FINISH_LEGEND.slice(0, 2).map((f) => <LegendItem key={f.key} f={f} />)}
-            </div>
-
-            <div style={{ flex: 1, maxWidth: "34vw", background: "rgba(8,26,42,0.65)", border: "1px solid #1c496b", borderRadius: 12, padding: "1vh 1.2vw", display: "flex", flexDirection: "column", minHeight: 0 }}>
-              <div style={{ textAlign: "center", fontSize: "1.9vh", fontWeight: 900, letterSpacing: "0.08em", color: "#8fd3f4", marginBottom: "0.6vh" }}>HISTÓRICO DA RODADA</div>
-              <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", gap: "0.35vh" }}>
-                {history.length === 0 ? (
-                  <div style={{ textAlign: "center", color: "#5b7f9a", fontSize: "1.7vh", padding: "1vh 0" }}>—</div>
-                ) : (
-                  history.slice(-5).map((h, i, arr) => {
-                    const rodada = history.length - arr.length + i + 1;
-                    const who = h.side === "p1" ? match.player1 : match.player2;
-                    const col = h.side === "p1" ? ORANGE : BLUE;
-                    return (
-                      <div key={i} style={{ display: "flex", alignItems: "center", fontSize: "1.9vh", fontWeight: 700, whiteSpace: "nowrap" }}>
-                        <span style={{ color: "#8aa9c0", width: "8vw" }}>Rodada {rodada}:</span>
-                        <span style={{ color: col, fontWeight: 900, flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{who}</span>
-                        <span style={{ color: "#e6f2fb", margin: "0 0.6vw" }}>{FINISH_NAME[h.finish]}</span>
-                        <span style={{ color: col, fontWeight: 900 }}>({h.points})</span>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "1vh" }}>
-              {FINISH_LEGEND.slice(2, 4).map((f) => <LegendItem key={f.key} f={f} />)}
-            </div>
-          </div>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "stretch", gap: "1vw" }}>
+          <PointsColumn points={match.p1Points} total={match.pointsToWinSet} color={BLUE} />
+          <CenterArena p1={match.p1Points} p2={match.p2Points} />
+          <PointsColumn points={match.p2Points} total={match.pointsToWinSet} color={RED} />
         </div>
 
-        <PlayerCard side="right" name={match.player2} avatar={match.p2Avatar} bey={match.p2ActiveBey} combo={match.p2Combo} color={BLUE} />
+        <PlayerPanel name={match.player2} avatar={match.p2Avatar} bey={match.p2ActiveBey} beyImg={match.p2BeyImg} sets={match.p2Sets} maxSets={match.maxSets} color={RED} />
       </div>
 
-      {/* Próxima rodada banner */}
-      <div style={{ flexShrink: 0, textAlign: "center", margin: "1vh 0", fontSize: "2.6vh", fontWeight: 900, letterSpacing: "0.12em", color: "#8fd3f4" }}>
-        ▶▶ {data.status === "pending" ? "PRÓXIMA PARTIDA" : "PRÓXIMA RODADA"} ◀◀
+      {/* Info strip */}
+      <div style={{ flexShrink: 0, display: "flex", justifyContent: "space-around", alignItems: "center", background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, padding: "0.8vh 1vw" }}>
+        <InfoItem label="RODADA" value={String(match.currentSetNum).padStart(2, "0")} />
+        <InfoItem label="PARTIDA" value={data.matchNumber ? String(data.matchNumber).padStart(2, "0") : "—"} />
+        <InfoItem label="STATUS" value={statusText} valueColor={data.status === "live" ? BLUE : YELLOW} />
       </div>
 
-      {/* Footer bar */}
-      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-around", borderTop: "1px solid #1c496b", paddingTop: "1vh", fontSize: "2vh", fontWeight: 900, letterSpacing: "0.06em" }}>
-        <span style={{ color: "#cfe8f7" }}>ARENA {arena}</span>
-        <span style={{ color: "#8fd3f4" }}>RODADA ATUAL: {battleNum}</span>
-        <span style={{ color: "#cfe8f7" }}>VAI A: {match.pointsToWinSet} PONTOS</span>
+      {/* Bottom bar */}
+      <div style={{ flexShrink: 0, display: "flex", justifyContent: "space-around", alignItems: "center", gap: "1vw" }}>
+        <BottomItem icon="🏆" label="EVENTO" value={data.tournamentName || "—"} />
+        <BottomItem icon="🎯" label="FASE" value={`Rodada ${data.round ?? match.currentSetNum}`} />
+        <BottomItem icon="🏟️" label="ARENA" value={`Arena ${arena}`} />
       </div>
     </div>
   );
 }
 
-function LegendItem({ f }: { f: (typeof FINISH_LEGEND)[number] }) {
+function HeaderPill({ name, color }: { name: string; color: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.6vw" }}>
-      <span style={{ width: "4vh", height: "4vh", borderRadius: "50%", border: "2px solid #2f7fb0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5vh", fontWeight: 900, color: "#8fd3f4", flexShrink: 0 }}>
-        {f.icon}
-      </span>
-      <div style={{ lineHeight: 1.05 }}>
-        <div style={{ fontSize: "1.4vh", fontWeight: 800, color: "#cfe8f7" }}>{f.label}</div>
-        <div style={{ fontSize: "1.4vh", fontWeight: 900, color: "#8fd3f4" }}>{f.points} {f.points === 1 ? "PT" : "PTS"}</div>
-      </div>
+    <div
+      style={{
+        textAlign: "center",
+        padding: "1vh 1vw",
+        fontWeight: 800,
+        fontSize: "2.2vh",
+        letterSpacing: "0.1em",
+        textTransform: "uppercase",
+        color,
+        border: `2px solid ${color}`,
+        borderRadius: 12,
+        background: "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0))",
+        boxShadow: `0 0 15px ${color}66`,
+        textShadow: `0 0 10px ${color}aa`,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}
+    >
+      {name}
     </div>
   );
 }
 
-// Framed player portrait with name + active bey/combo (broadcast card).
-function PlayerCard({ side, name, avatar, bey, combo, color }: {
-  side: "left" | "right"; name: string; avatar: string | null; bey: string | null; combo: string | null; color: string;
+function PlayerPanel({ name, avatar, bey, beyImg, sets, maxSets, color }: {
+  name: string; avatar: string | null; bey: string | null; beyImg: string | null; sets: number; maxSets: number; color: string;
 }) {
   return (
-    <div style={{ width: "22vw", display: "flex", flexDirection: "column", alignItems: "center", minHeight: 0 }}>
-      <div style={{ width: "100%", flex: 1, minHeight: 0, borderRadius: 14, border: `3px solid ${color}`, boxShadow: `0 0 2.5vh ${color}55`, overflow: "hidden", background: "#0b1c2c", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ width: "20vw", display: "flex", flexDirection: "column", gap: "1vh", minHeight: 0 }}>
+      {/* Photo */}
+      <div style={{ flex: 1, minHeight: 0, borderRadius: 14, border: `2px solid ${color}`, boxShadow: `0 0 15px ${color}55`, overflow: "hidden", background: PANEL_BG, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
-          <span style={{ color, fontWeight: 900, fontSize: "10vh" }}>{name.charAt(0).toUpperCase()}</span>
+          <div style={{ textAlign: "center", color: MUTED, fontSize: "1.6vh", fontWeight: 700, letterSpacing: "0.08em", lineHeight: 1.3 }}>
+            FOTO / ÍCONE<br />DO JOGADOR
+          </div>
         )}
       </div>
-      <div style={{ marginTop: "0.8vh", fontSize: "2.6vh", fontWeight: 900, color, textAlign: "center", maxWidth: "22vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {name}
+      {/* BEY slot */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6vw", background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 10, padding: "0.7vh 0.8vw" }}>
+        <span style={{ fontSize: "1.4vh", fontWeight: 900, color, letterSpacing: "0.1em", flexShrink: 0 }}>BEY</span>
+        <span style={{ fontSize: "1.8vh", fontWeight: 800, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{bey || "—"}</span>
       </div>
-      {bey ? <div style={{ fontSize: "1.7vh", fontWeight: 700, color: "#e6f2fb", textAlign: "center", maxWidth: "22vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{bey}</div> : null}
-      {combo ? <div style={{ fontSize: "1.5vh", color: "#7fa6c0", textAlign: "center", maxWidth: "22vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{combo}</div> : null}
+      {/* Bey image ring */}
+      <div style={{ alignSelf: "center", width: "11vh", height: "11vh", borderRadius: "50%", border: `3px solid ${color}`, boxShadow: `0 0 15px ${color}66`, overflow: "hidden", background: "#0b1017", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {beyImg ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={beyImg} alt="" style={{ width: "88%", height: "88%", objectFit: "contain" }} />
+        ) : null}
+      </div>
+      {/* Victories */}
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: "1.4vh", fontWeight: 900, color: MUTED, letterSpacing: "0.15em", marginBottom: "0.5vh" }}>VITÓRIAS</div>
+        <div style={{ display: "flex", justifyContent: "center", gap: "0.6vw" }}>
+          {Array.from({ length: Math.max(maxSets, 1) }).map((_, i) => (
+            <span key={i} style={{ width: "1.7vh", height: "1.7vh", borderRadius: "50%", background: i < sets ? color : "transparent", border: `2px solid ${color}`, boxShadow: i < sets ? `0 0 8px ${color}` : "none" }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PointsColumn({ points, total, color }: { points: number; total: number; color: string }) {
+  return (
+    <div style={{ width: "6vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1.2vh" }}>
+      <div style={{ fontSize: "1.5vh", fontWeight: 900, color, letterSpacing: "0.14em" }}>PONTOS</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.9vh", alignItems: "center" }}>
+        {Array.from({ length: Math.max(total, 1) }).map((_, i) => (
+          <span key={i} style={{ width: "2.4vh", height: "2.4vh", borderRadius: "50%", background: i < points ? color : "transparent", border: `2px solid ${color}`, boxShadow: i < points ? `0 0 10px ${color}` : "none" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CenterArena({ p1, p2 }: { p1: number; p2: number }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "2.2vh" }}>
+      {/* Arena ring with the neon X */}
+      <div style={{ width: "30vh", height: "30vh", borderRadius: "50%", border: `3px solid ${PANEL_BORDER}`, boxShadow: `0 0 25px rgba(0,170,255,0.18), inset 0 0 25px rgba(0,0,0,0.6)`, background: "radial-gradient(circle, #0f141a 0%, #070b10 100%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <svg viewBox="0 0 100 100" style={{ width: "68%", height: "68%" }}>
+          <line x1="20" y1="20" x2="80" y2="80" stroke={BLUE} strokeWidth="11" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 4px ${BLUE})` }} />
+          <line x1="80" y1="20" x2="20" y2="80" stroke={RED} strokeWidth="11" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 4px ${RED})` }} />
+        </svg>
+      </div>
+      {/* Score display */}
+      <div style={{ display: "flex", alignItems: "center", gap: "2vw", lineHeight: 1 }}>
+        <span style={{ fontSize: "9vh", fontWeight: 900, color: BLUE, textShadow: `0 0 15px ${BLUE}` }}>{p1}</span>
+        <span style={{ fontSize: "3.4vh", fontWeight: 900, color: YELLOW }}>X</span>
+        <span style={{ fontSize: "9vh", fontWeight: 900, color: RED, textShadow: `0 0 15px ${RED}` }}>{p2}</span>
+      </div>
+    </div>
+  );
+}
+
+function InfoItem({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontSize: "1.3vh", fontWeight: 800, color: MUTED, letterSpacing: "0.15em" }}>{label}</div>
+      <div style={{ fontSize: "2.4vh", fontWeight: 900, color: valueColor || TEXT }}>{value}</div>
+    </div>
+  );
+}
+
+function BottomItem({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.6vw", background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 10, padding: "0.7vh 1vw", flex: 1, minWidth: 0, justifyContent: "center" }}>
+      <span style={{ fontSize: "2.2vh", flexShrink: 0 }}>{icon}</span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: "1.2vh", fontWeight: 800, color: MUTED, letterSpacing: "0.12em" }}>{label}</div>
+        <div style={{ fontSize: "1.7vh", fontWeight: 800, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
+      </div>
     </div>
   );
 }
