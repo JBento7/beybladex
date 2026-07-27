@@ -5,18 +5,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v23-ipadfs";
+const ARENA_BUILD = "v24-lblcard";
 
-const RED = "#c8102e"; // player 1 (left)
-const AMBER = "#f0a500"; // player 2 (right)
-const GREEN = "#22b14c"; // center X
-
-// Main row (finish columns + center) — shared top/height so the finish blocks
-// and the score triangles line up at exactly the same height.
-const MAIN_TOP = 30; // vh
-const MAIN_H = 56; // vh
+// New "Beyblade X broadcast" palette: player 1 = orange, player 2 = cyan/blue,
+// on a dark navy background.
+const ORANGE = "#ff6a1a"; // player 1 (left)
+const BLUE = "#26a9e0"; // player 2 (right)
 
 type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
+
+type HistRow = { side: "p1" | "p2"; finish: "S" | "KO" | "B" | "X"; points: number };
 
 type Match = {
   player1: string;
@@ -35,6 +33,8 @@ type Match = {
   currentSetBattleCount: number;
   p1ActiveBey: string | null;
   p2ActiveBey: string | null;
+  p1Combo: string | null;
+  p2Combo: string | null;
   p1BeyImg: string | null;
   p2BeyImg: string | null;
   p1Finishes: FinishCounts;
@@ -49,16 +49,19 @@ type ArenaData = {
   matchNumber?: number;
   round?: number;
   countdown?: { key: string; elapsedMs: number } | null;
+  history?: HistRow[];
   match: Match | null;
   debug?: { inProgressTournaments: number; matchesThisArena: number };
 };
 
-const FINISH_ROWS: { key: keyof FinishCounts; label: string }[] = [
-  { key: "SPIN", label: "SPIN FINISH" },
-  { key: "BURST", label: "BURST FINISH" },
-  { key: "OVER", label: "OVER FINISH" },
-  { key: "EXTREME", label: "EXTREME FINISH" },
+// Finish legend, in the broadcast layout order, with the app's real point values.
+const FINISH_LEGEND: { key: HistRow["finish"]; icon: string; label: string; points: number }[] = [
+  { key: "S", icon: "S", label: "SOBREVIVÊNCIA", points: 1 },
+  { key: "KO", icon: "K.O.", label: "RING-OUT", points: 2 },
+  { key: "B", icon: "B", label: "BURST", points: 2 },
+  { key: "X", icon: "X", label: "XTREME", points: 3 },
 ];
+const FINISH_NAME: Record<HistRow["finish"], string> = { S: "S", KO: "K.O.", B: "Burst", X: "Xtreme" };
 
 export default function ArenaDisplay({ arena, previewParam }: { arena: number | null; previewParam: string | null }) {
   const [data, setData] = useState<ArenaData | null>(null);
@@ -202,7 +205,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 12 }}>Usuário sem arena</div>
         <div style={{ color: "#9ca3af", fontSize: 14, maxWidth: 420 }}>
           Faça login com um usuário de arena (arena1@lbl.arena … arena5@lbl.arena). Se for admin, use{" "}
-          <code style={{ color: AMBER }}>/arena?n=1</code> para pré-visualizar.
+          <code style={{ color: BLUE }}>/arena?n=1</code> para pré-visualizar.
         </div>
       </div>
     );
@@ -241,8 +244,8 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       {/* Start gate */}
       {!started && (
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 80, background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
-          <div style={{ fontSize: 34, fontWeight: 900, color: AMBER, marginBottom: 24 }}>ARENA {arena}</div>
-          <button onClick={startDisplay} style={{ background: AMBER, color: "#000", fontWeight: 900, fontSize: 22, padding: "18px 40px", borderRadius: 18, border: "none", marginBottom: 24 }}>
+          <div style={{ fontSize: 34, fontWeight: 900, color: BLUE, marginBottom: 24 }}>ARENA {arena}</div>
+          <button onClick={startDisplay} style={{ background: BLUE, color: "#000", fontWeight: 900, fontSize: 22, padding: "18px 40px", borderRadius: 18, border: "none", marginBottom: 24 }}>
             ▶ Toque para iniciar o telão
           </button>
           <div style={{ color: "#6b7280", fontSize: 14, maxWidth: 380 }}>
@@ -280,7 +283,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/lbl-logo.png" alt="LBL" style={{ height: "16vh", width: "auto", opacity: 0.9, marginBottom: "2vh" }} />
-          <div style={{ fontSize: "4vw", fontWeight: 900, color: AMBER }}>ARENA {arena}</div>
+          <div style={{ fontSize: "4vw", fontWeight: 900, color: BLUE }}>ARENA {arena}</div>
           <div style={{ color: "#6b7280", fontSize: "2vw", marginTop: "1vh" }}>Aguardando partida...</div>
           <div style={{ color: "#374151", fontSize: 10, marginTop: 6 }}>[{ARENA_BUILD}]</div>
           {data?.debug && (
@@ -302,7 +305,7 @@ function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | 
   const isP1 = winnerSide === "p1";
   const name = isP1 ? match.player1 : match.player2;
   const avatar = isP1 ? match.p1Avatar : match.p2Avatar;
-  const color = isP1 ? RED : AMBER;
+  const color = isP1 ? ORANGE : BLUE;
   const winSets = isP1 ? match.p1Sets : match.p2Sets;
   const loseSets = isP1 ? match.p2Sets : match.p1Sets;
   return (
@@ -328,149 +331,144 @@ function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | 
   );
 }
 
+// LBL broadcast scoreboard (matches the reference art): header with logo +
+// tournament name, two framed player portraits, big POINTS score, the round's
+// battle history, the finish legend and the footer bar.
 function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data: ArenaData; match: Match; build: string; onTest: () => void }) {
-  return (
-    <div style={{ position: "relative", width: "100%", height: "100vh" }}>
-      {/* Top-left: arena / match number */}
-      <div style={{ position: "absolute", top: "2vh", left: "2vw", lineHeight: 1.1, zIndex: 5 }}>
-        <div style={{ color: "#fff", fontWeight: 900, fontSize: "2vw" }}>ARENA {arena}</div>
-        {data.matchNumber ? <div style={{ color: "#9ca3af", fontWeight: 700, fontSize: "1.4vw" }}>PARTIDA {data.matchNumber}</div> : null}
-      </div>
-      <div style={{ position: "absolute", bottom: "0.6vh", right: "1vw", color: "#374151", fontSize: "0.9vw" }}>[{build}]</div>
-
-      {/* Top-center: LBL logo (tap it to test the countdown video) */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/lbl-logo.png" alt="LBL" onClick={onTest} style={{ position: "absolute", top: "1.5vh", left: "50%", marginLeft: "-7vh", height: "14vh", width: "auto", cursor: "pointer" }} />
-
-      {/* Players */}
-      <PlayerHead side="left" name={match.player1} avatar={match.p1Avatar} color={RED} />
-      <PlayerHead side="right" name={match.player2} avatar={match.p2Avatar} color={AMBER} />
-
-      {/* RODADA */}
-      <div style={{ position: "absolute", top: "18vh", left: "50%", marginLeft: "-8vw", width: "16vw", textAlign: "center", background: RED, color: "#fff", fontWeight: 900, padding: "0.9vh 0", borderRadius: 8, fontSize: "1.7vw" }}>
-        RODADA {match.currentSetNum}
-      </div>
-
-      {/* Center: red triangle · green X · amber triangle drawn in ONE svg so each
-          triangle apex nests into the X's notch with a uniform ~2px gap. */}
-      <CenterX p1={match.p1Points} p2={match.p2Points} />
-
-      {/* Finish columns */}
-      <FinishColumn side="left" color={RED} counts={match.p1Finishes} beyName={match.isDeck ? match.p1ActiveBey : null} beyImg={match.isDeck ? match.p1BeyImg : null} />
-      <FinishColumn side="right" color={AMBER} counts={match.p2Finishes} beyName={match.isDeck ? match.p2ActiveBey : null} beyImg={match.isDeck ? match.p2BeyImg : null} />
-
-      {data.status === "pending" && (
-        <div style={{ position: "absolute", bottom: "1vh", left: "50%", marginLeft: "-8vw", width: "16vw", textAlign: "center", color: AMBER, fontWeight: 900, fontSize: "1.3vw" }}>PRÓXIMA PARTIDA</div>
-      )}
-    </div>
-  );
-}
-
-// Center scoreboard: red triangle (p1) — green X — amber triangle (p2), all in
-// one viewBox so the triangle apexes nest into the X's left/right notches with a
-// uniform ~2px gap that follows the notch edges. viewBox aspect (1.3) matches the
-// displayed box aspect so the diagonal edges stay parallel (true angles).
-// Green X: square 90×90 centred in the box; notch vertices at x=48.8 / 81.2.
-// Triangles: edges parallel to the notch edges (slope ±1.143), apex 0.6u (~2px)
-// short of each notch vertex, base spanning almost the full height.
-function CenterX({ p1, p2 }: { p1: number; p2: number }) {
-  const GREEN_PTS =
-    "36.2,8.6 65,33.8 93.8,8.6 106.4,8.6 106.4,21.2 81.2,50 106.4,78.8 106.4,91.4 93.8,91.4 65,66.2 36.2,91.4 23.6,91.4 23.6,78.8 48.8,50 23.6,21.2 23.6,8.6";
+  const history = data.history ?? [];
+  const battleNum = match.currentSetBattleCount + 1;
   return (
     <div
       style={{
-        position: "absolute",
-        top: `${MAIN_TOP}vh`,
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: `${MAIN_H * 1.3}vh`,
-        height: `${MAIN_H}vh`,
+        position: "relative",
+        width: "100%",
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        background: "radial-gradient(120% 90% at 50% 0%, #123049 0%, #0b1f33 55%, #071523 100%)",
+        color: "#fff",
+        fontFamily: "system-ui, sans-serif",
+        padding: "2vh 2.5vw",
+        boxSizing: "border-box",
       }}
     >
-      <svg viewBox="0 0 130 100" preserveAspectRatio="none" style={{ width: "100%", height: "100%", display: "block" }}>
-        <polygon points="6,1.8 48.2,50 6,98.2" fill={RED} />
-        <polygon points="124,1.8 81.8,50 124,98.2" fill={AMBER} />
-        <polygon points={GREEN_PTS} fill={GREEN} />
-      </svg>
-      {/* Score numbers over each triangle's wide base. */}
-      <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "37%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: `${MAIN_H * 0.4}vh`, lineHeight: 1 }}>
-        {p1}
+      <div style={{ position: "absolute", bottom: "0.5vh", right: "1vw", color: "#2c4a63", fontSize: "0.9vw", zIndex: 5 }}>[{build}]</div>
+
+      {/* Header: logo (tap to test countdown) + tournament name */}
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/lbl-logo.png" alt="LBL" onClick={onTest} style={{ height: "12vh", width: "auto", cursor: "pointer" }} />
+        <div style={{ marginTop: "0.4vh", fontSize: "2.1vh", fontWeight: 900, letterSpacing: "0.12em", color: "#8fd3f4", textTransform: "uppercase", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "60vw" }}>
+          {data.tournamentName || `ARENA ${arena}`}
+        </div>
       </div>
-      <div style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: "37%", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 900, fontSize: `${MAIN_H * 0.4}vh`, lineHeight: 1 }}>
-        {p2}
+
+      {/* Middle: player | center | player */}
+      <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "stretch", gap: "2vw", marginTop: "1.5vh" }}>
+        <PlayerCard side="left" name={match.player1} avatar={match.p1Avatar} bey={match.p1ActiveBey} combo={match.p1Combo} color={ORANGE} />
+
+        {/* Center column */}
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          {/* Battle pips */}
+          <div style={{ display: "flex", gap: "0.6vw", marginBottom: "1vh", flexWrap: "wrap", justifyContent: "center" }}>
+            {history.map((h, i) => (
+              <span key={i} style={{ width: "1.1vh", height: "1.1vh", borderRadius: "50%", background: h.side === "p1" ? ORANGE : BLUE }} />
+            ))}
+          </div>
+
+          {/* Score */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "2.2vw", lineHeight: 0.9 }}>
+            <span style={{ fontSize: "16vh", fontWeight: 900, color: ORANGE, textShadow: `0 0 3vh ${ORANGE}66` }}>{match.p1Points}</span>
+            <span style={{ fontSize: "3.2vh", fontWeight: 900, letterSpacing: "0.15em", color: "#cfe8f7" }}>POINTS</span>
+            <span style={{ fontSize: "16vh", fontWeight: 900, color: BLUE, textShadow: `0 0 3vh ${BLUE}66` }}>{match.p2Points}</span>
+          </div>
+
+          {/* Legend + history + legend */}
+          <div style={{ width: "100%", display: "flex", alignItems: "stretch", justifyContent: "center", gap: "1vw", marginTop: "1vh", minHeight: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "1vh" }}>
+              {FINISH_LEGEND.slice(0, 2).map((f) => <LegendItem key={f.key} f={f} />)}
+            </div>
+
+            <div style={{ flex: 1, maxWidth: "34vw", background: "rgba(8,26,42,0.65)", border: "1px solid #1c496b", borderRadius: 12, padding: "1vh 1.2vw", display: "flex", flexDirection: "column", minHeight: 0 }}>
+              <div style={{ textAlign: "center", fontSize: "1.9vh", fontWeight: 900, letterSpacing: "0.08em", color: "#8fd3f4", marginBottom: "0.6vh" }}>HISTÓRICO DA RODADA</div>
+              <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", gap: "0.35vh" }}>
+                {history.length === 0 ? (
+                  <div style={{ textAlign: "center", color: "#5b7f9a", fontSize: "1.7vh", padding: "1vh 0" }}>—</div>
+                ) : (
+                  history.slice(-5).map((h, i, arr) => {
+                    const rodada = history.length - arr.length + i + 1;
+                    const who = h.side === "p1" ? match.player1 : match.player2;
+                    const col = h.side === "p1" ? ORANGE : BLUE;
+                    return (
+                      <div key={i} style={{ display: "flex", alignItems: "center", fontSize: "1.9vh", fontWeight: 700, whiteSpace: "nowrap" }}>
+                        <span style={{ color: "#8aa9c0", width: "8vw" }}>Rodada {rodada}:</span>
+                        <span style={{ color: col, fontWeight: 900, flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{who}</span>
+                        <span style={{ color: "#e6f2fb", margin: "0 0.6vw" }}>{FINISH_NAME[h.finish]}</span>
+                        <span style={{ color: col, fontWeight: 900 }}>({h.points})</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "1vh" }}>
+              {FINISH_LEGEND.slice(2, 4).map((f) => <LegendItem key={f.key} f={f} />)}
+            </div>
+          </div>
+        </div>
+
+        <PlayerCard side="right" name={match.player2} avatar={match.p2Avatar} bey={match.p2ActiveBey} combo={match.p2Combo} color={BLUE} />
+      </div>
+
+      {/* Próxima rodada banner */}
+      <div style={{ flexShrink: 0, textAlign: "center", margin: "1vh 0", fontSize: "2.6vh", fontWeight: 900, letterSpacing: "0.12em", color: "#8fd3f4" }}>
+        ▶▶ {data.status === "pending" ? "PRÓXIMA PARTIDA" : "PRÓXIMA RODADA"} ◀◀
+      </div>
+
+      {/* Footer bar */}
+      <div style={{ flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-around", borderTop: "1px solid #1c496b", paddingTop: "1vh", fontSize: "2vh", fontWeight: 900, letterSpacing: "0.06em" }}>
+        <span style={{ color: "#cfe8f7" }}>ARENA {arena}</span>
+        <span style={{ color: "#8fd3f4" }}>RODADA ATUAL: {battleNum}</span>
+        <span style={{ color: "#cfe8f7" }}>VAI A: {match.pointsToWinSet} PONTOS</span>
       </div>
     </div>
   );
 }
 
-function PlayerHead({ side, name, avatar, color }: { side: "left" | "right"; name: string; avatar: string | null; color: string }) {
-  const circle = (
-    <div style={{ width: "12vw", height: "12vw", borderRadius: "50%", background: color, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-      {avatar ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-      ) : (
-        <span style={{ color: "#000", fontWeight: 900, fontSize: "5vw" }}>{name.charAt(0).toUpperCase()}</span>
-      )}
-    </div>
-  );
-  const nameEl = (
-    <div style={{ color, fontWeight: 900, fontSize: "2.4vw", maxWidth: "20vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", margin: side === "right" ? "0 1.2vw 0 0" : "0 0 0 1.2vw" }}>{name}</div>
-  );
-  const style: React.CSSProperties = {
-    position: "absolute",
-    // Below the arena/match label so the left player never covers it.
-    top: "9vh",
-    display: "flex",
-    alignItems: "center",
-    flexDirection: side === "right" ? "row-reverse" : "row",
-  };
-  if (side === "left") style.left = "1.5vw";
-  else style.right = "1.5vw";
+function LegendItem({ f }: { f: (typeof FINISH_LEGEND)[number] }) {
   return (
-    <div style={style}>
-      {circle}
-      {nameEl}
+    <div style={{ display: "flex", alignItems: "center", gap: "0.6vw" }}>
+      <span style={{ width: "4vh", height: "4vh", borderRadius: "50%", border: "2px solid #2f7fb0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5vh", fontWeight: 900, color: "#8fd3f4", flexShrink: 0 }}>
+        {f.icon}
+      </span>
+      <div style={{ lineHeight: 1.05 }}>
+        <div style={{ fontSize: "1.4vh", fontWeight: 800, color: "#cfe8f7" }}>{f.label}</div>
+        <div style={{ fontSize: "1.4vh", fontWeight: 900, color: "#8fd3f4" }}>{f.points} {f.points === 1 ? "PT" : "PTS"}</div>
+      </div>
     </div>
   );
 }
 
-function FinishColumn({ side, color, counts, beyName, beyImg }: {
-  side: "left" | "right"; color: string; counts: FinishCounts; beyName: string | null; beyImg: string | null;
+// Framed player portrait with name + active bey/combo (broadcast card).
+function PlayerCard({ side, name, avatar, bey, combo, color }: {
+  side: "left" | "right"; name: string; avatar: string | null; bey: string | null; combo: string | null; color: string;
 }) {
-  // Full-height flex column so the whole block is exactly MAIN_H tall — the same
-  // height as the score triangles next to it.
-  const style: React.CSSProperties = {
-    position: "absolute",
-    top: `${MAIN_TOP}vh`,
-    height: `${MAIN_H}vh`,
-    width: "26vw",
-    display: "flex",
-    flexDirection: "column",
-  };
-  if (side === "left") style.left = "1.5vw";
-  else style.right = "1.5vw";
   return (
-    <div style={style}>
-      {FINISH_ROWS.map((r) => (
-        <div key={r.key} style={{ flex: 1, display: "flex", flexDirection: side === "right" ? "row-reverse" : "row", marginBottom: "1.4vh" }}>
-          <div style={{ flex: 1, background: color, color: "#fff", fontWeight: 800, fontSize: "1.35vw", borderRadius: 6, padding: "0 0.9vw", display: "flex", alignItems: "center", justifyContent: side === "right" ? "flex-end" : "flex-start", margin: side === "right" ? "0 0.6vw 0 0" : "0 0.6vw 0 0" }}>
-            {r.label}
-          </div>
-          <div style={{ width: "5.2vw", background: color, color: "#fff", fontWeight: 900, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.6vw" }}>
-            {counts[r.key]}
-          </div>
-        </div>
-      ))}
-      <div style={{ flex: 1.4, background: color, borderRadius: 8, padding: "0 0.9vw", display: "flex", alignItems: "center", flexDirection: side === "right" ? "row-reverse" : "row" }}>
-        {beyImg ? (
+    <div style={{ width: "22vw", display: "flex", flexDirection: "column", alignItems: "center", minHeight: 0 }}>
+      <div style={{ width: "100%", flex: 1, minHeight: 0, borderRadius: 14, border: `3px solid ${color}`, boxShadow: `0 0 2.5vh ${color}55`, overflow: "hidden", background: "#0b1c2c", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={beyImg} alt="" style={{ width: "9vh", height: "9vh", objectFit: "contain", flexShrink: 0, margin: side === "right" ? "0 0 0 0.8vw" : "0 0.8vw 0 0" }} />
-        ) : null}
-        <div style={{ color: "#fff", fontWeight: 800, fontSize: "1.3vw", textAlign: side === "right" ? "right" : "left" }}>
-          {beyName || "—"}
-        </div>
+          <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <span style={{ color, fontWeight: 900, fontSize: "10vh" }}>{name.charAt(0).toUpperCase()}</span>
+        )}
       </div>
+      <div style={{ marginTop: "0.8vh", fontSize: "2.6vh", fontWeight: 900, color, textAlign: "center", maxWidth: "22vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {name}
+      </div>
+      {bey ? <div style={{ fontSize: "1.7vh", fontWeight: 700, color: "#e6f2fb", textAlign: "center", maxWidth: "22vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{bey}</div> : null}
+      {combo ? <div style={{ fontSize: "1.5vh", color: "#7fa6c0", textAlign: "center", maxWidth: "22vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{combo}</div> : null}
     </div>
   );
 }

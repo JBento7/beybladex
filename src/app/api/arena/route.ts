@@ -147,11 +147,15 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 3on3: resolve active beyblade name + blade photo for the current battle.
+  // 3on3: resolve active beyblade name + combo + blade photo for the current battle.
   let p1ActiveBey: string | null = null;
   let p2ActiveBey: string | null = null;
+  let p1Combo: string | null = null;
+  let p2Combo: string | null = null;
   let p1BeyImg: string | null = null;
   let p2BeyImg: string | null = null;
+  const comboOf = (b: { blade?: string | null; ratchet?: string | null; bit?: string | null } | null) =>
+    b ? [b.blade, b.ratchet, b.bit].filter(Boolean).join(" ") || null : null;
   if (isDeck) {
     try {
       const cycleIndex = Math.floor(currentSetBattleCount / 3);
@@ -161,7 +165,10 @@ export async function GET(req: NextRequest) {
       });
       const beyIds = orders.flatMap((o) => [o.bey1Id, o.bey2Id, o.bey3Id]);
       const beys = beyIds.length
-        ? await prisma.beyblade.findMany({ where: { id: { in: beyIds } }, select: { id: true, name: true, blade: true } })
+        ? await prisma.beyblade.findMany({
+            where: { id: { in: beyIds } },
+            select: { id: true, name: true, blade: true, ratchet: true, bit: true },
+          })
         : [];
       const beyOf = (id: string) => beys.find((b) => b.id === id) ?? null;
       const o1 = orders.find((o) => o.userId === match.player1Id);
@@ -170,6 +177,8 @@ export async function GET(req: NextRequest) {
       const b2 = o2 ? beyOf([o2.bey1Id, o2.bey2Id, o2.bey3Id][pos]) : null;
       p1ActiveBey = b1?.name ?? null;
       p2ActiveBey = b2?.name ?? null;
+      p1Combo = comboOf(b1);
+      p2Combo = comboOf(b2);
       [p1BeyImg, p2BeyImg] = await Promise.all([bladeImage(b1?.blade ?? null), bladeImage(b2?.blade ?? null)]);
     } catch {
       /* deck order table may be missing */
@@ -200,6 +209,33 @@ export async function GET(req: NextRequest) {
     }
   } catch {
     /* ignore */
+  }
+
+  // Ordered battle history of the current set (HISTÓRICO DA RODADA):
+  // each scored point with who won it, the finish type and its point value.
+  type HistRow = { side: "p1" | "p2"; finish: "S" | "KO" | "B" | "X"; points: number };
+  const history: HistRow[] = [];
+  if (currentSet) {
+    try {
+      const pts = await prisma.matchPoint.findMany({
+        where: { setId: currentSet.id },
+        orderBy: { createdAt: "asc" },
+        select: { userId: true, finishType: true },
+      });
+      const fmap: Record<string, { k: HistRow["finish"]; p: number }> = {
+        SPIN_FINISH: { k: "S", p: 1 },
+        OVER_FINISH: { k: "KO", p: 2 },
+        BURST_FINISH: { k: "B", p: 2 },
+        EXTREME_FINISH: { k: "X", p: 3 },
+      };
+      for (const p of pts) {
+        const f = fmap[p.finishType];
+        if (!f) continue;
+        history.push({ side: p.userId === match.player1Id ? "p1" : "p2", finish: f.k, points: f.p });
+      }
+    } catch {
+      /* setId column may be missing */
+    }
   }
 
   // Match number: index of this match among the tournament's matches.
@@ -239,6 +275,7 @@ export async function GET(req: NextRequest) {
     matchNumber,
     round: match.round,
     countdown,
+    history,
     match: {
       player1: match.player1.bladerName || match.player1.name,
       player2: match.player2.bladerName || match.player2.name,
@@ -257,6 +294,8 @@ export async function GET(req: NextRequest) {
       currentSetBattleCount,
       p1ActiveBey,
       p2ActiveBey,
+      p1Combo,
+      p2Combo,
       p1BeyImg,
       p2BeyImg,
       p1Finishes,
