@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v25-neonx";
+const ARENA_BUILD = "v26-frame";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
@@ -441,9 +441,9 @@ function PlayerPanel({ name, avatar, bey, beyImg, sets, maxSets, color }: {
   name: string; avatar: string | null; bey: string | null; beyImg: string | null; sets: number; maxSets: number; color: string;
 }) {
   return (
-    <div style={{ width: "20vw", display: "flex", flexDirection: "column", gap: "1vh", minHeight: 0 }}>
-      {/* Photo */}
-      <div style={{ flex: 1, minHeight: 0, borderRadius: 14, border: `2px solid ${color}`, boxShadow: `0 0 15px ${color}55`, overflow: "hidden", background: PANEL_BG, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ width: "20vw", display: "flex", flexDirection: "column", gap: "1.2vh", minHeight: 0 }}>
+      {/* Photo (smaller — fixed height, top-aligned) */}
+      <div style={{ height: "26vh", flexShrink: 0, borderRadius: 14, border: `2px solid ${color}`, boxShadow: `0 0 15px ${color}55`, overflow: "hidden", background: PANEL_BG, display: "flex", alignItems: "center", justifyContent: "center" }}>
         {avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -454,19 +454,19 @@ function PlayerPanel({ name, avatar, bey, beyImg, sets, maxSets, color }: {
         )}
       </div>
       {/* BEY slot */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.6vw", background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 10, padding: "0.7vh 0.8vw" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6vw", background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 10, padding: "0.7vh 0.8vw", flexShrink: 0 }}>
         <span style={{ fontSize: "1.4vh", fontWeight: 900, color, letterSpacing: "0.1em", flexShrink: 0 }}>BEY</span>
         <span style={{ fontSize: "1.8vh", fontWeight: 800, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{bey || "—"}</span>
       </div>
-      {/* Bey image ring */}
-      <div style={{ alignSelf: "center", width: "11vh", height: "11vh", borderRadius: "50%", border: `3px solid ${color}`, boxShadow: `0 0 15px ${color}66`, overflow: "hidden", background: "#0b1017", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      {/* Bey image ring (a bit bigger) */}
+      <div style={{ alignSelf: "center", width: "16vh", height: "16vh", borderRadius: "50%", border: `3px solid ${color}`, boxShadow: `0 0 18px ${color}77`, overflow: "hidden", background: "#0b1017", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         {beyImg ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={beyImg} alt="" style={{ width: "88%", height: "88%", objectFit: "contain" }} />
         ) : null}
       </div>
       {/* Victories */}
-      <div style={{ textAlign: "center" }}>
+      <div style={{ textAlign: "center", flexShrink: 0 }}>
         <div style={{ fontSize: "1.4vh", fontWeight: 900, color: MUTED, letterSpacing: "0.15em", marginBottom: "0.5vh" }}>VITÓRIAS</div>
         <div style={{ display: "flex", justifyContent: "center", gap: "0.6vw" }}>
           {Array.from({ length: Math.max(maxSets, 1) }).map((_, i) => (
@@ -474,6 +474,7 @@ function PlayerPanel({ name, avatar, bey, beyImg, sets, maxSets, color }: {
           ))}
         </div>
       </div>
+      <div style={{ flex: 1 }} />
     </div>
   );
 }
@@ -501,11 +502,23 @@ function CenterArena({ p1, p2 }: { p1: number; p2: number }) {
           <line x1="80" y1="20" x2="20" y2="80" stroke={RED} strokeWidth="11" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 4px ${RED})` }} />
         </svg>
       </div>
-      {/* Score display */}
-      <div style={{ display: "flex", alignItems: "center", gap: "2vw", lineHeight: 1 }}>
-        <span style={{ fontSize: "9vh", fontWeight: 900, color: BLUE, textShadow: `0 0 15px ${BLUE}` }}>{p1}</span>
-        <span style={{ fontSize: "3.4vh", fontWeight: 900, color: YELLOW }}>X</span>
-        <span style={{ fontSize: "9vh", fontWeight: 900, color: RED, textShadow: `0 0 15px ${RED}` }}>{p2}</span>
+      {/* Score display (bigger, inside a framed panel) */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "2.4vw",
+          lineHeight: 1,
+          padding: "1.2vh 3vw",
+          border: `3px solid #2a3f52`,
+          borderRadius: 18,
+          background: "rgba(0,0,0,0.35)",
+          boxShadow: `0 0 22px rgba(0,170,255,0.15), inset 0 0 18px rgba(0,0,0,0.6)`,
+        }}
+      >
+        <span style={{ fontSize: "11vh", fontWeight: 900, color: BLUE, textShadow: `0 0 18px ${BLUE}` }}>{p1}</span>
+        <span style={{ fontSize: "4vh", fontWeight: 900, color: YELLOW }}>X</span>
+        <span style={{ fontSize: "11vh", fontWeight: 900, color: RED, textShadow: `0 0 18px ${RED}` }}>{p2}</span>
       </div>
     </div>
   );
