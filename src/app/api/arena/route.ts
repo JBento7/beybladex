@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   const include = {
     player1: { select: { id: true, name: true, bladerName: true, avatarUrl: true } },
     player2: { select: { id: true, name: true, bladerName: true, avatarUrl: true } },
-    tournament: { select: { name: true, setsToWin: true, pointsToWinSet: true, deckType: true } },
+    tournament: { select: { name: true, setsToWin: true, pointsToWinSet: true, deckType: true, location: true, venueName: true } },
     sets: { orderBy: { setNumber: "asc" as const }, include: { points: { select: { id: true } } } },
   };
 
@@ -257,6 +257,7 @@ export async function GET(req: NextRequest) {
 
   // Match number: index of this match among the tournament's matches.
   let matchNumber = 0;
+  let matchesTotal = 0;
   try {
     const all = await prisma.match.findMany({
       where: { tournamentId: match.tournamentId },
@@ -265,6 +266,7 @@ export async function GET(req: NextRequest) {
     });
     const idx = all.findIndex((m) => m.id === match.id);
     matchNumber = idx >= 0 ? idx + 1 : 0;
+    matchesTotal = all.length;
   } catch {
     /* ignore */
   }
@@ -289,7 +291,9 @@ export async function GET(req: NextRequest) {
     status: phase,
     winnerSide,
     tournamentName: match.tournament.name,
+    location: match.tournament.venueName || match.tournament.location || null,
     matchNumber,
+    matchesTotal,
     round: match.round,
     countdown,
     history,

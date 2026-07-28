@@ -6,18 +6,13 @@ import { signOut } from "next-auth/react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v31-logout";
+const ARENA_BUILD = "v32-bgart";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
+// Winner screen accents (player 1 / player 2).
 const BLUE = "#00aaff";
 const RED = "#ff3b3b";
-const GREEN = "#2ecc40";
-const YELLOW = "#ffd400";
-const TEXT = "#e6f1ff";
-const MUTED = "#9aa7b2";
-const PANEL_BG = "#0f141a";
-const PANEL_BORDER = "#1e2a36";
 
 type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
 
@@ -55,7 +50,9 @@ type ArenaData = {
   status: "live" | "pending" | "idle" | "finished";
   winnerSide?: "p1" | "p2" | null;
   tournamentName?: string;
+  location?: string | null;
   matchNumber?: number;
+  matchesTotal?: number;
   round?: number;
   countdown?: { key: string; elapsedMs: number } | null;
   history?: HistRow[];
@@ -349,271 +346,173 @@ function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | 
   );
 }
 
-// Neon "Beyblade X" scoreboard, ported from the reference component:
-// header pills (blue/red) + yellow championship title, side panels (photo, BEY,
-// bey image ring, VITÓRIAS dots), center arena ring with the X and score, an
-// info strip and a bottom bar.
-function Scoreboard({ arena, data, match, build, onTest }: { arena: number; data: ArenaData; match: Match; build: string; onTest: () => void }) {
-  const statusText = data.status === "live" ? "AO VIVO" : data.status === "pending" ? "AGUARDANDO" : "—";
-  return (
-    <div
-      style={{
-        position: "relative",
-        width: "100%",
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        gap: "1.3vh",
-        background: "radial-gradient(ellipse at center, #0d1117 0%, #070b10 100%)",
-        color: TEXT,
-        fontFamily: "'Orbitron', 'Segoe UI', Roboto, Arial, sans-serif",
-        padding: "1.8vh 2vw",
-        boxSizing: "border-box",
-      }}
-    >
-      <div style={{ position: "absolute", bottom: "0.4vh", right: "0.8vw", color: "#26333f", fontSize: "0.85vw", zIndex: 5 }}>[{build}]</div>
+// Background-art scoreboard: the LBL layout image (public/scoreboard-bg.png) is
+// the fixed 16:9 background and only the live data is overlaid at the matching
+// spots. Positions are percentages of the board; fonts use container-query
+// units (cqw) so everything scales with the board at any size.
+const GOLD = "#ffd400";
 
-      {/* Top header: player 01 (blue) · championship title (yellow) · player 02 (red) */}
-      <div style={{ flexShrink: 0, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: "1vw" }}>
-        <HeaderPill name={match.player1} color={BLUE} />
-        <div
-          onClick={onTest}
-          style={{
-            cursor: "pointer",
-            justifySelf: "center",
-            padding: "1vh 1.6vw",
-            fontWeight: 900,
-            fontSize: "2.1vh",
-            letterSpacing: "0.12em",
-            color: YELLOW,
-            textTransform: "uppercase",
-            border: `2px solid ${YELLOW}`,
-            borderRadius: 12,
-            textShadow: `0 0 10px ${YELLOW}aa`,
-            boxShadow: `0 0 14px ${YELLOW}44`,
-            whiteSpace: "nowrap",
-            textAlign: "center",
-            maxWidth: "42vw",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {data.tournamentName || "CAMPEONATO BEYBLADE X"}
-        </div>
-        <HeaderPill name={match.player2} color={RED} />
-      </div>
-
-      {/* Main body: panel | points+arena+points | panel */}
-      <div style={{ flex: 1, minHeight: 0, display: "flex", alignItems: "stretch", gap: "1.2vw" }}>
-        <PlayerPanel name={match.player1} avatar={match.p1Avatar} bey={match.p1ActiveBey} beyImg={match.p1BeyImg} sets={match.p1Sets} maxSets={match.maxSets} finishesBySet={match.p1FinishesBySet} color={BLUE} />
-
-        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "stretch", gap: "1vw" }}>
-          <PointsColumn points={match.p1Points} total={match.pointsToWinSet} color={BLUE} />
-          <CenterArena p1={match.p1Points} p2={match.p2Points} onTest={onTest} />
-          <PointsColumn points={match.p2Points} total={match.pointsToWinSet} color={RED} />
-        </div>
-
-        <PlayerPanel name={match.player2} avatar={match.p2Avatar} bey={match.p2ActiveBey} beyImg={match.p2BeyImg} sets={match.p2Sets} maxSets={match.maxSets} finishesBySet={match.p2FinishesBySet} color={RED} />
-      </div>
-
-      {/* Info strip */}
-      <div style={{ flexShrink: 0, display: "flex", justifyContent: "space-around", alignItems: "center", background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 12, padding: "0.8vh 1vw" }}>
-        <InfoItem label="RODADA" value={String(match.currentSetNum).padStart(2, "0")} />
-        <InfoItem label="PARTIDA" value={data.matchNumber ? String(data.matchNumber).padStart(2, "0") : "—"} />
-        <InfoItem label="STATUS" value={statusText} valueColor={data.status === "live" ? BLUE : YELLOW} />
-      </div>
-
-      {/* Bottom bar */}
-      <div style={{ flexShrink: 0, display: "flex", justifyContent: "space-around", alignItems: "center", gap: "1vw" }}>
-        <BottomItem icon="🏆" label="EVENTO" value={data.tournamentName || "—"} />
-        <BottomItem icon="🎯" label="FASE" value={`Rodada ${data.round ?? match.currentSetNum}`} />
-        <BottomItem icon="🏟️" label="ARENA" value={`Arena ${arena}`} />
-      </div>
-    </div>
-  );
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
 }
 
-function HeaderPill({ name, color }: { name: string; color: string }) {
+function Cell({ cx, cy, w, fs, color, children }: {
+  cx: number; cy: number; w?: number; fs: number; color?: string; children: React.ReactNode;
+}) {
   return (
     <div
       style={{
+        position: "absolute",
+        left: `${cx}%`,
+        top: `${cy}%`,
+        transform: "translate(-50%, -50%)",
+        width: w ? `${w}%` : undefined,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         textAlign: "center",
-        padding: "1vh 1vw",
-        fontWeight: 800,
-        fontSize: "2.2vh",
-        letterSpacing: "0.1em",
-        textTransform: "uppercase",
-        color,
-        border: `2px solid ${color}`,
-        borderRadius: 12,
-        background: "linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0))",
-        boxShadow: `0 0 15px ${color}66`,
-        textShadow: `0 0 10px ${color}aa`,
+        fontSize: `${fs}cqw`,
+        color: color || "#fff",
+        fontWeight: 900,
+        lineHeight: 1,
         whiteSpace: "nowrap",
         overflow: "hidden",
         textOverflow: "ellipsis",
       }}
     >
-      {name}
+      {children}
     </div>
   );
 }
 
-// Finish badges: art lives in /public/finishes/{spin,over,burst,xtreme}.png. If a
-// file is missing, we fall back to a colored text badge so it still works.
-const FINISH_META: Record<keyof FinishCounts, { file: string; label: string; pts: string; bg: string; fg: string }> = {
-  SPIN: { file: "spin", label: "SPIN", pts: "+1", bg: "#3a4048", fg: "#e6eef5" },
-  OVER: { file: "over", label: "OVER", pts: "+2", bg: "#0e5aa0", fg: "#bfe3ff" },
-  BURST: { file: "burst", label: "BURST", pts: "+2", bg: "#b8720a", fg: "#ffe6ad" },
-  EXTREME: { file: "xtreme", label: "XTREME", pts: "+3", bg: "#b01818", fg: "#ffd6d6" },
-};
-const FINISH_ORDER: (keyof FinishCounts)[] = ["SPIN", "OVER", "BURST", "EXTREME"];
-
-function FinishBadge({ type, count }: { type: keyof FinishCounts; count: number }) {
-  const m = FINISH_META[type];
-  const [imgOk, setImgOk] = useState(true);
+function PointPips({ cx, points }: { cx: number; points: number }) {
+  const top = 20.5;
+  const bot = 44;
   return (
-    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
-      {imgOk ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={`/finishes/${m.file}.png`} alt={m.label} onError={() => setImgOk(false)} style={{ height: "5.5vh", width: "auto", objectFit: "contain" }} />
-      ) : (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3vw", background: m.bg, color: m.fg, fontWeight: 900, fontSize: "1.4vh", padding: "0.4vh 0.7vw", borderRadius: 6, letterSpacing: "0.03em", whiteSpace: "nowrap", border: "1px solid rgba(255,255,255,0.15)" }}>
-          {m.label} {m.pts}
-        </span>
-      )}
-      {count > 1 && (
-        <span style={{ position: "absolute", top: "-0.8vh", right: "-0.9vw", background: "#000", color: "#fff", border: "1px solid rgba(255,255,255,0.7)", borderRadius: 999, fontSize: "1.2vh", fontWeight: 900, padding: "0 0.4vw", lineHeight: 1.5 }}>
-          ×{count}
-        </span>
-      )}
-    </div>
+    <>
+      {Array.from({ length: 5 }).map((_, i) => {
+        const y = top + (i * (bot - top)) / 4;
+        return (
+          <span
+            key={i}
+            style={{
+              position: "absolute",
+              left: `${cx}%`,
+              top: `${y}%`,
+              transform: "translate(-50%, -50%)",
+              width: "1.55cqw",
+              height: "1.55cqw",
+              borderRadius: "50%",
+              background: i < points ? GOLD : "transparent",
+            }}
+          />
+        );
+      })}
+    </>
   );
 }
 
-function PlayerPanel({ name, avatar, bey, beyImg, sets, maxSets, finishesBySet, color }: {
-  name: string; avatar: string | null; bey: string | null; beyImg: string | null; sets: number; maxSets: number;
-  finishesBySet: { setNumber: number; counts: FinishCounts }[]; color: string;
-}) {
-  // Only sets that actually have finishes, most recent last.
-  const finishGroups = finishesBySet
-    .map((g) => ({ setNumber: g.setNumber, earned: FINISH_ORDER.filter((k) => g.counts[k] > 0), counts: g.counts }))
-    .filter((g) => g.earned.length > 0);
+function VictoryPips({ cxs, sets }: { cxs: number[]; sets: number }) {
   return (
-    <div style={{ width: "20vw", display: "flex", flexDirection: "column", gap: "1.2vh", minHeight: 0 }}>
-      {/* Photo (smaller — fixed height, top-aligned) */}
-      <div style={{ height: "26vh", flexShrink: 0, borderRadius: 14, border: `2px solid ${color}`, boxShadow: `0 0 15px ${color}55`, overflow: "hidden", background: PANEL_BG, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {avatar ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        ) : (
-          <div style={{ textAlign: "center", color: MUTED, fontSize: "1.6vh", fontWeight: 700, letterSpacing: "0.08em", lineHeight: 1.3 }}>
-            FOTO / ÍCONE<br />DO JOGADOR
-          </div>
-        )}
-      </div>
-      {/* BEY slot */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.6vw", background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 10, padding: "0.7vh 0.8vw", flexShrink: 0 }}>
-        <span style={{ fontSize: "1.4vh", fontWeight: 900, color, letterSpacing: "0.1em", flexShrink: 0 }}>BEY</span>
-        <span style={{ fontSize: "1.8vh", fontWeight: 800, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{bey || "—"}</span>
-      </div>
-      {/* Bey image ring (a bit bigger) */}
-      <div style={{ alignSelf: "center", width: "16vh", height: "16vh", borderRadius: "50%", border: `3px solid ${color}`, boxShadow: `0 0 18px ${color}77`, overflow: "hidden", background: "#0b1017", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        {beyImg ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={beyImg} alt="" style={{ width: "88%", height: "88%", objectFit: "contain" }} />
-        ) : null}
-      </div>
-      {/* Victories */}
-      <div style={{ textAlign: "center", flexShrink: 0 }}>
-        <div style={{ fontSize: "1.4vh", fontWeight: 900, color: MUTED, letterSpacing: "0.15em", marginBottom: "0.5vh" }}>VITÓRIAS</div>
-        <div style={{ display: "flex", justifyContent: "center", gap: "0.6vw" }}>
-          {Array.from({ length: Math.max(maxSets, 1) }).map((_, i) => (
-            <span key={i} style={{ width: "1.7vh", height: "1.7vh", borderRadius: "50%", background: i < sets ? color : "transparent", border: `2px solid ${color}`, boxShadow: i < sets ? `0 0 8px ${color}` : "none" }} />
-          ))}
-        </div>
-      </div>
-      {/* Finishes earned, grouped by set (SET 1, SET 2, ...) */}
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6vh", marginTop: "0.4vh", overflow: "hidden" }}>
-        {finishGroups.map((g) => (
-          <div key={g.setNumber} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "0.7vw", rowGap: "0.6vh", width: "100%" }}>
-            <span style={{ fontSize: "1.3vh", fontWeight: 900, color: MUTED, letterSpacing: "0.1em", flexShrink: 0 }}>SET {g.setNumber}</span>
-            {g.earned.map((k) => (
-              <FinishBadge key={k} type={k} count={g.counts[k]} />
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
+    <>
+      {cxs.map((cx, i) => (
+        <span
+          key={i}
+          style={{
+            position: "absolute",
+            left: `${cx}%`,
+            top: "77.5%",
+            transform: "translate(-50%, -50%)",
+            width: "1.2cqw",
+            height: "1.2cqw",
+            borderRadius: "50%",
+            background: i < sets ? GOLD : "transparent",
+          }}
+        />
+      ))}
+    </>
   );
 }
 
-function PointsColumn({ points, total, color }: { points: number; total: number; color: string }) {
-  return (
-    <div style={{ width: "6vw", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1.2vh" }}>
-      <div style={{ fontSize: "1.5vh", fontWeight: 900, color, letterSpacing: "0.14em" }}>PONTOS</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.9vh", alignItems: "center" }}>
-        {Array.from({ length: Math.max(total, 1) }).map((_, i) => (
-          <span key={i} style={{ width: "2.4vh", height: "2.4vh", borderRadius: "50%", background: i < points ? color : "transparent", border: `2px solid ${color}`, boxShadow: i < points ? `0 0 10px ${color}` : "none" }} />
-        ))}
-      </div>
-    </div>
-  );
-}
+function Scoreboard({ data, match, build, onTest }: { arena: number; data: ArenaData; match: Match; build: string; onTest: () => void }) {
+  const statusText = data.status === "live" ? "AO VIVO" : data.status === "pending" ? "AGUARDANDO" : "—";
+  const partida = data.matchNumber
+    ? `${pad2(data.matchNumber)}${data.matchesTotal ? ` / ${pad2(data.matchesTotal)}` : ""}`
+    : "—";
+  const fase = `Rodada ${data.round ?? match.currentSetNum}`;
 
-function CenterArena({ p1, p2, onTest }: { p1: number; p2: number; onTest: () => void }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1.6vh" }}>
-      {/* LBL logo (tap to test the countdown video) */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/lbl-logo.png" alt="LBL" onClick={onTest} style={{ height: "9vh", width: "auto", cursor: "pointer", flexShrink: 0 }} />
-
-      {/* Arena ring with the green X */}
-      <div style={{ width: "24vh", height: "24vh", borderRadius: "50%", border: `3px solid ${PANEL_BORDER}`, boxShadow: `0 0 25px rgba(46,204,64,0.2), inset 0 0 25px rgba(0,0,0,0.6)`, background: "radial-gradient(circle, #0f141a 0%, #070b10 100%)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <svg viewBox="0 0 100 100" style={{ width: "70%", height: "70%" }}>
-          <line x1="20" y1="20" x2="80" y2="80" stroke={GREEN} strokeWidth="13" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 5px ${GREEN})` }} />
-          <line x1="80" y1="20" x2="20" y2="80" stroke={GREEN} strokeWidth="13" strokeLinecap="round" style={{ filter: `drop-shadow(0 0 5px ${GREEN})` }} />
-        </svg>
-      </div>
-      {/* Score display (bigger, inside a framed panel) */}
+    <div style={{ position: "absolute", inset: 0, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "2.4vw",
-          lineHeight: 1,
-          padding: "1.2vh 3vw",
-          border: `3px solid #2a3f52`,
-          borderRadius: 18,
-          background: "rgba(0,0,0,0.35)",
-          boxShadow: `0 0 22px rgba(0,170,255,0.15), inset 0 0 18px rgba(0,0,0,0.6)`,
+          position: "relative",
+          width: "min(100vw, calc(100vh * 1672 / 941))",
+          aspectRatio: "1672 / 941",
+          containerType: "size",
+          backgroundImage: "url(/scoreboard-bg.png)",
+          backgroundSize: "100% 100%",
+          backgroundRepeat: "no-repeat",
+          fontFamily: "'Arial Black', system-ui, sans-serif",
+          overflow: "hidden",
         }}
       >
-        <span style={{ fontSize: "11vh", fontWeight: 900, color: BLUE, textShadow: `0 0 18px ${BLUE}` }}>{p1}</span>
-        <span style={{ fontSize: "4vh", fontWeight: 900, color: YELLOW }}>X</span>
-        <span style={{ fontSize: "11vh", fontWeight: 900, color: RED, textShadow: `0 0 18px ${RED}` }}>{p2}</span>
+        <div style={{ position: "absolute", bottom: "0.4cqw", right: "0.6cqw", color: "#5b2a2a", fontSize: "0.8cqw", zIndex: 5 }}>[{build}]</div>
+
+        {/* Tap the LBL logo (top-center) to test the countdown video */}
+        <div onClick={onTest} style={{ position: "absolute", left: "45%", top: 0, width: "10%", height: "13%", cursor: "pointer", zIndex: 6 }} />
+
+        {/* Player photos (over the FOTO boxes) */}
+        {match.p1Avatar && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={match.p1Avatar} alt="" style={{ position: "absolute", left: "3.6%", top: "16.5%", width: "18.8%", height: "28.7%", objectFit: "cover", borderRadius: "1cqw" }} />
+        )}
+        {match.p2Avatar && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={match.p2Avatar} alt="" style={{ position: "absolute", left: "77.6%", top: "16.5%", width: "18.8%", height: "28.7%", objectFit: "cover", borderRadius: "1cqw" }} />
+        )}
+
+        {/* Bey images (over the gold rings) */}
+        {match.p1BeyImg && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={match.p1BeyImg} alt="" style={{ position: "absolute", left: "8.15%", top: "59.5%", width: "9.5%", height: "16.9%", objectFit: "contain" }} />
+        )}
+        {match.p2BeyImg && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={match.p2BeyImg} alt="" style={{ position: "absolute", left: "82.35%", top: "59.5%", width: "9.5%", height: "16.9%", objectFit: "contain" }} />
+        )}
+
+        {/* Names */}
+        <Cell cx={12.8} cy={7.5} w={21} fs={1.9}>{match.player1}</Cell>
+        <Cell cx={87.2} cy={7.5} w={21} fs={1.9}>{match.player2}</Cell>
+
+        {/* Bey names */}
+        <Cell cx={13} cy={51.5} w={19} fs={1.3}>{match.p1ActiveBey || ""}</Cell>
+        <Cell cx={87} cy={51.5} w={19} fs={1.3}>{match.p2ActiveBey || ""}</Cell>
+
+        {/* Points pips */}
+        <PointPips cx={28.2} points={match.p1Points} />
+        <PointPips cx={71.8} points={match.p2Points} />
+
+        {/* Score */}
+        <Cell cx={36.8} cy={57.5} fs={5.5}>{match.p1Points}</Cell>
+        <Cell cx={63.2} cy={57.5} fs={5.5}>{match.p2Points}</Cell>
+
+        {/* Victories */}
+        <VictoryPips cxs={[25.6, 28.1, 30.6]} sets={match.p1Sets} />
+        <VictoryPips cxs={[69.4, 71.9, 74.4]} sets={match.p2Sets} />
+
+        {/* Rodada / Partida / Status */}
+        <Cell cx={38.4} cy={76} fs={1.8}>{pad2(match.currentSetNum)}</Cell>
+        <Cell cx={48.6} cy={76} fs={1.7}>{partida}</Cell>
+        <Cell cx={60.1} cy={76} fs={1.4} color={GOLD}>{statusText}</Cell>
+
+        {/* Bottom bar */}
+        <Cell cx={15} cy={89} w={14} fs={1.05}>{data.tournamentName || "—"}</Cell>
+        <Cell cx={37} cy={89} w={16} fs={1.05}>{fase}</Cell>
+        <Cell cx={56} cy={89} w={14} fs={1.05}>{data.location || "—"}</Cell>
+        <Cell cx={79} cy={89} w={16} fs={1.05}>—</Cell>
       </div>
     </div>
   );
 }
 
-function InfoItem({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
-  return (
-    <div style={{ textAlign: "center" }}>
-      <div style={{ fontSize: "1.3vh", fontWeight: 800, color: MUTED, letterSpacing: "0.15em" }}>{label}</div>
-      <div style={{ fontSize: "2.4vh", fontWeight: 900, color: valueColor || TEXT }}>{value}</div>
-    </div>
-  );
-}
-
-function BottomItem({ icon, label, value }: { icon: string; label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.6vw", background: PANEL_BG, border: `1px solid ${PANEL_BORDER}`, borderRadius: 10, padding: "0.7vh 1vw", flex: 1, minWidth: 0, justifyContent: "center" }}>
-      <span style={{ fontSize: "2.2vh", flexShrink: 0 }}>{icon}</span>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: "1.2vh", fontWeight: 800, color: MUTED, letterSpacing: "0.12em" }}>{label}</div>
-        <div style={{ fontSize: "1.7vh", fontWeight: 800, color: TEXT, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
-      </div>
-    </div>
-  );
-}
