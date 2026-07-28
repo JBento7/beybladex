@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v39-finpanel";
+const ARENA_BUILD = "v40-finsplit";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
@@ -412,27 +412,22 @@ function FinishBadge({ type, count }: { type: keyof FinishCounts; count: number 
   );
 }
 
-// Finishes of the match, grouped by set, shown in the marked center-left area.
-function FinishesPanel({ p1BySet, p2BySet }: {
-  p1BySet: { setNumber: number; counts: FinishCounts }[];
-  p2BySet: { setNumber: number; counts: FinishCounts }[];
+// One player's finishes, grouped by set, with their own counts. Player 1 sits
+// in the marked center-left area; player 2 is mirrored to the center-right.
+function FinishesColumn({ bySet, side }: {
+  bySet: { setNumber: number; counts: FinishCounts }[];
+  side: "left" | "right";
 }) {
-  const bySet = new Map<number, FinishCounts>();
-  for (const g of [...p1BySet, ...p2BySet]) {
-    const cur = bySet.get(g.setNumber) ?? { SPIN: 0, BURST: 0, OVER: 0, EXTREME: 0 };
-    for (const k of FINISH_ORDER) cur[k] += g.counts[k];
-    bySet.set(g.setNumber, cur);
-  }
-  const rows = [...bySet.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([setNumber, counts]) => ({ setNumber, earned: FINISH_ORDER.filter((k) => counts[k] > 0), counts }))
-    .filter((r) => r.earned.length > 0);
+  const rows = bySet
+    .map((g) => ({ setNumber: g.setNumber, earned: FINISH_ORDER.filter((k) => g.counts[k] > 0), counts: g.counts }))
+    .filter((r) => r.earned.length > 0)
+    .sort((a, b) => a.setNumber - b.setNumber);
   if (rows.length === 0) return null;
   return (
     <div
       style={{
         position: "absolute",
-        left: "31.3%",
+        left: side === "left" ? "31.3%" : "53.3%",
         top: "11.5%",
         width: "15.4%",
         height: "34%",
@@ -535,8 +530,9 @@ function Scoreboard({ data, match, build, onTest }: { arena: number; data: Arena
         {/* Tap the LBL logo (top-center) to test the countdown video */}
         <div onClick={onTest} style={{ position: "absolute", left: "45%", top: 0, width: "10%", height: "13%", cursor: "pointer", zIndex: 6 }} />
 
-        {/* Finishes of the match (grouped by set) */}
-        <FinishesPanel p1BySet={match.p1FinishesBySet} p2BySet={match.p2FinishesBySet} />
+        {/* Finishes per player, grouped by set */}
+        <FinishesColumn bySet={match.p1FinishesBySet} side="left" />
+        <FinishesColumn bySet={match.p2FinishesBySet} side="right" />
 
         {/* Player photos (over the FOTO boxes) */}
         {match.p1Avatar && (
