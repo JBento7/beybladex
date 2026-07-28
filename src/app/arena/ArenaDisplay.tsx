@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v32-bgart";
+const ARENA_BUILD = "v33-center";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
@@ -464,21 +464,21 @@ function Scoreboard({ data, match, build, onTest }: { arena: number; data: Arena
         {/* Player photos (over the FOTO boxes) */}
         {match.p1Avatar && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={match.p1Avatar} alt="" style={{ position: "absolute", left: "3.6%", top: "16.5%", width: "18.8%", height: "28.7%", objectFit: "cover", borderRadius: "1cqw" }} />
+          <img src={match.p1Avatar} alt="" style={{ position: "absolute", left: "3.65%", top: "16.4%", width: "18%", height: "28%", objectFit: "cover", borderRadius: "1cqw" }} />
         )}
         {match.p2Avatar && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={match.p2Avatar} alt="" style={{ position: "absolute", left: "77.6%", top: "16.5%", width: "18.8%", height: "28.7%", objectFit: "cover", borderRadius: "1cqw" }} />
+          <img src={match.p2Avatar} alt="" style={{ position: "absolute", left: "78.35%", top: "16.4%", width: "18%", height: "28%", objectFit: "cover", borderRadius: "1cqw" }} />
         )}
 
-        {/* Bey images (over the gold rings) */}
+        {/* Bey images (centered over the gold rings) */}
         {match.p1BeyImg && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={match.p1BeyImg} alt="" style={{ position: "absolute", left: "8.15%", top: "59.5%", width: "9.5%", height: "16.9%", objectFit: "contain" }} />
+          <img src={match.p1BeyImg} alt="" style={{ position: "absolute", left: "8.95%", top: "60.15%", width: "9.5%", height: "16.9%", objectFit: "contain" }} />
         )}
         {match.p2BeyImg && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={match.p2BeyImg} alt="" style={{ position: "absolute", left: "82.35%", top: "59.5%", width: "9.5%", height: "16.9%", objectFit: "contain" }} />
+          <img src={match.p2BeyImg} alt="" style={{ position: "absolute", left: "81.45%", top: "60.15%", width: "9.5%", height: "16.9%", objectFit: "contain" }} />
         )}
 
         {/* Names */}
