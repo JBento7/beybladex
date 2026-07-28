@@ -7,7 +7,7 @@ import Navbar from "@/components/Navbar";
 const FORMATS = [
   {
     value: "ROUND_ROBIN",
-    label: "Pontos Corridos",
+    label: "Suíço",
     icon: "🔄",
     desc: "Todos se enfrentam. Top 4 → semifinais → final.",
   },
@@ -38,6 +38,7 @@ type Initial = {
   isOfficial: boolean;
   setsToWin: number;
   pointsToWinSet: number;
+  qualifiers: number | null;
   bannerUrl: string | null;
   location: string | null;
   venueName: string | null;
@@ -67,6 +68,7 @@ export default function EditTournamentForm({
     eventType: tournament.isOfficial ? "TORNEIO" : "BEYENCONTRO",
     setsToWin: String(tournament.setsToWin),
     pointsToWinSet: String(tournament.pointsToWinSet),
+    qualifiers: String(tournament.qualifiers ?? 8),
     bannerUrl: tournament.bannerUrl ?? "",
     location: tournament.location ?? "",
     venueName: tournament.venueName ?? "",
@@ -105,6 +107,7 @@ export default function EditTournamentForm({
         eventType: form.eventType,
         setsToWin: form.setsToWin,
         pointsToWinSet: form.pointsToWinSet,
+        qualifiers: form.format === "ROUND_ROBIN" ? parseInt(form.qualifiers) : null,
         bannerUrl: form.bannerUrl || undefined,
         location: form.location || undefined,
         venueName: form.venueName || undefined,
@@ -472,6 +475,24 @@ export default function EditTournamentForm({
                 </button>
               ))}
             </div>
+
+            {form.format === "ROUND_ROBIN" && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Quantos jogadores avançam para o mata-mata
+                </label>
+                <select
+                  name="qualifiers"
+                  value={form.qualifiers}
+                  onChange={(e) => setForm({ ...form, qualifiers: e.target.value })}
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                >
+                  <option value="16">16 jogadores</option>
+                  <option value="8">8 jogadores</option>
+                  <option value="4">4 jogadores</option>
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Match Rules */}

@@ -154,6 +154,7 @@ model Tournament {
   isTest          Boolean @default(false)
   setsToWin       Int     @default(2)
   pointsToWinSet  Int     @default(4)
+  qualifiers      Int?    // Suíço: how many top players advance to the knockout (16/8/4)
   bannerUrl       String?
   location        String?
   venueName       String?

@@ -84,7 +84,7 @@ export async function PATCH(
 
     const {
       name, description, format, maxParticipants, startDate, deckType, prize, arenas,
-      eventType, setsToWin, pointsToWinSet,
+      eventType, setsToWin, pointsToWinSet, qualifiers,
       bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
     } = await req.json();
 
@@ -103,6 +103,7 @@ export async function PATCH(
       arenas: arenas ? Math.max(1, parseInt(arenas)) : 1,
       setsToWin: setsToWin ? Math.min(2, Math.max(1, parseInt(setsToWin))) : 2,
       pointsToWinSet: pointsToWinSet ? Math.min(7, Math.max(4, parseInt(pointsToWinSet))) : 4,
+      qualifiers: format === "ROUND_ROBIN" && [4, 8, 16].includes(Number(qualifiers)) ? Number(qualifiers) : null,
       bannerUrl: bannerUrl || null,
       location: location || null,
       venueName: venueName || null,

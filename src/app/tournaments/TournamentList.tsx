@@ -24,7 +24,7 @@ type Tournament = {
 };
 
 const FORMAT_LABELS: Record<string, string> = {
-  ROUND_ROBIN: "Pontos Corridos",
+  ROUND_ROBIN: "Suíço",
   GROUPS: "Grupos",
   SINGLE_ELIMINATION: "Eliminação Simples",
   SWISS: "Suíço",

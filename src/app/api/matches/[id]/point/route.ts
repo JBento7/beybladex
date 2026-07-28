@@ -151,7 +151,9 @@ export async function POST(
 
         // Format-specific post-match
         if (match.tournament.format === "ROUND_ROBIN") {
-          await finalizeRoundRobin(match.tournamentId);
+          // Round 1 is the Swiss phase; rounds >= 2 are the knockout bracket.
+          if (match.round >= 2) await advanceSingleElimination(match.tournamentId, match.round);
+          else await finalizeRoundRobin(match.tournamentId);
         } else if (match.tournament.format === "SINGLE_ELIMINATION") {
           await advanceSingleElimination(match.tournamentId, match.round);
         } else if (match.tournament.format === "SWISS") {

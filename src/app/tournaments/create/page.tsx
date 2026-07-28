@@ -8,9 +8,9 @@ import Navbar from "@/components/Navbar";
 const FORMATS = [
   {
     value: "ROUND_ROBIN",
-    label: "Pontos Corridos",
+    label: "Suíço",
     icon: "🔄",
-    desc: "Todos se enfrentam. Top 4 → semifinais → final.",
+    desc: "Todos se enfrentam na fase inicial; os melhores avançam para o mata-mata.",
   },
   {
     value: "GROUPS",
@@ -42,6 +42,7 @@ export default function CreateTournamentPage() {
     eventType: "TORNEIO",
     setsToWin: "2",
     pointsToWinSet: "4",
+    qualifiers: "8",
     bannerUrl: "",
     location: "",
     venueName: "",
@@ -84,6 +85,7 @@ export default function CreateTournamentPage() {
         isTest: isAdmin ? isTest : false,
         setsToWin: form.setsToWin,
         pointsToWinSet: form.pointsToWinSet,
+        qualifiers: form.format === "ROUND_ROBIN" ? parseInt(form.qualifiers) : undefined,
         bannerUrl: form.bannerUrl || undefined,
         location: form.location || undefined,
         venueName: form.venueName || undefined,
@@ -478,6 +480,27 @@ export default function CreateTournamentPage() {
                 </button>
               ))}
             </div>
+
+            {form.format === "ROUND_ROBIN" && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  Quantos jogadores avançam para o mata-mata
+                </label>
+                <select
+                  name="qualifiers"
+                  value={form.qualifiers}
+                  onChange={handleChange}
+                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                >
+                  <option value="16">16 jogadores</option>
+                  <option value="8">8 jogadores</option>
+                  <option value="4">4 jogadores</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1.5">
+                  Os melhores colocados da fase inicial passam para o chaveamento eliminatório. Se houver menos inscritos que o número escolhido, não há mata-mata.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Match Rules */}

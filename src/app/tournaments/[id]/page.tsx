@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 }
 
 const FORMAT_LABELS: Partial<Record<TournamentFormat, string>> & Record<string, string> = {
-  ROUND_ROBIN: "Pontos Corridos",
+  ROUND_ROBIN: "Suíço",
   GROUPS: "Grupos",
   SINGLE_ELIMINATION: "Eliminação Simples",
   SWISS: "Suíço",
@@ -65,13 +65,15 @@ type MatchWithRelations = {
 };
 
 function getRoundName(round: number, totalRounds: number, format?: string): string {
-  if (format === "ROUND_ROBIN") {
-    return "Fase de Pontos Corridos";
+  // Suíço: round 1 is the Swiss phase; rounds >= 2 are the knockout bracket.
+  if (format === "ROUND_ROBIN" && round === 1) {
+    return "Fase Suíça";
   }
   const roundsFromEnd = totalRounds - round;
   if (roundsFromEnd === 0) return "Final";
   if (roundsFromEnd === 1) return "Semifinal";
   if (roundsFromEnd === 2) return "Quartas de Final";
+  if (roundsFromEnd === 3) return "Oitavas de Final";
   return `Rodada ${round}`;
 }
 

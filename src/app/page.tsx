@@ -97,7 +97,7 @@ export default async function LandingPage() {
 
         <div className="grid sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
           {[
-            { icon: "🔄", name: "Pontos Corridos", desc: "Todos os jogadores enfrentam uns aos outros. O campeão é definido pela pontuação total.", badge: "Clássico" },
+            { icon: "🔄", name: "Suíço", desc: "Fase inicial de todos contra todos; os melhores avançam para o mata-mata eliminatório.", badge: "Clássico" },
             { icon: "👥", name: "Grupos", desc: "Divididos em grupos para fase de pontos corridos. Os melhores de cada grupo avançam para a eliminatória.", badge: "Estratégico" },
             { icon: "⚔️", name: "Eliminação Simples", desc: "Perdeu, saiu. O formato de maior pressão — cada batalha é decisiva.", badge: "Intenso" },
           ].map((format) => (

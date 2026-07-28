@@ -391,7 +391,7 @@ export default function QuickTournamentPage() {
                 <label className="block text-sm font-medium text-gray-300 mb-2">Formato</label>
                 <div className="grid grid-cols-2 gap-3">
                   {([
-                    { value: "ROUND_ROBIN", label: "Pontos Corridos", desc: "Todos se enfrentam. Top 4 disputam playoffs." },
+                    { value: "ROUND_ROBIN", label: "Suíço", desc: "Fase inicial de todos contra todos; os melhores avançam para o mata-mata." },
                     { value: "SINGLE_ELIMINATION", label: "Eliminação Simples", desc: "Perdeu, saiu. Chaveamento aleatório." },
                   ] as const).map((f) => (
                     <button
@@ -463,7 +463,7 @@ export default function QuickTournamentPage() {
               <div>
                 <h1 className="text-2xl font-black text-white">{state.title || "Torneio Rápido"}</h1>
                 <p className="text-gray-500 text-sm">
-                  {state.format === "ROUND_ROBIN" ? "Pontos Corridos" : "Eliminação Simples"} · {state.participants.length} participantes
+                  {state.format === "ROUND_ROBIN" ? "Suíço" : "Eliminação Simples"} · {state.participants.length} participantes
                 </p>
               </div>
               <button

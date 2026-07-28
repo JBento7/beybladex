@@ -17,7 +17,7 @@ import type { TournamentFormat, TournamentStatus } from "@prisma/client";
 export const dynamic = "force-dynamic";
 
 const FORMAT_LABELS: Partial<Record<TournamentFormat, string>> & Record<string, string> = {
-  ROUND_ROBIN: "Pontos Corridos",
+  ROUND_ROBIN: "Suíço",
   GROUPS: "Grupos",
   SINGLE_ELIMINATION: "Eliminação Simples",
 };

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const FORMATS = [
-  { value: "ROUND_ROBIN", label: "Pontos Corridos" },
+  { value: "ROUND_ROBIN", label: "Suíço" },
   { value: "GROUPS", label: "Grupos" },
   { value: "SINGLE_ELIMINATION", label: "Eliminação Simples" },
 ];

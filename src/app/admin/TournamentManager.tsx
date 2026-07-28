@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 const FORMAT_LABELS: Record<string, string> = {
-  ROUND_ROBIN: "Pontos Corridos",
+  ROUND_ROBIN: "Suíço",
   GROUPS: "Grupos",
   SINGLE_ELIMINATION: "Eliminação Simples",
 };

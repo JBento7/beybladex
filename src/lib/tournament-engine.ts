@@ -91,7 +91,7 @@ const RANKING_POINTS_BY_PLACE = [100, 70, 50, 30, 10];
 // tie-broken by point differential (points scored - points conceded).
 export async function finalizeTournamentRanking(tournamentId: string) {
   const [tournament, participants, matches] = await Promise.all([
-    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true } }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true, qualifiers: true } }),
     prisma.tournamentParticipant.findMany({ where: { tournamentId } }),
     prisma.match.findMany({
       where: { tournamentId, status: "FINISHED" },
@@ -119,8 +119,48 @@ export async function finalizeTournamentRanking(tournamentId: string) {
     scored.set(m.player2Id, (scored.get(m.player2Id) ?? 0) + p2Pts);
   }
 
+  // A Suíço tournament with a knockout cut: rank the qualifiers by how far they
+  // went in the playoff (round >= 2), and place every non-qualifier below them
+  // by round-robin standings.
+  const playoffMatches = matches.filter((m) => m.round >= 2 && m.player1Id !== m.player2Id);
+  const isSwissPlayoff = tournament?.format === "ROUND_ROBIN" && playoffMatches.length > 0;
+
   let ranked: typeof participants;
-  if (tournament?.format === "SINGLE_ELIMINATION") {
+  if (isSwissPlayoff) {
+    const inPlayoff = new Set<string>();
+    playoffMatches.forEach((m) => {
+      inPlayoff.add(m.player1Id);
+      inPlayoff.add(m.player2Id);
+    });
+    const elimRound = new Map<string, number>();
+    for (const m of playoffMatches) {
+      if (!m.winnerId || m.isThirdPlace) continue;
+      const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
+      elimRound.set(loserId, m.round);
+    }
+    const thirdPlace = playoffMatches.find((m) => m.isThirdPlace && m.winnerId);
+    const byStandings = (a: (typeof participants)[number], b: (typeof participants)[number]) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      const bp = (scored.get(b.userId!) ?? 0) - (scored.get(a.userId!) ?? 0);
+      if (bp !== 0) return bp;
+      return (diff.get(b.userId!) ?? 0) - (diff.get(a.userId!) ?? 0);
+    };
+    ranked = [...participants].sort((a, b) => {
+      const aQ = inPlayoff.has(a.userId!);
+      const bQ = inPlayoff.has(b.userId!);
+      if (aQ !== bQ) return aQ ? -1 : 1; // qualifiers always rank above non-qualifiers
+      if (aQ) {
+        const aE = elimRound.get(a.userId!) ?? Infinity; // champion never lost → best
+        const bE = elimRound.get(b.userId!) ?? Infinity;
+        if (bE !== aE) return bE - aE;
+        if (thirdPlace) {
+          if (thirdPlace.winnerId === a.userId && thirdPlace.winnerId !== b.userId) return -1;
+          if (thirdPlace.winnerId === b.userId && thirdPlace.winnerId !== a.userId) return 1;
+        }
+      }
+      return byStandings(a, b);
+    });
+  } else if (tournament?.format === "SINGLE_ELIMINATION") {
     // The round each player LOST in; the champion never loses (treated as ∞).
     // A later elimination round means a better placement.
     const elimRound = new Map<string, number>();
@@ -167,13 +207,77 @@ export async function finalizeTournamentRanking(tournamentId: string) {
   });
 }
 
-// Called after each match finishes in a ROUND_ROBIN (Pontos Corridos) tournament.
-// There is no playoff bracket: once every round-1 match is done, the standings
-// (1 point per win) are final and ranking points are awarded.
+// Standard single-elimination seeding order for a power-of-two bracket, so the
+// top seeds only meet in later rounds (1 vs N, 2 vs N-1, arranged by halves).
+function seedOrder(n: number): number[] {
+  let seeds = [1, 2];
+  while (seeds.length < n) {
+    const sum = seeds.length * 2 + 1;
+    const next: number[] = [];
+    for (const s of seeds) {
+      next.push(s);
+      next.push(sum - s);
+    }
+    seeds = next;
+  }
+  return seeds;
+}
+
+// Suíço (Swiss / round-robin phase): build the top-N knockout bracket from the
+// standings once the group phase (round 1) is over. `qualifiers` is 4/8/16.
+export async function generatePlayoffBracket(tournamentId: string, qualifiers: number) {
+  const [tournament, judges, participants] = await Promise.all([
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
+    getTournamentJudgeIds(tournamentId),
+    prisma.tournamentParticipant.findMany({ where: { tournamentId }, orderBy: { totalPoints: "desc" } }),
+  ]);
+  const arenaCount = tournament?.arenas ?? 1;
+  const top = participants.slice(0, qualifiers);
+  if (top.length < 2) return;
+
+  const order = seedOrder(top.length);
+  const pairs: { player1Id: string; player2Id: string }[] = [];
+  for (let i = 0; i < order.length; i += 2) {
+    const a = top[order[i] - 1];
+    const b = top[order[i + 1] - 1];
+    if (a?.userId && b?.userId) pairs.push({ player1Id: a.userId, player2Id: b.userId });
+  }
+
+  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges);
+  await prisma.match.createMany({
+    data: scheduled.map(({ match, slot, arena, judgeId }, i) => ({
+      tournamentId,
+      player1Id: match.player1Id,
+      player2Id: match.player2Id,
+      round: 2, // round 1 is the Swiss/round-robin phase; the knockout starts at round 2
+      bracketPos: i + 1,
+      arena,
+      slot,
+      judgeId,
+    })),
+  });
+}
+
+// Called after each round-1 (Swiss/round-robin) match finishes. Once the whole
+// phase is done, either build the top-N knockout bracket (if `qualifiers` is
+// set) or, when no cut is configured, finalize the standings directly.
 export async function finalizeRoundRobin(tournamentId: string) {
   const roundMatches = await prisma.match.findMany({ where: { tournamentId, round: 1 } });
   const allFinished = roundMatches.every((m) => m.status === "FINISHED");
   if (!allFinished) return;
+
+  const [tournament, participantCount, playoffCount] = await Promise.all([
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { qualifiers: true } }),
+    prisma.tournamentParticipant.count({ where: { tournamentId } }),
+    prisma.match.count({ where: { tournamentId, round: { gte: 2 } } }),
+  ]);
+  const q = tournament?.qualifiers ?? null;
+
+  // A cut is only meaningful when fewer players advance than are competing.
+  if (q && q >= 2 && q < participantCount) {
+    if (playoffCount === 0) await generatePlayoffBracket(tournamentId, q);
+    return; // knockout advancement is handled by advanceSingleElimination
+  }
 
   await finalizeTournamentRanking(tournamentId);
 }

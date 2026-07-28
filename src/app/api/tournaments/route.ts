@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
     const {
       name, description, format, maxParticipants, startDate, deckType, prize, arenas,
-      eventType, isTest, setsToWin, pointsToWinSet,
+      eventType, isTest, setsToWin, pointsToWinSet, qualifiers,
       bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
     } = await req.json();
 
@@ -58,6 +58,8 @@ export async function POST(req: NextRequest) {
         isTest: session.user.role === "ORGANIZER" && !!isTest,
         setsToWin: setsToWin ? Math.min(2, Math.max(1, parseInt(setsToWin))) : 2,
         pointsToWinSet: pointsToWinSet ? Math.min(7, Math.max(4, parseInt(pointsToWinSet))) : 4,
+        // Suíço only: how many top players advance to the knockout (4/8/16).
+        qualifiers: format === "ROUND_ROBIN" && [4, 8, 16].includes(Number(qualifiers)) ? Number(qualifiers) : null,
         bannerUrl: bannerUrl || null,
         location: location || null,
         venueName: venueName || null,
