@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v33-center";
+const ARENA_BUILD = "v34-score";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
@@ -494,8 +494,8 @@ function Scoreboard({ data, match, build, onTest }: { arena: number; data: Arena
         <PointPips cx={71.8} points={match.p2Points} />
 
         {/* Score */}
-        <Cell cx={36.8} cy={57.5} fs={5.5}>{match.p1Points}</Cell>
-        <Cell cx={63.2} cy={57.5} fs={5.5}>{match.p2Points}</Cell>
+        <Cell cx={38} cy={56.5} fs={6.6}>{match.p1Points}</Cell>
+        <Cell cx={62} cy={56.5} fs={6.6}>{match.p2Points}</Cell>
 
         {/* Victories */}
         <VictoryPips cxs={[25.6, 28.1, 30.6]} sets={match.p1Sets} />
