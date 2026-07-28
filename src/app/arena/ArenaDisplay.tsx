@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v37-bey";
+const ARENA_BUILD = "v38-align";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
@@ -386,7 +386,7 @@ function Cell({ cx, cy, w, fs, color, children }: {
 }
 
 // Exact circle centers measured from the art (top → bottom).
-const POINT_Y = [20.2, 26.2, 32.4, 38.6, 44.7];
+const POINT_Y = [20.2, 26.2, 32.4, 38.6, 44.6];
 
 function PointPips({ cx, points }: { cx: number; points: number }) {
   return (
@@ -399,8 +399,8 @@ function PointPips({ cx, points }: { cx: number; points: number }) {
             left: `${cx}%`,
             top: `${y}%`,
             transform: "translate(-50%, -50%)",
-            width: "1.7cqw",
-            height: "1.7cqw",
+            width: "2cqw",
+            height: "2cqw",
             borderRadius: "50%",
             background: i < points ? GOLD : "transparent",
           }}
@@ -480,8 +480,8 @@ function Scoreboard({ data, match, build, onTest }: { arena: number; data: Arena
         )}
 
         {/* Names */}
-        <Cell cx={12.8} cy={7.5} w={21} fs={1.9}>{match.player1}</Cell>
-        <Cell cx={87.2} cy={7.5} w={21} fs={1.9}>{match.player2}</Cell>
+        <Cell cx={13.1} cy={8.3} w={21} fs={1.9}>{match.player1}</Cell>
+        <Cell cx={86.6} cy={8.3} w={21} fs={1.9}>{match.player2}</Cell>
 
         {/* Bey names */}
         <Cell cx={13.2} cy={50.9} w={20} fs={1.3}>{match.p1ActiveBey || ""}</Cell>
@@ -500,9 +500,9 @@ function Scoreboard({ data, match, build, onTest }: { arena: number; data: Arena
         <VictoryPips cxs={[69.4, 71.9, 74.4]} sets={match.p2Sets} />
 
         {/* Rodada / Partida / Status */}
-        <Cell cx={38.4} cy={76} fs={1.8}>{pad2(match.currentSetNum)}</Cell>
-        <Cell cx={48.6} cy={76} fs={1.7}>{partida}</Cell>
-        <Cell cx={60.1} cy={76} fs={1.4} color={GOLD}>{statusText}</Cell>
+        <Cell cx={38.5} cy={76.7} fs={1.8}>{pad2(match.currentSetNum)}</Cell>
+        <Cell cx={49.7} cy={76.7} fs={1.7}>{partida}</Cell>
+        <Cell cx={60.4} cy={76.7} fs={1.4} color={GOLD}>{statusText}</Cell>
 
         {/* Bottom bar */}
         <Cell cx={15} cy={89} w={14} fs={1.05}>{data.tournamentName || "—"}</Cell>
