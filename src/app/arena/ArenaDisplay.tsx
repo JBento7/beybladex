@@ -6,13 +6,10 @@ import { signOut } from "next-auth/react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v40-finsplit";
+const ARENA_BUILD = "v41-winnerart";
 
-// "Beyblade X" neon palette (from the reference component): player 1 = blue
-// (left), player 2 = red (right), yellow accent, on a near-black background.
-// Winner screen accents (player 1 / player 2).
+// Accent used on the start gate / waiting screen.
 const BLUE = "#00aaff";
-const RED = "#ff3b3b";
 
 type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
 
@@ -43,6 +40,10 @@ type Match = {
   p2Finishes: FinishCounts;
   p1FinishesBySet: { setNumber: number; counts: FinishCounts }[];
   p2FinishesBySet: { setNumber: number; counts: FinishCounts }[];
+  p1TotalPoints: number;
+  p2TotalPoints: number;
+  p1Deck: (string | null)[];
+  p2Deck: (string | null)[];
 };
 
 type ArenaData = {
@@ -314,33 +315,74 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   );
 }
 
-// Shown for ~10s after a match finishes (driven by the API's finished window):
-// VENCEDOR on top, the winner's photo, and the set score below.
+// Shown for ~10s after a match finishes. Uses the winner art (public/winner-bg.png)
+// as the background and overlays the winner's photo, name, POINTS score (not sets),
+// finishes and deck.
+const DECK_CX = [48.1, 64.8, 81.4];
+
 function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | "p2" }) {
   const isP1 = winnerSide === "p1";
   const name = isP1 ? match.player1 : match.player2;
   const avatar = isP1 ? match.p1Avatar : match.p2Avatar;
-  const color = isP1 ? BLUE : RED;
-  const winSets = isP1 ? match.p1Sets : match.p2Sets;
-  const loseSets = isP1 ? match.p2Sets : match.p1Sets;
+  const winPts = isP1 ? match.p1TotalPoints : match.p2TotalPoints;
+  const losePts = isP1 ? match.p2TotalPoints : match.p1TotalPoints;
+  const deck = (isP1 ? match.p1Deck : match.p2Deck) || [];
+  const finRows = (isP1 ? match.p1FinishesBySet : match.p2FinishesBySet)
+    .map((g) => ({ setNumber: g.setNumber, earned: FINISH_ORDER.filter((k) => g.counts[k] > 0), counts: g.counts }))
+    .filter((r) => r.earned.length > 0)
+    .sort((a, b) => a.setNumber - b.setNumber);
+
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2vh 4vw" }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/lbl-logo.png" alt="LBL" style={{ height: "14vh", width: "auto", marginBottom: "1vh" }} />
-      <div style={{ fontSize: "7vh", fontWeight: 900, color: "#fff", letterSpacing: "0.04em", lineHeight: 1, marginBottom: "2.5vh" }}>VENCEDOR</div>
-      <div style={{ width: "30vh", height: "30vh", borderRadius: "50%", background: color, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        {avatar ? (
+    <div style={{ position: "absolute", inset: 0, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div
+        style={{
+          position: "relative",
+          width: "min(100vw, calc(100vh * 1672 / 941))",
+          aspectRatio: "1672 / 941",
+          containerType: "size",
+          backgroundImage: "url(/winner-bg.png)",
+          backgroundSize: "100% 100%",
+          backgroundRepeat: "no-repeat",
+          fontFamily: "'Arial Black', system-ui, sans-serif",
+          overflow: "hidden",
+        }}
+      >
+        {/* Winner photo */}
+        {avatar && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-        ) : (
-          <span style={{ color: "#000", fontWeight: 900, fontSize: "12vh" }}>{name.charAt(0).toUpperCase()}</span>
+          <img src={avatar} alt="" style={{ position: "absolute", left: "10.3%", top: "27.3%", width: "22.8%", height: "36%", objectFit: "cover", borderRadius: "1cqw" }} />
         )}
-      </div>
-      <div style={{ color, fontWeight: 900, fontSize: "4.5vh", marginTop: "2vh", maxWidth: "80vw", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
-      <div style={{ marginTop: "1.5vh", background: color, color: "#fff", fontWeight: 900, fontSize: "4vh", padding: "1.2vh 4vw", borderRadius: 12, display: "flex", alignItems: "center", gap: "1.5vw" }}>
-        <span>{winSets}</span>
-        <span style={{ opacity: 0.7, fontSize: "3vh" }}>×</span>
-        <span>{loseSets}</span>
+
+        {/* Winner name (covers the baked "JOGADOR" placeholder) */}
+        <div style={{ position: "absolute", left: "11%", top: "63.6%", width: "22.8%", height: "5.6%", background: "#0d0d0d", borderRadius: "0.6cqw", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: "2cqw", fontWeight: 900, color: GOLD, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "94%" }}>{name}</span>
+        </div>
+
+        {/* PLACAR — points scored (winner left, loser right) */}
+        <Cell cx={52.3} cy={39} fs={5.5} color={GOLD}>{winPts}</Cell>
+        <Cell cx={82.5} cy={39} fs={5.5}>{losePts}</Cell>
+
+        {/* DECK — winner's beys */}
+        {DECK_CX.map((cx, i) =>
+          deck[i] ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={i} src={deck[i] as string} alt="" style={{ position: "absolute", left: `${cx - 6.5}%`, top: "57%", width: "13%", height: "23.1%", objectFit: "contain" }} />
+          ) : null
+        )}
+
+        {/* Finishes made by the winner (per set) */}
+        {finRows.length > 0 && (
+          <div style={{ position: "absolute", left: "10%", top: "72%", width: "25%", height: "17%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.6cqw", overflow: "hidden" }}>
+            {finRows.map((r) => (
+              <div key={r.setNumber} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "0.7cqw", rowGap: "0.5cqw" }}>
+                <span style={{ fontSize: "1.1cqw", fontWeight: 900, color: GOLD }}>SET {r.setNumber}</span>
+                {r.earned.map((k) => (
+                  <FinishBadge key={k} type={k} count={r.counts[k]} />
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

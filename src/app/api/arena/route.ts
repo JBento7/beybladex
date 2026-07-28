@@ -128,6 +128,9 @@ export async function GET(req: NextRequest) {
   }));
   const p1Sets = sets.filter((s) => s.winnerId === match.player1Id).length;
   const p2Sets = sets.filter((s) => s.winnerId === match.player2Id).length;
+  // Total battle points scored across the whole match (for the winner screen).
+  const p1TotalPoints = sets.reduce((s, x) => s + x.player1Points, 0);
+  const p2TotalPoints = sets.reduce((s, x) => s + x.player2Points, 0);
   const currentSet = match.sets.find((s) => s.status === "IN_PROGRESS") ?? null;
   const currentSetBattleCount = currentSet ? currentSet.points.length : 0;
   const completedSets = sets.filter((s) => s.status === "FINISHED").length;
@@ -255,6 +258,29 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Winner screen deck: each player's 3 beyblades (blade images) from their
+  // latest deck order in this match (3-on-3 only).
+  const matchId = match.id;
+  async function deckImages(userId: string): Promise<(string | null)[]> {
+    try {
+      const order = await prisma.matchDeckOrder.findFirst({
+        where: { matchId, userId },
+        orderBy: [{ setNumber: "desc" }, { cycleIndex: "desc" }],
+      });
+      if (!order) return [];
+      const ids = [order.bey1Id, order.bey2Id, order.bey3Id];
+      const beys = await prisma.beyblade.findMany({ where: { id: { in: ids } }, select: { id: true, blade: true } });
+      return Promise.all(ids.map((id) => bladeImage(beys.find((b) => b.id === id)?.blade ?? null)));
+    } catch {
+      return [];
+    }
+  }
+  let p1Deck: (string | null)[] = [];
+  let p2Deck: (string | null)[] = [];
+  if (isDeck) {
+    [p1Deck, p2Deck] = await Promise.all([deckImages(match.player1Id), deckImages(match.player2Id)]);
+  }
+
   // Match number: index of this match among the tournament's matches.
   let matchNumber = 0;
   let matchesTotal = 0;
@@ -323,6 +349,10 @@ export async function GET(req: NextRequest) {
       p2Finishes,
       p1FinishesBySet,
       p2FinishesBySet,
+      p1TotalPoints,
+      p2TotalPoints,
+      p1Deck,
+      p2Deck,
     },
   });
 }
