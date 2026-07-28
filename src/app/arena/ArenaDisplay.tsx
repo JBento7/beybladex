@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v42-dbfix";
+const ARENA_BUILD = "v43-deck";
 
 // Accent used on the start gate / waiting screen.
 const BLUE = "#00aaff";
@@ -363,11 +363,11 @@ function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | 
         <Cell cx={52.3} cy={39} fs={5.5} color={GOLD}>{winPts}</Cell>
         <Cell cx={82.5} cy={39} fs={5.5}>{losePts}</Cell>
 
-        {/* DECK — winner's beys */}
+        {/* DECK — winner's beys (centered in each ring) */}
         {DECK_CX.map((cx, i) =>
           deck[i] ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={deck[i] as string} alt="" style={{ position: "absolute", left: `${cx - 6.5}%`, top: "57%", width: "13%", height: "23.1%", objectFit: "contain" }} />
+            <img key={i} src={deck[i] as string} alt="" style={{ position: "absolute", left: `${cx - 7.5}%`, top: "55.2%", width: "15%", height: "26.7%", objectFit: "contain" }} />
           ) : null
         )}
 
