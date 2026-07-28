@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v38-align";
+const ARENA_BUILD = "v39-finpanel";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
@@ -385,6 +385,82 @@ function Cell({ cx, cy, w, fs, color, children }: {
   );
 }
 
+// Finish badge art (public/finishes/{file}.png), with text fallback.
+const FINISH_META: Record<keyof FinishCounts, { file: string; label: string; pts: string }> = {
+  SPIN: { file: "spin", label: "SPIN", pts: "+1" },
+  OVER: { file: "over", label: "OVER", pts: "+2" },
+  BURST: { file: "burst", label: "BURST", pts: "+2" },
+  EXTREME: { file: "xtreme", label: "XTREME", pts: "+3" },
+};
+const FINISH_ORDER: (keyof FinishCounts)[] = ["SPIN", "OVER", "BURST", "EXTREME"];
+
+function FinishBadge({ type, count }: { type: keyof FinishCounts; count: number }) {
+  const m = FINISH_META[type];
+  const [imgOk, setImgOk] = useState(true);
+  return (
+    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+      {imgOk ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`/finishes/${m.file}.png`} alt={m.label} onError={() => setImgOk(false)} style={{ height: "3.4cqw", width: "auto", objectFit: "contain" }} />
+      ) : (
+        <span style={{ background: "#222", color: "#fff", fontWeight: 900, fontSize: "1.1cqw", padding: "0.2cqw 0.4cqw", borderRadius: 4, whiteSpace: "nowrap" }}>{m.label} {m.pts}</span>
+      )}
+      {count > 1 && (
+        <span style={{ position: "absolute", top: "-0.8cqw", right: "-1cqw", background: "#000", color: "#fff", border: "1px solid rgba(255,255,255,0.7)", borderRadius: 999, fontSize: "1cqw", fontWeight: 900, padding: "0 0.3cqw", lineHeight: 1.4 }}>×{count}</span>
+      )}
+    </div>
+  );
+}
+
+// Finishes of the match, grouped by set, shown in the marked center-left area.
+function FinishesPanel({ p1BySet, p2BySet }: {
+  p1BySet: { setNumber: number; counts: FinishCounts }[];
+  p2BySet: { setNumber: number; counts: FinishCounts }[];
+}) {
+  const bySet = new Map<number, FinishCounts>();
+  for (const g of [...p1BySet, ...p2BySet]) {
+    const cur = bySet.get(g.setNumber) ?? { SPIN: 0, BURST: 0, OVER: 0, EXTREME: 0 };
+    for (const k of FINISH_ORDER) cur[k] += g.counts[k];
+    bySet.set(g.setNumber, cur);
+  }
+  const rows = [...bySet.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([setNumber, counts]) => ({ setNumber, earned: FINISH_ORDER.filter((k) => counts[k] > 0), counts }))
+    .filter((r) => r.earned.length > 0);
+  if (rows.length === 0) return null;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: "31.3%",
+        top: "11.5%",
+        width: "15.4%",
+        height: "34%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.8cqw",
+        background: "rgba(0,0,0,0.5)",
+        border: "1px solid rgba(255,212,0,0.35)",
+        borderRadius: "1cqw",
+        padding: "0.6cqw",
+        overflow: "hidden",
+        zIndex: 4,
+      }}
+    >
+      {rows.map((r) => (
+        <div key={r.setNumber} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "0.7cqw", rowGap: "0.5cqw", width: "100%" }}>
+          <span style={{ fontSize: "1.1cqw", fontWeight: 900, color: GOLD, letterSpacing: "0.05em" }}>SET {r.setNumber}</span>
+          {r.earned.map((k) => (
+            <FinishBadge key={k} type={k} count={r.counts[k]} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Exact circle centers measured from the art (top → bottom).
 const POINT_Y = [20.2, 26.2, 32.4, 38.6, 44.6];
 
@@ -458,6 +534,9 @@ function Scoreboard({ data, match, build, onTest }: { arena: number; data: Arena
 
         {/* Tap the LBL logo (top-center) to test the countdown video */}
         <div onClick={onTest} style={{ position: "absolute", left: "45%", top: 0, width: "10%", height: "13%", cursor: "pointer", zIndex: 6 }} />
+
+        {/* Finishes of the match (grouped by set) */}
+        <FinishesPanel p1BySet={match.p1FinishesBySet} p2BySet={match.p2FinishesBySet} />
 
         {/* Player photos (over the FOTO boxes) */}
         {match.p1Avatar && (
