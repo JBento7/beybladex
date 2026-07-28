@@ -235,6 +235,7 @@ model Match {
   countdownAt  DateTime?
   countdownKey String?
   onAirAt      DateTime?
+  xSidePlayerId String?  // which player chose the X side of the stadium (other = B side)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @default(now()) @updatedAt
 

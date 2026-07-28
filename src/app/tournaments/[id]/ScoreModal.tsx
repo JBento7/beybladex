@@ -48,6 +48,7 @@ type MatchState = {
   isDeckThreeOnThree: boolean;
   deckOrders: DeckOrderRow[];
   currentSetBattleCount: number;
+  xSidePlayerId: string | null;
 };
 
 const P1_COLOR = "#f0a500";
@@ -196,8 +197,10 @@ export default function ScoreModal({
   // point. A battle is identified by set + points already scored in it.
   const battleKey = `${currentSetNum}:${currentSetBattleCount}`;
   const startKey = battleKey;
+  // Before the very first battle the judge assigns the stadium sides (X / B).
+  const needSides = currentSetNum === 1 && currentSetBattleCount === 0 && !state?.xSidePlayerId;
   const revealScoring = gateReady && startedKey === startKey;
-  const showStart = gateReady && startedKey !== startKey;
+  const showStart = gateReady && startedKey !== startKey && !needSides;
   const waitingOrders = isDeck && !bothOrders;
 
   // Poll while waiting for players to submit their deck orders.
@@ -285,6 +288,27 @@ export default function ScoreModal({
     } finally {
       setStarting(false);
       setStartedKey(startKey);
+    }
+  }
+
+  // Judge assigns the X side to a player (the other becomes B side). Pass null to
+  // clear and choose again.
+  async function chooseSide(xSidePlayerId: string | null) {
+    setErr(null);
+    try {
+      const res = await fetch(`/api/matches/${matchId}/sides`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ xSidePlayerId: xSidePlayerId ?? "" }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setErr(d.error || "Erro ao definir lados");
+        return;
+      }
+      await fetchState();
+    } catch {
+      setErr("Erro ao definir lados");
     }
   }
 
@@ -460,6 +484,43 @@ export default function ScoreModal({
                         )}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Stadium side selection — before the first battle */}
+                {needSides && gateReady && (
+                  <div className="mb-3 bg-[#141414] border border-[#f0a500]/40 rounded-xl p-4">
+                    <div className="text-center text-sm font-black text-[#f0a500] tracking-wide mb-1">LADO DA ARENA</div>
+                    <div className="text-center text-[11px] text-gray-400 mb-3">Escolha quem fica no <b className="text-white">X side</b> (o outro fica no <b className="text-white">B side</b>).</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => chooseSide(player1.id)}
+                        className="rounded-xl border-2 border-[#f0a500] bg-[#f0a500]/10 hover:bg-[#f0a500]/20 transition-colors py-3 px-2 text-center"
+                      >
+                        <div className="text-[10px] font-black text-[#f0a500] tracking-widest">X SIDE</div>
+                        <div className="text-sm font-black text-white truncate">{p1Name}</div>
+                        <div className="text-[10px] text-gray-500 truncate">{p2Name} → B side</div>
+                      </button>
+                      <button
+                        onClick={() => chooseSide(player2.id)}
+                        className="rounded-xl border-2 border-[#f0a500] bg-[#f0a500]/10 hover:bg-[#f0a500]/20 transition-colors py-3 px-2 text-center"
+                      >
+                        <div className="text-[10px] font-black text-[#f0a500] tracking-widest">X SIDE</div>
+                        <div className="text-sm font-black text-white truncate">{p2Name}</div>
+                        <div className="text-[10px] text-gray-500 truncate">{p1Name} → B side</div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Chosen sides summary (before the first battle only) */}
+                {!needSides && state?.xSidePlayerId && currentSetNum === 1 && currentSetBattleCount === 0 && (
+                  <div className="mb-2 flex items-center justify-center gap-2 text-[11px] text-gray-400">
+                    <span>
+                      <b className="text-white">{state.xSidePlayerId === player1.id ? p1Name : p2Name}</b> = X side ·{" "}
+                      <b className="text-white">{state.xSidePlayerId === player1.id ? p2Name : p1Name}</b> = B side
+                    </span>
+                    <button onClick={() => chooseSide(null)} className="underline text-gray-500 hover:text-white">trocar</button>
                   </div>
                 )}
 

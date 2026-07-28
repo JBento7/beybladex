@@ -50,6 +50,8 @@ export async function GET(
       isDeckThreeOnThree: match.tournament.deckType === "THREE_ON_THREE",
       deckOrders,
       currentSetBattleCount,
+      // Which player is on the X side (other = B side); null until the judge sets it.
+      xSidePlayerId: (match as { xSidePlayerId?: string | null }).xSidePlayerId ?? null,
     });
   } catch (err) {
     console.error(err);

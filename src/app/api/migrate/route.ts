@@ -612,6 +612,10 @@ export async function GET() {
       name: "Tournament.qualifiers",
       sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "qualifiers" INTEGER`,
     },
+    {
+      name: "Match.xSidePlayerId",
+      sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "xSidePlayerId" TEXT`,
+    },
   ];
 
   for (const migration of migrations) {
