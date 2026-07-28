@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v41-winnerart";
+const ARENA_BUILD = "v42-dbfix";
 
 // Accent used on the start gate / waiting screen.
 const BLUE = "#00aaff";
@@ -100,7 +100,8 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   useEffect(() => {
     if (arena == null || !started) return;
     load();
-    const t = setInterval(load, 1000);
+    // 1.5s keeps the countdown snappy (7s window) while easing DB pool load.
+    const t = setInterval(load, 1500);
     return () => clearInterval(t);
   }, [arena, started, load]);
 

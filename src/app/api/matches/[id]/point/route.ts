@@ -99,7 +99,9 @@ export async function POST(
           ? { player1Points: { increment: points } }
           : { player2Points: { increment: points } },
       });
-    });
+      // Wait longer for a free connection so a busy pool (many arena polls /
+      // heartbeats) doesn't fail with "Unable to start a transaction in time".
+    }, { maxWait: 20000, timeout: 20000 });
 
     // Check if set is won
     const p1Pts = updatedSet.player1Points;
@@ -119,7 +121,7 @@ export async function POST(
           p1Sets: allSets.filter((s) => s.winnerId === match.player1Id).length,
           p2Sets: allSets.filter((s) => s.winnerId === match.player2Id).length,
         };
-      });
+      }, { maxWait: 20000, timeout: 20000 });
 
       if (p1Sets >= setsToWin || p2Sets >= setsToWin) {
         // Match is over

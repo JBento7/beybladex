@@ -277,7 +277,8 @@ export async function GET(req: NextRequest) {
   }
   let p1Deck: (string | null)[] = [];
   let p2Deck: (string | null)[] = [];
-  if (isDeck) {
+  // Only needed for the winner screen — skip during live/pending to save queries.
+  if (isDeck && phase === "finished") {
     [p1Deck, p2Deck] = await Promise.all([deckImages(match.player1Id), deckImages(match.player2Id)]);
   }
 
