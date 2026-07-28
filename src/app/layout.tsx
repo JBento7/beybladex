@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -8,12 +8,23 @@ export const metadata: Metadata = {
     template: "%s — LBL",
   },
   description: "A liga oficial de Beyblade de Londrina. Crie torneios, registre batalhas e suba no ranking.",
-  icons: { icon: "/lbl-logo.png", apple: "/lbl-logo.png" },
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/lbl-logo.png",
+    apple: "/apple-touch-icon.png",
+  },
+  // Installable web app: when added to the Home Screen, launch chromeless.
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "LBL" },
+  applicationName: "LBL",
   openGraph: {
     title: "LBL — Liga Beyblade Londrina",
     description: "A liga oficial de Beyblade de Londrina.",
     type: "website",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0d0d0d",
 };
 
 export default function RootLayout({
