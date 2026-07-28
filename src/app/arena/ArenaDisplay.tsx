@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { signOut } from "next-auth/react";
 
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v30-newvid";
+const ARENA_BUILD = "v31-logout";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
@@ -250,6 +251,12 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           <div style={{ color: "#6b7280", fontSize: 14, maxWidth: 380 }}>
             Ativa som e mantém a tela ligada. Para tela cheia sem barra: Compartilhar → Adicionar à Tela de Início, e abra pelo ícone.
           </div>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            style={{ marginTop: 28, background: "transparent", color: "#9ca3af", border: "1px solid #374151", borderRadius: 8, fontSize: 14, padding: "8px 18px" }}
+          >
+            ⎋ Sair desta arena
+          </button>
         </div>
       )}
 
@@ -273,6 +280,18 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           style={{ position: "absolute", top: "0.6vh", right: "1.5vw", zIndex: 20, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}
         >
           ↻ Atualizar
+        </button>
+      )}
+
+      {/* Logout — with a confirm so a tablet isn't signed out by accident. */}
+      {started && (
+        <button
+          onClick={() => {
+            if (window.confirm("Sair desta arena?")) signOut({ callbackUrl: "/login" });
+          }}
+          style={{ position: "absolute", top: "0.6vh", right: "22.5vw", zIndex: 20, background: "rgba(200,16,46,0.35)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}
+        >
+          ⎋ Sair
         </button>
       )}
 
