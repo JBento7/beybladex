@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v35-beyname";
+const ARENA_BUILD = "v36-pontos";
 
 // "Beyblade X" neon palette (from the reference component): player 1 = blue
 // (left), player 2 = red (right), yellow accent, on a near-black background.
@@ -385,29 +385,27 @@ function Cell({ cx, cy, w, fs, color, children }: {
   );
 }
 
+// Exact circle centers measured from the art (top → bottom).
+const POINT_Y = [20.2, 26.2, 32.4, 38.6, 44.7];
+
 function PointPips({ cx, points }: { cx: number; points: number }) {
-  const top = 20.5;
-  const bot = 44;
   return (
     <>
-      {Array.from({ length: 5 }).map((_, i) => {
-        const y = top + (i * (bot - top)) / 4;
-        return (
-          <span
-            key={i}
-            style={{
-              position: "absolute",
-              left: `${cx}%`,
-              top: `${y}%`,
-              transform: "translate(-50%, -50%)",
-              width: "1.55cqw",
-              height: "1.55cqw",
-              borderRadius: "50%",
-              background: i < points ? GOLD : "transparent",
-            }}
-          />
-        );
-      })}
+      {POINT_Y.map((y, i) => (
+        <span
+          key={i}
+          style={{
+            position: "absolute",
+            left: `${cx}%`,
+            top: `${y}%`,
+            transform: "translate(-50%, -50%)",
+            width: "1.7cqw",
+            height: "1.7cqw",
+            borderRadius: "50%",
+            background: i < points ? GOLD : "transparent",
+          }}
+        />
+      ))}
     </>
   );
 }
@@ -490,8 +488,8 @@ function Scoreboard({ data, match, build, onTest }: { arena: number; data: Arena
         <Cell cx={86.2} cy={50.9} w={20} fs={1.3}>{match.p2ActiveBey || ""}</Cell>
 
         {/* Points pips */}
-        <PointPips cx={28.2} points={match.p1Points} />
-        <PointPips cx={71.8} points={match.p2Points} />
+        <PointPips cx={28.1} points={match.p1Points} />
+        <PointPips cx={71.4} points={match.p2Points} />
 
         {/* Score */}
         <Cell cx={38} cy={56.5} fs={6.6}>{match.p1Points}</Cell>
