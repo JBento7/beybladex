@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v43-deck";
+const ARENA_BUILD = "v44-winfix";
 
 // Accent used on the start gate / waiting screen.
 const BLUE = "#00aaff";
@@ -319,7 +319,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 // Shown for ~10s after a match finishes. Uses the winner art (public/winner-bg.png)
 // as the background and overlays the winner's photo, name, POINTS score (not sets),
 // finishes and deck.
-const DECK_CX = [48.1, 64.8, 81.4];
+const DECK_CX = [48.2, 65.0, 81.2];
 
 function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | "p2" }) {
   const isP1 = winnerSide === "p1";
@@ -363,22 +363,22 @@ function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | 
         <Cell cx={52.3} cy={39} fs={5.5} color={GOLD}>{winPts}</Cell>
         <Cell cx={82.5} cy={39} fs={5.5}>{losePts}</Cell>
 
-        {/* DECK — winner's beys (centered in each ring) */}
+        {/* DECK — winner's beys (centered in each ring: cx per column, cy 69.9%) */}
         {DECK_CX.map((cx, i) =>
           deck[i] ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={deck[i] as string} alt="" style={{ position: "absolute", left: `${cx - 7.5}%`, top: "55.2%", width: "15%", height: "26.7%", objectFit: "contain" }} />
+            <img key={i} src={deck[i] as string} alt="" style={{ position: "absolute", left: `${cx - 7.5}%`, top: "56.6%", width: "15%", height: "26.7%", objectFit: "contain" }} />
           ) : null
         )}
 
-        {/* Finishes made by the winner (per set) */}
+        {/* Finishes made by the winner (per set) — kept inside the box */}
         {finRows.length > 0 && (
-          <div style={{ position: "absolute", left: "10%", top: "72%", width: "25%", height: "17%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.6cqw", overflow: "hidden" }}>
+          <div style={{ position: "absolute", left: "9.5%", top: "72.5%", width: "25.5%", height: "16.5%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.5cqw", overflow: "hidden" }}>
             {finRows.map((r) => (
-              <div key={r.setNumber} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "0.7cqw", rowGap: "0.5cqw" }}>
-                <span style={{ fontSize: "1.1cqw", fontWeight: 900, color: GOLD }}>SET {r.setNumber}</span>
+              <div key={r.setNumber} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "0.5cqw", rowGap: "0.4cqw", maxWidth: "100%" }}>
+                <span style={{ fontSize: "1cqw", fontWeight: 900, color: GOLD }}>SET {r.setNumber}</span>
                 {r.earned.map((k) => (
-                  <FinishBadge key={k} type={k} count={r.counts[k]} />
+                  <FinishBadge key={k} type={k} count={r.counts[k]} h="2.6cqw" />
                 ))}
               </div>
             ))}
@@ -437,14 +437,14 @@ const FINISH_META: Record<keyof FinishCounts, { file: string; label: string; pts
 };
 const FINISH_ORDER: (keyof FinishCounts)[] = ["SPIN", "OVER", "BURST", "EXTREME"];
 
-function FinishBadge({ type, count }: { type: keyof FinishCounts; count: number }) {
+function FinishBadge({ type, count, h = "3.4cqw" }: { type: keyof FinishCounts; count: number; h?: string }) {
   const m = FINISH_META[type];
   const [imgOk, setImgOk] = useState(true);
   return (
     <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
       {imgOk ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={`/finishes/${m.file}.png`} alt={m.label} onError={() => setImgOk(false)} style={{ height: "3.4cqw", width: "auto", objectFit: "contain" }} />
+        <img src={`/finishes/${m.file}.png`} alt={m.label} onError={() => setImgOk(false)} style={{ height: h, width: "auto", objectFit: "contain" }} />
       ) : (
         <span style={{ background: "#222", color: "#fff", fontWeight: 900, fontSize: "1.1cqw", padding: "0.2cqw 0.4cqw", borderRadius: 4, whiteSpace: "nowrap" }}>{m.label} {m.pts}</span>
       )}
