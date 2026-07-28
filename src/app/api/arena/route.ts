@@ -310,8 +310,37 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Stadium sides: the player on the B side is shown on the LEFT, the X side on
+  // the RIGHT. In multi-set matches the players swap sides every set; in a
+  // single-set match they keep the same side.
+  const xId = (match as { xSidePlayerId?: string | null }).xSidePlayerId ?? null;
+  let leftIsP1 = true; // default (no sides chosen): player1 left, player2 right
+  if (xId) {
+    const bId = xId === match.player1Id ? match.player2Id : match.player1Id;
+    const swap = maxSets > 1 && currentSetNum % 2 === 0; // set 2/4/... are swapped
+    const leftId = swap ? xId : bId; // base: B side left, X side right
+    leftIsP1 = leftId === match.player1Id;
+  }
+  function lr<T>(a: T, b: T): [T, T] {
+    return leftIsP1 ? [a, b] : [b, a];
+  }
+
+  const leftId = leftIsP1 ? match.player1Id : match.player2Id;
   const winnerSide: "p1" | "p2" | null =
-    phase === "finished" ? (match.winnerId === match.player2Id ? "p2" : "p1") : null;
+    phase === "finished" ? (match.winnerId === leftId ? "p1" : "p2") : null;
+
+  const [player1, player2] = lr(match.player1.bladerName || match.player1.name, match.player2.bladerName || match.player2.name);
+  const [p1Avatar, p2Avatar] = lr(match.player1.avatarUrl ?? null, match.player2.avatarUrl ?? null);
+  const [oP1Sets, oP2Sets] = lr(p1Sets, p2Sets);
+  const [oP1Points, oP2Points] = lr(currentSet?.player1Points ?? 0, currentSet?.player2Points ?? 0);
+  const [oP1ActiveBey, oP2ActiveBey] = lr(p1ActiveBey, p2ActiveBey);
+  const [oP1Combo, oP2Combo] = lr(p1Combo, p2Combo);
+  const [oP1BeyImg, oP2BeyImg] = lr(p1BeyImg, p2BeyImg);
+  const [oP1Finishes, oP2Finishes] = lr(p1Finishes, p2Finishes);
+  const [oP1FinishesBySet, oP2FinishesBySet] = lr(p1FinishesBySet, p2FinishesBySet);
+  const [oP1TotalPoints, oP2TotalPoints] = lr(p1TotalPoints, p2TotalPoints);
+  const [oP1Deck, oP2Deck] = lr(p1Deck, p2Deck);
+  const outHistory = leftIsP1 ? history : history.map((h) => ({ ...h, side: h.side === "p1" ? "p2" : "p1" }));
 
   return NextResponse.json({
     arena: arenaNum,
@@ -323,37 +352,37 @@ export async function GET(req: NextRequest) {
     matchesTotal,
     round: match.round,
     countdown,
-    history,
+    history: outHistory,
     match: {
-      player1: match.player1.bladerName || match.player1.name,
-      player2: match.player2.bladerName || match.player2.name,
-      p1Avatar: match.player1.avatarUrl ?? null,
-      p2Avatar: match.player2.avatarUrl ?? null,
-      p1Sets,
-      p2Sets,
+      player1,
+      player2,
+      p1Avatar,
+      p2Avatar,
+      p1Sets: oP1Sets,
+      p2Sets: oP2Sets,
       setsToWin,
       pointsToWinSet,
       maxSets,
       currentSetNum,
-      p1Points: currentSet?.player1Points ?? 0,
-      p2Points: currentSet?.player2Points ?? 0,
+      p1Points: oP1Points,
+      p2Points: oP2Points,
       sets,
       isDeck,
       currentSetBattleCount,
-      p1ActiveBey,
-      p2ActiveBey,
-      p1Combo,
-      p2Combo,
-      p1BeyImg,
-      p2BeyImg,
-      p1Finishes,
-      p2Finishes,
-      p1FinishesBySet,
-      p2FinishesBySet,
-      p1TotalPoints,
-      p2TotalPoints,
-      p1Deck,
-      p2Deck,
+      p1ActiveBey: oP1ActiveBey,
+      p2ActiveBey: oP2ActiveBey,
+      p1Combo: oP1Combo,
+      p2Combo: oP2Combo,
+      p1BeyImg: oP1BeyImg,
+      p2BeyImg: oP2BeyImg,
+      p1Finishes: oP1Finishes,
+      p2Finishes: oP2Finishes,
+      p1FinishesBySet: oP1FinishesBySet,
+      p2FinishesBySet: oP2FinishesBySet,
+      p1TotalPoints: oP1TotalPoints,
+      p2TotalPoints: oP2TotalPoints,
+      p1Deck: oP1Deck,
+      p2Deck: oP2Deck,
     },
   });
 }
