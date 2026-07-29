@@ -23,6 +23,13 @@ export default async function ArenaLayoutPage() {
     // table missing (pre-migration) — start from defaults
   }
 
+  // The signed-in organizer's profile is used as sample data in the preview.
+  const me = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { name: true, bladerName: true, avatarUrl: true },
+  });
+  const profile = { name: me?.bladerName || me?.name || "JOGADOR", avatar: me?.avatarUrl ?? null };
+
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
       <Navbar />
@@ -31,7 +38,7 @@ export default async function ArenaLayoutPage() {
         <p className="text-sm text-gray-400 mb-4">
           Arraste os elementos para posicionar e use a alça (canto) ou os campos numéricos para dimensionar. Salve para aplicar no telão das arenas.
         </p>
-        <LayoutEditor initial={initial} />
+        <LayoutEditor initial={initial} profile={profile} />
       </div>
     </div>
   );

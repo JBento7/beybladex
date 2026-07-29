@@ -32,8 +32,32 @@ function r1(v: number) {
   return Math.round(v * 10) / 10;
 }
 
-export default function LayoutEditor({ initial }: { initial: Record<TargetKey, Record<string, Field>> }) {
+export default function LayoutEditor({
+  initial,
+  profile,
+}: {
+  initial: Record<TargetKey, Record<string, Field>>;
+  profile: { name: string; avatar: string | null };
+}) {
   const [target, setTarget] = useState<TargetKey>("scoreboard");
+  const [preview, setPreview] = useState(false);
+
+  // Sample content for the preview, using the organizer's profile as a base.
+  function previewText(k: string): string {
+    if (k === "nameL" || k === "nameR" || k === "name") return profile.name;
+    const map: Record<string, string> = {
+      scoreL: "3", scoreR: "0", scoreWin: "7", scoreLose: "3",
+      beyNameL: "Dranzer", beyNameR: "Dranzer",
+      rodada: "01", partida: "03 / 08", status: "AO VIVO",
+      evento: "Campeonato SP", fase: "Rodada 1", local: "Londrina/PR", obs: "—",
+    };
+    return map[k] ?? "";
+  }
+  function previewImg(k: string): string | null {
+    if (k === "photoL" || k === "photoR" || k === "photo") return profile.avatar;
+    return "/bey-removebg-preview.png"; // bey / deck placeholder
+  }
+  const PIP_COUNTS: Record<string, number> = { pointsL: 3, pointsR: 1, victoriesL: 2, victoriesR: 1 };
 
   // Full geometry per target = defaults merged with saved overrides.
   const [byTarget, setByTarget] = useState<Record<string, Record<string, Field>>>(() => {
@@ -140,8 +164,8 @@ export default function LayoutEditor({ initial }: { initial: Record<TargetKey, R
 
   return (
     <div>
-      {/* Target tabs */}
-      <div className="flex gap-2 mb-3">
+      {/* Target tabs + preview toggle */}
+      <div className="flex gap-2 mb-3 items-center">
         {Object.keys(TARGETS).map((t) => (
           <button
             key={t}
@@ -151,6 +175,12 @@ export default function LayoutEditor({ initial }: { initial: Record<TargetKey, R
             {TARGETS[t].label}
           </button>
         ))}
+        <button
+          onClick={() => { setPreview((p) => !p); setSel(null); }}
+          className={`ml-auto px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${preview ? "bg-[#22c55e] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
+        >
+          {preview ? "✏️ Editar" : "👁 Pré-visualizar"}
+        </button>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4">
@@ -179,6 +209,45 @@ export default function LayoutEditor({ initial }: { initial: Record<TargetKey, R
               const def = defs[k];
               const isSel = sel === k;
               const outline = isSel ? "2px solid #f0a500" : "1px dashed rgba(255,255,255,0.35)";
+
+              // ---- Preview mode: render representative content, no boxes/handles ----
+              if (preview) {
+                if (def.kind === "text") {
+                  return (
+                    <div key={k} style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, transform: "translate(-50%, -50%)", width: `${f.w ?? 12}%`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: `${f.fs ?? 1.5}cqw`, fontWeight: 900, color: k === "status" || k === "scoreWin" ? "#ffd400" : "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {previewText(k)}
+                    </div>
+                  );
+                }
+                if (def.kind === "pipsV" || def.kind === "pipsH") {
+                  const count = PIP_COUNTS[k] ?? 0;
+                  return (
+                    <div key={k} style={{ position: "absolute", inset: 0 }}>
+                      {pipDots(f, def.kind === "pipsV" ? "v" : "h").map((d, i) => (
+                        <span key={i} style={{ position: "absolute", left: `${d.cx}%`, top: `${d.cy}%`, transform: "translate(-50%, -50%)", width: `${f.fs ?? 1.5}cqw`, height: `${f.fs ?? 1.5}cqw`, borderRadius: "50%", background: i < count ? "#ffd400" : "transparent" }} />
+                      ))}
+                    </div>
+                  );
+                }
+                if (k === "finishes") {
+                  return (
+                    <div key={k} style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w}%`, height: `${f.h}%`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.5cqw", overflow: "hidden" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.6cqw" }}><span style={{ fontSize: "1cqw", fontWeight: 900, color: "#ffd400" }}>SET 1</span><img src="/finishes/spin.png" alt="" style={{ height: "2.6cqw" }} /><img src="/finishes/burst.png" alt="" style={{ height: "2.6cqw" }} /></div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.6cqw" }}><span style={{ fontSize: "1cqw", fontWeight: 900, color: "#ffd400" }}>SET 2</span><img src="/finishes/xtreme.png" alt="" style={{ height: "2.6cqw" }} /></div>
+                    </div>
+                  );
+                }
+                // img (photo / bey / deck)
+                const src = previewImg(k);
+                if (!src) return null;
+                const cover = k.startsWith("photo");
+                return (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={k} src={src} alt="" style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w}%`, height: `${f.h}%`, objectFit: cover ? "cover" : "contain", borderRadius: cover ? "1cqw" : undefined }} />
+                );
+              }
+              // ---- Edit mode ----
               if (def.kind === "text") {
                 return (
                   <div
