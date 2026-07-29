@@ -28,7 +28,24 @@ export default async function ArenaLayoutPage() {
     where: { id: session.user.id },
     select: { name: true, bladerName: true, avatarUrl: true },
   });
-  const profile = { name: me?.bladerName || me?.name || "JOGADOR", avatar: me?.avatarUrl ?? null };
+  // Up to 3 of the organizer's beys (blade images) for the winner deck preview.
+  let deck: (string | null)[] = [];
+  try {
+    const beys = await prisma.beyblade.findMany({ where: { userId: session.user.id }, select: { blade: true }, take: 3 });
+    deck = await Promise.all(
+      beys.map(async (b) => {
+        if (!b.blade) return null;
+        const part = await prisma.beyPart.findFirst({
+          where: { name: b.blade, category: { in: ["BLADE", "MAIN_BLADE"] }, imageUrl: { not: null } },
+          select: { imageUrl: true },
+        });
+        return part?.imageUrl ?? null;
+      })
+    );
+  } catch {
+    /* no beys / tables missing */
+  }
+  const profile = { name: me?.bladerName || me?.name || "JOGADOR", avatar: me?.avatarUrl ?? null, deck };
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">

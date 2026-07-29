@@ -37,7 +37,7 @@ export default function LayoutEditor({
   profile,
 }: {
   initial: Record<TargetKey, Record<string, Field>>;
-  profile: { name: string; avatar: string | null };
+  profile: { name: string; avatar: string | null; deck: (string | null)[] };
 }) {
   const [target, setTarget] = useState<TargetKey>("scoreboard");
   const [preview, setPreview] = useState(false);
@@ -55,7 +55,9 @@ export default function LayoutEditor({
   }
   function previewImg(k: string): string | null {
     if (k === "photoL" || k === "photoR" || k === "photo") return profile.avatar;
-    return "/bey-removebg-preview.png"; // bey / deck placeholder
+    // Winner deck: use the matching bey from the profile; scoreboard bey: first one.
+    const deckIndex = k === "deck1" ? 0 : k === "deck2" ? 1 : k === "deck3" ? 2 : 0;
+    return profile.deck?.[deckIndex] || profile.deck?.find(Boolean) || "/bey-removebg-preview.png";
   }
   const PIP_COUNTS: Record<string, number> = { pointsL: 3, pointsR: 1, victoriesL: 2, victoriesR: 1 };
 
