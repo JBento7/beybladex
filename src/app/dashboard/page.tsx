@@ -106,7 +106,7 @@ export default async function DashboardPage() {
 
   const rankingUserIds = ranking.map((r: { userId: string }) => r.userId);
   const rankingUsers = await prisma.user.findMany({
-    where: { id: { in: rankingUserIds } },
+    where: { id: { in: rankingUserIds }, email: { not: { endsWith: "@lbl.arena" } } },
     select: { id: true, name: true, bladerName: true, avatarUrl: true },
   });
   const userMap = Object.fromEntries(rankingUsers.map((u: { id: string; name: string; bladerName: string | null; avatarUrl: string | null }) => [u.id, u]));

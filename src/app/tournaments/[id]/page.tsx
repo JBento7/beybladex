@@ -393,7 +393,7 @@ export default async function TournamentDetailPage({
     // Any organizer-role user gets the full player list for the admin panel
     isAdminUser
       ? prisma.user.findMany({
-          where: { deleted: false, isGuest: false },
+          where: { deleted: false, isGuest: false, email: { not: { endsWith: "@lbl.arena" } } },
           select: {
             id: true,
             name: true,

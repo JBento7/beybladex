@@ -19,7 +19,7 @@ export default async function RankingsPage() {
 
   const userIds = ranking.map((r) => r.userId);
   const users = await prisma.user.findMany({
-    where: { id: { in: userIds } },
+    where: { id: { in: userIds }, email: { not: { endsWith: "@lbl.arena" } } },
     select: { id: true, name: true, bladerName: true, avatarUrl: true },
   });
   const userMap = new Map(users.map((u) => [u.id, u]));
