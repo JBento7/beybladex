@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
-import { fieldStyle, type Layout } from "@/lib/arenaLayout";
+import { fieldStyle, pipDots, type Layout } from "@/lib/arenaLayout";
 
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v46-layout";
+const ARENA_BUILD = "v47-pips";
 
 // Accent used on the start gate / waiting screen.
 const BLUE = "#00aaff";
@@ -509,46 +509,24 @@ function FinishesColumn({ bySet, side }: {
   );
 }
 
-// Exact circle centers measured from the art (top → bottom).
-const POINT_Y = [20.2, 26.2, 32.4, 38.6, 44.6];
-
-function PointPips({ cx, points }: { cx: number; points: number }) {
+// Pip group (PONTOS = 5 vertical, VITÓRIAS = 3 horizontal), positioned from the layout.
+function Pips({ layout, k, count, dir }: { layout: Layout | null; k: string; count: number; dir: "v" | "h" }) {
+  const f = fieldStyle(k, layout);
+  const dot = f.fs ?? 1.5;
   return (
     <>
-      {POINT_Y.map((y, i) => (
+      {pipDots(f, dir).map((p, i) => (
         <span
           key={i}
           style={{
             position: "absolute",
-            left: `${cx}%`,
-            top: `${y}%`,
+            left: `${p.cx}%`,
+            top: `${p.cy}%`,
             transform: "translate(-50%, -50%)",
-            width: "2cqw",
-            height: "2cqw",
+            width: `${dot}cqw`,
+            height: `${dot}cqw`,
             borderRadius: "50%",
-            background: i < points ? GOLD : "transparent",
-          }}
-        />
-      ))}
-    </>
-  );
-}
-
-function VictoryPips({ cxs, sets }: { cxs: number[]; sets: number }) {
-  return (
-    <>
-      {cxs.map((cx, i) => (
-        <span
-          key={i}
-          style={{
-            position: "absolute",
-            left: `${cx}%`,
-            top: "77.5%",
-            transform: "translate(-50%, -50%)",
-            width: "1.2cqw",
-            height: "1.2cqw",
-            borderRadius: "50%",
-            background: i < sets ? GOLD : "transparent",
+            background: i < count ? GOLD : "transparent",
           }}
         />
       ))}
@@ -623,16 +601,16 @@ function Scoreboard({ data, match, build, layout, onTest }: { arena: number; dat
         <LText layout={layout} k="beyNameR">{match.p2ActiveBey || ""}</LText>
 
         {/* Points pips */}
-        <PointPips cx={28.1} points={match.p1Points} />
-        <PointPips cx={71.4} points={match.p2Points} />
+        <Pips layout={layout} k="pointsL" count={match.p1Points} dir="v" />
+        <Pips layout={layout} k="pointsR" count={match.p2Points} dir="v" />
 
         {/* Score */}
         <LText layout={layout} k="scoreL">{match.p1Points}</LText>
         <LText layout={layout} k="scoreR">{match.p2Points}</LText>
 
         {/* Victories */}
-        <VictoryPips cxs={[25.6, 28.1, 30.6]} sets={match.p1Sets} />
-        <VictoryPips cxs={[69.4, 71.9, 74.4]} sets={match.p2Sets} />
+        <Pips layout={layout} k="victoriesL" count={match.p1Sets} dir="h" />
+        <Pips layout={layout} k="victoriesR" count={match.p2Sets} dir="h" />
 
         {/* Rodada / Partida / Status */}
         <LText layout={layout} k="rodada">{pad2(match.currentSetNum)}</LText>

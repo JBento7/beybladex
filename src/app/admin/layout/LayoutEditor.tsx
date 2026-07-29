@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SCOREBOARD_DEFAULTS, type Field } from "@/lib/arenaLayout";
+import { SCOREBOARD_DEFAULTS, pipDots, type Field } from "@/lib/arenaLayout";
 
 const KEYS = Object.keys(SCOREBOARD_DEFAULTS);
 
@@ -179,6 +179,8 @@ export default function LayoutEditor({ initial }: { initial: Record<string, Fiel
                 </div>
               );
             }
+            const isPip = def.kind === "pipsV" || def.kind === "pipsH";
+            const dots = isPip ? pipDots(f, def.kind === "pipsV" ? "v" : "h") : [];
             return (
               <div
                 key={k}
@@ -189,7 +191,7 @@ export default function LayoutEditor({ initial }: { initial: Record<string, Fiel
                   top: `${f.y}%`,
                   width: `${f.w ?? 10}%`,
                   height: `${f.h ?? 10}%`,
-                  background: "rgba(240,165,0,0.14)",
+                  background: isPip ? "rgba(240,165,0,0.06)" : "rgba(240,165,0,0.14)",
                   outline,
                   display: "flex",
                   alignItems: "center",
@@ -201,7 +203,23 @@ export default function LayoutEditor({ initial }: { initial: Record<string, Fiel
                   zIndex: isSel ? 20 : 10,
                 }}
               >
-                {def.label}
+                {isPip
+                  ? dots.map((d, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          position: "absolute",
+                          left: `${((d.cx - f.x) / (f.w || 1)) * 100}%`,
+                          top: `${((d.cy - f.y) / (f.h || 1)) * 100}%`,
+                          transform: "translate(-50%, -50%)",
+                          width: `${f.fs ?? 1.5}cqw`,
+                          height: `${f.fs ?? 1.5}cqw`,
+                          borderRadius: "50%",
+                          background: "#ffd400",
+                        }}
+                      />
+                    ))
+                  : def.label}
                 {isSel && (
                   <span
                     onPointerDown={(e) => startDrag(e, k, "resize")}
@@ -234,6 +252,12 @@ export default function LayoutEditor({ initial }: { initial: Record<string, Fiel
                 <>
                   <NumberInput label="Larg %" value={selField.w ?? 10} onChange={(v) => upd(sel!, { w: v })} />
                   <NumberInput label="Alt %" value={selField.h ?? 10} onChange={(v) => upd(sel!, { h: v })} />
+                </>
+              ) : selDef.kind === "pipsV" || selDef.kind === "pipsH" ? (
+                <>
+                  <NumberInput label="Larg %" value={selField.w ?? 5} onChange={(v) => upd(sel!, { w: v })} />
+                  <NumberInput label="Alt %" value={selField.h ?? 5} onChange={(v) => upd(sel!, { h: v })} />
+                  <NumberInput label="Bolinha" value={selField.fs ?? 1.5} step={0.1} onChange={(v) => upd(sel!, { fs: v })} />
                 </>
               ) : (
                 <>
