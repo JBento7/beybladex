@@ -617,6 +617,10 @@ export async function GET() {
       sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "xSidePlayerId" TEXT`,
     },
     {
+      name: "TournamentParticipant.approved",
+      sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "approved" BOOLEAN NOT NULL DEFAULT true`,
+    },
+    {
       name: "ArenaLayout table",
       sql: `CREATE TABLE IF NOT EXISTS "ArenaLayout" (
         "id" TEXT NOT NULL,

@@ -149,6 +149,10 @@ export async function POST(
       }
     }
 
+    // Paid tournaments: the registration must be approved by an admin after the
+    // payment is confirmed, so it starts as pending (approved = false).
+    const needsApproval = !!(tournament.entryFee && tournament.entryFee > 0);
+
     const participant = await prisma.tournamentParticipant.create({
       data: {
         tournamentId: params.id,
@@ -156,10 +160,11 @@ export async function POST(
         beyblade1: beybladeIds[0] || null,
         beyblade2: beybladeIds[1] || null,
         beyblade3: beybladeIds[2] || null,
+        approved: !needsApproval,
       },
     });
 
-    return NextResponse.json(participant, { status: 201 });
+    return NextResponse.json({ ...participant, needsApproval }, { status: 201 });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Erro no servidor" }, { status: 500 });

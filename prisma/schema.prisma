@@ -205,6 +205,7 @@ model TournamentParticipant {
   beyblade3    String?
   hasPaid            Boolean  @default(false)
   beybladeInspected  Boolean  @default(false)
+  approved           Boolean  @default(true) // paid tournaments start false (awaiting admin approval)
   createdAt    DateTime @default(now())
 
   tournament Tournament @relation(fields: [tournamentId], references: [id])

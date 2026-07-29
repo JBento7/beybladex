@@ -475,9 +475,9 @@ export default async function TournamentDetailPage({
         .filter(Boolean) as BeybladeInfo[],
     ])
   );
-  const isParticipant = tournament.participants.some(
-    (p) => p.userId === session?.user.id
-  );
+  const myParticipant = tournament.participants.find((p) => p.userId === session?.user.id);
+  const isParticipant = !!myParticipant;
+  const myApproved = myParticipant ? ((myParticipant as { approved?: boolean }).approved ?? true) : true;
 
   const currentParticipant = tournament.participants.find(
     (p) => p.userId === session?.user.id
@@ -727,9 +727,15 @@ export default async function TournamentDetailPage({
               )}
               {isParticipant && tournament.status === "REGISTRATION" && (
                 <>
-                  <span className="text-sm bg-green-500/20 text-green-400 border border-green-500/30 px-4 py-2 rounded-lg font-medium text-center">
-                    ✓ Você está inscrito
-                  </span>
+                  {myApproved ? (
+                    <span className="text-sm bg-green-500/20 text-green-400 border border-green-500/30 px-4 py-2 rounded-lg font-medium text-center">
+                      ✓ Você está inscrito
+                    </span>
+                  ) : (
+                    <span className="text-sm bg-amber-500/15 text-amber-400 border border-amber-500/30 px-4 py-2 rounded-lg font-medium text-center">
+                      ⏳ Inscrição aguardando aprovação do pagamento
+                    </span>
+                  )}
                   <EditBeybladesButton
                     tournamentId={tournament.id}
                     deckType={tournament.deckType}
@@ -1054,6 +1060,7 @@ export default async function TournamentDetailPage({
                     currentBeyblades: currentSelectionMap.get(p.userId) ?? [],
                     hasPaid: p.hasPaid,
                     beybladeInspected: p.beybladeInspected,
+                    approved: (p as { approved?: boolean }).approved ?? true,
                   }))}
                   allPlayers={allPlayers}
                 />

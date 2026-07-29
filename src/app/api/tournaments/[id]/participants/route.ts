@@ -152,6 +152,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       guestBeyblades?: string[];
       hasPaid?: boolean;
       beybladeInspected?: boolean;
+      approved?: boolean;
     } = {};
     try { body = await req.json(); } catch { /* empty body */ }
 
@@ -164,8 +165,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: "Torneio já finalizado" }, { status: 400 });
     }
 
-    // ── STATUS FLAGS PATH (payment / beyblade inspection) ──────────────────
-    if (typeof body.hasPaid === "boolean" || typeof body.beybladeInspected === "boolean") {
+    // ── STATUS FLAGS PATH (payment / inspection / approval) ──────────────────
+    if (typeof body.hasPaid === "boolean" || typeof body.beybladeInspected === "boolean" || typeof body.approved === "boolean") {
       const participant = await prisma.tournamentParticipant.findUnique({
         where: { tournamentId_userId: { tournamentId: params.id, userId } },
       });
@@ -173,9 +174,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         return NextResponse.json({ error: "Participante não encontrado" }, { status: 404 });
       }
 
-      const data: { hasPaid?: boolean; beybladeInspected?: boolean } = {};
+      const data: { hasPaid?: boolean; beybladeInspected?: boolean; approved?: boolean } = {};
       if (typeof body.hasPaid === "boolean") data.hasPaid = body.hasPaid;
       if (typeof body.beybladeInspected === "boolean") data.beybladeInspected = body.beybladeInspected;
+      if (typeof body.approved === "boolean") {
+        data.approved = body.approved;
+        // Approving a paid registration implies the payment was confirmed.
+        if (body.approved) data.hasPaid = true;
+      }
 
       const updated = await prisma.tournamentParticipant.update({
         where: { id: participant.id },

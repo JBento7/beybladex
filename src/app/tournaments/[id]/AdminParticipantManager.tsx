@@ -18,6 +18,7 @@ interface Participant {
   currentBeyblades: { id: string; name: string }[];
   hasPaid: boolean;
   beybladeInspected: boolean;
+  approved: boolean;
 }
 
 interface Props {
@@ -129,6 +130,7 @@ export default function AdminParticipantManager({
           currentBeyblades: [],
           hasPaid: false,
           beybladeInspected: false,
+          approved: true,
         },
       ]);
 
@@ -232,7 +234,7 @@ export default function AdminParticipantManager({
 
   const [togglingFlag, setTogglingFlag] = useState<string | null>(null);
 
-  async function toggleFlag(p: Participant, flag: "hasPaid" | "beybladeInspected", value: boolean) {
+  async function toggleFlag(p: Participant, flag: "hasPaid" | "beybladeInspected" | "approved", value: boolean) {
     const flagKey = `${p.userId}:${flag}`;
     setTogglingFlag(flagKey);
     setLocalParticipants((prev) =>
@@ -467,6 +469,21 @@ export default function AdminParticipantManager({
                   </button>
                 </div>
               </div>
+
+              {!p.approved && (
+                <div className="flex items-center gap-3 mt-2 pl-8">
+                  <span className="text-[11px] font-bold text-amber-400 bg-amber-900/30 border border-amber-700/40 rounded px-2 py-0.5">
+                    ⏳ Aguardando aprovação (pagamento)
+                  </span>
+                  <button
+                    onClick={() => toggleFlag(p, "approved", true)}
+                    disabled={togglingFlag === `${p.userId}:approved`}
+                    className="text-xs font-bold text-black bg-[#22c55e] hover:bg-[#1ea34d] px-3 py-1 rounded disabled:opacity-50"
+                  >
+                    {togglingFlag === `${p.userId}:approved` ? "..." : "Aprovar inscrição"}
+                  </button>
+                </div>
+              )}
 
               {isOfficial && (
                 <div className="flex items-center gap-4 mt-2 pl-8">

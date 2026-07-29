@@ -55,7 +55,7 @@ function circleMethodRounds(players: string[]): Array<{ player1Id: string; playe
 
 export async function generateRoundRobin(tournamentId: string) {
   const [participants, tournament, judges] = await Promise.all([
-    prisma.tournamentParticipant.findMany({ where: { tournamentId } }),
+    prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } }),
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
     getTournamentJudgeIds(tournamentId),
   ]);
@@ -92,7 +92,7 @@ const RANKING_POINTS_BY_PLACE = [100, 70, 50, 30, 10];
 export async function finalizeTournamentRanking(tournamentId: string) {
   const [tournament, participants, matches] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true, qualifiers: true } }),
-    prisma.tournamentParticipant.findMany({ where: { tournamentId } }),
+    prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } }),
     prisma.match.findMany({
       where: { tournamentId, status: "FINISHED" },
       select: {
@@ -229,7 +229,7 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
   const [tournament, judges, participants] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
     getTournamentJudgeIds(tournamentId),
-    prisma.tournamentParticipant.findMany({ where: { tournamentId }, orderBy: { totalPoints: "desc" } }),
+    prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" } }),
   ]);
   const arenaCount = tournament?.arenas ?? 1;
   const top = participants.slice(0, qualifiers);
@@ -284,7 +284,7 @@ export async function finalizeRoundRobin(tournamentId: string) {
 
 export async function generateGroups(tournamentId: string) {
   const [rawParticipants, tournament, judges] = await Promise.all([
-    prisma.tournamentParticipant.findMany({ where: { tournamentId } }),
+    prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } }),
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
     getTournamentJudgeIds(tournamentId),
   ]);
@@ -352,7 +352,7 @@ export async function generateGroups(tournamentId: string) {
 
 export async function generateSingleElimination(tournamentId: string) {
   const [rawParticipants, tournament, judges] = await Promise.all([
-    prisma.tournamentParticipant.findMany({ where: { tournamentId } }),
+    prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } }),
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
     getTournamentJudgeIds(tournamentId),
   ]);
@@ -425,7 +425,7 @@ export async function generateSwissRound(
 ) {
   if (round === 1) {
     const participants = shuffle(
-      await prisma.tournamentParticipant.findMany({ where: { tournamentId } })
+      await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } })
     );
 
     const matches = [];
@@ -442,10 +442,7 @@ export async function generateSwissRound(
     await prisma.match.createMany({ data: matches });
   } else {
     // Pair by similar points
-    const participants = await prisma.tournamentParticipant.findMany({
-      where: { tournamentId },
-      orderBy: { totalPoints: "desc" },
-    });
+    const participants = await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" } });
 
     // Get pairs from previous rounds to avoid rematches
     const previousMatches = await prisma.match.findMany({
