@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
-import { fieldStyle, pipDots, type Layout } from "@/lib/arenaLayout";
+import { fieldStyle, pipDots, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type Layout } from "@/lib/arenaLayout";
 
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v47-pips";
+const ARENA_BUILD = "v48-winedit";
 
 // Accent used on the start gate / waiting screen.
 const BLUE = "#00aaff";
@@ -77,13 +77,12 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const [countdownOn, setCountdownOn] = useState(false);
   const playedKeyRef = useRef<string | null>(null);
 
-  // Saved scoreboard layout overrides from the admin editor (applied over defaults).
+  // Saved layout overrides from the admin editor (applied over the coded defaults).
   const [layout, setLayout] = useState<Layout | null>(null);
+  const [winnerLayout, setWinnerLayout] = useState<Layout | null>(null);
   useEffect(() => {
-    fetch("/api/arena-layout?key=scoreboard")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && setLayout(d.layout || {}))
-      .catch(() => {});
+    fetch("/api/arena-layout?key=scoreboard").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
+    fetch("/api/arena-layout?key=winner").then((r) => (r.ok ? r.json() : null)).then((d) => d && setWinnerLayout(d.layout || {})).catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
@@ -305,7 +304,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       )}
 
       {match && data?.status === "finished" ? (
-        <WinnerScreen match={match} winnerSide={data.winnerSide ?? "p1"} />
+        <WinnerScreen match={match} winnerSide={data.winnerSide ?? "p1"} layout={winnerLayout} />
       ) : !match ? (
         <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -329,9 +328,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 // Shown for ~10s after a match finishes. Uses the winner art (public/winner-bg.png)
 // as the background and overlays the winner's photo, name, POINTS score (not sets),
 // finishes and deck.
-const DECK_CX = [48.2, 65.0, 81.2];
-
-function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | "p2" }) {
+function WinnerScreen({ match, winnerSide, layout }: { match: Match; winnerSide: "p1" | "p2"; layout: Layout | null }) {
   const isP1 = winnerSide === "p1";
   const name = isP1 ? match.player1 : match.player2;
   const avatar = isP1 ? match.p1Avatar : match.p2Avatar;
@@ -342,6 +339,14 @@ function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | 
     .map((g) => ({ setNumber: g.setNumber, earned: FINISH_ORDER.filter((k) => g.counts[k] > 0), counts: g.counts }))
     .filter((r) => r.earned.length > 0)
     .sort((a, b) => a.setNumber - b.setNumber);
+
+  const wf = (k: string) => fieldStyle(WINNER_DEFAULTS, k, layout);
+  const photo = wf("photo");
+  const nm = wf("name");
+  const sw = wf("scoreWin");
+  const sl = wf("scoreLose");
+  const fin = wf("finishes");
+  const deckKeys = ["deck1", "deck2", "deck3"];
 
   return (
     <div style={{ position: "absolute", inset: 0, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -361,29 +366,30 @@ function WinnerScreen({ match, winnerSide }: { match: Match; winnerSide: "p1" | 
         {/* Winner photo */}
         {avatar && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatar} alt="" style={{ position: "absolute", left: "10.3%", top: "27.3%", width: "22.8%", height: "36%", objectFit: "cover", borderRadius: "1cqw" }} />
+          <img src={avatar} alt="" style={{ position: "absolute", left: `${photo.x}%`, top: `${photo.y}%`, width: `${photo.w}%`, height: `${photo.h}%`, objectFit: "cover", borderRadius: "1cqw" }} />
         )}
 
         {/* Winner name (covers the baked "JOGADOR" placeholder) */}
-        <div style={{ position: "absolute", left: "11%", top: "63.6%", width: "22.8%", height: "5.6%", background: "#0d0d0d", borderRadius: "0.6cqw", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ fontSize: "2cqw", fontWeight: 900, color: GOLD, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "94%" }}>{name}</span>
+        <div style={{ position: "absolute", left: `${nm.x}%`, top: `${nm.y}%`, transform: "translate(-50%, -50%)", width: `${nm.w}%`, background: "#0d0d0d", borderRadius: "0.6cqw", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.5cqw 0" }}>
+          <span style={{ fontSize: `${nm.fs}cqw`, fontWeight: 900, color: GOLD, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "94%" }}>{name}</span>
         </div>
 
-        {/* PLACAR — points scored (winner left, loser right) */}
-        <Cell cx={52.3} cy={39} fs={5.5} color={GOLD}>{winPts}</Cell>
-        <Cell cx={82.5} cy={39} fs={5.5}>{losePts}</Cell>
+        {/* PLACAR — points scored */}
+        <Cell cx={sw.x} cy={sw.y} fs={sw.fs ?? 5.5} color={GOLD}>{winPts}</Cell>
+        <Cell cx={sl.x} cy={sl.y} fs={sl.fs ?? 5.5}>{losePts}</Cell>
 
-        {/* DECK — winner's beys (centered in each ring: cx per column, cy 69.9%) */}
-        {DECK_CX.map((cx, i) =>
-          deck[i] ? (
+        {/* DECK — winner's beys */}
+        {deckKeys.map((k, i) => {
+          const d = wf(k);
+          return deck[i] ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={deck[i] as string} alt="" style={{ position: "absolute", left: `${cx - 7.5}%`, top: "56.6%", width: "15%", height: "26.7%", objectFit: "contain" }} />
-          ) : null
-        )}
+            <img key={k} src={deck[i] as string} alt="" style={{ position: "absolute", left: `${d.x}%`, top: `${d.y}%`, width: `${d.w}%`, height: `${d.h}%`, objectFit: "contain" }} />
+          ) : null;
+        })}
 
-        {/* Finishes made by the winner (per set) — kept inside the box */}
+        {/* Finishes made by the winner (per set) — inside the box */}
         {finRows.length > 0 && (
-          <div style={{ position: "absolute", left: "9.5%", top: "72.5%", width: "25.5%", height: "16.5%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.5cqw", overflow: "hidden" }}>
+          <div style={{ position: "absolute", left: `${fin.x}%`, top: `${fin.y}%`, width: `${fin.w}%`, height: `${fin.h}%`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.5cqw", overflow: "hidden" }}>
             {finRows.map((r) => (
               <div key={r.setNumber} style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "0.5cqw", rowGap: "0.4cqw", maxWidth: "100%" }}>
                 <span style={{ fontSize: "1cqw", fontWeight: 900, color: GOLD }}>SET {r.setNumber}</span>
@@ -511,7 +517,7 @@ function FinishesColumn({ bySet, side }: {
 
 // Pip group (PONTOS = 5 vertical, VITÓRIAS = 3 horizontal), positioned from the layout.
 function Pips({ layout, k, count, dir }: { layout: Layout | null; k: string; count: number; dir: "v" | "h" }) {
-  const f = fieldStyle(k, layout);
+  const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
   const dot = f.fs ?? 1.5;
   return (
     <>
@@ -537,11 +543,11 @@ function Pips({ layout, k, count, dir }: { layout: Layout | null; k: string; cou
 // Layout-driven text/image elements: read position/size from the saved layout
 // (admin editor), falling back to the coded defaults.
 function LText({ layout, k, color, children }: { layout: Layout | null; k: string; color?: string; children: React.ReactNode }) {
-  const f = fieldStyle(k, layout);
+  const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
   return <Cell cx={f.x} cy={f.y} w={f.w} fs={f.fs ?? 1.5} color={color}>{children}</Cell>;
 }
 function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src: string | null; cover?: boolean }) {
-  const f = fieldStyle(k, layout);
+  const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
   if (!src) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element

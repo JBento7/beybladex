@@ -41,6 +41,24 @@ export const SCOREBOARD_DEFAULTS: Record<string, FieldDef> = {
   obs: { kind: "text", label: "Observações", x: 79, y: 89, w: 16, fs: 1.05 },
 };
 
+// Winner screen (public/winner-bg.png) fields.
+export const WINNER_DEFAULTS: Record<string, FieldDef> = {
+  photo: { kind: "img", label: "Foto", x: 10.3, y: 27.3, w: 22.8, h: 36 },
+  name: { kind: "text", label: "Nome", x: 22.4, y: 66.4, w: 22.8, fs: 2 },
+  scoreWin: { kind: "text", label: "Placar (vencedor)", x: 52.3, y: 39, w: 12, fs: 5.5 },
+  scoreLose: { kind: "text", label: "Placar (perdedor)", x: 82.5, y: 39, w: 12, fs: 5.5 },
+  deck1: { kind: "img", label: "Bey 1", x: 40.7, y: 56.6, w: 15, h: 26.7 },
+  deck2: { kind: "img", label: "Bey 2", x: 57.5, y: 56.6, w: 15, h: 26.7 },
+  deck3: { kind: "img", label: "Bey 3", x: 73.7, y: 56.6, w: 15, h: 26.7 },
+  finishes: { kind: "img", label: "Finishes (caixa)", x: 9.5, y: 72.5, w: 25.5, h: 16.5 },
+};
+
+// Editor targets.
+export const TARGETS: Record<string, { label: string; bg: string; defaults: Record<string, FieldDef> }> = {
+  scoreboard: { label: "Placar", bg: "/scoreboard-bg.png", defaults: SCOREBOARD_DEFAULTS },
+  winner: { label: "Vencedor", bg: "/winner-bg.png", defaults: WINNER_DEFAULTS },
+};
+
 // Centers (in %) of the dots for a pip group. dir "v" = 5 stacked, "h" = 3 in a row.
 export function pipDots(f: Field, dir: "v" | "h"): { cx: number; cy: number }[] {
   const n = dir === "v" ? 5 : 3;
@@ -54,8 +72,8 @@ export function pipDots(f: Field, dir: "v" | "h"): { cx: number; cy: number }[] 
 }
 
 // Merge saved overrides on top of the defaults for one field.
-export function fieldStyle(key: string, saved: Layout | null | undefined): FieldDef {
-  const def = SCOREBOARD_DEFAULTS[key];
+export function fieldStyle(defs: Record<string, FieldDef>, key: string, saved: Layout | null | undefined): FieldDef {
+  const def = defs[key];
   const ov = saved?.[key];
   return ov ? { ...def, ...ov } : def;
 }
