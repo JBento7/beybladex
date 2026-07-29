@@ -12,6 +12,13 @@ enum Role {
   ORGANIZER
 }
 
+model ArenaLayout {
+  id        String   @id @default(cuid())
+  key       String   @unique // "scoreboard" | "winner"
+  data      String   // JSON of Record<fieldKey, {x,y,w?,h?,fs?}>
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
 enum TournamentFormat {
   ROUND_ROBIN
   GROUPS

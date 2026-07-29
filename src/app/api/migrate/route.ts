@@ -616,6 +616,16 @@ export async function GET() {
       name: "Match.xSidePlayerId",
       sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "xSidePlayerId" TEXT`,
     },
+    {
+      name: "ArenaLayout table",
+      sql: `CREATE TABLE IF NOT EXISTS "ArenaLayout" (
+        "id" TEXT NOT NULL,
+        "key" TEXT NOT NULL UNIQUE,
+        "data" TEXT NOT NULL,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "ArenaLayout_pkey" PRIMARY KEY ("id")
+      )`,
+    },
   ];
 
   for (const migration of migrations) {

@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
+import { fieldStyle, type Layout } from "@/lib/arenaLayout";
 
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v45-sides";
+const ARENA_BUILD = "v46-layout";
 
 // Accent used on the start gate / waiting screen.
 const BLUE = "#00aaff";
@@ -75,6 +76,15 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 
   const [countdownOn, setCountdownOn] = useState(false);
   const playedKeyRef = useRef<string | null>(null);
+
+  // Saved scoreboard layout overrides from the admin editor (applied over defaults).
+  const [layout, setLayout] = useState<Layout | null>(null);
+  useEffect(() => {
+    fetch("/api/arena-layout?key=scoreboard")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setLayout(d.layout || {}))
+      .catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -310,7 +320,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           )}
         </div>
       ) : (
-        <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} onTest={() => setCountdownOn(true)} />
+        <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} layout={layout} onTest={() => setCountdownOn(true)} />
       )}
     </div>
   );
@@ -546,7 +556,26 @@ function VictoryPips({ cxs, sets }: { cxs: number[]; sets: number }) {
   );
 }
 
-function Scoreboard({ data, match, build, onTest }: { arena: number; data: ArenaData; match: Match; build: string; onTest: () => void }) {
+// Layout-driven text/image elements: read position/size from the saved layout
+// (admin editor), falling back to the coded defaults.
+function LText({ layout, k, color, children }: { layout: Layout | null; k: string; color?: string; children: React.ReactNode }) {
+  const f = fieldStyle(k, layout);
+  return <Cell cx={f.x} cy={f.y} w={f.w} fs={f.fs ?? 1.5} color={color}>{children}</Cell>;
+}
+function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src: string | null; cover?: boolean }) {
+  const f = fieldStyle(k, layout);
+  if (!src) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w}%`, height: `${f.h}%`, objectFit: cover ? "cover" : "contain", borderRadius: cover ? "1cqw" : undefined }}
+    />
+  );
+}
+
+function Scoreboard({ data, match, build, layout, onTest }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; onTest: () => void }) {
   const statusText = data.status === "live" ? "AO VIVO" : data.status === "pending" ? "AGUARDANDO" : "—";
   const partida = data.matchNumber
     ? `${pad2(data.matchNumber)}${data.matchesTotal ? ` / ${pad2(data.matchesTotal)}` : ""}`
@@ -578,55 +607,43 @@ function Scoreboard({ data, match, build, onTest }: { arena: number; data: Arena
         <FinishesColumn bySet={match.p2FinishesBySet} side="right" />
 
         {/* Player photos (over the FOTO boxes) */}
-        {match.p1Avatar && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={match.p1Avatar} alt="" style={{ position: "absolute", left: "3.65%", top: "16.4%", width: "18%", height: "28%", objectFit: "cover", borderRadius: "1cqw" }} />
-        )}
-        {match.p2Avatar && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={match.p2Avatar} alt="" style={{ position: "absolute", left: "78.35%", top: "16.4%", width: "18%", height: "28%", objectFit: "cover", borderRadius: "1cqw" }} />
-        )}
+        <LImg layout={layout} k="photoL" src={match.p1Avatar} cover />
+        <LImg layout={layout} k="photoR" src={match.p2Avatar} cover />
 
         {/* Bey images (centered inside the gold rings) */}
-        {match.p1BeyImg && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={match.p1BeyImg} alt="" style={{ position: "absolute", left: "7.1%", top: "57.7%", width: "12.5%", height: "22.2%", objectFit: "contain" }} />
-        )}
-        {match.p2BeyImg && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={match.p2BeyImg} alt="" style={{ position: "absolute", left: "79.84%", top: "57.7%", width: "12.5%", height: "22.2%", objectFit: "contain" }} />
-        )}
+        <LImg layout={layout} k="beyImgL" src={match.p1BeyImg} />
+        <LImg layout={layout} k="beyImgR" src={match.p2BeyImg} />
 
         {/* Names */}
-        <Cell cx={13.1} cy={8.3} w={21} fs={1.9}>{match.player1}</Cell>
-        <Cell cx={86.6} cy={8.3} w={21} fs={1.9}>{match.player2}</Cell>
+        <LText layout={layout} k="nameL">{match.player1}</LText>
+        <LText layout={layout} k="nameR">{match.player2}</LText>
 
         {/* Bey names */}
-        <Cell cx={13.2} cy={50.9} w={20} fs={1.3}>{match.p1ActiveBey || ""}</Cell>
-        <Cell cx={86.2} cy={50.9} w={20} fs={1.3}>{match.p2ActiveBey || ""}</Cell>
+        <LText layout={layout} k="beyNameL">{match.p1ActiveBey || ""}</LText>
+        <LText layout={layout} k="beyNameR">{match.p2ActiveBey || ""}</LText>
 
         {/* Points pips */}
         <PointPips cx={28.1} points={match.p1Points} />
         <PointPips cx={71.4} points={match.p2Points} />
 
         {/* Score */}
-        <Cell cx={38} cy={56.5} fs={6.6}>{match.p1Points}</Cell>
-        <Cell cx={62} cy={56.5} fs={6.6}>{match.p2Points}</Cell>
+        <LText layout={layout} k="scoreL">{match.p1Points}</LText>
+        <LText layout={layout} k="scoreR">{match.p2Points}</LText>
 
         {/* Victories */}
         <VictoryPips cxs={[25.6, 28.1, 30.6]} sets={match.p1Sets} />
         <VictoryPips cxs={[69.4, 71.9, 74.4]} sets={match.p2Sets} />
 
         {/* Rodada / Partida / Status */}
-        <Cell cx={38.5} cy={76.7} fs={1.8}>{pad2(match.currentSetNum)}</Cell>
-        <Cell cx={49.7} cy={76.7} fs={1.7}>{partida}</Cell>
-        <Cell cx={60.4} cy={76.7} fs={1.4} color={GOLD}>{statusText}</Cell>
+        <LText layout={layout} k="rodada">{pad2(match.currentSetNum)}</LText>
+        <LText layout={layout} k="partida">{partida}</LText>
+        <LText layout={layout} k="status" color={GOLD}>{statusText}</LText>
 
         {/* Bottom bar */}
-        <Cell cx={15} cy={89} w={14} fs={1.05}>{data.tournamentName || "—"}</Cell>
-        <Cell cx={37} cy={89} w={16} fs={1.05}>{fase}</Cell>
-        <Cell cx={56} cy={89} w={14} fs={1.05}>{data.location || "—"}</Cell>
-        <Cell cx={79} cy={89} w={16} fs={1.05}>—</Cell>
+        <LText layout={layout} k="evento">{data.tournamentName || "—"}</LText>
+        <LText layout={layout} k="fase">{fase}</LText>
+        <LText layout={layout} k="local">{data.location || "—"}</LText>
+        <LText layout={layout} k="obs">—</LText>
       </div>
     </div>
   );

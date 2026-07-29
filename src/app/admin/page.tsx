@@ -62,6 +62,12 @@ export default async function AdminPage() {
             </div>
             <p className="text-gray-400">Gerencie torneios oficiais da LBL</p>
           </div>
+          <Link
+            href="/admin/layout"
+            className="ml-auto bg-[#1a1a1a] border border-[#f0a500]/50 text-[#f0a500] font-bold text-sm px-4 py-2.5 rounded-lg hover:bg-[#f0a500]/10 transition-colors"
+          >
+            🎛️ Editor do placar
+          </Link>
         </div>
 
         {/* Create Official Tournament */}
