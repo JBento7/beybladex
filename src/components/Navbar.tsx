@@ -62,9 +62,6 @@ export default function Navbar() {
                 <Link href="/profile" className={linkClass("/profile")}>
                   Perfil
                 </Link>
-                <Link href="/tournaments/create" className={linkClass("/tournaments/create")}>
-                  Criar
-                </Link>
                 <Link href="/beyparts" className={linkClass("/beyparts")}>
                   BeyParts
                 </Link>
@@ -158,7 +155,6 @@ export default function Navbar() {
               <>
                 <Link href="/dashboard" className={mobileLinkClass("/dashboard")} onClick={() => setMenuOpen(false)}>Painel</Link>
                 <Link href="/profile" className={mobileLinkClass("/profile")} onClick={() => setMenuOpen(false)}>Perfil</Link>
-                <Link href="/tournaments/create" className={mobileLinkClass("/tournaments/create")} onClick={() => setMenuOpen(false)}>Criar Torneio</Link>
                 <Link href="/beyparts" className={mobileLinkClass("/beyparts")} onClick={() => setMenuOpen(false)}>BeyParts</Link>
                 <Link href="/combos" className={mobileLinkClass("/combos")} onClick={() => setMenuOpen(false)}>Combos</Link>
                 <Link href="/rankings" className={mobileLinkClass("/rankings")} onClick={() => setMenuOpen(false)}>Rankings</Link>
