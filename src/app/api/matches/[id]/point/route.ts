@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
-import { recalculateStandings, advanceSingleElimination, generateSwissRound, finalizeRoundRobin, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
+import { recalculateStandings, advanceSingleElimination, generateSwissRound, advanceSwissTournament, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
 import type { FinishType } from "@prisma/client";
 
 export async function POST(
@@ -153,9 +153,8 @@ export async function POST(
 
         // Format-specific post-match
         if (match.tournament.format === "ROUND_ROBIN") {
-          // Round 1 is the Swiss phase; rounds >= 2 are the knockout bracket.
-          if (match.round >= 2) await advanceSingleElimination(match.tournamentId, match.round);
-          else await finalizeRoundRobin(match.tournamentId);
+          // "Suíço": Swiss rounds, then top-N knockout — all handled by the coordinator.
+          await advanceSwissTournament(match.tournamentId, match.round);
         } else if (match.tournament.format === "SINGLE_ELIMINATION") {
           await advanceSingleElimination(match.tournamentId, match.round);
         } else if (match.tournament.format === "SWISS") {

@@ -64,10 +64,10 @@ type MatchWithRelations = {
   points: { userId: string; points: number }[];
 };
 
-function getRoundName(round: number, totalRounds: number, format?: string): string {
-  // Suíço: round 1 is the Swiss phase; rounds >= 2 are the knockout bracket.
-  if (format === "ROUND_ROBIN" && round === 1) {
-    return "Fase Suíça";
+function getRoundName(round: number, totalRounds: number, format?: string, swissRounds = 0): string {
+  // Suíço: rounds 1..swissRounds are the Swiss phase; later rounds are the knockout.
+  if (format === "ROUND_ROBIN" && swissRounds > 0 && round <= swissRounds) {
+    return swissRounds === 1 ? "Fase Suíça" : `Suíço · Rodada ${round}`;
   }
   const roundsFromEnd = totalRounds - round;
   if (roundsFromEnd === 0) return "Final";
@@ -562,6 +562,13 @@ export default async function TournamentDetailPage({
       [...roundMatches].sort((a, b) => (a.bracketPos ?? 0) - (b.bracketPos ?? 0)),
     ] as [number, typeof tournament.matches]);
 
+  // Suíço: how many of the first rounds are the Swiss phase (rest is knockout).
+  const approvedCount = tournament.participants.filter(
+    (p) => (p as { approved?: boolean }).approved !== false
+  ).length;
+  const swissRounds =
+    tournament.format === "ROUND_ROBIN" ? Math.max(1, Math.ceil(Math.log2(Math.max(2, approvedCount)))) : 0;
+
   // Total rounds in a single-elimination bracket, based on the participant
   // count (next power of two) rather than how many rounds exist in the DB so
   // far — keeps round names ("Final", "Semifinal"...) stable as the bracket
@@ -835,7 +842,7 @@ export default async function TournamentDetailPage({
                   <div key={round} className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                     <h2 className="text-lg font-bold text-white mb-4">
                       {(tournament.format === "SINGLE_ELIMINATION" || tournament.format === "ROUND_ROBIN")
-                        ? getRoundName(round, sortedRounds.length, tournament.format)
+                        ? getRoundName(round, sortedRounds.length, tournament.format, swissRounds)
                         : `Rodada ${round}`}
                     </h2>
 

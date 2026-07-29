@@ -225,7 +225,7 @@ function seedOrder(n: number): number[] {
 
 // Suíço (Swiss / round-robin phase): build the top-N knockout bracket from the
 // standings once the group phase (round 1) is over. `qualifiers` is 4/8/16.
-export async function generatePlayoffBracket(tournamentId: string, qualifiers: number) {
+export async function generatePlayoffBracket(tournamentId: string, qualifiers: number, startRound = 2) {
   const [tournament, judges, participants] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
     getTournamentJudgeIds(tournamentId),
@@ -249,7 +249,7 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
       tournamentId,
       player1Id: match.player1Id,
       player2Id: match.player2Id,
-      round: 2, // round 1 is the Swiss/round-robin phase; the knockout starts at round 2
+      round: startRound, // knockout starts right after the last Swiss round
       bracketPos: i + 1,
       arena,
       slot,
@@ -258,27 +258,41 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
   });
 }
 
-// Called after each round-1 (Swiss/round-robin) match finishes. Once the whole
-// phase is done, either build the top-N knockout bracket (if `qualifiers` is
-// set) or, when no cut is configured, finalize the standings directly.
-export async function finalizeRoundRobin(tournamentId: string) {
-  const roundMatches = await prisma.match.findMany({ where: { tournamentId, round: 1 } });
-  const allFinished = roundMatches.every((m) => m.status === "FINISHED");
-  if (!allFinished) return;
+// Number of Swiss rounds for a field (standard: ceil(log2(N))).
+export function swissRoundCount(participantCount: number): number {
+  return Math.max(1, Math.ceil(Math.log2(Math.max(2, participantCount))));
+}
 
-  const [tournament, participantCount, playoffCount] = await Promise.all([
+// Drives a Suíço tournament after each match finishes: play the Swiss rounds
+// (pairing by standings), then cut the top `qualifiers` into a seeded knockout,
+// which then advances like a single-elimination bracket.
+export async function advanceSwissTournament(tournamentId: string, completedRound: number) {
+  const roundMatches = await prisma.match.findMany({ where: { tournamentId, round: completedRound } });
+  if (roundMatches.length === 0 || !roundMatches.every((m) => m.status === "FINISHED")) return;
+
+  const [tournament, participantCount] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { qualifiers: true } }),
-    prisma.tournamentParticipant.count({ where: { tournamentId } }),
-    prisma.match.count({ where: { tournamentId, round: { gte: 2 } } }),
+    prisma.tournamentParticipant.count({ where: { tournamentId, approved: { not: false } } }),
   ]);
-  const q = tournament?.qualifiers ?? null;
+  const swissRounds = swissRoundCount(participantCount);
 
-  // A cut is only meaningful when fewer players advance than are competing.
-  if (q && q >= 2 && q < participantCount) {
-    if (playoffCount === 0) await generatePlayoffBracket(tournamentId, q);
-    return; // knockout advancement is handled by advanceSingleElimination
+  // Knockout phase (rounds after the Swiss phase): advance the bracket.
+  if (completedRound > swissRounds) {
+    await advanceSingleElimination(tournamentId, completedRound);
+    return;
   }
-
+  // More Swiss rounds to play.
+  if (completedRound < swissRounds) {
+    await generateSwissRound(tournamentId, completedRound + 1);
+    return;
+  }
+  // Last Swiss round finished → cut to the knockout, or finalize the standings.
+  const q = tournament?.qualifiers ?? null;
+  if (q && q >= 2 && q < participantCount) {
+    const already = await prisma.match.count({ where: { tournamentId, round: { gt: swissRounds } } });
+    if (already === 0) await generatePlayoffBracket(tournamentId, q, swissRounds + 1);
+    return;
+  }
   await finalizeTournamentRanking(tournamentId);
 }
 

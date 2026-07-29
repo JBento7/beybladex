@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
-  generateRoundRobin,
   generateGroups,
   generateSingleElimination,
   generateSwissRound,
@@ -109,7 +108,8 @@ export async function POST(
     try {
       switch (tournament.format) {
         case "ROUND_ROBIN":
-          await generateRoundRobin(params.id);
+          // "Suíço": Swiss pairing for the initial phase, then a top-N knockout.
+          await generateSwissRound(params.id, 1);
           break;
         case "GROUPS":
           await generateGroups(params.id);

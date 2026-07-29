@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { recalculateStandings, advanceSingleElimination, generateSwissRound, finalizeRoundRobin, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
+import { recalculateStandings, advanceSingleElimination, generateSwissRound, advanceSwissTournament, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
 
 // POST — declare a walkover (W.O.): the opponent of `winnerId` didn't show up,
 // so the match is finished without playing any sets.
@@ -85,7 +85,7 @@ export async function POST(
         }
       }
     } else if (tournament.format === "ROUND_ROBIN") {
-      await finalizeRoundRobin(match.tournamentId);
+      await advanceSwissTournament(match.tournamentId, match.round);
     } else if (tournament.format === "GROUPS") {
       const allMatches = await prisma.match.findMany({
         where: { tournamentId: match.tournamentId },
