@@ -48,14 +48,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: params.id },
-    select: { organizerId: true },
+    select: { id: true },
   });
   if (!tournament) {
     return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
   }
-  if (tournament.organizerId !== session.user.id) {
-    return NextResponse.json({ error: "Apenas o organizador do torneio pode excluí-lo" }, { status: 403 });
-  }
+  // Any admin (ORGANIZER) may delete a tournament, not only its creator.
 
   // Delete in dependency order. Includes every table that references the
   // tournament (or its matches) so a FK with ON DELETE RESTRICT doesn't block it.
