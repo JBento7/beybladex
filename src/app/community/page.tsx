@@ -30,7 +30,8 @@ export default async function CommunityPage() {
   const beybladesHidden = !!activeOfficialTournament;
 
   const players = await prisma.user.findMany({
-    where: { deleted: false, isGuest: false },
+    // Arena display accounts (arenaN@lbl.arena) are only scoreboards — hide them.
+    where: { deleted: false, isGuest: false, email: { not: { endsWith: "@lbl.arena" } } },
     select: {
       id: true,
       name: true,
