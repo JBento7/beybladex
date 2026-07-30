@@ -25,7 +25,12 @@ const FINISH_BTNS: { type: keyof typeof FINISH_TYPE_POINTS; label: string }[] = 
 type Side = 1 | 2;
 type Snap = { p1Pts: number; p2Pts: number; p1Sets: number; p2Sets: number; setNum: number; battle: number; winner: Side | null };
 
-type Bey = { name: string; blade?: string | null; ratchet?: string | null; bit?: string | null };
+type Bey = {
+  name: string; line?: string | null;
+  blade?: string | null; ratchet?: string | null; bit?: string | null;
+  lockChip?: string | null; metalBlade?: string | null; assistBlade?: string | null;
+};
+const isCXBey = (b: Bey) => b.line === "CX" || b.line === "CX_EXPAND";
 type ApiBey = {
   id: string; name: string; beyLine: string | null;
   blade: string | null; ratchet: string | null; bit: string | null;
@@ -109,6 +114,12 @@ export default function QuickMatch() {
       if ((p.category === "BLADE" || p.category === "MAIN_BLADE") && p.imageUrl) m.set(p.name, p.imageUrl);
     }
     return (name?: string | null) => (name ? m.get(name) ?? null : null);
+  }, [parts]);
+  // Any part image by category + name (for CX lock chip / metal blade / assist blade).
+  const partImg = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of parts) if (p.imageUrl) m.set(`${p.category}:${p.name}`, p.imageUrl);
+    return (cat: string, name?: string | null) => (name ? m.get(`${cat}:${name}`) ?? null : null);
   }, [parts]);
 
   const [layout, setLayout] = useState<Layout | null>(null);
@@ -258,8 +269,6 @@ export default function QuickMatch() {
 
   // ---------- MATCH (scoreboard) ----------
   const statusText = winner ? "ENCERRADA" : scoring ? "AO VIVO" : readyBanner ? "PRONTOS!" : countdownOn ? "" : "PRONTOS?";
-  const img1 = bladeImg(a1?.blade);
-  const img2 = bladeImg(a2?.blade);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -278,8 +287,8 @@ export default function QuickMatch() {
         {/* Active bey name (rotates each battle in 3on3) */}
         <Cell layout={layout} k="beyNameL" color={GOLD}>{a1?.name ?? ""}</Cell>
         <Cell layout={layout} k="beyNameR" color={GOLD}>{a2?.name ?? ""}</Cell>
-        {img1 && <BeyImg layout={layout} k="beyImgL" src={img1} />}
-        {img2 && <BeyImg layout={layout} k="beyImgR" src={img2} />}
+        <BeyArt layout={layout} side="L" bey={a1} bladeImg={bladeImg} partImg={partImg} />
+        <BeyArt layout={layout} side="R" bey={a2} bladeImg={bladeImg} partImg={partImg} />
         <Cell layout={layout} k="scoreL">{p1Pts}</Cell>
         <Cell layout={layout} k="scoreR">{p2Pts}</Cell>
         <Pips layout={layout} k="pointsL" count={p1Pts} dir="v" />
@@ -328,12 +337,36 @@ export default function QuickMatch() {
   );
 }
 
-function BeyImg({ layout, k, src }: { layout: Layout | null; k: string; src: string }) {
+function BeyImg({ layout, k, src, z }: { layout: Layout | null; k: string; src: string; z?: number }) {
   const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w ?? 12}%`, height: `${f.h ?? 22}%`, objectFit: "contain", pointerEvents: "none" }} />
+    <img src={src} alt="" style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w ?? 12}%`, height: `${f.h ?? 22}%`, objectFit: "contain", pointerEvents: "none", zIndex: z }} />
   );
+}
+
+// Scoreboard bey art for one side. CX beys stack 3 transparent PNGs (assist
+// blade behind, metal blade middle, lock chip on top); others use the blade.
+function BeyArt({ layout, side, bey, bladeImg, partImg }: {
+  layout: Layout | null; side: "L" | "R"; bey: Bey | null;
+  bladeImg: (n?: string | null) => string | null;
+  partImg: (cat: string, n?: string | null) => string | null;
+}) {
+  if (!bey) return null;
+  if (isCXBey(bey)) {
+    const assist = partImg("ASSIST_BLADE", bey.assistBlade);
+    const metal = partImg("MAIN_BLADE", bey.metalBlade);
+    const lock = partImg("LOCK_CHIP", bey.lockChip);
+    return (
+      <>
+        {assist && <BeyImg layout={layout} k={`cxAssist${side}`} src={assist} z={1} />}
+        {metal && <BeyImg layout={layout} k={`cxMetal${side}`} src={metal} z={2} />}
+        {lock && <BeyImg layout={layout} k={`cxLock${side}`} src={lock} z={3} />}
+      </>
+    );
+  }
+  const img = bladeImg(bey.blade);
+  return img ? <BeyImg layout={layout} k={`beyImg${side}`} src={img} /> : null;
 }
 
 // ---------- Setup: per-player registered/guest + deck builder ----------
@@ -361,8 +394,13 @@ function PlayerSetup({ title, accent, conf, setConf, deckSize, players, parts, o
       const idx = c.deck.findIndex((x) => x.name === b.name);
       if (idx >= 0) return { ...c, deck: c.deck.filter((_, i) => i !== idx) };
       if (c.deck.length >= deckSize) return c;
-      // Show the registered bey name; use its main blade for the scoreboard art.
-      return { ...c, deck: [...c.deck, { name: b.name, blade: mainBladeOf(b) }] };
+      // Show the registered bey name; keep the parts for the scoreboard art
+      // (CX stacks lock chip / metal blade / assist blade; BX/UX uses the blade).
+      return { ...c, deck: [...c.deck, {
+        name: b.name, line: b.beyLine,
+        blade: mainBladeOf(b),
+        lockChip: b.lockChip, metalBlade: b.metalBlade, assistBlade: b.assistBlade,
+      }] };
     });
   }
   // Guest: build combos slot by slot.
