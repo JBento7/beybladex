@@ -298,7 +298,7 @@ function BeyImg({ layout, k, src }: { layout: Layout | null; k: string; src: str
   const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, transform: "translate(-50%, -50%)", width: `${f.w ?? 8}%`, height: "auto", objectFit: "contain", pointerEvents: "none" }} />
+    <img src={src} alt="" style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w ?? 12}%`, height: `${f.h ?? 22}%`, objectFit: "contain", pointerEvents: "none" }} />
   );
 }
 
