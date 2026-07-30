@@ -267,8 +267,8 @@ export default function QuickMatch() {
         <Cell layout={layout} k="status" color={scoring ? "#4ade80" : GOLD}>{statusText}</Cell>
 
         {/* Player control panels (over the photo boxes): PRONTOS or scoring buttons */}
-        {!winner && <ControlBox side="left" ready={ready1} scoring={scoring} counting={count !== null} onReady={() => setReady1(true)} onScore={(t) => score(1, t)} />}
-        {!winner && <ControlBox side="right" ready={ready2} scoring={scoring} counting={count !== null} onReady={() => setReady2(true)} onScore={(t) => score(2, t)} />}
+        {!winner && <ControlBox layout={layout} side="left" ready={ready1} scoring={scoring} counting={count !== null} onReady={() => setReady1(true)} onScore={(t) => score(1, t)} />}
+        {!winner && <ControlBox layout={layout} side="right" ready={ready2} scoring={scoring} counting={count !== null} onReady={() => setReady2(true)} onScore={(t) => score(2, t)} />}
 
         {/* Countdown overlay */}
         {count !== null && (
@@ -412,11 +412,11 @@ function PlayerSetup({ title, accent, conf, setConf, deckSize, players, parts, o
 
 // Control panel over a photo box: a big PRONTOS button, then the 4 finish
 // buttons once the battle is live.
-function ControlBox({ side, ready, scoring, counting, onReady, onScore }: {
-  side: "left" | "right"; ready: boolean; scoring: boolean; counting: boolean;
+function ControlBox({ layout, side, ready, scoring, counting, onReady, onScore }: {
+  layout: Layout | null; side: "left" | "right"; ready: boolean; scoring: boolean; counting: boolean;
   onReady: () => void; onScore: (t: keyof typeof FINISH_TYPE_POINTS) => void;
 }) {
-  const f = fieldStyle(SCOREBOARD_DEFAULTS, side === "left" ? "photoL" : "photoR", null);
+  const f = fieldStyle(SCOREBOARD_DEFAULTS, side === "left" ? "photoL" : "photoR", layout);
   const box: React.CSSProperties = { position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w}%`, height: `${f.h}%`, zIndex: 20, display: "flex", flexDirection: "column", gap: "0.6cqw" };
   if (scoring) {
     return (
