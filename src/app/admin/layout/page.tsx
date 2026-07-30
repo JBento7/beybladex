@@ -12,12 +12,11 @@ export default async function ArenaLayoutPage() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ORGANIZER") redirect("/dashboard");
 
-  const initial: { scoreboard: Record<string, Field>; winner: Record<string, Field> } = { scoreboard: {}, winner: {} };
+  const initial: Record<string, Record<string, Field>> = { scoreboard: {}, winner: {}, quickmatch: {} };
   try {
-    const rows = await prisma.arenaLayout.findMany({ where: { key: { in: ["scoreboard", "winner"] } } });
+    const rows = await prisma.arenaLayout.findMany({ where: { key: { in: ["scoreboard", "winner", "quickmatch"] } } });
     for (const row of rows) {
-      if (row.key === "scoreboard") initial.scoreboard = JSON.parse(row.data);
-      if (row.key === "winner") initial.winner = JSON.parse(row.data);
+      if (row.key === "scoreboard" || row.key === "winner" || row.key === "quickmatch") initial[row.key] = JSON.parse(row.data);
     }
   } catch {
     // table missing (pre-migration) — start from defaults

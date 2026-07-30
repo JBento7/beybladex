@@ -57,6 +57,7 @@ export const WINNER_DEFAULTS: Record<string, FieldDef> = {
 export const TARGETS: Record<string, { label: string; bg: string; defaults: Record<string, FieldDef> }> = {
   scoreboard: { label: "Placar", bg: "/scoreboard-bg.png", defaults: SCOREBOARD_DEFAULTS },
   winner: { label: "Vencedor", bg: "/winner-bg.png", defaults: WINNER_DEFAULTS },
+  quickmatch: { label: "Partidas Rápidas", bg: "/scoreboard-bg.png", defaults: SCOREBOARD_DEFAULTS },
 };
 
 // Centers (in %) of the dots for a pip group. dir "v" = 5 stacked, "h" = 3 in a row.

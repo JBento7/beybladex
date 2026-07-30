@@ -72,6 +72,18 @@ export default function QuickMatch() {
 
   const deckSize = deckType === "3on3" ? 3 : 1;
 
+  // Fullscreen helpers (browsers require a user gesture, so we trigger on click).
+  function enterFullscreen() {
+    try { document.documentElement.requestFullscreen?.().catch(() => {}); } catch { /* unsupported */ }
+  }
+  function exitFullscreen() {
+    try { if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); } catch { /* unsupported */ }
+  }
+  function backToMenu() {
+    exitFullscreen();
+    router.push("/");
+  }
+
   const [players, setPlayers] = useState<ApiPlayer[]>([]);
   const [parts, setParts] = useState<ApiPart[]>([]);
   useEffect(() => {
@@ -91,7 +103,7 @@ export default function QuickMatch() {
 
   const [layout, setLayout] = useState<Layout | null>(null);
   useEffect(() => {
-    fetch("/api/arena-layout?key=scoreboard").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
+    fetch("/api/arena-layout?key=quickmatch").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
   }, []);
 
   // Match state
@@ -133,6 +145,7 @@ export default function QuickMatch() {
     setP1Pts(0); setP2Pts(0); setP1Sets(0); setP2Sets(0); setSetNum(1); setBattle(0);
     setReady1(false); setReady2(false); setScoring(false); setCount(null); setWinner(null);
     snaps.current = [];
+    enterFullscreen();
     setPhase("match");
   }
 
@@ -171,7 +184,8 @@ export default function QuickMatch() {
     const deckOk = (c: PConf) => c.name.trim() && c.deck.length === deckSize && c.deck.every((b) => comboName(b).trim());
     const ready = deckOk(p1) && deckOk(p2);
     return (
-      <div style={{ minHeight: "100vh", background: "#0d0d0d", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", padding: "5vh 16px" }}>
+      <div style={{ minHeight: "100vh", background: "#0d0d0d", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", padding: "5vh 16px", position: "relative" }}>
+        <button onClick={backToMenu} style={{ position: "absolute", top: 16, left: 16, background: "rgba(255,255,255,0.08)", color: "#fff", border: "1px solid #333", borderRadius: 10, padding: "8px 14px", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>← Voltar ao menu</button>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/lbl-logo.png" alt="LBL" style={{ height: 80, marginBottom: 12 }} />
         <h1 style={{ fontSize: 26, fontWeight: 900, color: GOLD, margin: "0 0 4px" }}>Partidas Rápidas</h1>
@@ -226,7 +240,9 @@ export default function QuickMatch() {
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ position: "relative", width: "min(100vw, calc(100vh * 1672 / 941))", aspectRatio: "1672 / 941", containerType: "size", backgroundImage: "url(/scoreboard-bg.png)", backgroundSize: "100% 100%", backgroundRepeat: "no-repeat", fontFamily: "'Arial Black', system-ui, sans-serif", overflow: "hidden" }}>
-        {/* Exit */}
+        {/* Back to LBL menu (top-left) */}
+        <button onClick={backToMenu} style={{ position: "absolute", top: "0.6vh", left: "1.5vw", zIndex: 30, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}>← Menu</button>
+        {/* Exit to setup */}
         <button onClick={() => setPhase("setup")} style={{ position: "absolute", top: "0.6vh", right: "1.5vw", zIndex: 30, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}>✕ Sair</button>
         {snaps.current.length > 0 && !winner && (
           <button onClick={undo} style={{ position: "absolute", top: "0.6vh", right: "9vw", zIndex: 30, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}>↩ Desfazer</button>

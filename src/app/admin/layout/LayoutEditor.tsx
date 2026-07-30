@@ -24,6 +24,8 @@ const SAMPLES: Record<string, Record<string, string>> = {
   },
   winner: { name: "VENCEDOR", scoreWin: "7", scoreLose: "3" },
 };
+// Partidas Rápidas shares the scoreboard art, so reuse its sample content.
+SAMPLES.quickmatch = SAMPLES.scoreboard;
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
@@ -36,7 +38,7 @@ export default function LayoutEditor({
   initial,
   profile,
 }: {
-  initial: Record<TargetKey, Record<string, Field>>;
+  initial: Record<string, Record<string, Field>>;
   profile: { name: string; avatar: string | null; deck: (string | null)[] };
 }) {
   const [target, setTarget] = useState<TargetKey>("scoreboard");
