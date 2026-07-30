@@ -116,9 +116,10 @@ export default function QuickMatch() {
   const [ready1, setReady1] = useState(false);
   const [ready2, setReady2] = useState(false);
   const [scoring, setScoring] = useState(false);
-  const [count, setCount] = useState<number | null>(null); // 3,2,1,0(GO)
+  const [countdownOn, setCountdownOn] = useState(false);
   const [winner, setWinner] = useState<Side | null>(null);
   const snaps = useRef<Snap[]>([]);
+  const cdVideoRef = useRef<HTMLVideoElement>(null);
 
   // Active bey for each player (rotates every battle in 3on3, fixed in solo).
   const activeBey = (conf: PConf): Bey | null =>
@@ -126,24 +127,34 @@ export default function QuickMatch() {
   const a1 = activeBey(p1);
   const a2 = activeBey(p2);
 
-  // Both ready → run the 3-2-1 countdown, then enable scoring.
+  // Both ready → play the LBL countdown video, then enable scoring.
   useEffect(() => {
     if (!(ready1 && ready2) || scoring || winner) return;
-    setCount(3);
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    [1, 2, 3].forEach((i) => timers.push(setTimeout(() => setCount(3 - i), i * 800)));
-    timers.push(setTimeout(() => {
-      setCount(null);
-      setScoring(true);
-      setReady1(false);
-      setReady2(false);
-    }, 3 * 800 + 700));
-    return () => timers.forEach(clearTimeout);
+    setCountdownOn(true);
   }, [ready1, ready2, scoring, winner]);
+
+  // Drive the countdown video (with its own audio); enable scoring when it ends.
+  useEffect(() => {
+    if (!countdownOn) return;
+    const finish = () => { setCountdownOn(false); setScoring(true); setReady1(false); setReady2(false); };
+    const v = cdVideoRef.current;
+    if (!v) { const t = setTimeout(finish, 3500); return () => clearTimeout(t); }
+    try { v.currentTime = 0; } catch { /* ignore */ }
+    v.muted = false;
+    // Try with sound; if blocked, retry muted so at least the visual plays.
+    v.play().catch(() => { try { v.muted = true; v.play().catch(() => {}); } catch { /* ignore */ } });
+    v.addEventListener("ended", finish);
+    const safety = setTimeout(finish, 12000);
+    return () => {
+      v.removeEventListener("ended", finish);
+      clearTimeout(safety);
+      try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
+    };
+  }, [countdownOn]);
 
   function startMatch() {
     setP1Pts(0); setP2Pts(0); setP1Sets(0); setP2Sets(0); setSetNum(1); setBattle(0);
-    setReady1(false); setReady2(false); setScoring(false); setCount(null); setWinner(null);
+    setReady1(false); setReady2(false); setScoring(false); setCountdownOn(false); setWinner(null);
     snaps.current = [];
     enterFullscreen();
     setPhase("match");
@@ -176,7 +187,7 @@ export default function QuickMatch() {
     if (!s) return;
     setP1Pts(s.p1Pts); setP2Pts(s.p2Pts); setP1Sets(s.p1Sets); setP2Sets(s.p2Sets);
     setSetNum(s.setNum); setBattle(s.battle); setWinner(s.winner);
-    setScoring(false); setReady1(false); setReady2(false); setCount(null);
+    setScoring(false); setReady1(false); setReady2(false); setCountdownOn(false);
   }
 
   // ---------- SETUP ----------
@@ -233,7 +244,7 @@ export default function QuickMatch() {
   }
 
   // ---------- MATCH (scoreboard) ----------
-  const statusText = winner ? "ENCERRADA" : scoring ? "AO VIVO" : count !== null ? "" : "PRONTOS?";
+  const statusText = winner ? "ENCERRADA" : scoring ? "AO VIVO" : countdownOn ? "" : "PRONTOS?";
   const img1 = bladeImg(a1?.blade);
   const img2 = bladeImg(a2?.blade);
 
@@ -267,15 +278,18 @@ export default function QuickMatch() {
         <Cell layout={layout} k="status" color={scoring ? "#4ade80" : GOLD}>{statusText}</Cell>
 
         {/* Player control panels (over the photo boxes): PRONTOS or scoring buttons */}
-        {!winner && <ControlBox layout={layout} side="left" ready={ready1} scoring={scoring} counting={count !== null} onReady={() => setReady1(true)} onScore={(t) => score(1, t)} />}
-        {!winner && <ControlBox layout={layout} side="right" ready={ready2} scoring={scoring} counting={count !== null} onReady={() => setReady2(true)} onScore={(t) => score(2, t)} />}
+        {!winner && <ControlBox layout={layout} side="left" ready={ready1} scoring={scoring} counting={countdownOn} onReady={() => setReady1(true)} onScore={(t) => score(1, t)} />}
+        {!winner && <ControlBox layout={layout} side="right" ready={ready2} scoring={scoring} counting={countdownOn} onReady={() => setReady2(true)} onScore={(t) => score(2, t)} />}
 
-        {/* Countdown overlay */}
-        {count !== null && (
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 40 }}>
-            <span style={{ fontSize: "28cqw", fontWeight: 900, color: count === 0 ? "#4ade80" : GOLD, textShadow: "0 0 6vh rgba(0,0,0,0.8)" }}>{count === 0 ? "GO!" : count}</span>
-          </div>
-        )}
+        {/* Countdown video (LBL) — always mounted so it can autoplay when it fires */}
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <video
+          ref={cdVideoRef}
+          src="/countdown.mp4"
+          playsInline
+          preload="auto"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", zIndex: countdownOn ? 40 : -1, opacity: countdownOn ? 1 : 0, pointerEvents: "none" }}
+        />
 
         {/* Winner overlay */}
         {winner && (
