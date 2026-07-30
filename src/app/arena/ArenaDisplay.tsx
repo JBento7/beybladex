@@ -7,7 +7,7 @@ import { fieldStyle, pipDots, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type Layout 
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v49-partida";
+const ARENA_BUILD = "v50-queue";
 
 // Accent used on the start gate / waiting screen.
 const BLUE = "#00aaff";
@@ -58,6 +58,7 @@ type ArenaData = {
   round?: number;
   countdown?: { key: string; elapsedMs: number } | null;
   history?: HistRow[];
+  queue?: { round: number; player1: string; player2: string; p1Avatar: string | null; p2Avatar: string | null }[];
   match: Match | null;
   debug?: { inProgressTournaments: number; matchesThisArena: number };
 };
@@ -305,6 +306,8 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 
       {match && data?.status === "finished" ? (
         <WinnerScreen match={match} winnerSide={data.winnerSide ?? "p1"} layout={winnerLayout} />
+      ) : !match && data?.queue && data.queue.length > 0 ? (
+        <NextMatches arena={arena} queue={data.queue} build={ARENA_BUILD} />
       ) : !match ? (
         <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -321,6 +324,53 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       ) : (
         <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} layout={layout} onTest={() => setCountdownOn(true)} />
       )}
+    </div>
+  );
+}
+
+// Shown on the arena between matches: the queue of upcoming matches for this arena.
+function NextMatches({ arena, queue, build }: {
+  arena: number;
+  queue: { round: number; player1: string; player2: string; p1Avatar: string | null; p2Avatar: string | null }[];
+  build: string;
+}) {
+  const RED = "#c8102e";
+  const GOLD = "#ffd400";
+  return (
+    <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at top, #17110d 0%, #070605 100%)", display: "flex", flexDirection: "column", alignItems: "center", padding: "3vh 4vw", boxSizing: "border-box", overflow: "hidden" }}>
+      <div style={{ position: "absolute", bottom: "0.5vh", right: "1vw", color: "#3a2a1a", fontSize: "0.9vw" }}>[{build}]</div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/lbl-logo.png" alt="LBL" style={{ height: "11vh", width: "auto", marginBottom: "1vh" }} />
+      <div style={{ fontSize: "3.4vh", fontWeight: 900, color: GOLD, letterSpacing: "0.1em" }}>ARENA {arena} · PRÓXIMAS PARTIDAS</div>
+
+      <div style={{ marginTop: "2.5vh", width: "100%", maxWidth: "70vw", flex: 1, display: "flex", flexDirection: "column", gap: "1.2vh", overflow: "hidden" }}>
+        {queue.slice(0, 7).map((q, i) => (
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "1.5vw",
+              background: i === 0 ? "rgba(240,212,0,0.12)" : "rgba(255,255,255,0.04)",
+              border: i === 0 ? `2px solid ${GOLD}` : "1px solid #2a2320",
+              borderRadius: 12,
+              padding: "1.4vh 2vw",
+            }}
+          >
+            <div style={{ width: "5vh", height: "5vh", borderRadius: "50%", background: i === 0 ? GOLD : RED, color: "#000", fontWeight: 900, fontSize: "2.4vh", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {i + 1}
+            </div>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1vw", minWidth: 0 }}>
+              <span style={{ flex: 1, textAlign: "right", fontWeight: 900, fontSize: "2.6vh", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.player1}</span>
+              <span style={{ color: GOLD, fontWeight: 900, fontSize: "2.2vh", flexShrink: 0 }}>×</span>
+              <span style={{ flex: 1, textAlign: "left", fontWeight: 900, fontSize: "2.6vh", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.player2}</span>
+            </div>
+            <div style={{ flexShrink: 0, fontSize: "1.6vh", fontWeight: 700, color: "#9a8", background: "rgba(0,0,0,0.35)", borderRadius: 8, padding: "0.5vh 1vw" }}>
+              {i === 0 ? "A SEGUIR" : `Rodada ${q.round}`}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

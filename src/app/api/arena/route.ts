@@ -101,7 +101,35 @@ export async function GET(req: NextRequest) {
   const live = phase === "live";
 
   if (!match) {
-    // Diagnostics to make "nothing shows" debuggable.
+    // Nothing is on-air for this arena. Instead of just "aguardando", show the
+    // queue of upcoming matches assigned to this arena (in play order).
+    let queue: { round: number; player1: string; player2: string; p1Avatar: string | null; p2Avatar: string | null }[] = [];
+    try {
+      const ups = await prisma.match.findMany({
+        where: { ...arenaWhere, status: "PENDING", tournament: { status: "IN_PROGRESS" } },
+        orderBy: [{ round: "asc" }, { slot: "asc" }, { bracketPos: "asc" }, { createdAt: "asc" }],
+        take: 12,
+        select: {
+          player1Id: true,
+          player2Id: true,
+          round: true,
+          player1: { select: { name: true, bladerName: true, avatarUrl: true } },
+          player2: { select: { name: true, bladerName: true, avatarUrl: true } },
+        },
+      });
+      queue = ups
+        .filter((m) => m.player1Id !== m.player2Id)
+        .map((m) => ({
+          round: m.round,
+          player1: m.player1.bladerName || m.player1.name,
+          player2: m.player2.bladerName || m.player2.name,
+          p1Avatar: m.player1.avatarUrl ?? null,
+          p2Avatar: m.player2.avatarUrl ?? null,
+        }));
+    } catch {
+      /* ignore */
+    }
+
     const inProgressTournaments = await prisma.tournament.count({ where: { status: "IN_PROGRESS" } });
     const matchesThisArena = await prisma.match.count({
       where: { ...arenaWhere, tournament: { status: "IN_PROGRESS" } },
@@ -110,6 +138,7 @@ export async function GET(req: NextRequest) {
       arena: arenaNum,
       status: "idle",
       match: null,
+      queue,
       debug: { inProgressTournaments, matchesThisArena },
     });
   }
