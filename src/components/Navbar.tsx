@@ -48,6 +48,9 @@ export default function Navbar() {
             <Link href="/tournaments" className={linkClass("/tournaments")}>
               Torneios
             </Link>
+            <Link href="/quick-match" className={linkClass("/quick-match")}>
+              Partidas Rápidas
+            </Link>
             <Link href="/community" className={linkClass("/community")}>
               Comunidade
             </Link>
@@ -146,6 +149,7 @@ export default function Navbar() {
         {menuOpen && (
           <div className="md:hidden pb-4 pt-2 border-t border-[#2a2a2a] space-y-2">
             <Link href="/tournaments" className={mobileLinkClass("/tournaments")} onClick={() => setMenuOpen(false)}>Torneios</Link>
+            <Link href="/quick-match" className={mobileLinkClass("/quick-match")} onClick={() => setMenuOpen(false)}>Partidas Rápidas</Link>
             <Link href="/community" className={mobileLinkClass("/community")} onClick={() => setMenuOpen(false)}>Comunidade</Link>
             <Link href="/upcoming" className={mobileLinkClass("/upcoming")} onClick={() => setMenuOpen(false)}>Próximos</Link>
             {session && (
