@@ -282,18 +282,19 @@ export async function GET(req: NextRequest) {
     [p1Deck, p2Deck] = await Promise.all([deckImages(match.player1Id), deckImages(match.player2Id)]);
   }
 
-  // Match number: index of this match among the tournament's matches.
+  // Match number: position of this match WITHIN its round (resets each round),
+  // e.g. "PARTIDA 3 / 8" in round 1, then back to 1 in the next round.
   let matchNumber = 0;
   let matchesTotal = 0;
   try {
-    const all = await prisma.match.findMany({
-      where: { tournamentId: match.tournamentId },
-      orderBy: [{ round: "asc" }, { bracketPos: "asc" }, { createdAt: "asc" }],
+    const roundMatches = await prisma.match.findMany({
+      where: { tournamentId: match.tournamentId, round: match.round },
+      orderBy: [{ bracketPos: "asc" }, { slot: "asc" }, { arena: "asc" }, { createdAt: "asc" }],
       select: { id: true },
     });
-    const idx = all.findIndex((m) => m.id === match.id);
+    const idx = roundMatches.findIndex((m) => m.id === match.id);
     matchNumber = idx >= 0 ? idx + 1 : 0;
-    matchesTotal = all.length;
+    matchesTotal = roundMatches.length;
   } catch {
     /* ignore */
   }

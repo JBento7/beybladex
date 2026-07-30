@@ -7,7 +7,7 @@ import { fieldStyle, pipDots, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type Layout 
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v48-winedit";
+const ARENA_BUILD = "v49-partida";
 
 // Accent used on the start gate / waiting screen.
 const BLUE = "#00aaff";
