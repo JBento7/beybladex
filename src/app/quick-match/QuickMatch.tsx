@@ -26,7 +26,17 @@ type Side = 1 | 2;
 type Snap = { p1Pts: number; p2Pts: number; p1Sets: number; p2Sets: number; setNum: number; battle: number; winner: Side | null };
 
 type Bey = { name: string; blade?: string | null; ratchet?: string | null; bit?: string | null };
-type ApiBey = { id: string; name: string; blade: string | null; ratchet: string | null; bit: string | null };
+type ApiBey = {
+  id: string; name: string; beyLine: string | null;
+  blade: string | null; ratchet: string | null; bit: string | null;
+  lockChip: string | null; metalBlade: string | null; assistBlade: string | null; overBlade: string | null;
+};
+// The "main blade" carries the scoreboard art. CX/CX_EXPAND use the metal/over
+// blade instead of the BX/UX `blade` field.
+const mainBladeOf = (b: ApiBey): string | null => {
+  const isCX = b.beyLine === "CX" || b.beyLine === "CX_EXPAND";
+  return (isCX ? b.overBlade || b.metalBlade : b.blade) ?? null;
+};
 type ApiPlayer = { id: string; name: string; bladerName: string | null; avatarUrl: string | null; beyblades: ApiBey[] };
 type ApiPart = { id: string; category: string; name: string; fullName: string | null; imageUrl: string | null };
 
@@ -195,7 +205,7 @@ export default function QuickMatch() {
 
   // ---------- SETUP ----------
   if (phase === "setup") {
-    const deckOk = (c: PConf) => c.name.trim() && c.deck.length === deckSize && c.deck.every((b) => comboName(b).trim());
+    const deckOk = (c: PConf) => c.name.trim() && c.deck.length === deckSize && c.deck.every((b) => b.name.trim());
     const ready = deckOk(p1) && deckOk(p2);
     return (
       <div style={{ minHeight: "100vh", background: "#0d0d0d", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", padding: "5vh 16px", position: "relative" }}>
@@ -266,8 +276,8 @@ export default function QuickMatch() {
         <Cell layout={layout} k="nameL">{p1.name}</Cell>
         <Cell layout={layout} k="nameR">{p2.name}</Cell>
         {/* Active bey name (rotates each battle in 3on3) */}
-        <Cell layout={layout} k="beyNameL" color={GOLD}>{a1 ? comboName(a1) : ""}</Cell>
-        <Cell layout={layout} k="beyNameR" color={GOLD}>{a2 ? comboName(a2) : ""}</Cell>
+        <Cell layout={layout} k="beyNameL" color={GOLD}>{a1?.name ?? ""}</Cell>
+        <Cell layout={layout} k="beyNameR" color={GOLD}>{a2?.name ?? ""}</Cell>
         {img1 && <BeyImg layout={layout} k="beyImgL" src={img1} />}
         {img2 && <BeyImg layout={layout} k="beyImgR" src={img2} />}
         <Cell layout={layout} k="scoreL">{p1Pts}</Cell>
@@ -348,10 +358,11 @@ function PlayerSetup({ title, accent, conf, setConf, deckSize, players, parts, o
   // Registered: toggle a bey into the ordered deck.
   function toggleBey(b: ApiBey) {
     setConf((c) => {
-      const idx = c.deck.findIndex((x) => x.name === b.name && x.blade === b.blade);
+      const idx = c.deck.findIndex((x) => x.name === b.name);
       if (idx >= 0) return { ...c, deck: c.deck.filter((_, i) => i !== idx) };
       if (c.deck.length >= deckSize) return c;
-      return { ...c, deck: [...c.deck, { name: b.name, blade: b.blade, ratchet: b.ratchet, bit: b.bit }] };
+      // Show the registered bey name; use its main blade for the scoreboard art.
+      return { ...c, deck: [...c.deck, { name: b.name, blade: mainBladeOf(b) }] };
     });
   }
   // Guest: build combos slot by slot.
@@ -394,7 +405,7 @@ function PlayerSetup({ title, accent, conf, setConf, deckSize, players, parts, o
               </div>
               {selectedUser.beyblades.length === 0 && <div style={{ fontSize: 12, color: "#f87171" }}>Sem beys cadastradas.</div>}
               {selectedUser.beyblades.map((b) => {
-                const order = conf.deck.findIndex((x) => x.name === b.name && x.blade === b.blade);
+                const order = conf.deck.findIndex((x) => x.name === b.name);
                 const on = order >= 0;
                 return (
                   <button key={b.id} onClick={() => toggleBey(b)}

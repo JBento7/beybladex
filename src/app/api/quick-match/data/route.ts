@@ -29,7 +29,11 @@ export async function GET() {
         beyblades: {
           where: { hiddenFromCommunity: false },
           orderBy: { createdAt: "asc" },
-          select: { id: true, name: true, blade: true, ratchet: true, bit: true },
+          select: {
+            id: true, name: true, beyLine: true,
+            blade: true, ratchet: true, bit: true,
+            lockChip: true, metalBlade: true, assistBlade: true, overBlade: true,
+          },
         },
       },
     });
