@@ -31,6 +31,10 @@ type Bey = {
   lockChip?: string | null; metalBlade?: string | null; assistBlade?: string | null;
 };
 const isCXBey = (b: Bey) => b.line === "CX" || b.line === "CX_EXPAND";
+
+// Custom scoreboard field (added in the layout editor): text or integer, with
+// its own geometry and a live value the operator can change during the match.
+type CustomFld = { key: string; label: string; type: "text" | "int"; value: string; x: number; y: number; w?: number; h?: number; fs?: number };
 type ApiBey = {
   id: string; name: string; beyLine: string | null;
   blade: string | null; ratchet: string | null; bit: string | null;
@@ -99,6 +103,14 @@ export default function QuickMatch() {
     router.push("/");
   }
 
+  // Edit a custom field's value live (respects the int type).
+  function editCustom(cf: CustomFld) {
+    const raw = window.prompt(cf.label, cf.value);
+    if (raw === null) return;
+    const v = cf.type === "int" ? raw.replace(/[^\d-]/g, "") : raw;
+    setCustomFields((prev) => prev.map((c) => (c.key === cf.key ? { ...c, value: v } : c)));
+  }
+
   const [players, setPlayers] = useState<ApiPlayer[]>([]);
   const [parts, setParts] = useState<ApiPart[]>([]);
   useEffect(() => {
@@ -124,8 +136,13 @@ export default function QuickMatch() {
 
   const [layout, setLayout] = useState<Layout | null>(null);
   const [bg, setBg] = useState<string>("/scoreboard-bg.png");
+  const [customFields, setCustomFields] = useState<CustomFld[]>([]);
   useEffect(() => {
     fetch("/api/arena-layout?key=quickmatch").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
+    // Custom fields defined in the layout editor (text/int), live-editable here.
+    fetch("/api/arena-layout?key=scoreboard::custom").then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (Array.isArray(d?.layout)) setCustomFields(d.layout as CustomFld[]);
+    }).catch(() => {});
     // Custom background: use the quick-match one if set, else the scoreboard one.
     fetch("/api/arena-layout?key=quickmatch::bg").then((r) => (r.ok ? r.json() : null)).then((d) => {
       if (d?.layout?.url) { setBg(d.layout.url); return; }
@@ -304,6 +321,18 @@ export default function QuickMatch() {
         <Cell layout={layout} k="rodada">{String(setNum).padStart(2, "0")}</Cell>
         <Cell layout={layout} k="partida">{`${p1Sets}-${p2Sets}`}</Cell>
         <Cell layout={layout} k="status" color={scoring ? "#4ade80" : GOLD}>{statusText}</Cell>
+
+        {/* Custom fields (from the layout editor) — tap to edit the value live */}
+        {customFields.map((cf) => (
+          <div
+            key={cf.key}
+            onClick={() => editCustom(cf)}
+            title="Toque para editar"
+            style={{ position: "absolute", left: `${cf.x}%`, top: `${cf.y}%`, transform: "translate(-50%, -50%)", width: cf.w ? `${cf.w}%` : undefined, zIndex: 25, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontSize: `${cf.fs ?? 1.8}cqw`, fontWeight: 900, color: "#fff", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}
+          >
+            {cf.value || cf.label}
+          </div>
+        ))}
 
         {/* Player control panels (over the photo boxes): PRONTOS or scoring buttons */}
         {!winner && <ControlBox layout={layout} side="left" ready={ready1} scoring={scoring} counting={countdownOn || readyBanner} onReady={() => setReady1(true)} onScore={(t) => score(1, t)} />}

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { TARGETS, pipDots, type Field } from "@/lib/arenaLayout";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { TARGETS, pipDots, type Field, type FieldDef } from "@/lib/arenaLayout";
 
 type TargetKey = keyof typeof TARGETS;
 
@@ -45,6 +45,11 @@ function mirrorField(kind: string, f: Field): Field {
   const x = kind === "text" ? 100 - f.x : 100 - f.x - (f.w ?? 0);
   return { ...f, x: r1(x) };
 }
+
+// Custom scoreboard fields the organizer adds (text or integer), positioned in
+// the editor and given a live value that drives the placar.
+export type CustomField = { key: string; label: string; type: "text" | "int"; value: string } & Field;
+const isCustom = (k: string) => k.startsWith("custom_");
 
 export default function LayoutEditor({
   initial,
@@ -105,6 +110,7 @@ export default function LayoutEditor({
 
   // Sample content for the preview, using the organizer's profile as a base.
   function previewText(k: string): string {
+    if (isCustom(k)) return customValue(k);
     if (k === "nameL" || k === "nameR" || k === "name") return profile.name;
     const map: Record<string, string> = {
       scoreL: "3", scoreR: "0", scoreWin: "7", scoreLose: "3",
@@ -134,6 +140,28 @@ export default function LayoutEditor({
     return out;
   });
 
+  // Custom fields (scoreboard only). Meta (label/type/value) lives here;
+  // geometry lives in byTarget.scoreboard[key] like every other element.
+  const [customs, setCustoms] = useState<Omit<CustomField, keyof Field>[]>([]);
+  useEffect(() => {
+    fetch("/api/arena-layout?key=scoreboard::custom").then((r) => (r.ok ? r.json() : null)).then((d) => {
+      const arr = Array.isArray(d?.layout) ? (d.layout as CustomField[]) : [];
+      if (!arr.length) return;
+      setCustoms(arr.map((c) => ({ key: c.key, label: c.label, type: c.type, value: c.value })));
+      setByTarget((prev) => {
+        const sb = { ...prev.scoreboard };
+        for (const c of arr) sb[c.key] = { x: c.x, y: c.y, w: c.w, h: c.h, fs: c.fs };
+        return { ...prev, scoreboard: sb };
+      });
+    }).catch(() => {});
+  }, []);
+  const customDefs = useMemo(() => {
+    const out: Record<string, FieldDef> = {};
+    for (const c of customs) out[c.key] = { kind: "text", label: c.label, x: 50, y: 50, w: 14, fs: 1.8 };
+    return out;
+  }, [customs]);
+  const customValue = (k: string) => customs.find((c) => c.key === k)?.value ?? "";
+
   const [sel, setSel] = useState<string | null>(null);
   // Which elements are shown/editable on the board (chosen in the sidebar) so
   // overlapping items don't clutter the view while editing.
@@ -142,10 +170,12 @@ export default function LayoutEditor({
   const boardRef = useRef<HTMLDivElement>(null);
   const drag = useRef<null | { key: string; mode: "move" | "resize"; startX: number; startY: number; orig: Field }>(null);
 
-  const defs = TARGETS[target].defaults;
+  const defs: Record<string, FieldDef> = target === "scoreboard" ? { ...TARGETS[target].defaults, ...customDefs } : TARGETS[target].defaults;
   const KEYS = Object.keys(defs);
   const fields = byTarget[target];
   const SAMPLE = SAMPLES[target] || {};
+  // Text shown for an element on the board: custom fields show their value.
+  const cellText = (k: string) => (isCustom(k) ? (customValue(k) || defs[k]?.label || "") : (SAMPLE[k] ?? defs[k]?.label ?? ""));
 
   function pct(clientX: number, clientY: number) {
     const el = boardRef.current;
@@ -168,7 +198,7 @@ export default function LayoutEditor({
         if (d.mode === "move") {
           cur.x = clamp(r1(d.orig.x + (p.x - d.startX)), 0, 100);
           cur.y = clamp(r1(d.orig.y + (p.y - d.startY)), 0, 100);
-        } else if (def.kind === "text") {
+        } else if (!def || def.kind === "text") {
           cur.fs = Math.max(0.4, r1((d.orig.fs ?? 1.5) + (p.y - d.startY) * 0.18));
         } else {
           cur.w = clamp(r1((d.orig.w ?? 10) + (p.x - d.startX)), 1, 100);
@@ -225,6 +255,33 @@ export default function LayoutEditor({
     setByTarget((prev) => ({ ...prev, [target]: { ...prev[target], [selPair]: mirrored } }));
     setEditKeys((prev) => new Set(prev).add(selPair));
   }
+  // Create a new custom field (scoreboard only).
+  function addCustom() {
+    const label = window.prompt("Nome do campo (ex.: Mesa, Round, Nº):");
+    if (!label || !label.trim()) return;
+    const type: "text" | "int" = window.confirm("Este campo é numérico (inteiro)?\n\nOK = Número · Cancelar = Texto") ? "int" : "text";
+    const n = customs.reduce((m, c) => Math.max(m, parseInt(c.key.replace("custom_", "")) || 0), 0) + 1;
+    const key = `custom_${n}`;
+    setCustoms((prev) => [...prev, { key, label: label.trim(), type, value: type === "int" ? "0" : "" }]);
+    setByTarget((prev) => ({ ...prev, scoreboard: { ...prev.scoreboard, [key]: { x: 50, y: 50, w: 14, fs: 1.8 } } }));
+    setEditKeys((prev) => new Set(prev).add(key));
+    setSel(key);
+  }
+  function updateCustom(key: string, patch: Partial<Pick<CustomField, "label" | "type" | "value">>) {
+    setCustoms((prev) => prev.map((c) => {
+      if (c.key !== key) return c;
+      const next = { ...c, ...patch };
+      if (next.type === "int" && "value" in patch) next.value = String(patch.value ?? "").replace(/[^\d-]/g, "");
+      return next;
+    }));
+  }
+  function deleteCustom(key: string) {
+    setCustoms((prev) => prev.filter((c) => c.key !== key));
+    setByTarget((prev) => { const sb = { ...prev.scoreboard }; delete sb[key]; return { ...prev, scoreboard: sb }; });
+    setEditKeys((prev) => { const n = new Set(prev); n.delete(key); return n; });
+    if (sel === key) setSel(null);
+  }
+
   function resetAll() {
     setByTarget((prev) => {
       const f: Record<string, Field> = {};
@@ -236,12 +293,26 @@ export default function LayoutEditor({
   async function save() {
     setStatus("saving");
     try {
-      const res = await fetch("/api/arena-layout", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: target, layout: fields }),
-      });
-      setStatus(res.ok ? "saved" : "error");
+      // Standard layout excludes custom keys (those persist separately).
+      const std = Object.fromEntries(Object.entries(fields).filter(([k]) => !isCustom(k)));
+      const puts: Promise<Response>[] = [
+        fetch("/api/arena-layout", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: target, layout: std }),
+        }),
+      ];
+      // On the scoreboard, also persist the custom fields (meta + geometry).
+      if (target === "scoreboard") {
+        const arr: CustomField[] = customs.map((c) => ({ ...c, ...(fields[c.key] || { x: 50, y: 50, w: 14, fs: 1.8 }) }));
+        puts.push(fetch("/api/arena-layout", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: "scoreboard::custom", layout: arr }),
+        }));
+      }
+      const results = await Promise.all(puts);
+      setStatus(results.every((r) => r.ok) ? "saved" : "error");
     } catch {
       setStatus("error");
     }
@@ -276,6 +347,15 @@ export default function LayoutEditor({
         {bgByTarget[target] && target !== "quickmatch" && (
           <button onClick={restoreBg} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a1a1a] text-gray-400 border border-[#2a2a2a] hover:bg-[#252525]">
             Restaurar BG
+          </button>
+        )}
+        {!preview && target === "scoreboard" && (
+          <button
+            onClick={addCustom}
+            title="Adicionar um campo de texto ou número ao placar"
+            className="px-4 py-1.5 rounded-lg text-sm font-bold transition-colors bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"
+          >
+            ➕ Inserir campo
           </button>
         )}
         {!preview && (
@@ -388,7 +468,7 @@ export default function LayoutEditor({
                       zIndex: isSel ? 20 : 10,
                     }}
                   >
-                    {SAMPLE[k] ?? def.label}
+                    {cellText(k)}
                     {isSel && (
                       <span
                         onPointerDown={(e) => startDrag(e, k, "resize")}
@@ -486,6 +566,29 @@ export default function LayoutEditor({
                   </>
                 )}
               </div>
+              {isCustom(sel!) && (
+                <div className="space-y-2 border-t border-[#2a2a2a] pt-2 mt-1">
+                  <label className="text-[11px] text-gray-400 block">Nome do campo
+                    <input value={customs.find((c) => c.key === sel)?.label ?? ""} onChange={(e) => updateCustom(sel!, { label: e.target.value })}
+                      className="w-full mt-0.5 bg-[#252525] border border-[#333] rounded px-2 py-1 text-white text-sm outline-none focus:border-[#f0a500]" />
+                  </label>
+                  <label className="text-[11px] text-gray-400 block">Tipo
+                    <select value={customs.find((c) => c.key === sel)?.type ?? "text"} onChange={(e) => updateCustom(sel!, { type: e.target.value as "text" | "int" })}
+                      className="w-full mt-0.5 bg-[#252525] border border-[#333] rounded px-2 py-1 text-white text-sm outline-none focus:border-[#f0a500]">
+                      <option value="text">Texto</option>
+                      <option value="int">Número (inteiro)</option>
+                    </select>
+                  </label>
+                  <label className="text-[11px] text-gray-400 block">Valor
+                    <input
+                      value={customs.find((c) => c.key === sel)?.value ?? ""}
+                      inputMode={customs.find((c) => c.key === sel)?.type === "int" ? "numeric" : "text"}
+                      onChange={(e) => updateCustom(sel!, { value: e.target.value })}
+                      className="w-full mt-0.5 bg-[#252525] border border-[#333] rounded px-2 py-1 text-white text-sm outline-none focus:border-[#f0a500]" />
+                  </label>
+                  <button onClick={() => deleteCustom(sel!)} className="text-xs text-red-400 hover:text-red-300 underline">excluir campo</button>
+                </div>
+              )}
               <button onClick={() => resetField(sel!)} className="text-xs text-gray-400 hover:text-white underline">
                 resetar este item
               </button>

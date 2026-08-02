@@ -14,6 +14,9 @@ const BLUE = "#00aaff";
 
 type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
 
+// Custom scoreboard field added in the layout editor (text or integer).
+type CustomFld = { key: string; label: string; type: "text" | "int"; value: string; x: number; y: number; w?: number; h?: number; fs?: number };
+
 type HistRow = { side: "p1" | "p2"; finish: "S" | "KO" | "B" | "X"; points: number };
 
 type Match = {
@@ -83,11 +86,13 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const [winnerLayout, setWinnerLayout] = useState<Layout | null>(null);
   const [scoreboardBg, setScoreboardBg] = useState<string>("/scoreboard-bg.png");
   const [winnerBg, setWinnerBg] = useState<string>("/winner-bg.png");
+  const [customFields, setCustomFields] = useState<CustomFld[]>([]);
   useEffect(() => {
     fetch("/api/arena-layout?key=scoreboard").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
     fetch("/api/arena-layout?key=winner").then((r) => (r.ok ? r.json() : null)).then((d) => d && setWinnerLayout(d.layout || {})).catch(() => {});
     fetch("/api/arena-layout?key=scoreboard::bg").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.layout?.url) setScoreboardBg(d.layout.url); }).catch(() => {});
     fetch("/api/arena-layout?key=winner::bg").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.layout?.url) setWinnerBg(d.layout.url); }).catch(() => {});
+    fetch("/api/arena-layout?key=scoreboard::custom").then((r) => (r.ok ? r.json() : null)).then((d) => { if (Array.isArray(d?.layout)) setCustomFields(d.layout as CustomFld[]); }).catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
@@ -326,7 +331,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           )}
         </div>
       ) : (
-        <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} layout={layout} bg={scoreboardBg} onTest={() => setCountdownOn(true)} />
+        <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} layout={layout} bg={scoreboardBg} customFields={customFields} onTest={() => setCountdownOn(true)} />
       )}
     </div>
   );
@@ -613,7 +618,7 @@ function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src
   );
 }
 
-function Scoreboard({ data, match, build, layout, bg, onTest }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; onTest: () => void }) {
+function Scoreboard({ data, match, build, layout, bg, customFields, onTest }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; customFields: CustomFld[]; onTest: () => void }) {
   const statusText = data.status === "live" ? "AO VIVO" : data.status === "pending" ? "AGUARDANDO" : "—";
   const partida = data.matchNumber
     ? `${pad2(data.matchNumber)}${data.matchesTotal ? ` / ${pad2(data.matchesTotal)}` : ""}`
@@ -636,6 +641,13 @@ function Scoreboard({ data, match, build, layout, bg, onTest }: { arena: number;
         }}
       >
         <div style={{ position: "absolute", bottom: "0.4cqw", right: "0.6cqw", color: "#5b2a2a", fontSize: "0.8cqw", zIndex: 5 }}>[{build}]</div>
+
+        {/* Custom fields from the layout editor (read-only on the telão) */}
+        {customFields.map((cf) => (
+          <div key={cf.key} style={{ position: "absolute", left: `${cf.x}%`, top: `${cf.y}%`, transform: "translate(-50%, -50%)", width: cf.w ? `${cf.w}%` : undefined, zIndex: 7, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontSize: `${cf.fs ?? 1.8}cqw`, fontWeight: 900, color: "#fff", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {cf.value || cf.label}
+          </div>
+        ))}
 
         {/* Tap the LBL logo (top-center) to test the countdown video */}
         <div onClick={onTest} style={{ position: "absolute", left: "45%", top: 0, width: "10%", height: "13%", cursor: "pointer", zIndex: 6 }} />
