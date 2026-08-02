@@ -33,6 +33,18 @@ function clamp(v: number, lo: number, hi: number) {
 function r1(v: number) {
   return Math.round(v * 10) / 10;
 }
+// The counterpart key on the other side (nameL <-> nameR, cxLockL <-> cxLockR…).
+function pairKey(key: string): string | null {
+  if (/L$/.test(key)) return key.slice(0, -1) + "R";
+  if (/R$/.test(key)) return key.slice(0, -1) + "L";
+  return null;
+}
+// Horizontal mirror of a field. Text is center-anchored (x' = 100 - x);
+// images/pips are left-anchored (x' = 100 - x - w).
+function mirrorField(kind: string, f: Field): Field {
+  const x = kind === "text" ? 100 - f.x : 100 - f.x - (f.w ?? 0);
+  return { ...f, x: r1(x) };
+}
 
 export default function LayoutEditor({
   initial,
@@ -123,6 +135,10 @@ export default function LayoutEditor({
   });
 
   const [sel, setSel] = useState<string | null>(null);
+  // Which elements are shown/editable on the board (chosen in the sidebar) so
+  // overlapping items don't clutter the view while editing.
+  const [editKeys, setEditKeys] = useState<Set<string>>(new Set());
+  const [mirror, setMirror] = useState(false);
   const [status, setStatus] = useState<"" | "saving" | "saved" | "error">("");
   const boardRef = useRef<HTMLDivElement>(null);
   const drag = useRef<null | { key: string; mode: "move" | "resize"; startX: number; startY: number; orig: Field }>(null);
@@ -139,7 +155,17 @@ export default function LayoutEditor({
     return { x: ((clientX - r.left) / r.width) * 100, y: ((clientY - r.top) / r.height) * 100 };
   }
   function setField(key: string, updater: (cur: Field) => Field) {
-    setByTarget((prev) => ({ ...prev, [target]: { ...prev[target], [key]: updater(prev[target][key]) } }));
+    setByTarget((prev) => {
+      const cur = prev[target];
+      const nf = updater(cur[key]);
+      const next = { ...cur, [key]: nf };
+      // With mirror on, apply the mirrored geometry to the paired side too.
+      if (mirror) {
+        const pk = pairKey(key);
+        if (pk && cur[pk] && defs[key]) next[pk] = { ...cur[pk], ...mirrorField(defs[key].kind, nf) };
+      }
+      return { ...prev, [target]: next };
+    });
   }
 
   useEffect(() => {
@@ -187,6 +213,21 @@ export default function LayoutEditor({
   function resetField(key: string) {
     setField(key, () => ({ ...defs[key] }));
   }
+  // Toggle an element's visibility/editability from the sidebar.
+  function toggleEdit(k: string) {
+    setEditKeys((prev) => {
+      const n = new Set(prev);
+      if (n.has(k)) { n.delete(k); }
+      else {
+        n.add(k);
+        if (mirror) { const pk = pairKey(k); if (pk) n.add(pk); }
+      }
+      return n;
+    });
+    setSel(k);
+  }
+  function showAll() { setEditKeys(new Set(KEYS)); }
+  function hideAll() { setEditKeys(new Set()); setSel(null); }
   function resetAll() {
     setByTarget((prev) => {
       const f: Record<string, Field> = {};
@@ -220,7 +261,7 @@ export default function LayoutEditor({
         {Object.keys(TARGETS).map((t) => (
           <button
             key={t}
-            onClick={() => { setTarget(t as TargetKey); setSel(null); }}
+            onClick={() => { setTarget(t as TargetKey); setSel(null); setEditKeys(new Set()); }}
             className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${target === t ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
           >
             {TARGETS[t].label}
@@ -238,6 +279,15 @@ export default function LayoutEditor({
         {bgByTarget[target] && target !== "quickmatch" && (
           <button onClick={restoreBg} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a1a1a] text-gray-400 border border-[#2a2a2a] hover:bg-[#252525]">
             Restaurar BG
+          </button>
+        )}
+        {!preview && (
+          <button
+            onClick={() => setMirror((m) => !m)}
+            title="Espelhar edições para o lado oposto (simetria)"
+            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${mirror ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
+          >
+            ⇄ Espelhar {mirror ? "ON" : "OFF"}
           </button>
         )}
         <button
@@ -272,6 +322,8 @@ export default function LayoutEditor({
             {KEYS.map((k) => {
               const f = fields[k];
               const def = defs[k];
+              // In edit mode only render the elements ticked in the sidebar.
+              if (!preview && !editKeys.has(k)) return null;
               const isSel = sel === k;
               const outline = isSel ? "2px solid #f0a500" : "1px dashed rgba(255,255,255,0.35)";
 
@@ -441,21 +493,31 @@ export default function LayoutEditor({
               </button>
             </div>
           ) : (
-            <div className="text-xs text-gray-500">Clique num elemento para selecioná-lo. Arraste para mover; a alça amarela dimensiona.</div>
+            <div className="text-xs text-gray-500">Marque abaixo os elementos que quer editar — só eles aparecem no quadro (evita sobreposição). Arraste para mover; a alça amarela dimensiona. Use ⇄ Espelhar para editar os dois lados simetricamente.</div>
           )}
 
           <div className="mt-4 border-t border-[#2a2a2a] pt-3">
-            <div className="text-[11px] text-gray-500 mb-1">Elementos</div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-[11px] text-gray-500">Elementos (marque p/ editar)</div>
+              <div className="flex gap-1">
+                <button onClick={showAll} className="text-[10px] text-gray-400 hover:text-white border border-[#333] rounded px-1.5 py-0.5">Todos</button>
+                <button onClick={hideAll} className="text-[10px] text-gray-400 hover:text-white border border-[#333] rounded px-1.5 py-0.5">Nenhum</button>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-1">
-              {KEYS.map((k) => (
-                <button
-                  key={k}
-                  onClick={() => setSel(k)}
-                  className={`text-[11px] text-left px-2 py-1 rounded ${sel === k ? "bg-[#f0a500] text-black font-bold" : "text-gray-300 hover:bg-[#252525]"}`}
-                >
-                  {defs[k].label}
-                </button>
-              ))}
+              {KEYS.map((k) => {
+                const on = editKeys.has(k);
+                return (
+                  <button
+                    key={k}
+                    onClick={() => toggleEdit(k)}
+                    className={`text-[11px] text-left px-2 py-1 rounded flex items-center gap-1 ${sel === k ? "bg-[#f0a500] text-black font-bold" : on ? "bg-[#2a2a2a] text-white" : "text-gray-400 hover:bg-[#252525]"}`}
+                  >
+                    <span className="w-3 shrink-0">{on ? "☑" : "☐"}</span>
+                    <span className="truncate">{defs[k].label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
