@@ -44,6 +44,53 @@ export default function LayoutEditor({
   const [target, setTarget] = useState<TargetKey>("scoreboard");
   const [preview, setPreview] = useState(false);
 
+  // Custom background per target (uploaded), overriding the default art.
+  const [bgByTarget, setBgByTarget] = useState<Record<string, string>>({});
+  const [bgStatus, setBgStatus] = useState<"" | "uploading" | "saved" | "error">("");
+  const bgInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    Object.keys(TARGETS).forEach((t) => {
+      fetch(`/api/arena-layout?key=${t}::bg`).then((r) => (r.ok ? r.json() : null)).then((d) => {
+        const url = d?.layout?.url;
+        if (url) setBgByTarget((prev) => ({ ...prev, [t]: url }));
+      }).catch(() => {});
+    });
+  }, []);
+  // quickmatch shares the scoreboard art, so it inherits that custom BG.
+  const bgUrl = bgByTarget[target] || (target === "quickmatch" ? bgByTarget["scoreboard"] : "") || TARGETS[target].bg;
+
+  async function onPickBg(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBgStatus("uploading");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const up = await fetch("/api/admin/beyparts/upload", { method: "POST", body: fd });
+      const j = await up.json();
+      if (!up.ok || !j.path) { setBgStatus("error"); setTimeout(() => setBgStatus(""), 2500); return; }
+      setBgByTarget((prev) => ({ ...prev, [target]: j.path }));
+      const res = await fetch("/api/arena-layout", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: `${target}::bg`, layout: { url: j.path } }),
+      });
+      setBgStatus(res.ok ? "saved" : "error");
+    } catch {
+      setBgStatus("error");
+    }
+    setTimeout(() => setBgStatus(""), 2500);
+  }
+  async function restoreBg() {
+    setBgByTarget((prev) => { const n = { ...prev }; delete n[target]; return n; });
+    await fetch("/api/arena-layout", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: `${target}::bg`, layout: {} }),
+    }).catch(() => {});
+  }
+
   // Sample content for the preview, using the organizer's profile as a base.
   function previewText(k: string): string {
     if (k === "nameL" || k === "nameR" || k === "name") return profile.name;
@@ -179,9 +226,23 @@ export default function LayoutEditor({
             {TARGETS[t].label}
           </button>
         ))}
+        <input ref={bgInputRef} type="file" accept="image/*" onChange={onPickBg} className="hidden" />
+        <button
+          onClick={() => bgInputRef.current?.click()}
+          disabled={target === "quickmatch"}
+          title={target === "quickmatch" ? "As Partidas Rápidas usam o BG do Placar" : "Trocar imagem de fundo"}
+          className={`ml-auto px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${target === "quickmatch" ? "bg-[#1a1a1a] text-gray-600 border border-[#2a2a2a] cursor-not-allowed" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
+        >
+          {bgStatus === "uploading" ? "Enviando…" : bgStatus === "saved" ? "BG salvo ✓" : bgStatus === "error" ? "Erro no BG" : "🖼 Trocar BG"}
+        </button>
+        {bgByTarget[target] && target !== "quickmatch" && (
+          <button onClick={restoreBg} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a1a1a] text-gray-400 border border-[#2a2a2a] hover:bg-[#252525]">
+            Restaurar BG
+          </button>
+        )}
         <button
           onClick={() => { setPreview((p) => !p); setSel(null); }}
-          className={`ml-auto px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${preview ? "bg-[#22c55e] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
+          className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${preview ? "bg-[#22c55e] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
         >
           {preview ? "✏️ Editar" : "👁 Pré-visualizar"}
         </button>
@@ -198,7 +259,7 @@ export default function LayoutEditor({
               width: "100%",
               aspectRatio: "1672 / 941",
               containerType: "size",
-              backgroundImage: `url(${TARGETS[target].bg})`,
+              backgroundImage: `url(${bgUrl})`,
               backgroundSize: "100% 100%",
               backgroundRepeat: "no-repeat",
               borderRadius: 8,

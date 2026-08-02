@@ -123,8 +123,14 @@ export default function QuickMatch() {
   }, [parts]);
 
   const [layout, setLayout] = useState<Layout | null>(null);
+  const [bg, setBg] = useState<string>("/scoreboard-bg.png");
   useEffect(() => {
     fetch("/api/arena-layout?key=quickmatch").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
+    // Custom background: use the quick-match one if set, else the scoreboard one.
+    fetch("/api/arena-layout?key=quickmatch::bg").then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (d?.layout?.url) { setBg(d.layout.url); return; }
+      fetch("/api/arena-layout?key=scoreboard::bg").then((r) => (r.ok ? r.json() : null)).then((s) => { if (s?.layout?.url) setBg(s.layout.url); }).catch(() => {});
+    }).catch(() => {});
   }, []);
 
   // Match state
@@ -272,7 +278,7 @@ export default function QuickMatch() {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ position: "relative", width: "min(100vw, calc(100vh * 1672 / 941))", aspectRatio: "1672 / 941", containerType: "size", backgroundImage: "url(/scoreboard-bg.png)", backgroundSize: "100% 100%", backgroundRepeat: "no-repeat", fontFamily: "'Arial Black', system-ui, sans-serif", overflow: "hidden" }}>
+      <div style={{ position: "relative", width: "min(100vw, calc(100vh * 1672 / 941))", aspectRatio: "1672 / 941", containerType: "size", backgroundImage: `url(${bg})`, backgroundSize: "100% 100%", backgroundRepeat: "no-repeat", fontFamily: "'Arial Black', system-ui, sans-serif", overflow: "hidden" }}>
         {/* Back to LBL menu (top-left) */}
         <button onClick={backToMenu} style={{ position: "absolute", top: "0.6vh", left: "1.5vw", zIndex: 30, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}>← Menu</button>
         {/* Exit to setup */}

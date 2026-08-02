@@ -81,9 +81,13 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   // Saved layout overrides from the admin editor (applied over the coded defaults).
   const [layout, setLayout] = useState<Layout | null>(null);
   const [winnerLayout, setWinnerLayout] = useState<Layout | null>(null);
+  const [scoreboardBg, setScoreboardBg] = useState<string>("/scoreboard-bg.png");
+  const [winnerBg, setWinnerBg] = useState<string>("/winner-bg.png");
   useEffect(() => {
     fetch("/api/arena-layout?key=scoreboard").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
     fetch("/api/arena-layout?key=winner").then((r) => (r.ok ? r.json() : null)).then((d) => d && setWinnerLayout(d.layout || {})).catch(() => {});
+    fetch("/api/arena-layout?key=scoreboard::bg").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.layout?.url) setScoreboardBg(d.layout.url); }).catch(() => {});
+    fetch("/api/arena-layout?key=winner::bg").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.layout?.url) setWinnerBg(d.layout.url); }).catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
@@ -305,7 +309,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       )}
 
       {match && data?.status === "finished" ? (
-        <WinnerScreen match={match} winnerSide={data.winnerSide ?? "p1"} layout={winnerLayout} />
+        <WinnerScreen match={match} winnerSide={data.winnerSide ?? "p1"} layout={winnerLayout} bg={winnerBg} />
       ) : !match && data?.queue && data.queue.length > 0 ? (
         <NextMatches arena={arena} queue={data.queue} build={ARENA_BUILD} />
       ) : !match ? (
@@ -322,7 +326,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           )}
         </div>
       ) : (
-        <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} layout={layout} onTest={() => setCountdownOn(true)} />
+        <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} layout={layout} bg={scoreboardBg} onTest={() => setCountdownOn(true)} />
       )}
     </div>
   );
@@ -378,7 +382,7 @@ function NextMatches({ arena, queue, build }: {
 // Shown for ~10s after a match finishes. Uses the winner art (public/winner-bg.png)
 // as the background and overlays the winner's photo, name, POINTS score (not sets),
 // finishes and deck.
-function WinnerScreen({ match, winnerSide, layout }: { match: Match; winnerSide: "p1" | "p2"; layout: Layout | null }) {
+function WinnerScreen({ match, winnerSide, layout, bg }: { match: Match; winnerSide: "p1" | "p2"; layout: Layout | null; bg: string }) {
   const isP1 = winnerSide === "p1";
   const name = isP1 ? match.player1 : match.player2;
   const avatar = isP1 ? match.p1Avatar : match.p2Avatar;
@@ -406,7 +410,7 @@ function WinnerScreen({ match, winnerSide, layout }: { match: Match; winnerSide:
           width: "min(100vw, calc(100vh * 1672 / 941))",
           aspectRatio: "1672 / 941",
           containerType: "size",
-          backgroundImage: "url(/winner-bg.png)",
+          backgroundImage: `url(${bg})`,
           backgroundSize: "100% 100%",
           backgroundRepeat: "no-repeat",
           fontFamily: "'Arial Black', system-ui, sans-serif",
@@ -609,7 +613,7 @@ function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src
   );
 }
 
-function Scoreboard({ data, match, build, layout, onTest }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; onTest: () => void }) {
+function Scoreboard({ data, match, build, layout, bg, onTest }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; onTest: () => void }) {
   const statusText = data.status === "live" ? "AO VIVO" : data.status === "pending" ? "AGUARDANDO" : "—";
   const partida = data.matchNumber
     ? `${pad2(data.matchNumber)}${data.matchesTotal ? ` / ${pad2(data.matchesTotal)}` : ""}`
@@ -624,7 +628,7 @@ function Scoreboard({ data, match, build, layout, onTest }: { arena: number; dat
           width: "min(100vw, calc(100vh * 1672 / 941))",
           aspectRatio: "1672 / 941",
           containerType: "size",
-          backgroundImage: "url(/scoreboard-bg.png)",
+          backgroundImage: `url(${bg})`,
           backgroundSize: "100% 100%",
           backgroundRepeat: "no-repeat",
           fontFamily: "'Arial Black', system-ui, sans-serif",
