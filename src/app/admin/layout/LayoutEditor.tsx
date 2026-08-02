@@ -138,7 +138,6 @@ export default function LayoutEditor({
   // Which elements are shown/editable on the board (chosen in the sidebar) so
   // overlapping items don't clutter the view while editing.
   const [editKeys, setEditKeys] = useState<Set<string>>(new Set());
-  const [mirror, setMirror] = useState(false);
   const [status, setStatus] = useState<"" | "saving" | "saved" | "error">("");
   const boardRef = useRef<HTMLDivElement>(null);
   const drag = useRef<null | { key: string; mode: "move" | "resize"; startX: number; startY: number; orig: Field }>(null);
@@ -155,17 +154,7 @@ export default function LayoutEditor({
     return { x: ((clientX - r.left) / r.width) * 100, y: ((clientY - r.top) / r.height) * 100 };
   }
   function setField(key: string, updater: (cur: Field) => Field) {
-    setByTarget((prev) => {
-      const cur = prev[target];
-      const nf = updater(cur[key]);
-      const next = { ...cur, [key]: nf };
-      // With mirror on, apply the mirrored geometry to the paired side too.
-      if (mirror) {
-        const pk = pairKey(key);
-        if (pk && cur[pk] && defs[key]) next[pk] = { ...cur[pk], ...mirrorField(defs[key].kind, nf) };
-      }
-      return { ...prev, [target]: next };
-    });
+    setByTarget((prev) => ({ ...prev, [target]: { ...prev[target], [key]: updater(prev[target][key]) } }));
   }
 
   useEffect(() => {
@@ -217,17 +206,25 @@ export default function LayoutEditor({
   function toggleEdit(k: string) {
     setEditKeys((prev) => {
       const n = new Set(prev);
-      if (n.has(k)) { n.delete(k); }
-      else {
-        n.add(k);
-        if (mirror) { const pk = pairKey(k); if (pk) n.add(pk); }
-      }
+      if (n.has(k)) n.delete(k); else n.add(k);
       return n;
     });
     setSel(k);
   }
   function showAll() { setEditKeys(new Set(KEYS)); }
   function hideAll() { setEditKeys(new Set()); setSel(null); }
+
+  // Mirror the SELECTED element (all of it: position, size, font) onto its
+  // paired side, flipping x horizontally so the layout is symmetric.
+  const selPair = sel ? pairKey(sel) : null;
+  const canMirror = !!(sel && selPair && defs[selPair]);
+  function mirrorSelected() {
+    if (!sel || !selPair || !defs[selPair]) return;
+    const src = fields[sel];
+    const mirrored: Field = { ...src, ...mirrorField(defs[sel].kind, src) };
+    setByTarget((prev) => ({ ...prev, [target]: { ...prev[target], [selPair]: mirrored } }));
+    setEditKeys((prev) => new Set(prev).add(selPair));
+  }
   function resetAll() {
     setByTarget((prev) => {
       const f: Record<string, Field> = {};
@@ -283,11 +280,12 @@ export default function LayoutEditor({
         )}
         {!preview && (
           <button
-            onClick={() => setMirror((m) => !m)}
-            title="Espelhar edições para o lado oposto (simetria)"
-            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${mirror ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
+            onClick={mirrorSelected}
+            disabled={!canMirror}
+            title={canMirror ? "Copiar posição/tamanho do item selecionado para o lado oposto" : "Selecione um item com par (esq/dir)"}
+            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${canMirror ? "bg-[#f0a500] text-black hover:bg-[#d9940a]" : "bg-[#1a1a1a] text-gray-600 border border-[#2a2a2a] cursor-not-allowed"}`}
           >
-            ⇄ Espelhar {mirror ? "ON" : "OFF"}
+            ⇄ Espelhar p/ outro lado
           </button>
         )}
         <button
@@ -493,7 +491,7 @@ export default function LayoutEditor({
               </button>
             </div>
           ) : (
-            <div className="text-xs text-gray-500">Marque abaixo os elementos que quer editar — só eles aparecem no quadro (evita sobreposição). Arraste para mover; a alça amarela dimensiona. Use ⇄ Espelhar para editar os dois lados simetricamente.</div>
+            <div className="text-xs text-gray-500">Marque abaixo os elementos que quer editar — só eles aparecem no quadro (evita sobreposição). Arraste para mover; a alça amarela dimensiona. Selecione um item e clique ⇄ Espelhar p/ outro lado para copiar posição e tamanho para o lado oposto (simetria).</div>
           )}
 
           <div className="mt-4 border-t border-[#2a2a2a] pt-3">
