@@ -60,17 +60,19 @@ type PConf = {
 const emptyConf = (): PConf => ({ mode: "registered", userId: "", name: "", avatarUrl: null, deck: [] });
 const comboName = (b: Bey) => [b.blade, b.ratchet, b.bit].filter(Boolean).join(" ") || b.name || "";
 
-function Cell({ layout, k, color, children }: { layout: Layout | null; k: string; color?: string; children: React.ReactNode }) {
+function Cell({ layout, k, color, children, hidden }: { layout: Layout | null; k: string; color?: string; children: React.ReactNode; hidden?: Set<string> }) {
   const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
+  if (hidden?.has(k)) return null;
   return (
     <div style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, transform: "translate(-50%, -50%)", width: f.w ? `${f.w}%` : undefined, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontSize: `${f.fs ?? 1.5}cqw`, fontWeight: 900, color: color || "#fff", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
       {children}
     </div>
   );
 }
-function Pips({ layout, k, count, dir }: { layout: Layout | null; k: string; count: number; dir: "v" | "h" }) {
+function Pips({ layout, k, count, dir, hidden }: { layout: Layout | null; k: string; count: number; dir: "v" | "h"; hidden?: Set<string> }) {
   const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
   const dot = f.fs ?? 1.5;
+  if (hidden?.has(k)) return null;
   return (
     <>
       {pipDots(f, dir).map((p, i) => (
@@ -137,11 +139,16 @@ export default function QuickMatch() {
   const [layout, setLayout] = useState<Layout | null>(null);
   const [bg, setBg] = useState<string>("/scoreboard-bg.png");
   const [customFields, setCustomFields] = useState<CustomFld[]>([]);
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
   useEffect(() => {
     fetch("/api/arena-layout?key=quickmatch").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
     // Custom fields defined in the layout editor (text/int), live-editable here.
     fetch("/api/arena-layout?key=scoreboard::custom").then((r) => (r.ok ? r.json() : null)).then((d) => {
       if (Array.isArray(d?.layout)) setCustomFields(d.layout as CustomFld[]);
+    }).catch(() => {});
+    // Disabled fields (hidden from the placar).
+    fetch("/api/arena-layout?key=scoreboard::hidden").then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (Array.isArray(d?.layout)) setHidden(new Set(d.layout as string[]));
     }).catch(() => {});
     // Custom background: use the quick-match one if set, else the scoreboard one.
     fetch("/api/arena-layout?key=quickmatch::bg").then((r) => (r.ok ? r.json() : null)).then((d) => {
@@ -305,25 +312,25 @@ export default function QuickMatch() {
         )}
 
         {/* Names / score / pips / status */}
-        <Cell layout={layout} k="nameL">{p1.name}</Cell>
-        <Cell layout={layout} k="nameR">{p2.name}</Cell>
+        <Cell hidden={hidden} layout={layout} k="nameL">{p1.name}</Cell>
+        <Cell hidden={hidden} layout={layout} k="nameR">{p2.name}</Cell>
         {/* Active bey name (rotates each battle in 3on3) */}
-        <Cell layout={layout} k="beyNameL" color={GOLD}>{a1?.name ?? ""}</Cell>
-        <Cell layout={layout} k="beyNameR" color={GOLD}>{a2?.name ?? ""}</Cell>
-        <BeyArt layout={layout} side="L" bey={a1} bladeImg={bladeImg} partImg={partImg} />
-        <BeyArt layout={layout} side="R" bey={a2} bladeImg={bladeImg} partImg={partImg} />
-        <Cell layout={layout} k="scoreL">{p1Pts}</Cell>
-        <Cell layout={layout} k="scoreR">{p2Pts}</Cell>
-        <Pips layout={layout} k="pointsL" count={p1Pts} dir="v" />
-        <Pips layout={layout} k="pointsR" count={p2Pts} dir="v" />
-        <Pips layout={layout} k="victoriesL" count={p1Sets} dir="h" />
-        <Pips layout={layout} k="victoriesR" count={p2Sets} dir="h" />
-        <Cell layout={layout} k="rodada">{String(setNum).padStart(2, "0")}</Cell>
-        <Cell layout={layout} k="partida">{`${p1Sets}-${p2Sets}`}</Cell>
-        <Cell layout={layout} k="status" color={scoring ? "#4ade80" : GOLD}>{statusText}</Cell>
+        <Cell hidden={hidden} layout={layout} k="beyNameL" color={GOLD}>{a1?.name ?? ""}</Cell>
+        <Cell hidden={hidden} layout={layout} k="beyNameR" color={GOLD}>{a2?.name ?? ""}</Cell>
+        <BeyArt layout={layout} side="L" bey={a1} bladeImg={bladeImg} partImg={partImg} hidden={hidden} />
+        <BeyArt layout={layout} side="R" bey={a2} bladeImg={bladeImg} partImg={partImg} hidden={hidden} />
+        <Cell hidden={hidden} layout={layout} k="scoreL">{p1Pts}</Cell>
+        <Cell hidden={hidden} layout={layout} k="scoreR">{p2Pts}</Cell>
+        <Pips hidden={hidden} layout={layout} k="pointsL" count={p1Pts} dir="v" />
+        <Pips hidden={hidden} layout={layout} k="pointsR" count={p2Pts} dir="v" />
+        <Pips hidden={hidden} layout={layout} k="victoriesL" count={p1Sets} dir="h" />
+        <Pips hidden={hidden} layout={layout} k="victoriesR" count={p2Sets} dir="h" />
+        <Cell hidden={hidden} layout={layout} k="rodada">{String(setNum).padStart(2, "0")}</Cell>
+        <Cell hidden={hidden} layout={layout} k="partida">{`${p1Sets}-${p2Sets}`}</Cell>
+        <Cell hidden={hidden} layout={layout} k="status" color={scoring ? "#4ade80" : GOLD}>{statusText}</Cell>
 
         {/* Custom fields (from the layout editor) — tap to edit the value live */}
-        {customFields.map((cf) => (
+        {customFields.filter((cf) => !hidden.has(cf.key)).map((cf) => (
           <div
             key={cf.key}
             onClick={() => editCustom(cf)}
@@ -382,10 +389,11 @@ function BeyImg({ layout, k, src, z }: { layout: Layout | null; k: string; src: 
 
 // Scoreboard bey art for one side. CX beys stack 3 transparent PNGs (assist
 // blade behind, metal blade middle, lock chip on top); others use the blade.
-function BeyArt({ layout, side, bey, bladeImg, partImg }: {
+function BeyArt({ layout, side, bey, bladeImg, partImg, hidden }: {
   layout: Layout | null; side: "L" | "R"; bey: Bey | null;
   bladeImg: (n?: string | null) => string | null;
   partImg: (cat: string, n?: string | null) => string | null;
+  hidden?: Set<string>;
 }) {
   if (!bey) return null;
   if (isCXBey(bey)) {
@@ -394,12 +402,13 @@ function BeyArt({ layout, side, bey, bladeImg, partImg }: {
     const lock = partImg("LOCK_CHIP", bey.lockChip);
     return (
       <>
-        {assist && <BeyImg layout={layout} k={`cxAssist${side}`} src={assist} z={1} />}
-        {metal && <BeyImg layout={layout} k={`cxMetal${side}`} src={metal} z={2} />}
-        {lock && <BeyImg layout={layout} k={`cxLock${side}`} src={lock} z={3} />}
+        {assist && !hidden?.has(`cxAssist${side}`) && <BeyImg layout={layout} k={`cxAssist${side}`} src={assist} z={1} />}
+        {metal && !hidden?.has(`cxMetal${side}`) && <BeyImg layout={layout} k={`cxMetal${side}`} src={metal} z={2} />}
+        {lock && !hidden?.has(`cxLock${side}`) && <BeyImg layout={layout} k={`cxLock${side}`} src={lock} z={3} />}
       </>
     );
   }
+  if (hidden?.has(`beyImg${side}`)) return null;
   const img = bladeImg(bey.blade);
   return img ? <BeyImg layout={layout} k={`beyImg${side}`} src={img} /> : null;
 }

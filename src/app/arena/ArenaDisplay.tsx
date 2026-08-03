@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import { fieldStyle, pipDots, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type Layout } from "@/lib/arenaLayout";
+
+// Fields disabled in the layout editor are hidden from the placar via this ctx.
+const HiddenCtx = createContext<Set<string>>(new Set());
 
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
@@ -87,8 +90,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const [scoreboardBg, setScoreboardBg] = useState<string>("/scoreboard-bg.png");
   const [winnerBg, setWinnerBg] = useState<string>("/winner-bg.png");
   const [customFields, setCustomFields] = useState<CustomFld[]>([]);
+  const [hiddenFields, setHiddenFields] = useState<Set<string>>(new Set());
   useEffect(() => {
     fetch("/api/arena-layout?key=scoreboard").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
+    fetch("/api/arena-layout?key=scoreboard::hidden").then((r) => (r.ok ? r.json() : null)).then((d) => { if (Array.isArray(d?.layout)) setHiddenFields(new Set(d.layout as string[])); }).catch(() => {});
     fetch("/api/arena-layout?key=winner").then((r) => (r.ok ? r.json() : null)).then((d) => d && setWinnerLayout(d.layout || {})).catch(() => {});
     fetch("/api/arena-layout?key=scoreboard::bg").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.layout?.url) setScoreboardBg(d.layout.url); }).catch(() => {});
     fetch("/api/arena-layout?key=winner::bg").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.layout?.url) setWinnerBg(d.layout.url); }).catch(() => {});
@@ -331,7 +336,9 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           )}
         </div>
       ) : (
-        <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} layout={layout} bg={scoreboardBg} customFields={customFields} onTest={() => setCountdownOn(true)} />
+        <HiddenCtx.Provider value={hiddenFields}>
+          <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} layout={layout} bg={scoreboardBg} customFields={customFields} onTest={() => setCountdownOn(true)} />
+        </HiddenCtx.Provider>
       )}
     </div>
   );
@@ -576,8 +583,10 @@ function FinishesColumn({ bySet, side }: {
 
 // Pip group (PONTOS = 5 vertical, VITÓRIAS = 3 horizontal), positioned from the layout.
 function Pips({ layout, k, count, dir }: { layout: Layout | null; k: string; count: number; dir: "v" | "h" }) {
+  const hidden = useContext(HiddenCtx);
   const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
   const dot = f.fs ?? 1.5;
+  if (hidden.has(k)) return null;
   return (
     <>
       {pipDots(f, dir).map((p, i) => (
@@ -602,12 +611,15 @@ function Pips({ layout, k, count, dir }: { layout: Layout | null; k: string; cou
 // Layout-driven text/image elements: read position/size from the saved layout
 // (admin editor), falling back to the coded defaults.
 function LText({ layout, k, color, children }: { layout: Layout | null; k: string; color?: string; children: React.ReactNode }) {
+  const hidden = useContext(HiddenCtx);
   const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
+  if (hidden.has(k)) return null;
   return <Cell cx={f.x} cy={f.y} w={f.w} fs={f.fs ?? 1.5} color={color}>{children}</Cell>;
 }
 function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src: string | null; cover?: boolean }) {
+  const hidden = useContext(HiddenCtx);
   const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
-  if (!src) return null;
+  if (!src || hidden.has(k)) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -619,6 +631,7 @@ function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src
 }
 
 function Scoreboard({ data, match, build, layout, bg, customFields, onTest }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; customFields: CustomFld[]; onTest: () => void }) {
+  const hidden = useContext(HiddenCtx);
   const statusText = data.status === "live" ? "AO VIVO" : data.status === "pending" ? "AGUARDANDO" : "—";
   const partida = data.matchNumber
     ? `${pad2(data.matchNumber)}${data.matchesTotal ? ` / ${pad2(data.matchesTotal)}` : ""}`
@@ -643,7 +656,7 @@ function Scoreboard({ data, match, build, layout, bg, customFields, onTest }: { 
         <div style={{ position: "absolute", bottom: "0.4cqw", right: "0.6cqw", color: "#5b2a2a", fontSize: "0.8cqw", zIndex: 5 }}>[{build}]</div>
 
         {/* Custom fields from the layout editor (read-only on the telão) */}
-        {customFields.map((cf) => (
+        {customFields.filter((cf) => !hidden.has(cf.key)).map((cf) => (
           <div key={cf.key} style={{ position: "absolute", left: `${cf.x}%`, top: `${cf.y}%`, transform: "translate(-50%, -50%)", width: cf.w ? `${cf.w}%` : undefined, zIndex: 7, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontSize: `${cf.fs ?? 1.8}cqw`, fontWeight: 900, color: "#fff", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {cf.value || cf.label}
           </div>

@@ -162,6 +162,27 @@ export default function LayoutEditor({
   }, [customs]);
   const customValue = (k: string) => customs.find((c) => c.key === k)?.value ?? "";
 
+  // Disabled fields: hidden from the real placar but kept in the editor so they
+  // can be re-enabled later. Stored per target under "<target>::hidden".
+  const [hiddenByTarget, setHiddenByTarget] = useState<Record<string, Set<string>>>({});
+  useEffect(() => {
+    Object.keys(TARGETS).forEach((t) => {
+      fetch(`/api/arena-layout?key=${t}::hidden`).then((r) => (r.ok ? r.json() : null)).then((d) => {
+        const arr = Array.isArray(d?.layout) ? (d.layout as string[]) : [];
+        if (arr.length) setHiddenByTarget((prev) => ({ ...prev, [t]: new Set(arr) }));
+      }).catch(() => {});
+    });
+  }, []);
+  const hiddenSet = hiddenByTarget[target] ?? new Set<string>();
+  const isHidden = (k: string) => hiddenSet.has(k);
+  function toggleHidden(k: string) {
+    setHiddenByTarget((prev) => {
+      const s = new Set(prev[target] ?? []);
+      if (s.has(k)) s.delete(k); else s.add(k);
+      return { ...prev, [target]: s };
+    });
+  }
+
   const [sel, setSel] = useState<string | null>(null);
   // Which elements are shown/editable on the board (chosen in the sidebar) so
   // overlapping items don't clutter the view while editing.
@@ -301,6 +322,11 @@ export default function LayoutEditor({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: target, layout: std }),
         }),
+        fetch("/api/arena-layout", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: `${target}::hidden`, layout: Array.from(hiddenSet) }),
+        }),
       ];
       // On the scoreboard, also persist the custom fields (meta + geometry).
       if (target === "scoreboard") {
@@ -402,6 +428,8 @@ export default function LayoutEditor({
               const def = defs[k];
               // In edit mode only render the elements ticked in the sidebar.
               if (!preview && !editKeys.has(k)) return null;
+              // Disabled fields don't appear in the preview (mirrors the placar).
+              if (preview && isHidden(k)) return null;
               const isSel = sel === k;
               const outline = isSel ? "2px solid #f0a500" : "1px dashed rgba(255,255,255,0.35)";
 
@@ -589,9 +617,17 @@ export default function LayoutEditor({
                   <button onClick={() => deleteCustom(sel!)} className="text-xs text-red-400 hover:text-red-300 underline">excluir campo</button>
                 </div>
               )}
-              <button onClick={() => resetField(sel!)} className="text-xs text-gray-400 hover:text-white underline">
-                resetar este item
-              </button>
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  onClick={() => toggleHidden(sel!)}
+                  className={`text-xs font-bold rounded-lg px-3 py-1.5 border ${isHidden(sel!) ? "bg-[#22c55e] text-black border-transparent" : "bg-[#1a1a1a] text-red-300 border-[#3a2020] hover:bg-[#251a1a]"}`}
+                >
+                  {isHidden(sel!) ? "✅ Reativar no placar" : "🚫 Desativar no placar"}
+                </button>
+                <button onClick={() => resetField(sel!)} className="text-xs text-gray-400 hover:text-white underline">
+                  resetar
+                </button>
+              </div>
             </div>
           ) : (
             <div className="text-xs text-gray-500">Marque abaixo os elementos que quer editar — só eles aparecem no quadro (evita sobreposição). Arraste para mover; a alça amarela dimensiona. Selecione um item e clique ⇄ Espelhar p/ outro lado para copiar posição e tamanho para o lado oposto (simetria).</div>
@@ -615,7 +651,7 @@ export default function LayoutEditor({
                     className={`text-[11px] text-left px-2 py-1 rounded flex items-center gap-1 ${sel === k ? "bg-[#f0a500] text-black font-bold" : on ? "bg-[#2a2a2a] text-white" : "text-gray-400 hover:bg-[#252525]"}`}
                   >
                     <span className="w-3 shrink-0">{on ? "☑" : "☐"}</span>
-                    <span className="truncate">{defs[k].label}</span>
+                    <span className={`truncate ${isHidden(k) ? "line-through opacity-60" : ""}`}>{isHidden(k) ? "🚫 " : ""}{defs[k].label}</span>
                   </button>
                 );
               })}
