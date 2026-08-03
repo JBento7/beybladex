@@ -303,6 +303,18 @@ export default function LayoutEditor({
     if (sel === key) setSel(null);
   }
 
+  // Copy every element's position/size from the Placar into Partidas Rápidas
+  // (same background → same layout). Standard fields only.
+  function replicateFromScoreboard() {
+    if (!window.confirm("Replicar as posições do Placar para as Partidas Rápidas? Isso substitui o layout atual das Partidas Rápidas.")) return;
+    setByTarget((prev) => {
+      const src = prev.scoreboard;
+      const copy: Record<string, Field> = {};
+      for (const k of Object.keys(TARGETS.quickmatch.defaults)) copy[k] = { ...(src[k] ?? TARGETS.quickmatch.defaults[k]) };
+      return { ...prev, quickmatch: copy };
+    });
+    setSel(null);
+  }
   function resetAll() {
     setByTarget((prev) => {
       const f: Record<string, Field> = {};
@@ -373,6 +385,15 @@ export default function LayoutEditor({
         {bgByTarget[target] && target !== "quickmatch" && (
           <button onClick={restoreBg} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a1a1a] text-gray-400 border border-[#2a2a2a] hover:bg-[#252525]">
             Restaurar BG
+          </button>
+        )}
+        {!preview && target === "quickmatch" && (
+          <button
+            onClick={replicateFromScoreboard}
+            title="Copiar as posições/tamanhos do Placar para as Partidas Rápidas"
+            className="px-4 py-1.5 rounded-lg text-sm font-bold transition-colors bg-[#f0a500] text-black hover:bg-[#d9940a]"
+          >
+            ⧉ Replicar do Placar
           </button>
         )}
         {!preview && target === "scoreboard" && (
