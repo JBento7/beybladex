@@ -162,6 +162,8 @@ model Tournament {
   setsToWin       Int     @default(2)
   pointsToWinSet  Int     @default(4)
   qualifiers      Int?    // Suíço: how many top players advance to the knockout (16/8/4)
+  isMultiDay      Boolean @default(false) // 2-day tournament: day 1 Suíço, day 2 mata-mata
+  day2Date        DateTime? // date of the knockout day (day 2)
   bannerUrl       String?
   location        String?
   venueName       String?

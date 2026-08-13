@@ -672,7 +672,12 @@ export default async function TournamentDetailPage({
                     💵 R$ {tournament.entryFee.toFixed(2).replace(".", ",")}
                   </span>
                 )}
-                {tournament.startDate ? (
+                {tournament.isMultiDay ? (
+                  <span>
+                    📅 Dia 1 (Suíço){tournament.startDate ? ` ${new Date(tournament.startDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : ""}
+                    {" · "}Dia 2 (Mata-mata){tournament.day2Date ? ` ${new Date(tournament.day2Date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}` : ""}
+                  </span>
+                ) : tournament.startDate ? (
                   <span>
                     📅 {new Date(tournament.startDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                   </span>
