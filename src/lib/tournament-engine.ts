@@ -437,33 +437,29 @@ export async function generateSwissRound(
   tournamentId: string,
   round: number
 ) {
+  const [tournament, judges] = await Promise.all([
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
+    getTournamentJudgeIds(tournamentId),
+  ]);
+  const arenaCount = tournament?.arenas ?? 1;
+
+  // Build this round's pairings (player1/player2 pairs).
+  const pairs: { player1Id: string; player2Id: string }[] = [];
+
   if (round === 1) {
     const participants = shuffle(
       await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } })
     );
-
-    const matches = [];
     for (let i = 0; i < Math.floor(participants.length / 2); i++) {
-      matches.push({
-        tournamentId,
-        player1Id: participants[i * 2].userId!,
-        player2Id: participants[i * 2 + 1].userId!,
-        round,
-        bracketPos: i + 1,
-      });
+      pairs.push({ player1Id: participants[i * 2].userId!, player2Id: participants[i * 2 + 1].userId! });
     }
-
-    await prisma.match.createMany({ data: matches });
   } else {
-    // Pair by similar points
+    // Pair by similar points, avoiding rematches from earlier rounds.
     const participants = await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" } });
-
-    // Get pairs from previous rounds to avoid rematches
     const previousMatches = await prisma.match.findMany({
       where: { tournamentId },
       select: { player1Id: true, player2Id: true },
     });
-
     const pairedSet = new Set<string>();
     previousMatches.forEach((m) => {
       pairedSet.add(`${m.player1Id}-${m.player2Id}`);
@@ -471,43 +467,40 @@ export async function generateSwissRound(
     });
 
     const unmatched = [...participants];
-    const matches = [];
-
     while (unmatched.length >= 2) {
       const p1 = unmatched.shift()!;
       let paired = false;
-
       for (let i = 0; i < unmatched.length; i++) {
         const p2 = unmatched[i];
         if (!pairedSet.has(`${p1.userId}-${p2.userId}`)) {
-          matches.push({
-            tournamentId,
-            player1Id: p1.userId!,
-            player2Id: p2.userId!,
-            round,
-            bracketPos: matches.length + 1,
-          });
+          pairs.push({ player1Id: p1.userId!, player2Id: p2.userId! });
           unmatched.splice(i, 1);
           paired = true;
           break;
         }
       }
-
       if (!paired && unmatched.length > 0) {
-        // No choice, pair with next anyway
         const p2 = unmatched.shift()!;
-        matches.push({
-          tournamentId,
-          player1Id: p1.userId!,
-          player2Id: p2.userId!,
-          round,
-          bracketPos: matches.length + 1,
-        });
+        pairs.push({ player1Id: p1.userId!, player2Id: p2.userId! });
       }
     }
-
-    await prisma.match.createMany({ data: matches });
   }
+
+  // Distribute the matches across arenas (and assign judges), like the other
+  // formats — otherwise the placar can't tell which battle is in each arena.
+  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges);
+  await prisma.match.createMany({
+    data: scheduled.map(({ match, slot, arena, judgeId }, i) => ({
+      tournamentId,
+      player1Id: match.player1Id,
+      player2Id: match.player2Id,
+      round,
+      bracketPos: i + 1,
+      arena,
+      slot,
+      judgeId,
+    })),
+  });
 }
 
 export async function advanceSingleElimination(
