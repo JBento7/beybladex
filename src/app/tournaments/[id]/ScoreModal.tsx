@@ -320,6 +320,38 @@ export default function ScoreModal({
   const p1Name = player1.bladerName || player1.name;
   const p2Name = player2.bladerName || player2.name;
 
+  // Stadium sides: the B side player is shown on the LEFT (like the telão), the
+  // X side on the RIGHT. Multi-set matches swap sides every set; single-set
+  // matches keep the same side. We reorder the whole scoreboard by these.
+  const xId = state?.xSidePlayerId ?? null;
+  let leftIsP1 = true;
+  if (xId) {
+    const bId = xId === player1.id ? player2.id : player1.id;
+    const swap = maxSets > 1 && currentSetNum % 2 === 0;
+    const leftId = swap ? xId : bId; // base: B side left, X side right
+    leftIsP1 = leftId === player1.id;
+  }
+  const L = {
+    player: leftIsP1 ? player1 : player2,
+    name: leftIsP1 ? p1Name : p2Name,
+    color: leftIsP1 ? P1_COLOR : P2_COLOR,
+    pts: leftIsP1 ? p1Pts : p2Pts,
+    beyblades: leftIsP1 ? player1Beyblades : player2Beyblades,
+    beybladeId: leftIsP1 ? p1BeybladeId : p2BeybladeId,
+    setBeybladeId: leftIsP1 ? setP1BeybladeId : setP2BeybladeId,
+    orderArr: leftIsP1 ? p1OrderArr : p2OrderArr,
+  };
+  const R = {
+    player: leftIsP1 ? player2 : player1,
+    name: leftIsP1 ? p2Name : p1Name,
+    color: leftIsP1 ? P2_COLOR : P1_COLOR,
+    pts: leftIsP1 ? p2Pts : p1Pts,
+    beyblades: leftIsP1 ? player2Beyblades : player1Beyblades,
+    beybladeId: leftIsP1 ? p2BeybladeId : p1BeybladeId,
+    setBeybladeId: leftIsP1 ? setP2BeybladeId : setP1BeybladeId,
+    orderArr: leftIsP1 ? p2OrderArr : p1OrderArr,
+  };
+
   // Player scoring column (video layout): 4 finish buttons that directly score.
   function ScoreColumn({ player, color, side }: { player: Player; color: string; side: "left" | "right" }) {
     return (
@@ -386,9 +418,10 @@ export default function ScoreModal({
                 <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-start mb-3">
                   <div
                     className="px-3 py-2 border-b-4 bg-[#141414]"
-                    style={{ borderColor: P1_COLOR, clipPath: "polygon(0 0,100% 0,90% 100%,0 100%)" }}
+                    style={{ borderColor: L.color, clipPath: "polygon(0 0,100% 0,90% 100%,0 100%)" }}
                   >
-                    <div className="text-sm font-black text-white truncate">{p1Name}</div>
+                    <div className="text-sm font-black text-white truncate">{L.name}</div>
+                    {xId && <div className="text-[9px] font-black text-[#00aaff] tracking-widest">B SIDE</div>}
                   </div>
                   <div className="text-center px-2">
                     <div className="text-2xl font-black text-white leading-none">R{currentSetNum}</div>
@@ -398,9 +431,10 @@ export default function ScoreModal({
                   </div>
                   <div
                     className="px-3 py-2 border-b-4 bg-[#141414] text-right"
-                    style={{ borderColor: P2_COLOR, clipPath: "polygon(10% 0,100% 0,100% 100%,0 100%)" }}
+                    style={{ borderColor: R.color, clipPath: "polygon(10% 0,100% 0,100% 100%,0 100%)" }}
                   >
-                    <div className="text-sm font-black text-white truncate">{p2Name}</div>
+                    <div className="text-sm font-black text-white truncate">{R.name}</div>
+                    {xId && <div className="text-[9px] font-black text-[#f0a500] tracking-widest">X SIDE</div>}
                   </div>
                 </div>
 
@@ -414,12 +448,12 @@ export default function ScoreModal({
                         key={i}
                         className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border-2"
                         style={{
-                          borderColor: !s ? "#333" : won === player1.id ? P1_COLOR : won === player2.id ? P2_COLOR : "#22c55e",
-                          color: !s ? "#555" : won === player1.id ? P1_COLOR : won === player2.id ? P2_COLOR : "#22c55e",
-                          background: won === player1.id ? `${P1_COLOR}22` : won === player2.id ? `${P2_COLOR}22` : "transparent",
+                          borderColor: !s ? "#333" : won === L.player.id ? L.color : won === R.player.id ? R.color : "#22c55e",
+                          color: !s ? "#555" : won === L.player.id ? L.color : won === R.player.id ? R.color : "#22c55e",
+                          background: won === L.player.id ? `${L.color}22` : won === R.player.id ? `${R.color}22` : "transparent",
                         }}
                       >
-                        {!s ? i + 1 : s.status === "FINISHED" ? (won === player1.id ? "1" : "2") : "●"}
+                        {!s ? i + 1 : s.status === "FINISHED" ? (won === L.player.id ? "1" : "2") : "●"}
                       </div>
                     );
                   })}
@@ -428,9 +462,9 @@ export default function ScoreModal({
                 {/* Current set big score */}
                 <div className="bg-[#141414] border border-[#222] rounded-xl py-3 mb-3">
                   <div className="flex items-center justify-center gap-4">
-                    <span className="text-5xl font-black tabular-nums" style={{ color: p1Pts > p2Pts ? P1_COLOR : "#fff" }}>{p1Pts}</span>
+                    <span className="text-5xl font-black tabular-nums" style={{ color: L.pts > R.pts ? L.color : "#fff" }}>{L.pts}</span>
                     <span className="text-2xl text-gray-600 font-bold">:</span>
-                    <span className="text-5xl font-black tabular-nums" style={{ color: p2Pts > p1Pts ? P2_COLOR : "#fff" }}>{p2Pts}</span>
+                    <span className="text-5xl font-black tabular-nums" style={{ color: R.pts > L.pts ? R.color : "#fff" }}>{R.pts}</span>
                   </div>
                   <div className="text-center text-[10px] text-gray-500 mt-1">
                     primeiro a {pointsToWinSet} vence o set
@@ -439,11 +473,11 @@ export default function ScoreModal({
                 </div>
 
                 {/* 3on3 active beyblades */}
-                {isDeck && p1OrderArr && p2OrderArr && (
+                {isDeck && L.orderArr && R.orderArr && (
                   <div className="bg-[#141414] border border-[#222] rounded-xl px-4 py-3 mb-3 flex items-center gap-3">
-                    <ActiveBey beyblades={player1Beyblades} order={p1OrderArr} positionInCycle={posInCycle} color={P1_COLOR} align="left" />
+                    <ActiveBey beyblades={L.beyblades} order={L.orderArr} positionInCycle={posInCycle} color={L.color} align="left" />
                     <span className="text-gray-600 font-black text-xs">VS</span>
-                    <ActiveBey beyblades={player2Beyblades} order={p2OrderArr} positionInCycle={posInCycle} color={P2_COLOR} align="right" />
+                    <ActiveBey beyblades={R.beyblades} order={R.orderArr} positionInCycle={posInCycle} color={R.color} align="right" />
                   </div>
                 )}
 
@@ -547,14 +581,14 @@ export default function ScoreModal({
                     {/* Solo mode bey selectors */}
                     {!isDeck && (player1Beyblades.length > 1 || player2Beyblades.length > 1) && (
                       <div className="grid grid-cols-2 gap-2 mb-2">
-                        <SoloSelector beyblades={player1Beyblades} value={p1BeybladeId} onChange={setP1BeybladeId} color={P1_COLOR} />
-                        <SoloSelector beyblades={player2Beyblades} value={p2BeybladeId} onChange={setP2BeybladeId} color={P2_COLOR} />
+                        <SoloSelector beyblades={L.beyblades} value={L.beybladeId} onChange={L.setBeybladeId} color={L.color} />
+                        <SoloSelector beyblades={R.beyblades} value={R.beybladeId} onChange={R.setBeybladeId} color={R.color} />
                       </div>
                     )}
 
                     <div className="grid grid-cols-2 gap-3">
-                      <ScoreColumn player={player1} color={P1_COLOR} side="left" />
-                      <ScoreColumn player={player2} color={P2_COLOR} side="right" />
+                      <ScoreColumn player={L.player} color={L.color} side="left" />
+                      <ScoreColumn player={R.player} color={R.color} side="right" />
                     </div>
 
                     <div className="mt-3 flex items-center gap-3">
