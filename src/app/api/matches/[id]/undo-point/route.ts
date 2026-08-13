@@ -42,7 +42,7 @@ export async function DELETE(
 
   if (!lastPoint) return NextResponse.json({ error: "Nenhum ponto para desfazer" }, { status: 400 });
 
-  const pointsToWinSet = match.tournament.pointsToWinSet;
+  const pointsToWinSet = match.pointsToWinSet ?? match.tournament.pointsToWinSet;
 
   await prisma.$transaction(async (tx) => {
     await tx.matchPoint.delete({ where: { id: lastPoint.id } });

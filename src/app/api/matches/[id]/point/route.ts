@@ -49,8 +49,8 @@ export async function POST(
     const points = FINISH_TYPE_POINTS[finishType as FinishType];
     if (!points) return NextResponse.json({ error: "Tipo de finish inválido" }, { status: 400 });
 
-    const setsToWin = match.tournament.setsToWin;
-    const pointsToWinSet = match.tournament.pointsToWinSet;
+    const setsToWin = match.setsToWin ?? match.tournament.setsToWin;
+    const pointsToWinSet = match.pointsToWinSet ?? match.tournament.pointsToWinSet;
     const maxSets = setsToWin * 2 - 1;
 
     if (!match.sets.find((s) => s.status === "IN_PROGRESS") && match.sets.length + 1 > maxSets) {

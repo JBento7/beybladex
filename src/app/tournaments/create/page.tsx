@@ -55,6 +55,8 @@ export default function CreateTournamentPage() {
   const [dateTBD, setDateTBD] = useState(false);
   const [isMultiDay, setIsMultiDay] = useState(false);
   const [day2Date, setDay2Date] = useState("");
+  const [day2SetsToWin, setDay2SetsToWin] = useState("2");
+  const [day2PointsToWinSet, setDay2PointsToWinSet] = useState("4");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -90,6 +92,8 @@ export default function CreateTournamentPage() {
         qualifiers: form.format === "ROUND_ROBIN" ? parseInt(form.qualifiers) : undefined,
         isMultiDay: form.format === "ROUND_ROBIN" && isMultiDay,
         day2Date: form.format === "ROUND_ROBIN" && isMultiDay && !dateTBD ? day2Date || undefined : undefined,
+        day2SetsToWin: form.format === "ROUND_ROBIN" && isMultiDay ? day2SetsToWin : undefined,
+        day2PointsToWinSet: form.format === "ROUND_ROBIN" && isMultiDay ? day2PointsToWinSet : undefined,
         bannerUrl: form.bannerUrl || undefined,
         location: form.location || undefined,
         venueName: form.venueName || undefined,
@@ -551,6 +555,9 @@ export default function CreateTournamentPage() {
           {/* Match Rules */}
           <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
             <h2 className="text-base font-bold text-white mb-4">Regras da Partida</h2>
+            {isMultiDay && form.format === "ROUND_ROBIN" && (
+              <div className="text-xs font-bold text-[#f0a500] mb-2">Dia 1 — Fase Suíça</div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1.5">
@@ -584,6 +591,39 @@ export default function CreateTournamentPage() {
                 </select>
               </div>
             </div>
+
+            {/* Day 2 (knockout) rules, only for 2-day Suíço */}
+            {isMultiDay && form.format === "ROUND_ROBIN" && (
+              <div className="mt-5 border-t border-[#2a2a2a] pt-4">
+                <div className="text-xs font-bold text-[#f0a500] mb-2">Dia 2 — Mata-mata</div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1.5">Sets por partida</label>
+                    <select
+                      value={day2SetsToWin}
+                      onChange={(e) => setDay2SetsToWin(e.target.value)}
+                      className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                    >
+                      <option value="1">1 set</option>
+                      <option value="2">Melhor de 3 (2 sets)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1.5">Pontos para vencer o set</label>
+                    <select
+                      value={day2PointsToWinSet}
+                      onChange={(e) => setDay2PointsToWinSet(e.target.value)}
+                      className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                    >
+                      <option value="4">4 pontos</option>
+                      <option value="5">5 pontos</option>
+                      <option value="6">6 pontos</option>
+                      <option value="7">7 pontos</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <button

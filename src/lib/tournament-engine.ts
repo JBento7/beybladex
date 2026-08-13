@@ -227,13 +227,17 @@ function seedOrder(n: number): number[] {
 // standings once the group phase (round 1) is over. `qualifiers` is 4/8/16.
 export async function generatePlayoffBracket(tournamentId: string, qualifiers: number, startRound = 2) {
   const [tournament, judges, participants] = await Promise.all([
-    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true, isMultiDay: true, day2SetsToWin: true, day2PointsToWinSet: true } }),
     getTournamentJudgeIds(tournamentId),
     prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" } }),
   ]);
   const arenaCount = tournament?.arenas ?? 1;
   const top = participants.slice(0, qualifiers);
   if (top.length < 2) return;
+
+  // 2-day tournaments can use different match rules on the knockout day.
+  const knockoutSets = tournament?.isMultiDay ? tournament.day2SetsToWin ?? null : null;
+  const knockoutPoints = tournament?.isMultiDay ? tournament.day2PointsToWinSet ?? null : null;
 
   const order = seedOrder(top.length);
   const pairs: { player1Id: string; player2Id: string }[] = [];
@@ -254,6 +258,8 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
       arena,
       slot,
       judgeId,
+      setsToWin: knockoutSets,
+      pointsToWinSet: knockoutPoints,
     })),
   });
 }
@@ -555,6 +561,11 @@ export async function advanceSingleElimination(
     }
   }
 
+  // Carry the knockout match rules forward (2-day tournaments may use different
+  // sets/points for the playoff day).
+  const inheritSets = bracketMatches[0]?.setsToWin ?? null;
+  const inheritPoints = bracketMatches[0]?.pointsToWinSet ?? null;
+
   const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges);
   const matches = scheduled.map(({ match, slot, arena, judgeId }, i) => ({
     tournamentId,
@@ -566,6 +577,8 @@ export async function advanceSingleElimination(
     arena,
     slot,
     judgeId,
+    setsToWin: inheritSets,
+    pointsToWinSet: inheritPoints,
   }));
 
   await prisma.match.createMany({ data: matches });

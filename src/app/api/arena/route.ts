@@ -143,8 +143,8 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const setsToWin = match.tournament.setsToWin;
-  const pointsToWinSet = match.tournament.pointsToWinSet;
+  const setsToWin = (match as { setsToWin?: number | null }).setsToWin ?? match.tournament.setsToWin;
+  const pointsToWinSet = (match as { pointsToWinSet?: number | null }).pointsToWinSet ?? match.tournament.pointsToWinSet;
   const maxSets = setsToWin * 2 - 1;
   const isDeck = match.tournament.deckType === "THREE_ON_THREE";
 

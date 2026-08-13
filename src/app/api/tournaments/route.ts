@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       name, description, format, maxParticipants, startDate, deckType, prize, arenas,
       eventType, isTest, setsToWin, pointsToWinSet, qualifiers,
       bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
-      isMultiDay, day2Date,
+      isMultiDay, day2Date, day2SetsToWin, day2PointsToWinSet,
     } = await req.json();
 
     if (!name || !format) {
@@ -64,6 +64,8 @@ export async function POST(req: NextRequest) {
         // 2-day tournament (Suíço only): day 1 Suíço, day 2 knockout.
         isMultiDay: format === "ROUND_ROBIN" && !!isMultiDay,
         day2Date: format === "ROUND_ROBIN" && isMultiDay && day2Date ? new Date(day2Date) : null,
+        day2SetsToWin: format === "ROUND_ROBIN" && isMultiDay && day2SetsToWin ? Math.min(2, Math.max(1, parseInt(day2SetsToWin))) : null,
+        day2PointsToWinSet: format === "ROUND_ROBIN" && isMultiDay && day2PointsToWinSet ? Math.min(7, Math.max(4, parseInt(day2PointsToWinSet))) : null,
         bannerUrl: bannerUrl || null,
         location: location || null,
         venueName: venueName || null,

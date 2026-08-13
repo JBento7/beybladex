@@ -621,6 +621,22 @@ export async function GET() {
       sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "day2Date" TIMESTAMP(3)`,
     },
     {
+      name: "Tournament.day2SetsToWin",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "day2SetsToWin" INTEGER`,
+    },
+    {
+      name: "Tournament.day2PointsToWinSet",
+      sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "day2PointsToWinSet" INTEGER`,
+    },
+    {
+      name: "Match.setsToWin",
+      sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "setsToWin" INTEGER`,
+    },
+    {
+      name: "Match.pointsToWinSet",
+      sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "pointsToWinSet" INTEGER`,
+    },
+    {
       name: "Match.xSidePlayerId",
       sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "xSidePlayerId" TEXT`,
     },

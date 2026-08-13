@@ -36,12 +36,14 @@ export async function GET() {
         arenas: 1,
         isOfficial: false,
         isTest: true,
-        setsToWin: 2,
+        setsToWin: 1, // Dia 1 (Suíço): set único
         pointsToWinSet: 4,
         qualifiers,
         isMultiDay: true,
         startDate: day1,
         day2Date: day2,
+        day2SetsToWin: 2, // Dia 2 (Mata-mata): melhor de 3
+        day2PointsToWinSet: 4,
       },
     });
 

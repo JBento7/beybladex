@@ -164,6 +164,8 @@ model Tournament {
   qualifiers      Int?    // Suíço: how many top players advance to the knockout (16/8/4)
   isMultiDay      Boolean @default(false) // 2-day tournament: day 1 Suíço, day 2 mata-mata
   day2Date        DateTime? // date of the knockout day (day 2)
+  day2SetsToWin   Int?    // 2-day: match rules for the knockout day (day 1 uses setsToWin)
+  day2PointsToWinSet Int? // 2-day: points per set for the knockout day
   bannerUrl       String?
   location        String?
   venueName       String?
@@ -246,6 +248,8 @@ model Match {
   countdownKey String?
   onAirAt      DateTime?
   xSidePlayerId String?  // which player chose the X side of the stadium (other = B side)
+  setsToWin      Int?    // per-match override (e.g. 2-day: knockout uses different rules)
+  pointsToWinSet Int?    // per-match override
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @default(now()) @updatedAt
 
