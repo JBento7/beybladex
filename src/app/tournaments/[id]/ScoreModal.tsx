@@ -491,23 +491,24 @@ export default function ScoreModal({
                 {needSides && gateReady && (
                   <div className="mb-3 bg-[#141414] border border-[#f0a500]/40 rounded-xl p-4">
                     <div className="text-center text-sm font-black text-[#f0a500] tracking-wide mb-1">LADO DA ARENA</div>
-                    <div className="text-center text-[11px] text-gray-400 mb-3">Escolha quem fica no <b className="text-white">X side</b> (o outro fica no <b className="text-white">B side</b>).</div>
+                    <div className="text-center text-[11px] text-gray-400 mb-3">Toque no jogador que vai ficar no <b className="text-[#00aaff]">B side</b> (o outro fica no <b className="text-white">X side</b> automaticamente).</div>
                     <div className="grid grid-cols-2 gap-3">
-                      <button
-                        onClick={() => chooseSide(player1.id)}
-                        className="rounded-xl border-2 border-[#f0a500] bg-[#f0a500]/10 hover:bg-[#f0a500]/20 transition-colors py-3 px-2 text-center"
-                      >
-                        <div className="text-[10px] font-black text-[#f0a500] tracking-widest">X SIDE</div>
-                        <div className="text-sm font-black text-white truncate">{p1Name}</div>
-                        <div className="text-[10px] text-gray-500 truncate">{p2Name} → B side</div>
-                      </button>
+                      {/* Clicking a player puts THEM on B side → the other is X side. */}
                       <button
                         onClick={() => chooseSide(player2.id)}
-                        className="rounded-xl border-2 border-[#f0a500] bg-[#f0a500]/10 hover:bg-[#f0a500]/20 transition-colors py-3 px-2 text-center"
+                        className="rounded-xl border-2 border-[#00aaff] bg-[#00aaff]/10 hover:bg-[#00aaff]/25 transition-colors py-3 px-2 text-center"
                       >
-                        <div className="text-[10px] font-black text-[#f0a500] tracking-widest">X SIDE</div>
+                        <div className="text-[10px] font-black text-[#00aaff] tracking-widest">B SIDE ◀</div>
+                        <div className="text-sm font-black text-white truncate">{p1Name}</div>
+                        <div className="text-[10px] text-gray-500 truncate">esquerda do telão</div>
+                      </button>
+                      <button
+                        onClick={() => chooseSide(player1.id)}
+                        className="rounded-xl border-2 border-[#00aaff] bg-[#00aaff]/10 hover:bg-[#00aaff]/25 transition-colors py-3 px-2 text-center"
+                      >
+                        <div className="text-[10px] font-black text-[#00aaff] tracking-widest">B SIDE ◀</div>
                         <div className="text-sm font-black text-white truncate">{p2Name}</div>
-                        <div className="text-[10px] text-gray-500 truncate">{p1Name} → B side</div>
+                        <div className="text-[10px] text-gray-500 truncate">esquerda do telão</div>
                       </button>
                     </div>
                   </div>
@@ -517,8 +518,8 @@ export default function ScoreModal({
                 {!needSides && state?.xSidePlayerId && currentSetNum === 1 && currentSetBattleCount === 0 && (
                   <div className="mb-2 flex items-center justify-center gap-2 text-[11px] text-gray-400">
                     <span>
-                      <b className="text-white">{state.xSidePlayerId === player1.id ? p1Name : p2Name}</b> = X side ·{" "}
-                      <b className="text-white">{state.xSidePlayerId === player1.id ? p2Name : p1Name}</b> = B side
+                      <b className="text-[#00aaff]">{state.xSidePlayerId === player1.id ? p2Name : p1Name}</b> = B side (esquerda) ·{" "}
+                      <b className="text-white">{state.xSidePlayerId === player1.id ? p1Name : p2Name}</b> = X side
                     </span>
                     <button onClick={() => chooseSide(null)} className="underline text-gray-500 hover:text-white">trocar</button>
                   </div>
