@@ -86,6 +86,7 @@ export async function PATCH(
       name, description, format, maxParticipants, startDate, deckType, prize, arenas,
       eventType, setsToWin, pointsToWinSet, qualifiers,
       bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
+      isMultiDay, day2Date, day2SetsToWin, day2PointsToWinSet,
     } = await req.json();
 
     if (!name || !format) {
@@ -111,6 +112,10 @@ export async function PATCH(
       entryFee: entryFee !== undefined && entryFee !== null && entryFee !== "" ? parseFloat(entryFee) : null,
       regulation: regulation || null,
       registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : null,
+      isMultiDay: format === "ROUND_ROBIN" && !!isMultiDay,
+      day2Date: format === "ROUND_ROBIN" && isMultiDay && day2Date ? new Date(day2Date) : null,
+      day2SetsToWin: format === "ROUND_ROBIN" && isMultiDay && day2SetsToWin ? Math.min(2, Math.max(1, parseInt(day2SetsToWin))) : null,
+      day2PointsToWinSet: format === "ROUND_ROBIN" && isMultiDay && day2PointsToWinSet ? Math.min(7, Math.max(4, parseInt(day2PointsToWinSet))) : null,
     };
 
     // Only admins can change whether a tournament counts as official.

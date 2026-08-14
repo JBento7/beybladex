@@ -315,6 +315,44 @@ export default function CreateTournamentPage() {
                 </label>
               </div>
             </div>
+
+            {/* Days of the tournament (Suíço only) */}
+            {form.format === "ROUND_ROBIN" && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">Dias de torneio</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsMultiDay(false)}
+                    className={`flex-1 py-2.5 rounded-lg font-bold border transition-colors ${!isMultiDay ? "border-[#f0a500] bg-[#f0a500]/10 text-[#f0a500]" : "border-[#333] bg-[#252525] text-gray-400 hover:bg-[#2a2a2a]"}`}
+                  >
+                    1 dia
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsMultiDay(true)}
+                    className={`flex-1 py-2.5 rounded-lg font-bold border transition-colors ${isMultiDay ? "border-[#f0a500] bg-[#f0a500]/10 text-[#f0a500]" : "border-[#333] bg-[#252525] text-gray-400 hover:bg-[#2a2a2a]"}`}
+                  >
+                    2 dias (Suíço + Mata-mata)
+                  </button>
+                </div>
+                {isMultiDay && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Data do Dia 2 — Mata-mata</label>
+                    <input
+                      type="date"
+                      value={day2Date}
+                      onChange={(e) => setDay2Date(e.target.value)}
+                      disabled={dateTBD}
+                      className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors disabled:opacity-50"
+                    />
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      Dia 1 = fase suíça · Dia 2 = mata-mata dos {form.qualifiers} classificados (gerado automaticamente ao fim do suíço). Ajuste as regras de cada dia abaixo.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Location & Registration */}
@@ -507,47 +545,6 @@ export default function CreateTournamentPage() {
                 <p className="text-xs text-gray-500 mt-1.5">
                   Os melhores colocados da fase inicial passam para o chaveamento eliminatório. Se houver menos inscritos que o número escolhido, não há mata-mata.
                 </p>
-
-                {/* Two-day tournament */}
-                <div className="mt-4 border-t border-[#2a2a2a] pt-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isMultiDay}
-                      onChange={(e) => setIsMultiDay(e.target.checked)}
-                      className="w-4 h-4 accent-[#f0a500]"
-                    />
-                    <span className="text-sm font-medium text-gray-200">Torneio de 2 dias (Dia 1: Suíço · Dia 2: Mata-mata)</span>
-                  </label>
-                  {isMultiDay && (
-                    <div className="mt-3 grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-1.5">Dia 1 — Fase Suíça</label>
-                        <input
-                          type="date"
-                          name="startDate"
-                          value={form.startDate}
-                          onChange={handleChange}
-                          disabled={dateTBD}
-                          className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors disabled:opacity-40"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-1.5">Dia 2 — Mata-mata</label>
-                        <input
-                          type="date"
-                          value={day2Date}
-                          onChange={(e) => setDay2Date(e.target.value)}
-                          disabled={dateTBD}
-                          className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors disabled:opacity-40"
-                        />
-                      </div>
-                      <p className="col-span-2 text-xs text-gray-500">
-                        No dia 1 acontece a fase suíça. Quando a última rodada suíça termina, o chaveamento com os {form.qualifiers} classificados é gerado automaticamente para o dia 2.
-                      </p>
-                    </div>
-                  )}
-                </div>
               </div>
             )}
           </div>

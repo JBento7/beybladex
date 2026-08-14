@@ -39,6 +39,10 @@ export default async function EditTournamentPage({
       entryFee: true,
       regulation: true,
       registrationDeadline: true,
+      isMultiDay: true,
+      day2Date: true,
+      day2SetsToWin: true,
+      day2PointsToWinSet: true,
     },
   });
 
@@ -79,6 +83,10 @@ export default async function EditTournamentPage({
         entryFee: tournament.entryFee,
         regulation: tournament.regulation,
         registrationDeadline: tournament.registrationDeadline ? tournament.registrationDeadline.toISOString() : null,
+        isMultiDay: tournament.isMultiDay,
+        day2Date: tournament.day2Date ? tournament.day2Date.toISOString() : null,
+        day2SetsToWin: tournament.day2SetsToWin,
+        day2PointsToWinSet: tournament.day2PointsToWinSet,
       }}
       canChangeEventType={isAdmin}
     />
