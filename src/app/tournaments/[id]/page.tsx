@@ -577,6 +577,16 @@ export default async function TournamentDetailPage({
   while (bracketSize < tournament.participants.length) bracketSize *= 2;
   const totalBracketRounds = Math.max(1, Math.log2(bracketSize));
 
+  // Suíço: split rounds into the Swiss phase (list) and the knockout (bracket
+  // tree). Once the knockout exists, show the final Swiss standings + the tree.
+  const isSwiss = tournament.format === "ROUND_ROBIN";
+  const swissRoundsList = isSwiss ? sortedRounds.filter(([r]) => r <= swissRounds) : [];
+  const knockoutRoundsList = isSwiss ? sortedRounds.filter(([r]) => r > swissRounds) : [];
+  const knockoutTotalRounds = knockoutRoundsList.length ? knockoutRoundsList[knockoutRoundsList.length - 1][0] : 0;
+  // Which rounds render as the per-round list: Suíço → only its Swiss rounds.
+  const listRounds = isSwiss ? swissRoundsList : sortedRounds;
+  const qualifiersCount = tournament.qualifiers ?? 0;
+
   // Always show the sidebar so players can track standings in real-time.
   const showSidebar = true;
 
@@ -835,7 +845,8 @@ export default async function TournamentDetailPage({
                 )}
               </>
             ) : sortedRounds.length > 0 ? (
-              sortedRounds.map(([round, roundMatches]: [number, typeof tournament.matches]) => {
+              <>
+              {listRounds.map(([round, roundMatches]: [number, typeof tournament.matches]) => {
                 const arenaCount = tournament.arenas ?? 1;
                 // Use stored arena/slot from DB — these are fixed at match creation time
                 const useStoredArenas = arenaCount > 1 && roundMatches.some((m) => m.arena != null);
@@ -916,7 +927,73 @@ export default async function TournamentDetailPage({
                     )}
                   </div>
                 );
-              })
+              })}
+
+              {/* Suíço knockout: final Swiss standings + bracket tree */}
+              {isSwiss && knockoutRoundsList.length > 0 && (
+                <>
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                    <h2 className="text-lg font-bold text-white mb-1">Classificação Final da Fase Suíça</h2>
+                    <p className="text-xs text-gray-500 mb-4">
+                      {qualifiersCount > 0 ? `Os ${qualifiersCount} primeiros avançaram para o mata-mata.` : "Classificação após a fase suíça."}
+                    </p>
+                    <div className="space-y-1.5">
+                      {standingsParticipants.map((p, idx) => {
+                        const classified = qualifiersCount > 0 && idx < qualifiersCount;
+                        return (
+                          <div
+                            key={p.id}
+                            className={`flex items-center gap-3 rounded-lg px-3 py-2 border ${classified ? "border-[#f0a500]/40 bg-[#f0a500]/10" : "border-gray-800 bg-gray-950"}`}
+                          >
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${classified ? "bg-[#f0a500] text-black" : "bg-gray-800 text-gray-400"}`}>
+                              {idx + 1}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-bold text-white truncate">{p.user.bladerName || p.user.name}</div>
+                            </div>
+                            {classified && <span className="text-[10px] font-black text-[#f0a500] tracking-wide">CLASSIFICADO</span>}
+                            <div className="text-sm font-bold text-amber-400 tabular-nums">{p.totalPoints}V</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                    <h2 className="text-lg font-bold text-white mb-4">Mata-mata</h2>
+                    <BracketView
+                      rounds={knockoutRoundsList}
+                      totalRounds={knockoutTotalRounds}
+                      isOrganizer={canJudge}
+                      tournamentId={tournament.id}
+                      participantBeyblades={participantBeyblades}
+                      arenaCount={tournament.arenas ?? 1}
+                      currentUserId={session?.user.id}
+                      deckType={tournament.deckType}
+                      openJudging={openJudging}
+                    />
+                  </div>
+
+                  {thirdPlaceMatch && (
+                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+                      <h2 className="text-lg font-bold text-white mb-4">Disputa de 3º Lugar</h2>
+                      <div className="max-w-sm">
+                        <MatchCard
+                          match={thirdPlaceMatch}
+                          isOrganizer={canJudge}
+                          arenaCount={tournament.arenas ?? 1}
+                          tournamentId={tournament.id}
+                          participantBeyblades={participantBeyblades}
+                          currentUserId={session?.user.id}
+                          deckType={tournament.deckType}
+                          openJudging={openJudging}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              </>
             ) : tournament.status === "REGISTRATION" ? (
               <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
                 <div className="text-4xl mb-3">⏳</div>
