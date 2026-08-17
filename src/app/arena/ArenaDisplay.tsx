@@ -20,6 +20,9 @@ type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number
 // Custom scoreboard field added in the layout editor (text or integer).
 type CustomFld = { key: string; label: string; type: "text" | "int"; value: string; x: number; y: number; w?: number; h?: number; fs?: number };
 
+// CX beys expose 3 stacked pieces; non-CX beys are a single blade image.
+type BeyPieces = { lock: string | null; metal: string | null; assist: string | null } | null;
+
 type HistRow = { side: "p1" | "p2"; finish: "S" | "KO" | "B" | "X"; points: number };
 
 type Match = {
@@ -43,6 +46,8 @@ type Match = {
   p2Combo: string | null;
   p1BeyImg: string | null;
   p2BeyImg: string | null;
+  p1BeyPieces: BeyPieces;
+  p2BeyPieces: BeyPieces;
   p1Finishes: FinishCounts;
   p2Finishes: FinishCounts;
   p1FinishesBySet: { setNumber: number; counts: FinishCounts }[];
@@ -629,6 +634,20 @@ function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src
     />
   );
 }
+// Bey art for one side: CX beys stack 3 transparent PNGs (assist behind, metal
+// middle, lock chip front); others use the single blade image.
+function BeyArt({ layout, side, img, pieces }: { layout: Layout | null; side: "L" | "R"; img: string | null; pieces: BeyPieces }) {
+  if (pieces && (pieces.lock || pieces.metal || pieces.assist)) {
+    return (
+      <>
+        <LImg layout={layout} k={`cxAssist${side}`} src={pieces.assist} />
+        <LImg layout={layout} k={`cxMetal${side}`} src={pieces.metal} />
+        <LImg layout={layout} k={`cxLock${side}`} src={pieces.lock} />
+      </>
+    );
+  }
+  return <LImg layout={layout} k={`beyImg${side}`} src={img} />;
+}
 
 function Scoreboard({ data, match, build, layout, bg, customFields, onTest }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; customFields: CustomFld[]; onTest: () => void }) {
   const hidden = useContext(HiddenCtx);
@@ -674,8 +693,8 @@ function Scoreboard({ data, match, build, layout, bg, customFields, onTest }: { 
         <LImg layout={layout} k="photoR" src={match.p2Avatar} cover />
 
         {/* Bey images (centered inside the gold rings) */}
-        <LImg layout={layout} k="beyImgL" src={match.p1BeyImg} />
-        <LImg layout={layout} k="beyImgR" src={match.p2BeyImg} />
+        <BeyArt layout={layout} side="L" img={match.p1BeyImg} pieces={match.p1BeyPieces} />
+        <BeyArt layout={layout} side="R" img={match.p2BeyImg} pieces={match.p2BeyPieces} />
 
         {/* Names */}
         <LText layout={layout} k="nameL">{match.player1}</LText>

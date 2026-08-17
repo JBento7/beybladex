@@ -178,13 +178,35 @@ export async function GET(req: NextRequest) {
       return null;
     }
   }
+  // Image of any BeyPart by category + name.
+  async function partImage(category: string, name: string | null): Promise<string | null> {
+    if (!name) return null;
+    try {
+      const part = await prisma.beyPart.findFirst({ where: { name, category: { in: [category] as never }, imageUrl: { not: null } }, select: { imageUrl: true } });
+      return part?.imageUrl ?? null;
+    } catch {
+      return null;
+    }
+  }
   // CX/CX_EXPAND keep the main blade in metal/over blade, not `blade`.
-  type BeyLike = { beyLine?: string | null; blade?: string | null; metalBlade?: string | null; overBlade?: string | null };
+  type BeyLike = { beyLine?: string | null; blade?: string | null; lockChip?: string | null; metalBlade?: string | null; assistBlade?: string | null; overBlade?: string | null };
+  const isCXBey = (b: BeyLike | null) => !!b && (b.beyLine === "CX" || b.beyLine === "CX_EXPAND");
   const mainBladeName = (b: BeyLike | null): string | null => {
     if (!b) return null;
-    const isCX = b.beyLine === "CX" || b.beyLine === "CX_EXPAND";
-    return (isCX ? b.overBlade || b.metalBlade : b.blade) ?? null;
+    return (isCXBey(b) ? b.overBlade || b.metalBlade : b.blade) ?? null;
   };
+  // CX beys expose 3 stacked pieces (lock chip / metal blade / assist blade).
+  type BeyPieces = { lock: string | null; metal: string | null; assist: string | null } | null;
+  async function beyPieces(b: BeyLike | null): Promise<BeyPieces> {
+    if (!isCXBey(b) || !b) return null;
+    const [lock, metal, assist] = await Promise.all([
+      partImage("LOCK_CHIP", b.lockChip ?? null),
+      partImage("MAIN_BLADE", b.metalBlade ?? null),
+      partImage("ASSIST_BLADE", b.assistBlade ?? null),
+    ]);
+    if (!lock && !metal && !assist) return null;
+    return { lock, metal, assist };
+  }
 
   // 3on3: resolve active beyblade name + combo + blade photo for the current battle.
   let p1ActiveBey: string | null = null;
@@ -193,9 +215,11 @@ export async function GET(req: NextRequest) {
   let p2Combo: string | null = null;
   let p1BeyImg: string | null = null;
   let p2BeyImg: string | null = null;
+  let p1BeyPieces: BeyPieces = null;
+  let p2BeyPieces: BeyPieces = null;
   const comboOf = (b: { blade?: string | null; ratchet?: string | null; bit?: string | null } | null) =>
     b ? [b.blade, b.ratchet, b.bit].filter(Boolean).join(" ") || null : null;
-  const beySelect = { id: true, name: true, beyLine: true, blade: true, ratchet: true, bit: true, metalBlade: true, overBlade: true } as const;
+  const beySelect = { id: true, name: true, beyLine: true, blade: true, ratchet: true, bit: true, lockChip: true, metalBlade: true, assistBlade: true, overBlade: true } as const;
   if (isDeck) {
     try {
       const cycleIndex = Math.floor(currentSetBattleCount / 3);
@@ -216,7 +240,9 @@ export async function GET(req: NextRequest) {
       p2ActiveBey = b2?.name ?? null;
       p1Combo = comboOf(b1);
       p2Combo = comboOf(b2);
-      [p1BeyImg, p2BeyImg] = await Promise.all([bladeImage(mainBladeName(b1)), bladeImage(mainBladeName(b2))]);
+      [p1BeyImg, p2BeyImg, p1BeyPieces, p2BeyPieces] = await Promise.all([
+        bladeImage(mainBladeName(b1)), bladeImage(mainBladeName(b2)), beyPieces(b1), beyPieces(b2),
+      ]);
     } catch {
       /* deck order table may be missing */
     }
@@ -247,7 +273,9 @@ export async function GET(req: NextRequest) {
       p2ActiveBey = b2?.name ?? null;
       p1Combo = comboOf(b1);
       p2Combo = comboOf(b2);
-      [p1BeyImg, p2BeyImg] = await Promise.all([bladeImage(mainBladeName(b1)), bladeImage(mainBladeName(b2))]);
+      [p1BeyImg, p2BeyImg, p1BeyPieces, p2BeyPieces] = await Promise.all([
+        bladeImage(mainBladeName(b1)), bladeImage(mainBladeName(b2)), beyPieces(b1), beyPieces(b2),
+      ]);
     } catch {
       /* beyblade table issue — leave photos empty */
     }
@@ -402,6 +430,7 @@ export async function GET(req: NextRequest) {
   const [oP1ActiveBey, oP2ActiveBey] = lr(p1ActiveBey, p2ActiveBey);
   const [oP1Combo, oP2Combo] = lr(p1Combo, p2Combo);
   const [oP1BeyImg, oP2BeyImg] = lr(p1BeyImg, p2BeyImg);
+  const [oP1BeyPieces, oP2BeyPieces] = lr(p1BeyPieces, p2BeyPieces);
   const [oP1Finishes, oP2Finishes] = lr(p1Finishes, p2Finishes);
   const [oP1FinishesBySet, oP2FinishesBySet] = lr(p1FinishesBySet, p2FinishesBySet);
   const [oP1TotalPoints, oP2TotalPoints] = lr(p1TotalPoints, p2TotalPoints);
@@ -441,6 +470,8 @@ export async function GET(req: NextRequest) {
       p2Combo: oP2Combo,
       p1BeyImg: oP1BeyImg,
       p2BeyImg: oP2BeyImg,
+      p1BeyPieces: oP1BeyPieces,
+      p2BeyPieces: oP2BeyPieces,
       p1Finishes: oP1Finishes,
       p2Finishes: oP2Finishes,
       p1FinishesBySet: oP1FinishesBySet,
