@@ -170,7 +170,7 @@ export async function GET(req: NextRequest) {
     if (!bladeName) return null;
     try {
       const part = await prisma.beyPart.findFirst({
-        where: { name: bladeName, category: { in: ["BLADE", "MAIN_BLADE"] }, imageUrl: { not: null } },
+        where: { name: bladeName, category: { in: ["BLADE", "MAIN_BLADE", "OVER_BLADE"] }, imageUrl: { not: null } },
         select: { imageUrl: true },
       });
       return part?.imageUrl ?? null;
@@ -178,6 +178,13 @@ export async function GET(req: NextRequest) {
       return null;
     }
   }
+  // CX/CX_EXPAND keep the main blade in metal/over blade, not `blade`.
+  type BeyLike = { beyLine?: string | null; blade?: string | null; metalBlade?: string | null; overBlade?: string | null };
+  const mainBladeName = (b: BeyLike | null): string | null => {
+    if (!b) return null;
+    const isCX = b.beyLine === "CX" || b.beyLine === "CX_EXPAND";
+    return (isCX ? b.overBlade || b.metalBlade : b.blade) ?? null;
+  };
 
   // 3on3: resolve active beyblade name + combo + blade photo for the current battle.
   let p1ActiveBey: string | null = null;
@@ -188,6 +195,7 @@ export async function GET(req: NextRequest) {
   let p2BeyImg: string | null = null;
   const comboOf = (b: { blade?: string | null; ratchet?: string | null; bit?: string | null } | null) =>
     b ? [b.blade, b.ratchet, b.bit].filter(Boolean).join(" ") || null : null;
+  const beySelect = { id: true, name: true, beyLine: true, blade: true, ratchet: true, bit: true, metalBlade: true, overBlade: true } as const;
   if (isDeck) {
     try {
       const cycleIndex = Math.floor(currentSetBattleCount / 3);
@@ -197,10 +205,7 @@ export async function GET(req: NextRequest) {
       });
       const beyIds = orders.flatMap((o) => [o.bey1Id, o.bey2Id, o.bey3Id]);
       const beys = beyIds.length
-        ? await prisma.beyblade.findMany({
-            where: { id: { in: beyIds } },
-            select: { id: true, name: true, blade: true, ratchet: true, bit: true },
-          })
+        ? await prisma.beyblade.findMany({ where: { id: { in: beyIds } }, select: beySelect })
         : [];
       const beyOf = (id: string) => beys.find((b) => b.id === id) ?? null;
       const o1 = orders.find((o) => o.userId === match.player1Id);
@@ -211,9 +216,40 @@ export async function GET(req: NextRequest) {
       p2ActiveBey = b2?.name ?? null;
       p1Combo = comboOf(b1);
       p2Combo = comboOf(b2);
-      [p1BeyImg, p2BeyImg] = await Promise.all([bladeImage(b1?.blade ?? null), bladeImage(b2?.blade ?? null)]);
+      [p1BeyImg, p2BeyImg] = await Promise.all([bladeImage(mainBladeName(b1)), bladeImage(mainBladeName(b2))]);
     } catch {
       /* deck order table may be missing */
+    }
+  } else {
+    // Solo: show each player's beyblade — the one they've been scoring with in
+    // this match, falling back to their first registered bey.
+    try {
+      const pts = await prisma.matchPoint.findMany({
+        where: { matchId: match.id, beybladeId: { not: null } },
+        orderBy: { createdAt: "desc" },
+        select: { userId: true, beybladeId: true },
+      });
+      const latestBeyId = (userId: string) => pts.find((p) => p.userId === userId)?.beybladeId ?? null;
+      async function soloBey(userId: string) {
+        const chosenId = latestBeyId(userId);
+        if (chosenId) {
+          const b = await prisma.beyblade.findUnique({ where: { id: chosenId }, select: beySelect });
+          if (b) return b;
+        }
+        return prisma.beyblade.findFirst({
+          where: { userId, hiddenFromCommunity: false },
+          orderBy: { createdAt: "asc" },
+          select: beySelect,
+        });
+      }
+      const [b1, b2] = await Promise.all([soloBey(match.player1Id), soloBey(match.player2Id)]);
+      p1ActiveBey = b1?.name ?? null;
+      p2ActiveBey = b2?.name ?? null;
+      p1Combo = comboOf(b1);
+      p2Combo = comboOf(b2);
+      [p1BeyImg, p2BeyImg] = await Promise.all([bladeImage(mainBladeName(b1)), bladeImage(mainBladeName(b2))]);
+    } catch {
+      /* beyblade table issue — leave photos empty */
     }
   }
 
