@@ -473,7 +473,7 @@ export default function LayoutEditor({
                     </div>
                   );
                 }
-                if (k === "finishes") {
+                if (k.startsWith("finishes")) {
                   return (
                     <div key={k} style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w}%`, height: `${f.h}%`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "0.5cqw", overflow: "hidden" }}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -544,23 +544,27 @@ function FinishBadge({ type, count, h = "3.4cqw" }: { type: keyof FinishCounts; 
 
 // One player's finishes, grouped by set, with their own counts. Player 1 sits
 // in the marked center-left area; player 2 is mirrored to the center-right.
-function FinishesColumn({ bySet, side }: {
+function FinishesColumn({ bySet, side, layout }: {
   bySet: { setNumber: number; counts: FinishCounts }[];
   side: "left" | "right";
+  layout: Layout | null;
 }) {
+  const hidden = useContext(HiddenCtx);
+  const k = side === "left" ? "finishesL" : "finishesR";
+  const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
   const rows = bySet
     .map((g) => ({ setNumber: g.setNumber, earned: FINISH_ORDER.filter((k) => g.counts[k] > 0), counts: g.counts }))
     .filter((r) => r.earned.length > 0)
     .sort((a, b) => a.setNumber - b.setNumber);
-  if (rows.length === 0) return null;
+  if (rows.length === 0 || hidden.has(k)) return null;
   return (
     <div
       style={{
         position: "absolute",
-        left: side === "left" ? "31.3%" : "53.3%",
-        top: "11.5%",
-        width: "15.4%",
-        height: "34%",
+        left: `${f.x}%`,
+        top: `${f.y}%`,
+        width: `${f.w}%`,
+        height: `${f.h}%`,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -685,8 +689,8 @@ function Scoreboard({ data, match, build, layout, bg, customFields, onTest }: { 
         <div onClick={onTest} style={{ position: "absolute", left: "45%", top: 0, width: "10%", height: "13%", cursor: "pointer", zIndex: 6 }} />
 
         {/* Finishes per player, grouped by set */}
-        <FinishesColumn bySet={match.p1FinishesBySet} side="left" />
-        <FinishesColumn bySet={match.p2FinishesBySet} side="right" />
+        <FinishesColumn bySet={match.p1FinishesBySet} side="left" layout={layout} />
+        <FinishesColumn bySet={match.p2FinishesBySet} side="right" layout={layout} />
 
         {/* Player photos (over the FOTO boxes) */}
         <LImg layout={layout} k="photoL" src={match.p1Avatar} cover />

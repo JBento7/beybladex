@@ -34,6 +34,9 @@ export const SCOREBOARD_DEFAULTS: Record<string, FieldDef> = {
   cxAssistR: { kind: "img", label: "CX Assist Blade (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
   cxMetalR: { kind: "img", label: "CX Metal Blade (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
   cxLockR: { kind: "img", label: "CX Lock Chip (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
+  // Finishes boxes (SET N + badges), grouped per player.
+  finishesL: { kind: "img", label: "Finishes (esq)", x: 31.3, y: 11.5, w: 15.4, h: 34 },
+  finishesR: { kind: "img", label: "Finishes (dir)", x: 53.3, y: 11.5, w: 15.4, h: 34 },
   scoreL: { kind: "text", label: "Placar (esq)", x: 38, y: 56.5, w: 12, fs: 6.6 },
   scoreR: { kind: "text", label: "Placar (dir)", x: 62, y: 56.5, w: 12, fs: 6.6 },
   pointsL: { kind: "pipsV", label: "Pontos (esq)", x: 27.1, y: 20.2, w: 2, h: 24.4, fs: 2 },
