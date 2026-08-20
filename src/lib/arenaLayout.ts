@@ -8,7 +8,16 @@
 // pipsV = 5 dots stacked vertically (PONTOS); pipsH = 3 dots in a row (VITÓRIAS).
 // For pip fields the box (x,y,w,h) is the group extent and fs is the dot diameter (cqw).
 export type FieldKind = "text" | "img" | "pipsV" | "pipsH";
-export type Field = { x: number; y: number; w?: number; h?: number; fs?: number };
+export type Field = { x: number; y: number; w?: number; h?: number; fs?: number; ff?: string };
+
+// A custom font in the library: uploaded (embedded via @font-face) or a Google
+// Font (loaded by name). `family` is the CSS font-family used everywhere.
+export type FontDef = { family: string; kind: "upload" | "google"; src?: string };
+
+// CSS font-family stack for an element, falling back to the default placar font.
+export function fontStack(ff?: string | null): string {
+  return ff ? `'${ff}', 'Arial Black', system-ui, sans-serif` : "'Arial Black', system-ui, sans-serif";
+}
 export type FieldDef = Field & { kind: FieldKind; label: string };
 export type Layout = Record<string, Field>;
 

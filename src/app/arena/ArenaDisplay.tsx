@@ -2,7 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
-import { fieldStyle, pipDots, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type Layout } from "@/lib/arenaLayout";
+import { fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type Layout, type FontDef } from "@/lib/arenaLayout";
+import FontLoader from "@/components/FontLoader";
 
 // Fields disabled in the layout editor are hidden from the placar via this ctx.
 const HiddenCtx = createContext<Set<string>>(new Set());
@@ -18,7 +19,7 @@ const BLUE = "#00aaff";
 type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
 
 // Custom scoreboard field added in the layout editor (text or integer).
-type CustomFld = { key: string; label: string; type: "text" | "int"; value: string; x: number; y: number; w?: number; h?: number; fs?: number };
+type CustomFld = { key: string; label: string; type: "text" | "int"; value: string; x: number; y: number; w?: number; h?: number; fs?: number; ff?: string };
 
 // CX beys expose 3 stacked pieces; non-CX beys are a single blade image.
 type BeyPieces = { lock: string | null; metal: string | null; assist: string | null } | null;
@@ -96,6 +97,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const [winnerBg, setWinnerBg] = useState<string>("/winner-bg.png");
   const [customFields, setCustomFields] = useState<CustomFld[]>([]);
   const [hiddenFields, setHiddenFields] = useState<Set<string>>(new Set());
+  const [fonts, setFonts] = useState<FontDef[]>([]);
+  useEffect(() => {
+    fetch("/api/arena-layout?key=fonts").then((r) => (r.ok ? r.json() : null)).then((d) => { if (Array.isArray(d?.layout)) setFonts(d.layout as FontDef[]); }).catch(() => {});
+  }, []);
   useEffect(() => {
     fetch("/api/arena-layout?key=scoreboard").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
     fetch("/api/arena-layout?key=scoreboard::hidden").then((r) => (r.ok ? r.json() : null)).then((d) => { if (Array.isArray(d?.layout)) setHiddenFields(new Set(d.layout as string[])); }).catch(() => {});
@@ -243,6 +248,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 
   return (
     <div ref={wrapRef} style={{ height: "100vh", width: "100vw", background: "#000", color: "#fff", overflow: "hidden", position: "relative" }}>
+      <FontLoader fonts={fonts} />
       {/* nosleep loop (offscreen) */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video ref={noSleepRef} src="/nosleep.mp4" muted loop playsInline style={{ position: "fixed", width: 2, height: 2, opacity: 0, top: 0, left: 0, pointerEvents: "none" }} />
@@ -442,12 +448,12 @@ function WinnerScreen({ match, winnerSide, layout, bg }: { match: Match; winnerS
 
         {/* Winner name (covers the baked "JOGADOR" placeholder) */}
         <div style={{ position: "absolute", left: `${nm.x}%`, top: `${nm.y}%`, transform: "translate(-50%, -50%)", width: `${nm.w}%`, background: "#0d0d0d", borderRadius: "0.6cqw", display: "flex", alignItems: "center", justifyContent: "center", padding: "0.5cqw 0" }}>
-          <span style={{ fontSize: `${nm.fs}cqw`, fontWeight: 900, color: GOLD, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "94%" }}>{name}</span>
+          <span style={{ fontFamily: nm.ff ? fontStack(nm.ff) : undefined, fontSize: `${nm.fs}cqw`, fontWeight: 900, color: GOLD, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "94%" }}>{name}</span>
         </div>
 
         {/* PLACAR — points scored */}
-        <Cell cx={sw.x} cy={sw.y} fs={sw.fs ?? 5.5} color={GOLD}>{winPts}</Cell>
-        <Cell cx={sl.x} cy={sl.y} fs={sl.fs ?? 5.5}>{losePts}</Cell>
+        <Cell cx={sw.x} cy={sw.y} fs={sw.fs ?? 5.5} color={GOLD} ff={sw.ff}>{winPts}</Cell>
+        <Cell cx={sl.x} cy={sl.y} fs={sl.fs ?? 5.5} ff={sl.ff}>{losePts}</Cell>
 
         {/* DECK — winner's beys */}
         {deckKeys.map((k, i) => {
@@ -486,8 +492,8 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-function Cell({ cx, cy, w, fs, color, children }: {
-  cx: number; cy: number; w?: number; fs: number; color?: string; children: React.ReactNode;
+function Cell({ cx, cy, w, fs, color, ff, children }: {
+  cx: number; cy: number; w?: number; fs: number; color?: string; ff?: string; children: React.ReactNode;
 }) {
   return (
     <div
@@ -501,6 +507,7 @@ function Cell({ cx, cy, w, fs, color, children }: {
         alignItems: "center",
         justifyContent: "center",
         textAlign: "center",
+        fontFamily: ff ? fontStack(ff) : undefined,
         fontSize: `${fs}cqw`,
         color: color || "#fff",
         fontWeight: 900,
@@ -623,7 +630,7 @@ function LText({ layout, k, color, children }: { layout: Layout | null; k: strin
   const hidden = useContext(HiddenCtx);
   const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
   if (hidden.has(k)) return null;
-  return <Cell cx={f.x} cy={f.y} w={f.w} fs={f.fs ?? 1.5} color={color}>{children}</Cell>;
+  return <Cell cx={f.x} cy={f.y} w={f.w} fs={f.fs ?? 1.5} color={color} ff={f.ff}>{children}</Cell>;
 }
 function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src: string | null; cover?: boolean }) {
   const hidden = useContext(HiddenCtx);
@@ -680,7 +687,7 @@ function Scoreboard({ data, match, build, layout, bg, customFields, onTest }: { 
 
         {/* Custom fields from the layout editor (read-only on the telão) */}
         {customFields.filter((cf) => !hidden.has(cf.key)).map((cf) => (
-          <div key={cf.key} style={{ position: "absolute", left: `${cf.x}%`, top: `${cf.y}%`, transform: "translate(-50%, -50%)", width: cf.w ? `${cf.w}%` : undefined, zIndex: 7, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontSize: `${cf.fs ?? 1.8}cqw`, fontWeight: 900, color: "#fff", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div key={cf.key} style={{ position: "absolute", left: `${cf.x}%`, top: `${cf.y}%`, transform: "translate(-50%, -50%)", width: cf.w ? `${cf.w}%` : undefined, zIndex: 7, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: cf.ff ? fontStack(cf.ff) : undefined, fontSize: `${cf.fs ?? 1.8}cqw`, fontWeight: 900, color: "#fff", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {cf.value || cf.label}
           </div>
         ))}

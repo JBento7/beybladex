@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
-import { fieldStyle, pipDots, SCOREBOARD_DEFAULTS, type Layout } from "@/lib/arenaLayout";
+import { fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, type Layout, type FontDef } from "@/lib/arenaLayout";
+import FontLoader from "@/components/FontLoader";
 
 // Self-contained "quick match": two players score their own points (no judge).
 // Same scoring rules and scoreboard art as the tournament arena. A battle only
@@ -34,7 +35,7 @@ const isCXBey = (b: Bey) => b.line === "CX" || b.line === "CX_EXPAND";
 
 // Custom scoreboard field (added in the layout editor): text or integer, with
 // its own geometry and a live value the operator can change during the match.
-type CustomFld = { key: string; label: string; type: "text" | "int"; value: string; x: number; y: number; w?: number; h?: number; fs?: number };
+type CustomFld = { key: string; label: string; type: "text" | "int"; value: string; x: number; y: number; w?: number; h?: number; fs?: number; ff?: string };
 type ApiBey = {
   id: string; name: string; beyLine: string | null;
   blade: string | null; ratchet: string | null; bit: string | null;
@@ -64,7 +65,7 @@ function Cell({ layout, k, color, children, hidden }: { layout: Layout | null; k
   const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
   if (hidden?.has(k)) return null;
   return (
-    <div style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, transform: "translate(-50%, -50%)", width: f.w ? `${f.w}%` : undefined, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontSize: `${f.fs ?? 1.5}cqw`, fontWeight: 900, color: color || "#fff", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+    <div style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, transform: "translate(-50%, -50%)", width: f.w ? `${f.w}%` : undefined, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: f.ff ? fontStack(f.ff) : undefined, fontSize: `${f.fs ?? 1.5}cqw`, fontWeight: 900, color: color || "#fff", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
       {children}
     </div>
   );
@@ -140,7 +141,9 @@ export default function QuickMatch() {
   const [bg, setBg] = useState<string>("/scoreboard-bg.png");
   const [customFields, setCustomFields] = useState<CustomFld[]>([]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [fonts, setFonts] = useState<FontDef[]>([]);
   useEffect(() => {
+    fetch("/api/arena-layout?key=fonts").then((r) => (r.ok ? r.json() : null)).then((d) => { if (Array.isArray(d?.layout)) setFonts(d.layout as FontDef[]); }).catch(() => {});
     fetch("/api/arena-layout?key=quickmatch").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
     // Custom fields defined in the layout editor (text/int), live-editable here.
     fetch("/api/arena-layout?key=scoreboard::custom").then((r) => (r.ok ? r.json() : null)).then((d) => {
@@ -303,6 +306,7 @@ export default function QuickMatch() {
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ position: "relative", width: "min(100vw, calc(100vh * 1672 / 941))", aspectRatio: "1672 / 941", containerType: "size", backgroundImage: `url(${bg})`, backgroundSize: "100% 100%", backgroundRepeat: "no-repeat", fontFamily: "'Arial Black', system-ui, sans-serif", overflow: "hidden" }}>
+        <FontLoader fonts={fonts} />
         {/* Back to LBL menu (top-left) */}
         <button onClick={backToMenu} style={{ position: "absolute", top: "0.6vh", left: "1.5vw", zIndex: 30, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}>← Menu</button>
         {/* Exit to setup */}
@@ -335,7 +339,7 @@ export default function QuickMatch() {
             key={cf.key}
             onClick={() => editCustom(cf)}
             title="Toque para editar"
-            style={{ position: "absolute", left: `${cf.x}%`, top: `${cf.y}%`, transform: "translate(-50%, -50%)", width: cf.w ? `${cf.w}%` : undefined, zIndex: 25, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontSize: `${cf.fs ?? 1.8}cqw`, fontWeight: 900, color: "#fff", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}
+            style={{ position: "absolute", left: `${cf.x}%`, top: `${cf.y}%`, transform: "translate(-50%, -50%)", width: cf.w ? `${cf.w}%` : undefined, zIndex: 25, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontFamily: cf.ff ? fontStack(cf.ff) : undefined, fontSize: `${cf.fs ?? 1.8}cqw`, fontWeight: 900, color: "#fff", lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}
           >
             {cf.value || cf.label}
           </div>

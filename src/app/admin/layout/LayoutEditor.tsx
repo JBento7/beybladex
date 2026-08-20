@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { TARGETS, pipDots, type Field, type FieldDef } from "@/lib/arenaLayout";
+import { TARGETS, pipDots, fontStack, type Field, type FieldDef, type FontDef } from "@/lib/arenaLayout";
+import FontLoader from "@/components/FontLoader";
 
 type TargetKey = keyof typeof TARGETS;
 
@@ -60,6 +61,7 @@ export default function LayoutEditor({
 }) {
   const [target, setTarget] = useState<TargetKey>("scoreboard");
   const [preview, setPreview] = useState(false);
+  const [showFonts, setShowFonts] = useState(false);
 
   // Custom background per target (uploaded), overriding the default art.
   const [bgByTarget, setBgByTarget] = useState<Record<string, string>>({});
@@ -181,6 +183,33 @@ export default function LayoutEditor({
       if (s.has(k)) s.delete(k); else s.add(k);
       return { ...prev, [target]: s };
     });
+  }
+
+  // Custom font library (global, shared across targets).
+  const [fonts, setFonts] = useState<FontDef[]>([]);
+  useEffect(() => {
+    fetch("/api/arena-layout?key=fonts").then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (Array.isArray(d?.layout)) setFonts(d.layout as FontDef[]);
+    }).catch(() => {});
+  }, []);
+  const fontInputRef = useRef<HTMLInputElement>(null);
+  function onPickFont(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const family = window.prompt("Nome para esta fonte (ex.: Minha Fonte):", file.name.replace(/\.[^.]+$/, ""));
+    if (!family || !family.trim()) return;
+    const reader = new FileReader();
+    reader.onload = () => setFonts((prev) => [...prev.filter((f) => f.family !== family.trim()), { family: family.trim(), kind: "upload", src: String(reader.result) }]);
+    reader.readAsDataURL(file);
+  }
+  function addGoogleFont() {
+    const family = window.prompt("Nome da fonte no Google Fonts (ex.: Oswald, Bebas Neue):");
+    if (!family || !family.trim()) return;
+    setFonts((prev) => [...prev.filter((f) => f.family !== family.trim()), { family: family.trim(), kind: "google" }]);
+  }
+  function deleteFont(family: string) {
+    setFonts((prev) => prev.filter((f) => f.family !== family));
   }
 
   const [sel, setSel] = useState<string | null>(null);
@@ -339,6 +368,11 @@ export default function LayoutEditor({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ key: `${target}::hidden`, layout: Array.from(hiddenSet) }),
         }),
+        fetch("/api/arena-layout", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: "fonts", layout: fonts }),
+        }),
       ];
       // On the scoreboard, also persist the custom fields (meta + geometry).
       if (target === "scoreboard") {
@@ -415,6 +449,13 @@ export default function LayoutEditor({
             ⇄ Espelhar p/ outro lado
           </button>
         )}
+        <input ref={fontInputRef} type="file" accept=".ttf,.otf,.woff,.woff2,font/*" onChange={onPickFont} className="hidden" />
+        <button
+          onClick={() => setShowFonts((v) => !v)}
+          className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${showFonts ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
+        >
+          🔤 Fontes
+        </button>
         <button
           onClick={() => { setPreview((p) => !p); setSel(null); }}
           className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${preview ? "bg-[#22c55e] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
@@ -423,6 +464,32 @@ export default function LayoutEditor({
         </button>
       </div>
 
+      {/* Font library manager */}
+      {showFonts && (
+        <div className="mb-3 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="text-sm font-black text-[#f0a500]">Fontes personalizadas</div>
+            <button onClick={() => fontInputRef.current?.click()} className="ml-auto text-xs font-bold bg-[#252525] border border-[#333] rounded-lg px-3 py-1.5 hover:bg-[#2a2a2a] text-gray-200">⬆ Enviar arquivo</button>
+            <button onClick={addGoogleFont} className="text-xs font-bold bg-[#252525] border border-[#333] rounded-lg px-3 py-1.5 hover:bg-[#2a2a2a] text-gray-200">+ Google Fonts</button>
+          </div>
+          {fonts.length === 0 ? (
+            <div className="text-xs text-gray-500">Nenhuma fonte adicionada. Envie um arquivo (.ttf/.otf/.woff/.woff2) ou adicione uma do Google Fonts. Depois selecione um texto e escolha a fonte no painel à direita.</div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-2">
+              {fonts.map((f) => (
+                <div key={f.family} className="flex items-center gap-2 bg-[#252525] border border-[#333] rounded-lg px-3 py-2">
+                  <span className="text-lg text-white truncate" style={{ fontFamily: fontStack(f.family) }}>{f.family}</span>
+                  <span className="text-[10px] text-gray-500 uppercase">{f.kind === "upload" ? "arquivo" : "google"}</span>
+                  <button onClick={() => deleteFont(f.family)} className="ml-auto text-xs text-red-400 hover:text-red-300">excluir</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="text-[11px] text-gray-500 mt-2">Lembre de clicar em <b>Salvar</b> para aplicar as fontes no telão.</div>
+        </div>
+      )}
+
+      <FontLoader fonts={fonts} />
       <div className="flex flex-col lg:flex-row gap-4">
         {/* Board */}
         <div className="flex-1 min-w-0">
@@ -458,7 +525,7 @@ export default function LayoutEditor({
               if (preview) {
                 if (def.kind === "text") {
                   return (
-                    <div key={k} style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, transform: "translate(-50%, -50%)", width: `${f.w ?? 12}%`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: `${f.fs ?? 1.5}cqw`, fontWeight: 900, color: k === "status" || k === "scoreWin" ? "#ffd400" : "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div key={k} style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, transform: "translate(-50%, -50%)", width: `${f.w ?? 12}%`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: fontStack(f.ff), fontSize: `${f.fs ?? 1.5}cqw`, fontWeight: 900, color: k === "status" || k === "scoreWin" ? "#ffd400" : "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {previewText(k)}
                     </div>
                   );
@@ -506,6 +573,7 @@ export default function LayoutEditor({
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
+                      fontFamily: fontStack(f.ff),
                       fontSize: `${f.fs ?? 1.5}cqw`,
                       fontWeight: 900,
                       color: "#fff",
@@ -615,6 +683,18 @@ export default function LayoutEditor({
                   </>
                 )}
               </div>
+              {selDef.kind === "text" && (
+                <label className="text-[11px] text-gray-400 block">Fonte
+                  <select
+                    value={selField.ff ?? ""}
+                    onChange={(e) => upd(sel!, { ff: e.target.value || undefined })}
+                    className="w-full mt-0.5 bg-[#252525] border border-[#333] rounded px-2 py-1 text-white text-sm outline-none focus:border-[#f0a500]"
+                  >
+                    <option value="">Padrão (Arial Black)</option>
+                    {fonts.map((f) => <option key={f.family} value={f.family}>{f.family}</option>)}
+                  </select>
+                </label>
+              )}
               {isCustom(sel!) && (
                 <div className="space-y-2 border-t border-[#2a2a2a] pt-2 mt-1">
                   <label className="text-[11px] text-gray-400 block">Nome do campo
