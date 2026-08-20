@@ -483,10 +483,15 @@ export default function LayoutEditor({
           ) : (
             <div className="grid sm:grid-cols-2 gap-2">
               {fonts.map((f) => (
-                <div key={f.family} className="flex items-center gap-2 bg-[#252525] border border-[#333] rounded-lg px-3 py-2">
-                  <span className="text-lg text-white truncate" style={{ fontFamily: fontStack(f.family) }}>{f.family}</span>
-                  <span className="text-[10px] text-gray-500 uppercase">{f.kind === "upload" ? "arquivo" : "google"}</span>
-                  <button onClick={() => deleteFont(f.family)} className="ml-auto text-xs text-red-400 hover:text-red-300">excluir</button>
+                <div key={f.family} className="bg-[#252525] border border-[#333] rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white truncate">{f.family}</span>
+                    <span className="text-[10px] text-gray-500 uppercase">{f.kind === "upload" ? "arquivo" : "google"}</span>
+                    <button onClick={() => deleteFont(f.family)} className="ml-auto text-xs text-red-400 hover:text-red-300">excluir</button>
+                  </div>
+                  {/* If this line doesn't render in the custom font, it didn't load
+                      (Google: name is wrong; check spelling/caps). */}
+                  <div className="text-2xl text-[#f0a500] truncate" style={{ fontFamily: fontStack(f.family) }}>Placar 3 X 0 · AaBb</div>
                 </div>
               ))}
             </div>
