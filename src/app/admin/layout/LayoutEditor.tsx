@@ -204,9 +204,15 @@ export default function LayoutEditor({
     reader.readAsDataURL(file);
   }
   function addGoogleFont() {
-    const family = window.prompt("Nome da fonte no Google Fonts (ex.: Oswald, Bebas Neue):");
-    if (!family || !family.trim()) return;
-    setFonts((prev) => [...prev.filter((f) => f.family !== family.trim()), { family: family.trim(), kind: "google" }]);
+    const raw = window.prompt("Nome da fonte no Google Fonts (ex.: Oswald, Bebas Neue).\nPode colar o link do Google Fonts também.");
+    if (!raw || !raw.trim()) return;
+    // Accept either a plain family name or a pasted Google Fonts URL.
+    let family = raw.trim();
+    const m = family.match(/[?&]family=([^&:]+)/i);
+    if (m) family = decodeURIComponent(m[1]).replace(/\+/g, " ");
+    family = family.trim();
+    if (!family) return;
+    setFonts((prev) => [...prev.filter((f) => f.family !== family), { family, kind: "google" }]);
   }
   function deleteFont(family: string) {
     setFonts((prev) => prev.filter((f) => f.family !== family));
