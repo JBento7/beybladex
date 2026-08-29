@@ -351,8 +351,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Winner screen deck: each player's 3 beyblades (blade images) from their
-  // latest deck order in this match (3-on-3 only).
+  // Winner screen deck: each player's beyblades (blade images). In 3-on-3 that's
+  // the 3 beys from their latest deck order; in solo it's their single bey.
   const matchId = match.id;
   async function deckImages(userId: string): Promise<(string | null)[]> {
     try {
@@ -362,8 +362,8 @@ export async function GET(req: NextRequest) {
       });
       if (!order) return [];
       const ids = [order.bey1Id, order.bey2Id, order.bey3Id];
-      const beys = await prisma.beyblade.findMany({ where: { id: { in: ids } }, select: { id: true, blade: true } });
-      return Promise.all(ids.map((id) => bladeImage(beys.find((b) => b.id === id)?.blade ?? null)));
+      const beys = await prisma.beyblade.findMany({ where: { id: { in: ids } }, select: beySelect });
+      return Promise.all(ids.map((id) => bladeImage(mainBladeName(beys.find((b) => b.id === id) ?? null))));
     } catch {
       return [];
     }
@@ -371,8 +371,14 @@ export async function GET(req: NextRequest) {
   let p1Deck: (string | null)[] = [];
   let p2Deck: (string | null)[] = [];
   // Only needed for the winner screen — skip during live/pending to save queries.
-  if (isDeck && phase === "finished") {
-    [p1Deck, p2Deck] = await Promise.all([deckImages(match.player1Id), deckImages(match.player2Id)]);
+  if (phase === "finished") {
+    if (isDeck) {
+      [p1Deck, p2Deck] = await Promise.all([deckImages(match.player1Id), deckImages(match.player2Id)]);
+    } else {
+      // Solo: the single bey goes in the middle deck slot (centered).
+      p1Deck = p1BeyImg ? [null, p1BeyImg, null] : [];
+      p2Deck = p2BeyImg ? [null, p2BeyImg, null] : [];
+    }
   }
 
   // Match number: position of this match WITHIN its round (resets each round),
