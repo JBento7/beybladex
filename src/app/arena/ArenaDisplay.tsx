@@ -410,7 +410,6 @@ function WinnerScreen({ match, winnerSide, layout, bg }: { match: Match; winnerS
   const name = isP1 ? match.player1 : match.player2;
   const avatar = isP1 ? match.p1Avatar : match.p2Avatar;
   const winPts = isP1 ? match.p1TotalPoints : match.p2TotalPoints;
-  const losePts = isP1 ? match.p2TotalPoints : match.p1TotalPoints;
   const deck = (isP1 ? match.p1Deck : match.p2Deck) || [];
   const finRows = (isP1 ? match.p1FinishesBySet : match.p2FinishesBySet)
     .map((g) => ({ setNumber: g.setNumber, earned: FINISH_ORDER.filter((k) => g.counts[k] > 0), counts: g.counts }))
@@ -421,7 +420,6 @@ function WinnerScreen({ match, winnerSide, layout, bg }: { match: Match; winnerS
   const photo = wf("photo");
   const nm = wf("name");
   const sw = wf("scoreWin");
-  const sl = wf("scoreLose");
   const fin = wf("finishes");
   const deckKeys = ["deck1", "deck2", "deck3"];
 
@@ -453,7 +451,6 @@ function WinnerScreen({ match, winnerSide, layout, bg }: { match: Match; winnerS
 
         {/* PLACAR — points scored */}
         <Cell cx={sw.x} cy={sw.y} fs={sw.fs ?? 5.5} color={GOLD} ff={sw.ff}>{winPts}</Cell>
-        <Cell cx={sl.x} cy={sl.y} fs={sl.fs ?? 5.5} ff={sl.ff}>{losePts}</Cell>
 
         {/* DECK — winner's beys */}
         {deckKeys.map((k, i) => {
