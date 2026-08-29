@@ -505,15 +505,15 @@ export default function ScoreModal({
                     </button>
                     {showManual && (
                       <div className="mt-2 space-y-2">
-                        {!p1Order && player1Beyblades.length === 3 && (
+                        {!p1Order && player1Beyblades.length >= 3 && (
                           <DeckOrderPicker title={`${p1Name} — ordem`} beyblades={player1Beyblades} color={P1_COLOR} onConfirm={(o) => saveDeckOrder(player1.id, o)} />
                         )}
-                        {!p2Order && player2Beyblades.length === 3 && (
+                        {!p2Order && player2Beyblades.length >= 3 && (
                           <DeckOrderPicker title={`${p2Name} — ordem`} beyblades={player2Beyblades} color={P2_COLOR} onConfirm={(o) => saveDeckOrder(player2.id, o)} />
                         )}
-                        {(player1Beyblades.length !== 3 || player2Beyblades.length !== 3) && (
+                        {(player1Beyblades.length < 3 || player2Beyblades.length < 3) && (
                           <div className="text-xs text-yellow-500 bg-yellow-900/20 border border-yellow-700/30 rounded-lg px-3 py-2">
-                            Algum jogador tem deck incompleto (precisa de 3 beyblades cadastradas).
+                            Algum jogador tem menos de 3 beyblades cadastradas (o deck 3on3 precisa de 3).
                           </div>
                         )}
                       </div>

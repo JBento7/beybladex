@@ -96,7 +96,8 @@ export default function PlayerDeckOrder({
     }
   }
 
-  if (beyblades.length !== 3) return null;
+  // Need at least 3 beys; players with more pick which 3 (in the picker).
+  if (beyblades.length < 3) return null;
 
   return (
     <>

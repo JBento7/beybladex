@@ -33,11 +33,12 @@ export default function DeckOrderPicker({
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const beyMap = Object.fromEntries(beyblades.map((b) => [b.id, b]));
-  const complete = selected.length === beyblades.length;
+  // A deck is always 3 beys; players with more registered beys pick which 3.
+  const complete = selected.length === 3;
 
   function tap(id: string) {
     if (selected.includes(id)) setSelected(selected.filter((s) => s !== id));
-    else setSelected([...selected, id]);
+    else if (selected.length < 3) setSelected([...selected, id]);
   }
 
   return (
