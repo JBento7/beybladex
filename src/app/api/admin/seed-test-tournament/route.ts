@@ -5,21 +5,51 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
-// Admin-only: create a ready-to-test 2-day tournament (Dia 1 Suíço · Dia 2
-// Mata-mata) with 8 test participants, so the organizer can start it and watch
-// the Swiss → automatic knockout flow. Marked isTest so it shows under testes.
-// Visit /api/admin/seed-test-tournament while logged in as an ORGANIZER.
-export async function GET() {
+// Admin-only seed for a ready-to-test tournament with test participants that
+// already have registered beys and a selected deck — so the bey selection and
+// the telão can be validated end to end. ORGANIZER only.
+//
+// Query params (all optional):
+//   official=1   → official tournament (deck comes from each player's selection)
+//   deck=3on3    → 3-on-3 (default solo)
+//   players=8    → number of test participants (default 8)
+//   multiday=1   → 2-day Suíço (Dia 1 Suíço · Dia 2 Mata-mata)
+// Example: /api/admin/seed-test-tournament?official=1&deck=3on3
+export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ORGANIZER") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
 
-  try {
-    const N = 8;
-    const qualifiers = 4; // top 4 advance to the knockout
+  const url = new URL(req.url);
+  const official = url.searchParams.get("official") === "1";
+  const is3on3 = url.searchParams.get("deck") === "3on3";
+  const multiDay = url.searchParams.get("multiday") === "1";
+  const N = Math.max(4, Math.min(16, parseInt(url.searchParams.get("players") || "8") || 8));
+  const deckSize = is3on3 ? 3 : 1;
+  const qualifiers = 4;
 
-    // Two consecutive days from today.
+  try {
+    // Pull real BeyParts so the test beys have valid parts (and images when the
+    // catalog has them). Pad with synthetic names if the catalog is small.
+    async function names(category: string, prefix: string): Promise<string[]> {
+      let list: { name: string }[] = [];
+      try {
+        list = await prisma.beyPart.findMany({
+          where: { category: { in: [category] as never } },
+          orderBy: [{ imageUrl: "desc" }, { name: "asc" }],
+          select: { name: true },
+          take: 12,
+        });
+      } catch { /* table may be missing */ }
+      const out = list.map((p) => p.name);
+      while (out.length < 4) out.push(`${prefix} ${out.length + 1}`);
+      return out;
+    }
+    const [blades, ratchets, bits] = await Promise.all([
+      names("BLADE", "Blade"), names("RATCHET", "Ratchet"), names("BIT", "Bit"),
+    ]);
+
     const day1 = new Date();
     day1.setHours(10, 0, 0, 0);
     const day2 = new Date(day1);
@@ -27,63 +57,83 @@ export async function GET() {
 
     const tournament = await prisma.tournament.create({
       data: {
-        name: `TESTE · Suíço 2 dias (${day1.toLocaleDateString("pt-BR")})`,
-        description: "Torneio de teste gerado automaticamente: Dia 1 fase suíça, Dia 2 mata-mata dos 4 classificados.",
+        name: `TESTE · ${official ? "Oficial" : "BeyEncontro"} ${is3on3 ? "3on3" : "Solo"} (${day1.toLocaleDateString("pt-BR")})`,
+        description: "Torneio de teste gerado automaticamente para validar seleção de bey e telão.",
         format: "ROUND_ROBIN",
-        deckType: "SOLO",
+        deckType: is3on3 ? "THREE_ON_THREE" : "SOLO",
         organizerId: session.user.id,
         status: "REGISTRATION",
         arenas: 1,
-        isOfficial: false,
+        isOfficial: official,
         isTest: true,
-        setsToWin: 1, // Dia 1 (Suíço): set único
+        setsToWin: multiDay ? 1 : 2,
         pointsToWinSet: 4,
         qualifiers,
-        isMultiDay: true,
+        isMultiDay: multiDay,
         startDate: day1,
-        day2Date: day2,
-        day2SetsToWin: 2, // Dia 2 (Mata-mata): melhor de 3
-        day2PointsToWinSet: 4,
+        day2Date: multiDay ? day2 : null,
+        day2SetsToWin: multiDay ? 2 : null,
+        day2PointsToWinSet: multiDay ? 4 : null,
       },
     });
 
-    // Reuse test users by email (idempotent) so repeated seeds don't pile up users.
     const hash = await bcrypt.hash("teste123", 10);
-    const participantIds: string[] = [];
     for (let i = 1; i <= N; i++) {
       const email = `teste.blader${i}@teste.lbl`;
       const user = await prisma.user.upsert({
         where: { email },
         update: {},
         create: {
-          name: `Teste Blader ${i}`,
-          bladerName: `Blader ${i}`,
-          email,
-          password: hash,
-          role: "PARTICIPANT",
-          isGuest: true, // hidden from community/player lists
+          name: `Teste Blader ${i}`, bladerName: `Blader ${i}`,
+          email, password: hash, role: "PARTICIPANT", isGuest: true,
         },
       });
-      participantIds.push(user.id);
-    }
 
-    await prisma.tournamentParticipant.createMany({
-      data: participantIds.map((userId) => ({
-        tournamentId: tournament.id,
-        userId,
-        approved: true,
-        hasPaid: true,
-      })),
-      skipDuplicates: true,
-    });
+      // Ensure the user has `deckSize` test beys (distinct parts within the deck).
+      const existing = await prisma.beyblade.findMany({
+        where: { userId: user.id, name: { startsWith: "TB " } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
+      const beyIds = existing.map((b) => b.id);
+      for (let j = beyIds.length; j < deckSize; j++) {
+        const bl = blades[(i + j) % blades.length];
+        const created = await prisma.beyblade.create({
+          data: {
+            userId: user.id,
+            name: `TB ${bl} ${j + 1}`,
+            beyLine: "BX",
+            blade: bl,
+            ratchet: ratchets[(i + j) % ratchets.length],
+            bit: bits[(i + j) % bits.length],
+          },
+          select: { id: true },
+        });
+        beyIds.push(created.id);
+      }
+      const deck = beyIds.slice(0, deckSize);
+
+      await prisma.tournamentParticipant.upsert({
+        where: { tournamentId_userId: { tournamentId: tournament.id, userId: user.id } },
+        update: {},
+        create: {
+          tournamentId: tournament.id,
+          userId: user.id,
+          approved: true,
+          hasPaid: true,
+          beyblade1: deck[0] ?? null,
+          beyblade2: deck[1] ?? null,
+          beyblade3: deck[2] ?? null,
+        },
+      });
+    }
 
     return NextResponse.json({
       ok: true,
       tournamentId: tournament.id,
       link: `/tournaments/${tournament.id}`,
-      participants: N,
-      qualifiers,
-      message: "Torneio de teste criado. Abra o link, clique em Iniciar Torneio e jogue as partidas para ver o suíço virar mata-mata.",
+      official, deckType: is3on3 ? "3on3" : "solo", players: N, multiDay,
+      message: "Torneio de teste criado com beys e decks selecionados. Abra o link, inicie e acompanhe o telão.",
     });
   } catch (err) {
     console.error("[seed-test-tournament]", err);
