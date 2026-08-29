@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { generateSwissRound, advanceSwissTournament, swissRoundCount, recalculateStandings } from "@/lib/tournament-engine";
 
 // Admin-only seed for a ready-to-test tournament with test participants that
 // already have registered beys and a selected deck — so the bey selection and
@@ -25,6 +26,7 @@ export async function GET(req: Request) {
   const official = url.searchParams.get("official") === "1";
   const is3on3 = url.searchParams.get("deck") === "3on3";
   const multiDay = url.searchParams.get("multiday") === "1";
+  const autoplay = url.searchParams.get("autoplay") === "1";
   const N = Math.max(4, Math.min(16, parseInt(url.searchParams.get("players") || "8") || 8));
   const deckSize = is3on3 ? 3 : 1;
   const qualifiers = 4;
@@ -78,6 +80,7 @@ export async function GET(req: Request) {
     });
 
     const hash = await bcrypt.hash("teste123", 10);
+    const participantIds: string[] = [];
     for (let i = 1; i <= N; i++) {
       const email = `teste.blader${i}@teste.lbl`;
       const user = await prisma.user.upsert({
@@ -126,14 +129,45 @@ export async function GET(req: Request) {
           beyblade3: deck[2] ?? null,
         },
       });
+      participantIds.push(user.id);
+    }
+
+    // Autoplay: simulate the whole Swiss phase (random winners) so the bracket
+    // is generated and the organizer lands right at the knockout.
+    let autoplayed = false;
+    if (autoplay) {
+      await prisma.tournament.update({ where: { id: tournament.id }, data: { status: "IN_PROGRESS" } });
+      await generateSwissRound(tournament.id, 1);
+      const swissRounds = swissRoundCount(participantIds.length);
+      for (let round = 1; round <= swissRounds; round++) {
+        const matches = await prisma.match.findMany({ where: { tournamentId: tournament.id, round } });
+        for (const m of matches) {
+          if (m.status === "FINISHED") continue;
+          const winnerId = m.player1Id === m.player2Id || Math.random() < 0.5 ? m.player1Id : m.player2Id;
+          const loserWon = Math.floor(Math.random() * 4); // 0..3 points for the loser
+          await prisma.matchSet.create({
+            data: {
+              matchId: m.id, setNumber: 1, status: "FINISHED", winnerId,
+              player1Points: winnerId === m.player1Id ? 4 : loserWon,
+              player2Points: winnerId === m.player2Id ? 4 : loserWon,
+            },
+          });
+          await prisma.match.update({ where: { id: m.id }, data: { winnerId, status: "FINISHED" } });
+        }
+        for (const uid of participantIds) await recalculateStandings(tournament.id, uid);
+        await advanceSwissTournament(tournament.id, round);
+      }
+      autoplayed = true;
     }
 
     return NextResponse.json({
       ok: true,
       tournamentId: tournament.id,
       link: `/tournaments/${tournament.id}`,
-      official, deckType: is3on3 ? "3on3" : "solo", players: N, multiDay,
-      message: "Torneio de teste criado com beys e decks selecionados. Abra o link, inicie e acompanhe o telão.",
+      official, deckType: is3on3 ? "3on3" : "solo", players: N, multiDay, autoplayed,
+      message: autoplayed
+        ? "Torneio de teste criado e fase suíça simulada. Abra o link: a classificação e a árvore do mata-mata já estão prontas."
+        : "Torneio de teste criado com beys e decks selecionados. Abra o link, inicie e acompanhe o telão.",
     });
   } catch (err) {
     console.error("[seed-test-tournament]", err);
