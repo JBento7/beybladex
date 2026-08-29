@@ -256,8 +256,16 @@ export async function GET(req: NextRequest) {
         select: { userId: true, beybladeId: true },
       });
       const latestBeyId = (userId: string) => pts.find((p) => p.userId === userId)?.beybladeId ?? null;
+      // The bey each player registered FOR this tournament (solo = beyblade1).
+      const parts = await prisma.tournamentParticipant.findMany({
+        where: { tournamentId: match.tournamentId, userId: { in: [match.player1Id, match.player2Id] } },
+        select: { userId: true, beyblade1: true },
+      });
+      const registeredBeyId = (userId: string) => parts.find((p) => p.userId === userId)?.beyblade1 ?? null;
       async function soloBey(userId: string) {
-        const chosenId = latestBeyId(userId);
+        // Priority: the bey scored with → the bey selected for the tournament →
+        // the player's first registered bey.
+        const chosenId = latestBeyId(userId) || registeredBeyId(userId);
         if (chosenId) {
           const b = await prisma.beyblade.findUnique({ where: { id: chosenId }, select: beySelect });
           if (b) return b;
