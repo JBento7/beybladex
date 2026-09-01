@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureBeyParts } from "@/lib/ensureBeyParts";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -50,6 +51,9 @@ export async function POST(req: NextRequest) {
       overBlade: overBlade?.trim() || null,
     },
   });
+
+  // Auto-register any new parts into the BeyParts catalog (best-effort).
+  await ensureBeyParts(beyLine, { blade, ratchet, bit, lockChip, metalBlade, assistBlade, overBlade });
 
   return NextResponse.json(beyblade, { status: 201 });
 }

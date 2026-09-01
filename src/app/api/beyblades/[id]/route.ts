@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureBeyParts } from "@/lib/ensureBeyParts";
 
 export async function PATCH(
   req: NextRequest,
@@ -48,6 +49,10 @@ export async function PATCH(
     where: { id: params.id },
     data,
   });
+
+  if (name !== undefined) {
+    await ensureBeyParts(beyLine, { blade, ratchet, bit, lockChip, metalBlade, assistBlade, overBlade });
+  }
 
   return NextResponse.json(updated);
 }

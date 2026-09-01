@@ -12,6 +12,7 @@ interface BeyPart {
   category: string;
   name: string;
   fullName: string | null;
+  imageUrl: string | null;
   weight: number | null;
   statAttack: number | null;
   statDefense: number | null;
@@ -628,6 +629,33 @@ export default function BeybladeManager() {
                 options={partsFor("BIT", "BIT")}
                 onChange={(v) => setForm((f) => ({ ...f, bit: v }))}
               />
+
+              {/* Part image preview — what shows on the placar/telão */}
+              {(() => {
+                const sel = getSelectedParts().filter((p): p is BeyPart => !!p);
+                const withImg = sel.filter((p) => !!p.imageUrl);
+                if (sel.length === 0) return null;
+                return (
+                  <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-3">
+                    <p className="text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Imagens no placar</p>
+                    {withImg.length > 0 ? (
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {withImg.map((p) => (
+                          <div key={p.id} className="flex flex-col items-center gap-1">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={p.imageUrl!} alt={p.name} className="w-14 h-14 object-contain" />
+                            <span className="text-[10px] text-gray-500 max-w-[64px] truncate text-center">{p.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-gray-500">
+                        As peças escolhidas ainda não têm imagem cadastrada — o placar mostrará uma bey genérica. Um admin pode adicionar a imagem no BeyParts (a bey será atrelada automaticamente pelo nome).
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Total weight preview */}
               {formWeight.known > 0 && (
