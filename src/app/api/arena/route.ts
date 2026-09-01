@@ -165,12 +165,19 @@ export async function GET(req: NextRequest) {
   const completedSets = sets.filter((s) => s.status === "FINISHED").length;
   const currentSetNum = currentSet?.setNumber ?? completedSets + 1;
 
-  // Resolve the image of a blade part name (from BeyParts), if any.
+  // Resolve the image of a blade part name (from BeyParts), if any. Matching is
+  // lenient: case-insensitive, and by name OR fullName, so a bey auto-links to
+  // its part's image even when the name is written slightly differently.
   async function bladeImage(bladeName: string | null): Promise<string | null> {
     if (!bladeName) return null;
+    const n = bladeName.trim();
     try {
       const part = await prisma.beyPart.findFirst({
-        where: { name: bladeName, category: { in: ["BLADE", "MAIN_BLADE", "OVER_BLADE"] }, imageUrl: { not: null } },
+        where: {
+          category: { in: ["BLADE", "MAIN_BLADE", "OVER_BLADE"] },
+          imageUrl: { not: null },
+          OR: [{ name: { equals: n, mode: "insensitive" } }, { fullName: { equals: n, mode: "insensitive" } }],
+        },
         select: { imageUrl: true },
       });
       return part?.imageUrl ?? null;
@@ -178,11 +185,19 @@ export async function GET(req: NextRequest) {
       return null;
     }
   }
-  // Image of any BeyPart by category + name.
+  // Image of any BeyPart by category + name (lenient match).
   async function partImage(category: string, name: string | null): Promise<string | null> {
     if (!name) return null;
+    const n = name.trim();
     try {
-      const part = await prisma.beyPart.findFirst({ where: { name, category: { in: [category] as never }, imageUrl: { not: null } }, select: { imageUrl: true } });
+      const part = await prisma.beyPart.findFirst({
+        where: {
+          category: { in: [category] as never },
+          imageUrl: { not: null },
+          OR: [{ name: { equals: n, mode: "insensitive" } }, { fullName: { equals: n, mode: "insensitive" } }],
+        },
+        select: { imageUrl: true },
+      });
       return part?.imageUrl ?? null;
     } catch {
       return null;

@@ -122,19 +122,25 @@ export default function QuickMatch() {
     }).catch(() => {});
   }, []);
 
-  // Blade name -> image, from the BeyParts catalog (for the scoreboard bey art).
+  // Blade name -> image (lenient: case-insensitive, name or fullName).
   const bladeImg = useMemo(() => {
     const m = new Map<string, string>();
     for (const p of parts) {
-      if ((p.category === "BLADE" || p.category === "MAIN_BLADE") && p.imageUrl) m.set(p.name, p.imageUrl);
+      if ((p.category === "BLADE" || p.category === "MAIN_BLADE" || p.category === "OVER_BLADE") && p.imageUrl) {
+        m.set(p.name.trim().toLowerCase(), p.imageUrl);
+        if (p.fullName) m.set(p.fullName.trim().toLowerCase(), p.imageUrl);
+      }
     }
-    return (name?: string | null) => (name ? m.get(name) ?? null : null);
+    return (name?: string | null) => (name ? m.get(name.trim().toLowerCase()) ?? null : null);
   }, [parts]);
   // Any part image by category + name (for CX lock chip / metal blade / assist blade).
   const partImg = useMemo(() => {
     const m = new Map<string, string>();
-    for (const p of parts) if (p.imageUrl) m.set(`${p.category}:${p.name}`, p.imageUrl);
-    return (cat: string, name?: string | null) => (name ? m.get(`${cat}:${name}`) ?? null : null);
+    for (const p of parts) if (p.imageUrl) {
+      m.set(`${p.category}:${p.name.trim().toLowerCase()}`, p.imageUrl);
+      if (p.fullName) m.set(`${p.category}:${p.fullName.trim().toLowerCase()}`, p.imageUrl);
+    }
+    return (cat: string, name?: string | null) => (name ? m.get(`${cat}:${name.trim().toLowerCase()}`) ?? null : null);
   }, [parts]);
 
   const [layout, setLayout] = useState<Layout | null>(null);
