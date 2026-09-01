@@ -7,6 +7,7 @@ import Link from "next/link";
 import StartTournamentButton from "./StartTournamentButton";
 import FinishTournamentButton from "./FinishTournamentButton";
 import ResetTournamentButton from "./ResetTournamentButton";
+import AutoplaySwissButton from "./AutoplaySwissButton";
 import ScoreModal from "./ScoreModal";
 import PlayerDeckOrder from "./PlayerDeckOrder";
 import ClientJoinButton from "./ClientJoinButton";
@@ -775,6 +776,9 @@ export default async function TournamentDetailPage({
               )}
               {canJudge && tournament.status === "IN_PROGRESS" && (
                 <FinishTournamentButton tournamentId={tournament.id} isOfficial={tournament.isOfficial} />
+              )}
+              {isAdminUser && tournament.isTest && tournament.format === "ROUND_ROBIN" && tournament.status !== "FINISHED" && (
+                <AutoplaySwissButton tournamentId={tournament.id} />
               )}
               {isAdminUser && tournament.isTest && tournament.status !== "REGISTRATION" && (
                 <ResetTournamentButton tournamentId={tournament.id} />
