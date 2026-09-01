@@ -27,6 +27,9 @@ export async function GET(req: Request) {
   const is3on3 = url.searchParams.get("deck") === "3on3";
   const multiDay = url.searchParams.get("multiday") === "1";
   const autoplay = url.searchParams.get("autoplay") === "1";
+  // real=1 → use registered bladers (with enough beys) and random decks, instead
+  // of synthetic test users.
+  const real = url.searchParams.get("real") === "1";
   const N = Math.max(4, Math.min(16, parseInt(url.searchParams.get("players") || "8") || 8));
   const deckSize = is3on3 ? 3 : 1;
   const qualifiers = 4;
@@ -81,6 +84,35 @@ export async function GET(req: Request) {
 
     const hash = await bcrypt.hash("teste123", 10);
     const participantIds: string[] = [];
+    const shuffle = <T,>(a: T[]): T[] => { const r = [...a]; for (let k = r.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [r[k], r[j]] = [r[j], r[k]]; } return r; };
+
+    if (real) {
+      // Registered bladers (non-guest, non-arena) with at least `deckSize` beys.
+      const candidates = await prisma.user.findMany({
+        where: {
+          isGuest: false, deleted: false,
+          email: { not: { endsWith: "@lbl.arena" } },
+          beyblades: { some: { hiddenFromCommunity: false } },
+        },
+        select: { id: true, beyblades: { where: { hiddenFromCommunity: false }, select: { id: true } } },
+      });
+      const eligible = shuffle(candidates.filter((u) => u.beyblades.length >= deckSize)).slice(0, N);
+      if (eligible.length < 2) {
+        return NextResponse.json({ error: `Poucos bladers com ${deckSize}+ beys cadastradas (encontrados ${eligible.length}).` }, { status: 400 });
+      }
+      for (const u of eligible) {
+        const deck = shuffle(u.beyblades.map((b) => b.id)).slice(0, deckSize);
+        await prisma.tournamentParticipant.upsert({
+          where: { tournamentId_userId: { tournamentId: tournament.id, userId: u.id } },
+          update: {},
+          create: {
+            tournamentId: tournament.id, userId: u.id, approved: true, hasPaid: true,
+            beyblade1: deck[0] ?? null, beyblade2: deck[1] ?? null, beyblade3: deck[2] ?? null,
+          },
+        });
+        participantIds.push(u.id);
+      }
+    } else
     for (let i = 1; i <= N; i++) {
       const email = `teste.blader${i}@teste.lbl`;
       const user = await prisma.user.upsert({
@@ -164,7 +196,7 @@ export async function GET(req: Request) {
       ok: true,
       tournamentId: tournament.id,
       link: `/tournaments/${tournament.id}`,
-      official, deckType: is3on3 ? "3on3" : "solo", players: N, multiDay, autoplayed,
+      official, deckType: is3on3 ? "3on3" : "solo", players: participantIds.length, real, multiDay, autoplayed,
       message: autoplayed
         ? "Torneio de teste criado e fase suíça simulada. Abra o link: a classificação e a árvore do mata-mata já estão prontas."
         : "Torneio de teste criado com beys e decks selecionados. Abra o link, inicie e acompanhe o telão.",
