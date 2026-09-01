@@ -364,6 +364,7 @@ export async function GET(req: NextRequest) {
   // from their latest deck order; in solo it's their single bey.
   type DeckSlot = { img: string | null; pieces: BeyPieces };
   const emptySlot: DeckSlot = { img: null, pieces: null };
+  const BEY_FALLBACK = "/bey-removebg-preview.png"; // generic bey when art is missing
   const matchId = match.id;
   async function deckImages(userId: string): Promise<DeckSlot[]> {
     try {
@@ -377,7 +378,9 @@ export async function GET(req: NextRequest) {
       return Promise.all(ids.map(async (id) => {
         const b = beys.find((x) => x.id === id) ?? null;
         const [img, pieces] = await Promise.all([bladeImage(mainBladeName(b)), beyPieces(b)]);
-        return { img, pieces };
+        const hasPieces = !!(pieces && (pieces.lock || pieces.metal || pieces.assist));
+        // Every deck bey shows something: real art, CX pieces, or a fallback.
+        return { img: hasPieces ? null : (img || (b ? BEY_FALLBACK : null)), pieces };
       }));
     } catch {
       return [];
@@ -391,8 +394,12 @@ export async function GET(req: NextRequest) {
       [p1Deck, p2Deck] = await Promise.all([deckImages(match.player1Id), deckImages(match.player2Id)]);
     } else {
       // Solo: the single bey goes in the middle deck slot (centered).
-      p1Deck = p1BeyImg || p1BeyPieces ? [emptySlot, { img: p1BeyImg, pieces: p1BeyPieces }, emptySlot] : [];
-      p2Deck = p2BeyImg || p2BeyPieces ? [emptySlot, { img: p2BeyImg, pieces: p2BeyPieces }, emptySlot] : [];
+      const soloSlot = (img: string | null, pieces: BeyPieces): DeckSlot => {
+        const hasPieces = !!(pieces && (pieces.lock || pieces.metal || pieces.assist));
+        return { img: hasPieces ? null : (img || BEY_FALLBACK), pieces };
+      };
+      p1Deck = [emptySlot, soloSlot(p1BeyImg, p1BeyPieces), emptySlot];
+      p2Deck = [emptySlot, soloSlot(p2BeyImg, p2BeyPieces), emptySlot];
     }
   }
 

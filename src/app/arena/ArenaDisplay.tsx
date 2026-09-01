@@ -8,9 +8,15 @@ import FontLoader from "@/components/FontLoader";
 // Fields disabled in the layout editor are hidden from the placar via this ctx.
 const HiddenCtx = createContext<Set<string>>(new Set());
 
-// Hide a broken image (bad/missing BeyParts URL) instead of showing the browser
-// broken-image icon.
+// Hide a broken image instead of the browser broken-image icon (for photos).
 const hideImg = (e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.visibility = "hidden"; };
+// For bey art: swap a broken image to a generic bey; if that also fails, hide it.
+const fallbackBey = (e: React.SyntheticEvent<HTMLImageElement>) => {
+  const el = e.currentTarget;
+  if (el.dataset.fb) { el.style.visibility = "hidden"; return; }
+  el.dataset.fb = "1";
+  el.src = "/bey-removebg-preview.png";
+};
 
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
@@ -467,16 +473,16 @@ function WinnerScreen({ match, winnerSide, layout, bg }: { match: Match; winnerS
             return (
               <div key={k} style={{ position: "absolute", left: `${d.x}%`, top: `${d.y}%`, width: `${d.w}%`, height: `${d.h}%` }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {slot.pieces.assist && <img src={slot.pieces.assist} alt="" onError={hideImg} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 1 }} />}
+                {slot.pieces.assist && <img src={slot.pieces.assist} alt="" onError={fallbackBey} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 1 }} />}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {slot.pieces.metal && <img src={slot.pieces.metal} alt="" onError={hideImg} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 2 }} />}
+                {slot.pieces.metal && <img src={slot.pieces.metal} alt="" onError={fallbackBey} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 2 }} />}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {slot.pieces.lock && <img src={slot.pieces.lock} alt="" onError={hideImg} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 3 }} />}
+                {slot.pieces.lock && <img src={slot.pieces.lock} alt="" onError={fallbackBey} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 3 }} />}
               </div>
             );
           }
           // eslint-disable-next-line @next/next/no-img-element
-          return slot.img ? <img key={k} src={slot.img} alt="" onError={hideImg} style={box} /> : null;
+          return slot.img ? <img key={k} src={slot.img} alt="" onError={fallbackBey} style={box} /> : null;
         })}
 
         {/* Finishes made by the winner (per set) — inside the box */}
@@ -656,7 +662,7 @@ function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src
     <img
       src={src}
       alt=""
-      onError={hideImg}
+      onError={cover ? hideImg : fallbackBey}
       style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w}%`, height: `${f.h}%`, objectFit: cover ? "cover" : "contain", borderRadius: cover ? "1cqw" : undefined }}
     />
   );
