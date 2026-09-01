@@ -55,9 +55,10 @@ type Match = {
   p2FinishesBySet: { setNumber: number; counts: FinishCounts }[];
   p1TotalPoints: number;
   p2TotalPoints: number;
-  p1Deck: (string | null)[];
-  p2Deck: (string | null)[];
+  p1Deck: DeckSlot[];
+  p2Deck: DeckSlot[];
 };
+type DeckSlot = { img: string | null; pieces: BeyPieces };
 
 type ArenaData = {
   arena: number;
@@ -452,13 +453,26 @@ function WinnerScreen({ match, winnerSide, layout, bg }: { match: Match; winnerS
         {/* PLACAR — points scored */}
         <Cell cx={sw.x} cy={sw.y} fs={sw.fs ?? 5.5} color={GOLD} ff={sw.ff}>{winPts}</Cell>
 
-        {/* DECK — winner's beys */}
+        {/* DECK — winner's beys. CX beys stack 3 pieces (assist/metal/lock). */}
         {deckKeys.map((k, i) => {
           const d = wf(k);
-          return deck[i] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={k} src={deck[i] as string} alt="" style={{ position: "absolute", left: `${d.x}%`, top: `${d.y}%`, width: `${d.w}%`, height: `${d.h}%`, objectFit: "contain" }} />
-          ) : null;
+          const slot = deck[i];
+          if (!slot) return null;
+          const box: React.CSSProperties = { position: "absolute", left: `${d.x}%`, top: `${d.y}%`, width: `${d.w}%`, height: `${d.h}%`, objectFit: "contain" };
+          if (slot.pieces && (slot.pieces.lock || slot.pieces.metal || slot.pieces.assist)) {
+            return (
+              <div key={k} style={{ position: "absolute", left: `${d.x}%`, top: `${d.y}%`, width: `${d.w}%`, height: `${d.h}%` }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {slot.pieces.assist && <img src={slot.pieces.assist} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 1 }} />}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {slot.pieces.metal && <img src={slot.pieces.metal} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 2 }} />}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {slot.pieces.lock && <img src={slot.pieces.lock} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 3 }} />}
+              </div>
+            );
+          }
+          // eslint-disable-next-line @next/next/no-img-element
+          return slot.img ? <img key={k} src={slot.img} alt="" style={box} /> : null;
         })}
 
         {/* Finishes made by the winner (per set) — inside the box */}

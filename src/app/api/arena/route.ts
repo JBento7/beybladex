@@ -359,10 +359,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Winner screen deck: each player's beyblades (blade images). In 3-on-3 that's
-  // the 3 beys from their latest deck order; in solo it's their single bey.
+  // Winner screen deck: each player's beyblades. Each slot carries either a
+  // single blade image or the 3 stacked CX pieces. In 3-on-3 that's the 3 beys
+  // from their latest deck order; in solo it's their single bey.
+  type DeckSlot = { img: string | null; pieces: BeyPieces };
+  const emptySlot: DeckSlot = { img: null, pieces: null };
   const matchId = match.id;
-  async function deckImages(userId: string): Promise<(string | null)[]> {
+  async function deckImages(userId: string): Promise<DeckSlot[]> {
     try {
       const order = await prisma.matchDeckOrder.findFirst({
         where: { matchId, userId },
@@ -371,21 +374,25 @@ export async function GET(req: NextRequest) {
       if (!order) return [];
       const ids = [order.bey1Id, order.bey2Id, order.bey3Id];
       const beys = await prisma.beyblade.findMany({ where: { id: { in: ids } }, select: beySelect });
-      return Promise.all(ids.map((id) => bladeImage(mainBladeName(beys.find((b) => b.id === id) ?? null))));
+      return Promise.all(ids.map(async (id) => {
+        const b = beys.find((x) => x.id === id) ?? null;
+        const [img, pieces] = await Promise.all([bladeImage(mainBladeName(b)), beyPieces(b)]);
+        return { img, pieces };
+      }));
     } catch {
       return [];
     }
   }
-  let p1Deck: (string | null)[] = [];
-  let p2Deck: (string | null)[] = [];
+  let p1Deck: DeckSlot[] = [];
+  let p2Deck: DeckSlot[] = [];
   // Only needed for the winner screen — skip during live/pending to save queries.
   if (phase === "finished") {
     if (isDeck) {
       [p1Deck, p2Deck] = await Promise.all([deckImages(match.player1Id), deckImages(match.player2Id)]);
     } else {
       // Solo: the single bey goes in the middle deck slot (centered).
-      p1Deck = p1BeyImg ? [null, p1BeyImg, null] : [];
-      p2Deck = p2BeyImg ? [null, p2BeyImg, null] : [];
+      p1Deck = p1BeyImg || p1BeyPieces ? [emptySlot, { img: p1BeyImg, pieces: p1BeyPieces }, emptySlot] : [];
+      p2Deck = p2BeyImg || p2BeyPieces ? [emptySlot, { img: p2BeyImg, pieces: p2BeyPieces }, emptySlot] : [];
     }
   }
 
