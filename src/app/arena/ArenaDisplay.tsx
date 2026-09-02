@@ -142,12 +142,25 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     }
   }, [previewParam]);
 
+  // Track the latest status so the poll can adapt its cadence.
+  const statusRef = useRef<string>("idle");
+  useEffect(() => { statusRef.current = data?.status ?? "idle"; }, [data]);
+
   useEffect(() => {
     if (arena == null || !started) return;
-    load();
-    // 1.5s keeps the countdown snappy (7s window) while easing DB pool load.
-    const t = setInterval(load, 1500);
-    return () => clearInterval(t);
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      await load();
+      if (!active) return;
+      // Poll fast while a match is pending/live so the countdown video starts
+      // almost immediately after the judge presses Iniciar; ease off when idle.
+      const st = statusRef.current;
+      const delay = st === "pending" || st === "live" ? 600 : 2000;
+      timer = setTimeout(tick, delay);
+    };
+    tick();
+    return () => { active = false; if (timer) clearTimeout(timer); };
   }, [arena, started, load]);
 
   // Play the countdown video (with its own audio) when triggered.
