@@ -142,26 +142,34 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     }
   }, [previewParam]);
 
-  // Track the latest status so the poll can adapt its cadence.
-  const statusRef = useRef<string>("idle");
-  useEffect(() => { statusRef.current = data?.status ?? "idle"; }, [data]);
+  // Full scoreboard poll (heavy) — steady 1.5s.
+  useEffect(() => {
+    if (arena == null || !started) return;
+    load();
+    const t = setInterval(load, 1500);
+    return () => clearInterval(t);
+  }, [arena, started, load]);
 
+  // Lightweight countdown poll (single cheap query) — fast so the video starts
+  // almost immediately after the judge presses Iniciar, without the heavy poll.
   useEffect(() => {
     if (arena == null || !started) return;
     let active = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = async () => {
-      await load();
-      if (!active) return;
-      // Poll fast while a match is pending/live so the countdown video starts
-      // almost immediately after the judge presses Iniciar; ease off when idle.
-      const st = statusRef.current;
-      const delay = st === "pending" || st === "live" ? 600 : 2000;
-      timer = setTimeout(tick, delay);
+      try {
+        const url = previewParam ? `/api/arena/tick?n=${previewParam}` : "/api/arena/tick";
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const d: { countdown?: { key: string; elapsedMs: number } | null } = await res.json();
+        if (active && d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
+          playedKeyRef.current = d.countdown.key;
+          setCountdownOn(true);
+        }
+      } catch { /* ignore */ }
     };
-    tick();
-    return () => { active = false; if (timer) clearTimeout(timer); };
-  }, [arena, started, load]);
+    const t = setInterval(tick, 500);
+    return () => { active = false; clearInterval(t); };
+  }, [arena, started, previewParam]);
 
   // Play the countdown video (with its own audio) when triggered.
   useEffect(() => {
