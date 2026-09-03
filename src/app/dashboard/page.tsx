@@ -9,6 +9,7 @@ import Navbar from "@/components/Navbar";
 import NewsPopup from "./NewsPopup";
 import Link from "next/link";
 import { FINISH_TYPE_LABELS } from "@/lib/scoring";
+import { tierFor } from "@/lib/tiers";
 import type { FinishType } from "@prisma/client";
 
 
@@ -101,8 +102,24 @@ export default async function DashboardPage() {
 
   const currentUser = await prisma.user.findUnique({
     where: { id: userId },
-    select: { bladerName: true },
+    select: { bladerName: true, avatarUrl: true },
   });
+
+  // Official career wins (ranking metric) and my position in the full ranking.
+  const myRankingRow = ranking.find((r: { userId: string }) => r.userId === userId);
+  const myOfficialWins = myRankingRow?._sum.wins ?? 0;
+  const myOfficialLosses = myRankingRow?._sum.losses ?? 0;
+  const myBattlePoints = battlePointsByUser.get(userId) ?? 0;
+  // Rank = position when sorting everyone by official wins → battle points.
+  const fullSorted = ranking
+    .map((r: { userId: string; _sum: { wins: number | null } }) => ({ userId: r.userId, wins: r._sum.wins ?? 0, bp: battlePointsByUser.get(r.userId) ?? 0 }))
+    .sort((a, b) => b.wins - a.wins || b.bp - a.bp);
+  const myRankIdx = fullSorted.findIndex((r) => r.userId === userId);
+  const myRank = myRankIdx >= 0 ? myRankIdx + 1 : null;
+  const rankedTotal = fullSorted.length;
+  const officialGames = myOfficialWins + myOfficialLosses;
+  const winRate = officialGames > 0 ? Math.round((myOfficialWins / officialGames) * 100) : 0;
+  const { tier, next, progress, toNext } = tierFor(myOfficialWins);
 
   const rankingUserIds = ranking.map((r: { userId: string }) => r.userId);
   const rankingUsers = await prisma.user.findMany({
@@ -147,6 +164,56 @@ export default async function DashboardPage() {
             {currentUser?.bladerName && <span className="text-gray-500 text-xl font-normal ml-2">({session.user.name})</span>}!
           </h1>
           <p className="text-gray-400 mt-1">Acompanhe suas partidas, torneios e suba no ranking.</p>
+        </div>
+
+        {/* Hero player card — tier, rank position, win rate (LBB-style) */}
+        <div className="mb-6 bg-gradient-to-br from-[#1a1a1a] to-[#141414] border border-[#2a2a2a] rounded-2xl p-5 sm:p-6">
+          <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
+            {/* Avatar + tier badge */}
+            <div className="relative flex-shrink-0">
+              <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 flex items-center justify-center bg-[#252525]" style={{ borderColor: tier.color }}>
+                {currentUser?.avatarUrl
+                  ? <img src={currentUser.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  : <img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain" />}
+              </div>
+              <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: tier.color, color: "#111" }}>
+                {tier.icon} {tier.name}
+              </span>
+            </div>
+
+            {/* KPIs */}
+            <div className="flex-1 min-w-[240px] grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <div className="text-2xl font-black text-[#f0a500] leading-none">{myRank ? `#${myRank}` : "—"}</div>
+                <div className="text-[11px] text-gray-500 mt-1">Ranking oficial{rankedTotal ? ` / ${rankedTotal}` : ""}</div>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-green-400 leading-none">{winRate}%</div>
+                <div className="text-[11px] text-gray-500 mt-1">Aproveitamento</div>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-white leading-none">{myOfficialWins}<span className="text-sm text-gray-500 font-bold">V</span> {myOfficialLosses}<span className="text-sm text-gray-500 font-bold">D</span></div>
+                <div className="text-[11px] text-gray-500 mt-1">Oficiais</div>
+              </div>
+              <div>
+                <div className="text-2xl font-black text-amber-400 leading-none">{myBattlePoints}</div>
+                <div className="text-[11px] text-gray-500 mt-1">Pontos de batalha</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tier progress */}
+          {next && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-[11px] text-gray-400 mb-1">
+                <span style={{ color: tier.color }}>{tier.icon} {tier.name}</span>
+                <span>{toNext > 0 ? `Faltam ${toNext} vitória${toNext > 1 ? "s" : ""} para ` : "Pronto para "}<span style={{ color: next.color }}>{next.icon} {next.name}</span></span>
+              </div>
+              <div className="h-2 rounded-full bg-[#111] overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${Math.round(progress * 100)}%`, background: `linear-gradient(90deg, ${tier.color}, ${next.color})` }} />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid lg:grid-cols-[1fr_300px] gap-6">
