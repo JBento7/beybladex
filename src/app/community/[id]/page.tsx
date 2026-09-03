@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import { TierBadge } from "@/components/TierBadge";
 import Link from "next/link";
 import { FINISH_TYPE_LABELS, FINISH_TYPE_POINTS } from "@/lib/scoring";
 import MyDeckSection from "@/app/profile/MyDeckSection";
@@ -104,6 +105,7 @@ export default async function PlayerProfilePage({
 
   const totalWins = player.participations.reduce((s, p) => s + p.wins, 0);
   const totalLosses = player.participations.reduce((s, p) => s + p.losses, 0);
+  const officialWins = player.participations.filter((p) => p.tournament.isOfficial).reduce((s, p) => s + p.wins, 0);
   const totalPoints = player.participations.reduce((s, p) => s + p.totalPoints, 0);
   const officialPoints = player.participations
     .filter((p) => p.tournament.isOfficial)
@@ -148,6 +150,7 @@ export default async function PlayerProfilePage({
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-1 flex-wrap">
                 <h1 className="text-2xl font-black text-white">{player.bladerName || player.name}</h1>
+                <TierBadge wins={officialWins} size="md" />
                 <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
                   player.role === "ORGANIZER"
                     ? "bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30"

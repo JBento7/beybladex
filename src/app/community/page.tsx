@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import { TierBadge } from "@/components/TierBadge";
 
 export const metadata: Metadata = { title: "Comunidade" };
 import Link from "next/link";
@@ -132,6 +133,7 @@ export default async function CommunityPage() {
                       <span className="font-bold text-white truncate group-hover:text-[#f0a500] transition-colors">
                         {player.bladerName || player.name}
                       </span>
+                      <TierBadge wins={player.officialWins} />
                       {player.role === "ORGANIZER" && (
                         <span className="text-xs bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30 px-1.5 py-0.5 rounded font-semibold flex-shrink-0">
                           ADMIN
