@@ -100,6 +100,31 @@ export default async function DashboardPage() {
     battlePointAgg.map((b: { userId: string; _sum: { points: number | null } }) => [b.userId, b._sum.points ?? 0])
   );
 
+  // My finish-type distribution (which finishes I score most).
+  const finishAgg = await prisma.matchPoint.groupBy({
+    by: ["finishType"],
+    where: { userId },
+    _count: { _all: true },
+    _sum: { points: true },
+  });
+  const finishTotal = finishAgg.reduce((s: number, f: { _count: { _all: number } }) => s + f._count._all, 0);
+  const FINISH_META: Record<string, { color: string }> = {
+    SPIN_FINISH: { color: "#9ca3af" },
+    OVER_FINISH: { color: "#60a5fa" },
+    BURST_FINISH: { color: "#f0a500" },
+    EXTREME_FINISH: { color: "#ef4444" },
+  };
+  const finishRows = finishAgg
+    .map((f: { finishType: string; _count: { _all: number }; _sum: { points: number | null } }) => ({
+      type: f.finishType,
+      label: FINISH_TYPE_LABELS[f.finishType as FinishType] ?? f.finishType,
+      count: f._count._all,
+      points: f._sum.points ?? 0,
+      color: FINISH_META[f.finishType]?.color ?? "#9ca3af",
+      pct: finishTotal > 0 ? Math.round((f._count._all / finishTotal) * 100) : 0,
+    }))
+    .sort((a: { count: number }, b: { count: number }) => b.count - a.count);
+
   const currentUser = await prisma.user.findUnique({
     where: { id: userId },
     select: { bladerName: true, avatarUrl: true },
@@ -317,6 +342,29 @@ export default async function DashboardPage() {
             )}
           </div>
           </div>{/* end inner 2-col grid */}
+
+            {/* Finish-type breakdown */}
+            {finishTotal > 0 && (
+              <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-white">Suas Finalizações</h2>
+                  <span className="text-xs text-gray-500">{finishTotal} no total</span>
+                </div>
+                <div className="space-y-3">
+                  {finishRows.map((f: { type: string; label: string; count: number; points: number; color: string; pct: number }) => (
+                    <div key={f.type}>
+                      <div className="flex items-center justify-between text-xs mb-1">
+                        <span className="font-bold" style={{ color: f.color }}>{f.label}</span>
+                        <span className="text-gray-400">{f.count} · {f.pct}% · {f.points} pts</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-[#111] overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${f.pct}%`, background: f.color }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>{/* end left column */}
 
           {/* Right column — Ranking */}
