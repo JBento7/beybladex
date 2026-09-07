@@ -38,6 +38,7 @@ enum FinishType {
   OVER_FINISH
   BURST_FINISH
   EXTREME_FINISH
+  MISSLAUNCH
 }
 
 enum MatchStatus {

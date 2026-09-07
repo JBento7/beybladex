@@ -5,6 +5,7 @@ export const FINISH_TYPE_POINTS: Record<FinishType, number> = {
   OVER_FINISH: 2,
   BURST_FINISH: 2,
   EXTREME_FINISH: 3,
+  MISSLAUNCH: 1,
 };
 
 export const FINISH_TYPE_LABELS: Record<FinishType, string> = {
@@ -12,6 +13,7 @@ export const FINISH_TYPE_LABELS: Record<FinishType, string> = {
   OVER_FINISH: "Over Finish",
   BURST_FINISH: "Burst Finish",
   EXTREME_FINISH: "Extreme Finish",
+  MISSLAUNCH: "Misslaunch",
 };
 
 export const FINISH_TYPE_DESCRIPTIONS: Record<FinishType, string> = {
@@ -19,4 +21,5 @@ export const FINISH_TYPE_DESCRIPTIONS: Record<FinishType, string> = {
   OVER_FINISH: "Opponent leaves the stadium — 2 points",
   BURST_FINISH: "Opponent's Beyblade bursts — 2 points",
   EXTREME_FINISH: "Extreme burst or ring-out — 3 points",
+  MISSLAUNCH: "Opponent misslaunched — 1 point",
 };

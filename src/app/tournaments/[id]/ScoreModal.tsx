@@ -12,6 +12,7 @@ const FINISH_BTNS: { type: FinishType; label: string }[] = [
   { type: "OVER_FINISH", label: "OVER" },
   { type: "BURST_FINISH", label: "BURST" },
   { type: "EXTREME_FINISH", label: "XTREME" },
+  { type: "MISSLAUNCH", label: "MISSLAUNCH" },
 ];
 
 type Player = { id: string; name: string; bladerName?: string | null };
@@ -591,8 +592,16 @@ export default function ScoreModal({
                       <ScoreColumn player={R.player} color={R.color} side="right" />
                     </div>
 
-                    <div className="mt-3 flex items-center gap-3">
+                    <div className="mt-3 flex items-center gap-3 flex-wrap">
                       {loading && <span className="text-xs text-gray-500 animate-pulse">Registrando...</span>}
+                      {/* Relaunch: re-fire the countdown on the telão (misslaunch / early shoot) */}
+                      <button
+                        onClick={startBattle}
+                        disabled={starting}
+                        className="text-sm font-semibold text-blue-300 hover:text-white bg-[#1a1a1a] hover:bg-[#252525] border border-blue-500/40 hover:border-blue-400 px-4 py-2.5 rounded-lg transition-colors disabled:opacity-40"
+                      >
+                        {starting ? "..." : "🔄 Recontagem"}
+                      </button>
                       <button
                         onClick={undoPoint}
                         disabled={loading}

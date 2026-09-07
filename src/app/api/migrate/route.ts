@@ -613,6 +613,10 @@ export async function GET() {
       sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "qualifiers" INTEGER`,
     },
     {
+      name: "FinishType.MISSLAUNCH",
+      sql: `ALTER TYPE "FinishType" ADD VALUE IF NOT EXISTS 'MISSLAUNCH'`,
+    },
+    {
       name: "Tournament.isMultiDay",
       sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "isMultiDay" BOOLEAN NOT NULL DEFAULT false`,
     },
