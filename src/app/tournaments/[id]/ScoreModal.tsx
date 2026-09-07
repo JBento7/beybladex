@@ -321,22 +321,25 @@ export default function ScoreModal({
   const p1Name = player1.bladerName || player1.name;
   const p2Name = player2.bladerName || player2.name;
 
-  // Stadium sides: the B side player is shown on the LEFT (like the telão), the
-  // X side on the RIGHT. Multi-set matches swap sides every set; single-set
-  // matches keep the same side. We reorder the whole scoreboard by these.
+  // Stadium sides. The judge faces the players, so this panel is the MIRROR of
+  // the telão: the telão shows the B side on the LEFT, so the judge shows it on
+  // the RIGHT. Sides swap every set in multi-set matches. Color follows the
+  // side identity (B side = gold, X side = red) so it's consistent everywhere.
   const xId = state?.xSidePlayerId ?? null;
+  const bSideId = xId ? (xId === player1.id ? player2.id : player1.id) : null;
   let leftIsP1 = true;
   if (xId) {
-    const bId = xId === player1.id ? player2.id : player1.id;
     const swap = maxSets > 1 && currentSetNum % 2 === 0;
-    const leftId = swap ? xId : bId; // base: B side left, X side right
-    leftIsP1 = leftId === player1.id;
+    const telaoLeftId = swap ? xId : bSideId!; // telão: B side left (set 1)
+    const judgeLeftId = telaoLeftId === player1.id ? player2.id : player1.id; // mirror
+    leftIsP1 = judgeLeftId === player1.id;
   }
-  // Colors follow POSITION (like the telão art): left is always gold, right red.
+  const colorFor = (pid: string, positional: string) =>
+    bSideId ? (pid === bSideId ? P1_COLOR : P2_COLOR) : positional;
   const L = {
     player: leftIsP1 ? player1 : player2,
     name: leftIsP1 ? p1Name : p2Name,
-    color: P1_COLOR,
+    color: colorFor(leftIsP1 ? player1.id : player2.id, P1_COLOR),
     pts: leftIsP1 ? p1Pts : p2Pts,
     beyblades: leftIsP1 ? player1Beyblades : player2Beyblades,
     beybladeId: leftIsP1 ? p1BeybladeId : p2BeybladeId,
@@ -346,7 +349,7 @@ export default function ScoreModal({
   const R = {
     player: leftIsP1 ? player2 : player1,
     name: leftIsP1 ? p2Name : p1Name,
-    color: P2_COLOR,
+    color: colorFor(leftIsP1 ? player2.id : player1.id, P2_COLOR),
     pts: leftIsP1 ? p2Pts : p1Pts,
     beyblades: leftIsP1 ? player2Beyblades : player1Beyblades,
     beybladeId: leftIsP1 ? p2BeybladeId : p1BeybladeId,
@@ -423,7 +426,7 @@ export default function ScoreModal({
                     style={{ borderColor: L.color, clipPath: "polygon(0 0,100% 0,90% 100%,0 100%)" }}
                   >
                     <div className="text-sm font-black text-white truncate">{L.name}</div>
-                    {xId && <div className="text-[9px] font-black text-[#00aaff] tracking-widest">B SIDE</div>}
+                    {bSideId && <div className={`text-[9px] font-black tracking-widest ${L.player.id === bSideId ? "text-[#00aaff]" : "text-[#f0a500]"}`}>{L.player.id === bSideId ? "B SIDE" : "X SIDE"}</div>}
                   </div>
                   <div className="text-center px-2">
                     <div className="text-2xl font-black text-white leading-none">R{currentSetNum}</div>
@@ -436,7 +439,7 @@ export default function ScoreModal({
                     style={{ borderColor: R.color, clipPath: "polygon(10% 0,100% 0,100% 100%,0 100%)" }}
                   >
                     <div className="text-sm font-black text-white truncate">{R.name}</div>
-                    {xId && <div className="text-[9px] font-black text-[#f0a500] tracking-widest">X SIDE</div>}
+                    {bSideId && <div className={`text-[9px] font-black tracking-widest ${R.player.id === bSideId ? "text-[#00aaff]" : "text-[#f0a500]"}`}>{R.player.id === bSideId ? "B SIDE" : "X SIDE"}</div>}
                   </div>
                 </div>
 
