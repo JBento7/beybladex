@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   const FINISHED_WINDOW_MS = 10500;
   // A match only shows while a judge keeps the scoreboard open (heartbeat every
   // 3s). If no heartbeat lands within this window, the arena goes to "aguardando".
-  const ONAIR_WINDOW_MS = 8000;
+  const ONAIR_WINDOW_MS = 25000;
   const onAirSince = new Date(Date.now() - ONAIR_WINDOW_MS);
 
   // Tournament-level filter, preferring real tournaments over test ones.

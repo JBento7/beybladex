@@ -100,6 +100,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 
   const [countdownOn, setCountdownOn] = useState(false);
   const playedKeyRef = useRef<string | null>(null);
+  const lastMatchTsRef = useRef<number>(0);
 
   // Saved layout overrides from the admin editor (applied over the coded defaults).
   const [layout, setLayout] = useState<Layout | null>(null);
@@ -132,6 +133,11 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       }
       setError(null);
       const d: ArenaData = await res.json();
+      // Sticky: ignore a transient "no match" right after we had one (e.g. the
+      // on-air heartbeat lagging during scoring) so the telão doesn't flicker to
+      // the waiting screen. A real gap (a few seconds) still falls through.
+      if (!d.match && Date.now() - lastMatchTsRef.current < 6000) return;
+      if (d.match) lastMatchTsRef.current = Date.now();
       setData(d);
       if (d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
         playedKeyRef.current = d.countdown.key;
