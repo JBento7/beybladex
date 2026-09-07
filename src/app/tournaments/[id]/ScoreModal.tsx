@@ -332,10 +332,11 @@ export default function ScoreModal({
     const leftId = swap ? xId : bId; // base: B side left, X side right
     leftIsP1 = leftId === player1.id;
   }
+  // Colors follow POSITION (like the telão art): left is always gold, right red.
   const L = {
     player: leftIsP1 ? player1 : player2,
     name: leftIsP1 ? p1Name : p2Name,
-    color: leftIsP1 ? P1_COLOR : P2_COLOR,
+    color: P1_COLOR,
     pts: leftIsP1 ? p1Pts : p2Pts,
     beyblades: leftIsP1 ? player1Beyblades : player2Beyblades,
     beybladeId: leftIsP1 ? p1BeybladeId : p2BeybladeId,
@@ -345,7 +346,7 @@ export default function ScoreModal({
   const R = {
     player: leftIsP1 ? player2 : player1,
     name: leftIsP1 ? p2Name : p1Name,
-    color: leftIsP1 ? P2_COLOR : P1_COLOR,
+    color: P2_COLOR,
     pts: leftIsP1 ? p2Pts : p1Pts,
     beyblades: leftIsP1 ? player2Beyblades : player1Beyblades,
     beybladeId: leftIsP1 ? p2BeybladeId : p1BeybladeId,
