@@ -37,8 +37,24 @@ const STATUS_STYLES: Record<string, { label: string; style: string }> = {
   FINISHED: { label: "Finalizado", style: "bg-gray-700 text-gray-500" },
 };
 
+// Mutually-exclusive buckets covering every status.
+type Bucket = "registration" | "in_progress" | "upcoming" | "finished";
+const bucketOf = (status: string): Bucket =>
+  status === "REGISTRATION" ? "registration"
+    : status === "IN_PROGRESS" ? "in_progress"
+    : status === "FINISHED" ? "finished"
+    : "upcoming"; // DRAFT / scheduled
+
+const SECTIONS: { key: Bucket; label: string; icon: string }[] = [
+  { key: "registration", label: "Inscrições abertas", icon: "📝" },
+  { key: "in_progress", label: "Em andamento", icon: "🔴" },
+  { key: "upcoming", label: "Próximos", icon: "🗓️" },
+  { key: "finished", label: "Finalizados", icon: "🏁" },
+];
+
 export default function TournamentList({ tournaments }: { tournaments: Tournament[] }) {
   const [query, setQuery] = useState("");
+  const [tab, setTab] = useState<"all" | Bucket>("all");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -51,9 +67,18 @@ export default function TournamentList({ tournaments }: { tournaments: Tournamen
     );
   }, [tournaments, query]);
 
+  const counts = useMemo(() => {
+    const c: Record<Bucket, number> = { registration: 0, in_progress: 0, upcoming: 0, finished: 0 };
+    for (const t of filtered) c[bucketOf(t.status)]++;
+    return c;
+  }, [filtered]);
+
+  const byBucket = (b: Bucket) => filtered.filter((t) => bucketOf(t.status) === b);
+
   return (
     <div>
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      {/* Search */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
           <input
             type="text"
@@ -67,127 +92,120 @@ export default function TournamentList({ tournaments }: { tournaments: Tournamen
           </svg>
         </div>
         {query && (
-          <button
-            onClick={() => setQuery("")}
-            className="text-sm bg-[#1a1a1a] hover:bg-[#252525] border border-[#2a2a2a] text-gray-300 px-4 py-2.5 rounded-xl transition-colors"
-          >
-            Limpar Filtros
+          <button onClick={() => setQuery("")} className="text-sm bg-[#1a1a1a] hover:bg-[#252525] border border-[#2a2a2a] text-gray-300 px-4 py-2.5 rounded-xl transition-colors">
+            Limpar
           </button>
         )}
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
+        <TabBtn active={tab === "all"} onClick={() => setTab("all")}>Todos <Count n={filtered.length} /></TabBtn>
+        {SECTIONS.map((s) => (
+          <TabBtn key={s.key} active={tab === s.key} onClick={() => setTab(s.key)}>
+            {s.icon} {s.label} <Count n={counts[s.key]} />
+          </TabBtn>
+        ))}
+      </div>
+
       {filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">Nenhum torneio encontrado para &quot;{query}&quot;.</div>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((t) => {
-            const status = STATUS_STYLES[t.status];
-            const pct = t.maxParticipants
-              ? Math.min(100, Math.round((t.participantCount / t.maxParticipants) * 100))
-              : null;
-
+        <div className="text-center py-16 text-gray-500">Nenhum torneio encontrado{query ? ` para "${query}"` : ""}.</div>
+      ) : tab === "all" ? (
+        <div className="space-y-10">
+          {SECTIONS.map((s) => {
+            const list = byBucket(s.key);
+            if (list.length === 0) return null;
             return (
-              <div
-                key={t.id}
-                className="bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#f0a500]/30 rounded-2xl overflow-hidden transition-all flex flex-col"
-              >
-                {t.bannerUrl && (
-                  <img src={t.bannerUrl} alt="" className="w-full h-32 object-cover" />
-                )}
-                <div className="p-6 flex flex-col flex-1">
-                  {/* Status badge */}
-                  <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${status.style}`}>
-                        {status.label}
-                      </span>
-                      {!t.isOfficial && (
-                        <span className="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-1 rounded-full font-semibold">
-                          🎮 BeyEncontro
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-gray-500 font-medium bg-[#252525] px-2.5 py-1 rounded-full">
-                      {FORMAT_LABELS[t.format]}
-                    </span>
-                  </div>
-
-                  <h3 className="text-lg font-bold text-white mb-2">{t.name}</h3>
-
-                  {t.description && (
-                    <p className="text-sm text-gray-400 mb-4 line-clamp-2 flex-1">{t.description}</p>
-                  )}
-
-                  <div className="mt-auto">
-                    {t.prize && (
-                      <div className="mb-3 text-sm bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500] px-3 py-2 rounded-lg font-medium">
-                        🏆 {t.prize}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-3 text-sm text-gray-500 mb-2 flex-wrap">
-                      <span>🎯 {t.organizer.name}</span>
-                      {t.location && <span>📍 {t.location}</span>}
-                      {t.entryFee !== null && (
-                        <span className="text-green-400">
-                          💵 R$ {t.entryFee.toFixed(2).replace(".", ",")}
-                        </span>
-                      )}
-                    </div>
-
-                    {t.startDate ? (
-                      <div className="text-xs text-gray-500 mb-3">
-                        📅 {new Date(t.startDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                      </div>
-                    ) : (t.status === "DRAFT" || t.status === "REGISTRATION") && (
-                      <div className="text-xs text-gray-500 mb-3">📅 Data a definir</div>
-                    )}
-
-                    <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                      <span>
-                        👥 {t.participantCount}
-                        {t.maxParticipants && ` / ${t.maxParticipants}`}
-                      </span>
-                      {pct !== null && <span className="ml-auto">{pct}%</span>}
-                    </div>
-                    {t.maxParticipants && (
-                      <div className="h-1.5 bg-[#252525] rounded-full overflow-hidden mb-4">
-                        <div
-                          className="h-full bg-[#f0a500] rounded-full transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    )}
-                    {!t.maxParticipants && <div className="mb-4" />}
-
-                    <div className="flex items-center gap-2">
-                      <Link
-                        href={`/tournaments/${t.id}`}
-                        className="flex-1 text-center bg-[#252525] hover:bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-                      >
-                        Ver Detalhes
-                      </Link>
-                      <ShareButton url={`/tournaments/${t.id}`} title={t.name} className="w-9 h-9" />
-                      {t.isJoined ? (
-                        <span className="flex-1 text-center bg-green-500/20 text-green-400 text-sm font-medium px-4 py-2 rounded-lg border border-green-500/30">
-                          ✓ Inscrito
-                        </span>
-                      ) : t.canJoin ? (
-                        <Link
-                          href={`/tournaments/${t.id}`}
-                          className="flex-1 text-center bg-[#f0a500] hover:bg-[#d4940a] text-black text-sm font-bold px-4 py-2 rounded-lg transition-colors"
-                        >
-                          Participar
-                        </Link>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <section key={s.key}>
+                <h2 className="text-sm font-black text-gray-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <span>{s.icon}</span>{s.label}
+                  <span className="text-xs text-gray-600 font-bold">({list.length})</span>
+                </h2>
+                <Grid list={list} />
+              </section>
             );
           })}
         </div>
+      ) : byBucket(tab).length === 0 ? (
+        <div className="text-center py-16 text-gray-500">Nenhum torneio nesta categoria.</div>
+      ) : (
+        <Grid list={byBucket(tab)} />
       )}
+    </div>
+  );
+}
+
+function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${active ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
+    >
+      {children}
+    </button>
+  );
+}
+function Count({ n }: { n: number }) {
+  return <span className="opacity-70">{n}</span>;
+}
+
+function Grid({ list }: { list: Tournament[] }) {
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {list.map((t) => {
+        const status = STATUS_STYLES[t.status];
+        const pct = t.maxParticipants ? Math.min(100, Math.round((t.participantCount / t.maxParticipants) * 100)) : null;
+        return (
+          <div key={t.id} className="bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#f0a500]/30 rounded-2xl overflow-hidden transition-all flex flex-col">
+            {t.bannerUrl && <img src={t.bannerUrl} alt="" className="w-full h-32 object-cover" />}
+            <div className="p-6 flex flex-col flex-1">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${status.style}`}>{status.label}</span>
+                  {!t.isOfficial && <span className="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-1 rounded-full font-semibold">🎮 BeyEncontro</span>}
+                </div>
+                <span className="text-xs text-gray-500 font-medium bg-[#252525] px-2.5 py-1 rounded-full">{FORMAT_LABELS[t.format]}</span>
+              </div>
+
+              <h3 className="text-lg font-bold text-white mb-2">{t.name}</h3>
+              {t.description && <p className="text-sm text-gray-400 mb-4 line-clamp-2 flex-1">{t.description}</p>}
+
+              <div className="mt-auto">
+                {t.prize && <div className="mb-3 text-sm bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500] px-3 py-2 rounded-lg font-medium">🏆 {t.prize}</div>}
+                <div className="flex items-center gap-3 text-sm text-gray-500 mb-2 flex-wrap">
+                  <span>🎯 {t.organizer.name}</span>
+                  {t.location && <span>📍 {t.location}</span>}
+                  {t.entryFee !== null && <span className="text-green-400">💵 R$ {t.entryFee.toFixed(2).replace(".", ",")}</span>}
+                </div>
+                {t.startDate ? (
+                  <div className="text-xs text-gray-500 mb-3">📅 {new Date(t.startDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}</div>
+                ) : (t.status === "DRAFT" || t.status === "REGISTRATION") && (
+                  <div className="text-xs text-gray-500 mb-3">📅 Data a definir</div>
+                )}
+                <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
+                  <span>👥 {t.participantCount}{t.maxParticipants && ` / ${t.maxParticipants}`}</span>
+                  {pct !== null && <span className="ml-auto">{pct}%</span>}
+                </div>
+                {t.maxParticipants ? (
+                  <div className="h-1.5 bg-[#252525] rounded-full overflow-hidden mb-4">
+                    <div className="h-full bg-[#f0a500] rounded-full transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                ) : <div className="mb-4" />}
+
+                <div className="flex items-center gap-2">
+                  <Link href={`/tournaments/${t.id}`} className="flex-1 text-center bg-[#252525] hover:bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">Ver Detalhes</Link>
+                  <ShareButton url={`/tournaments/${t.id}`} title={t.name} className="w-9 h-9" />
+                  {t.isJoined ? (
+                    <span className="flex-1 text-center bg-green-500/20 text-green-400 text-sm font-medium px-4 py-2 rounded-lg border border-green-500/30">✓ Inscrito</span>
+                  ) : t.canJoin ? (
+                    <Link href={`/tournaments/${t.id}`} className="flex-1 text-center bg-[#f0a500] hover:bg-[#d4940a] text-black text-sm font-bold px-4 py-2 rounded-lg transition-colors">Participar</Link>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

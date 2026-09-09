@@ -54,9 +54,6 @@ export default function Navbar() {
             <Link href="/community" className={linkClass("/community")}>
               Comunidade
             </Link>
-            <Link href="/upcoming" className={linkClass("/upcoming")}>
-              Próximos
-            </Link>
             {session && (
               <>
                 <Link href="/dashboard" className={linkClass("/dashboard")}>
@@ -151,7 +148,6 @@ export default function Navbar() {
             <Link href="/tournaments" className={mobileLinkClass("/tournaments")} onClick={() => setMenuOpen(false)}>Torneios</Link>
             <Link href="/quick-match" className={mobileLinkClass("/quick-match")} onClick={() => setMenuOpen(false)}>Partidas Rápidas</Link>
             <Link href="/community" className={mobileLinkClass("/community")} onClick={() => setMenuOpen(false)}>Comunidade</Link>
-            <Link href="/upcoming" className={mobileLinkClass("/upcoming")} onClick={() => setMenuOpen(false)}>Próximos</Link>
             {session && (
               <>
                 <Link href="/dashboard" className={mobileLinkClass("/dashboard")} onClick={() => setMenuOpen(false)}>Painel</Link>
