@@ -118,6 +118,8 @@ export default function ScoreModal({
 
   // Judge manual-order fallback toggle
   const [showManual, setShowManual] = useState(false);
+  // Judge override: start a 3on3 match even without deck orders (player forgot).
+  const [forceStart, setForceStart] = useState(false);
 
   // Which battle the judge has started (reveals the scoring board). The 3-2-1
   // countdown plays on the ARENA display, not here.
@@ -192,7 +194,9 @@ export default function ScoreModal({
   const p2OrderArr = p2Order ? [p2Order.bey1Id, p2Order.bey2Id, p2Order.bey3Id] : null;
 
   const bothOrders = !isDeck || (!!p1Order && !!p2Order);
-  const gateReady = !isDeck || bothOrders; // 3on3 needs both deck orders first
+  // 3on3 normally needs both deck orders first — but the judge can override and
+  // start anyway if a player forgot to register/pick their deck.
+  const gateReady = !isDeck || bothOrders || forceStart;
   // Every battle (point) gets its own countdown — in 3-on-3 the active beyblade
   // switches each battle, and in solo the countdown must also play before each
   // point. A battle is identified by set + points already scored in it.
@@ -202,7 +206,7 @@ export default function ScoreModal({
   const needSides = currentSetNum === 1 && currentSetBattleCount === 0 && !state?.xSidePlayerId;
   const revealScoring = gateReady && startedKey === startKey;
   const showStart = gateReady && startedKey !== startKey && !needSides;
-  const waitingOrders = isDeck && !bothOrders;
+  const waitingOrders = isDeck && !bothOrders && !forceStart;
 
   // Poll while waiting for players to submit their deck orders.
   useEffect(() => {
@@ -523,6 +527,19 @@ export default function ScoreModal({
                         )}
                       </div>
                     )}
+
+                    {/* Judge override: start without a deck (player forgot to register). */}
+                    <div className="mt-3 border-t border-[#2a2a2a] pt-3">
+                      <button
+                        onClick={() => setForceStart(true)}
+                        className="w-full bg-[#c8102e]/80 hover:bg-[#c8102e] text-white text-sm font-bold py-2.5 rounded-lg transition-colors"
+                      >
+                        ▶ Iniciar sem deck
+                      </button>
+                      <div className="text-[11px] text-gray-500 mt-1.5 text-center">
+                        Use se um jogador esqueceu de cadastrar/enviar o deck. A partida inicia normalmente; a bey ativa não será exibida.
+                      </div>
+                    </div>
                   </div>
                 )}
 
