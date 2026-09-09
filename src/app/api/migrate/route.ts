@@ -617,6 +617,10 @@ export async function GET() {
       sql: `ALTER TYPE "FinishType" ADD VALUE IF NOT EXISTS 'MISSLAUNCH'`,
     },
     {
+      name: "TournamentParticipant.finalsSwapUsed",
+      sql: `ALTER TABLE "TournamentParticipant" ADD COLUMN IF NOT EXISTS "finalsSwapUsed" BOOLEAN NOT NULL DEFAULT false`,
+    },
+    {
       name: "Tournament.isMultiDay",
       sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "isMultiDay" BOOLEAN NOT NULL DEFAULT false`,
     },

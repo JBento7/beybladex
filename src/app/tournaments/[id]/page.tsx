@@ -12,6 +12,7 @@ import ScoreModal from "./ScoreModal";
 import PlayerDeckOrder from "./PlayerDeckOrder";
 import ClientJoinButton from "./ClientJoinButton";
 import EditBeybladesButton from "./EditBeybladesButton";
+import FinalsDeckButton from "./FinalsDeckButton";
 import WOButton from "./WOButton";
 import AdminParticipantManager from "./AdminParticipantManager";
 import AdminMatchEditor from "./AdminMatchEditor";
@@ -588,6 +589,14 @@ export default async function TournamentDetailPage({
   const listRounds = isSwiss ? swissRoundsList : sortedRounds;
   const qualifiersCount = tournament.qualifiers ?? 0;
 
+  // Suíço finals: a qualified player (in the knockout) may swap 1 deck combo once.
+  const inKnockout = !!session?.user.id && knockoutRoundsList.length > 0 &&
+    tournament.matches.some((m) => m.round > swissRounds && (m.player1.id === session.user.id || m.player2.id === session.user.id));
+  const canSwapFinals = isSwiss && tournament.deckType === "THREE_ON_THREE" &&
+    tournament.status !== "FINISHED" && inKnockout &&
+    !!currentParticipant && !(currentParticipant as { finalsSwapUsed?: boolean }).finalsSwapUsed &&
+    currentBeybladeIds.length === 3;
+
   // Always show the sidebar so players can track standings in real-time.
   const showSidebar = true;
 
@@ -936,6 +945,15 @@ export default async function TournamentDetailPage({
               {/* Suíço knockout: final Swiss standings + bracket tree */}
               {isSwiss && knockoutRoundsList.length > 0 && (
                 <>
+                  {canSwapFinals && (
+                    <div className="bg-[#1a1a1a] border border-[#f0a500]/40 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <div className="font-bold text-[#f0a500]">Você se classificou! 🎉</div>
+                        <div className="text-xs text-gray-400 mt-0.5">Pode trocar <b className="text-white">1 combo</b> do seu deck para o mata-mata.</div>
+                      </div>
+                      <FinalsDeckButton tournamentId={tournament.id} currentDeckIds={currentBeybladeIds} />
+                    </div>
+                  )}
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
                     <h2 className="text-lg font-bold text-white mb-1">Classificação Final da Fase Suíça</h2>
                     <p className="text-xs text-gray-500 mb-4">

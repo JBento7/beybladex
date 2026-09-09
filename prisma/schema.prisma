@@ -211,6 +211,7 @@ model TournamentParticipant {
   hasPaid            Boolean  @default(false)
   beybladeInspected  Boolean  @default(false)
   approved           Boolean  @default(true) // paid tournaments start false (awaiting admin approval)
+  finalsSwapUsed     Boolean  @default(false) // Suíço: used their 1 deck change for the knockout
   createdAt    DateTime @default(now())
 
   tournament Tournament @relation(fields: [tournamentId], references: [id])
