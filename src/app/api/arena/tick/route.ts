@@ -20,23 +20,37 @@ export async function GET(req: NextRequest) {
 
   const arenaWhere = arenaNum === 1 ? { OR: [{ arena: 1 }, { arena: null }] } : { arena: arenaNum };
   const WINDOW_MS = 7000;
+  const since = new Date(Date.now() - WINDOW_MS);
 
+  let countdown: { key: string; elapsedMs: number } | null = null;
+  let finish: { key: string; type: string; elapsedMs: number } | null = null;
   try {
     const row = await prisma.match.findFirst({
       where: {
         ...arenaWhere,
         status: { in: ["IN_PROGRESS", "PENDING"] },
-        countdownAt: { gte: new Date(Date.now() - WINDOW_MS) },
+        countdownAt: { gte: since },
       },
       orderBy: { countdownAt: "desc" },
       select: { id: true, countdownAt: true },
     });
     if (row?.countdownAt) {
       const ts = new Date(row.countdownAt).getTime();
-      return NextResponse.json({ countdown: { key: `${row.id}:${ts}`, elapsedMs: Date.now() - ts } });
+      countdown = { key: `${row.id}:${ts}`, elapsedMs: Date.now() - ts };
     }
-  } catch {
-    // countdownAt column missing (pre-migration) — behave as no countdown.
-  }
-  return NextResponse.json({ countdown: null });
+  } catch { /* countdownAt column missing — ignore */ }
+
+  try {
+    const row = await prisma.match.findFirst({
+      where: { ...arenaWhere, finishVideoAt: { gte: since } },
+      orderBy: { finishVideoAt: "desc" },
+      select: { id: true, finishVideoAt: true, finishVideoType: true },
+    });
+    if (row?.finishVideoAt && row.finishVideoType) {
+      const ts = new Date(row.finishVideoAt).getTime();
+      finish = { key: `${row.id}:${ts}`, type: row.finishVideoType, elapsedMs: Date.now() - ts };
+    }
+  } catch { /* finishVideo columns missing — ignore */ }
+
+  return NextResponse.json({ countdown, finish });
 }

@@ -248,6 +248,8 @@ model Match {
   isThirdPlace Boolean     @default(false)
   countdownAt  DateTime?
   countdownKey String?
+  finishVideoAt   DateTime? // signals the telão to play a finish-type video
+  finishVideoType String?
   onAirAt      DateTime?
   xSidePlayerId String?  // which player chose the X side of the stadium (other = B side)
   setsToWin      Int?    // per-match override (e.g. 2-day: knockout uses different rules)

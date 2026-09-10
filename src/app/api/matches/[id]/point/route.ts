@@ -185,6 +185,16 @@ export async function POST(
       }
     }
 
+    // Signal the telão to play this finish's video (SPIN/OVER/BURST/EXTREME).
+    if (["SPIN_FINISH", "OVER_FINISH", "BURST_FINISH", "EXTREME_FINISH"].includes(finishType)) {
+      try {
+        await prisma.match.update({
+          where: { id: params.id },
+          data: { finishVideoAt: new Date(), finishVideoType: finishType },
+        });
+      } catch { /* columns may be missing pre-migration — ignore */ }
+    }
+
     return NextResponse.json({ success: true, matchFinished, winnerId: matchWinnerId });
   } catch (err) {
     console.error(err);

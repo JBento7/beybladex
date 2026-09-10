@@ -101,6 +101,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const [countdownOn, setCountdownOn] = useState(false);
   const playedKeyRef = useRef<string | null>(null);
   const lastMatchTsRef = useRef<number>(0);
+  // Finish-type video overlay (SPIN/OVER/BURST/EXTREME) triggered when scored.
+  const [finishVideo, setFinishVideo] = useState<string | null>(null);
+  const finishRefs = useRef<Record<string, HTMLVideoElement | null>>({});
+  const playedFinishKeyRef = useRef<string | null>(null);
 
   // Saved layout overrides from the admin editor (applied over the coded defaults).
   const [layout, setLayout] = useState<Layout | null>(null);
@@ -166,14 +170,22 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         const url = previewParam ? `/api/arena/tick?n=${previewParam}` : "/api/arena/tick";
         const res = await fetch(url);
         if (!res.ok) return;
-        const d: { countdown?: { key: string; elapsedMs: number } | null } = await res.json();
-        if (active && d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
+        const d: {
+          countdown?: { key: string; elapsedMs: number } | null;
+          finish?: { key: string; type: string; elapsedMs: number } | null;
+        } = await res.json();
+        if (!active) return;
+        if (d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
           playedKeyRef.current = d.countdown.key;
           setCountdownOn(true);
         }
+        if (d.finish && d.finish.key !== playedFinishKeyRef.current && d.finish.elapsedMs < 5000) {
+          playedFinishKeyRef.current = d.finish.key;
+          setFinishVideo(d.finish.type);
+        }
       } catch { /* ignore */ }
     };
-    const t = setInterval(tick, 500);
+    const t = setInterval(tick, 400);
     return () => { active = false; clearInterval(t); };
   }, [arena, started, previewParam]);
 
@@ -198,6 +210,24 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
     };
   }, [countdownOn]);
+
+  // Play the finish-type video when a finish is scored.
+  useEffect(() => {
+    if (!finishVideo) return;
+    const v = finishRefs.current[finishVideo];
+    if (!v) return;
+    try { v.currentTime = 0; } catch { /* ignore */ }
+    v.muted = false;
+    v.play().catch(() => { try { v.muted = true; v.play().catch(() => {}); } catch { /* ignore */ } });
+    const done = () => setFinishVideo(null);
+    v.addEventListener("ended", done);
+    const safety = setTimeout(done, 8000);
+    return () => {
+      v.removeEventListener("ended", done);
+      clearTimeout(safety);
+      try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
+    };
+  }, [finishVideo]);
 
   async function acquireWakeLock() {
     try {
@@ -266,6 +296,11 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     if (v) {
       try { v.muted = true; await v.play(); v.pause(); v.currentTime = 0; } catch { /* ignore */ }
     }
+    // Prime the finish videos too (unlock autoplay-with-sound on the telão).
+    for (const el of Object.values(finishRefs.current)) {
+      if (!el) continue;
+      try { el.muted = true; await el.play(); el.pause(); el.currentTime = 0; } catch { /* ignore */ }
+    }
     await acquireWakeLock();
     setStarted(true);
   }
@@ -312,6 +347,20 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           pointerEvents: "none",
         }}
       />
+
+      {/* Finish-type videos (SPIN/OVER/BURST/EXTREME) — always mounted & primed
+          so the right one plays instantly with sound when a finish is scored. */}
+      {["SPIN_FINISH", "OVER_FINISH", "BURST_FINISH", "EXTREME_FINISH"].map((ft) => (
+        // eslint-disable-next-line jsx-a11y/media-has-caption
+        <video
+          key={ft}
+          ref={(el) => { finishRefs.current[ft] = el; }}
+          src={`/finish-videos/${ft}.mp4`}
+          playsInline
+          preload="auto"
+          style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", objectFit: "cover", background: "#000", zIndex: finishVideo === ft ? 72 : -1, opacity: finishVideo === ft ? 1 : 0, pointerEvents: "none" }}
+        />
+      ))}
 
       {/* Start gate */}
       {!started && (
