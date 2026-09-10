@@ -165,28 +165,32 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   useEffect(() => {
     if (arena == null || !started) return;
     let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Self-scheduling loop: the next poll fires ~250ms AFTER the previous one
+    // returns, so slow requests never pile up (snappy signal, low DB load).
     const tick = async () => {
       try {
         const url = previewParam ? `/api/arena/tick?n=${previewParam}` : "/api/arena/tick";
         const res = await fetch(url);
-        if (!res.ok) return;
-        const d: {
-          countdown?: { key: string; elapsedMs: number } | null;
-          finish?: { key: string; type: string; elapsedMs: number } | null;
-        } = await res.json();
-        if (!active) return;
-        if (d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
-          playedKeyRef.current = d.countdown.key;
-          setCountdownOn(true);
-        }
-        if (d.finish && d.finish.key !== playedFinishKeyRef.current && d.finish.elapsedMs < 5000) {
-          playedFinishKeyRef.current = d.finish.key;
-          setFinishVideo(d.finish.type);
+        if (res.ok) {
+          const d: {
+            countdown?: { key: string; elapsedMs: number } | null;
+            finish?: { key: string; type: string; elapsedMs: number } | null;
+          } = await res.json();
+          if (active && d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
+            playedKeyRef.current = d.countdown.key;
+            setCountdownOn(true);
+          }
+          if (active && d.finish && d.finish.key !== playedFinishKeyRef.current && d.finish.elapsedMs < 5000) {
+            playedFinishKeyRef.current = d.finish.key;
+            setFinishVideo(d.finish.type);
+          }
         }
       } catch { /* ignore */ }
+      if (active) timer = setTimeout(tick, 250);
     };
-    const t = setInterval(tick, 400);
-    return () => { active = false; clearInterval(t); };
+    tick();
+    return () => { active = false; if (timer) clearTimeout(timer); };
   }, [arena, started, previewParam]);
 
   // Play the countdown video (with its own audio) when triggered.

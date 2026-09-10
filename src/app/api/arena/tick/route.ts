@@ -25,32 +25,24 @@ export async function GET(req: NextRequest) {
   let countdown: { key: string; elapsedMs: number } | null = null;
   let finish: { key: string; type: string; elapsedMs: number } | null = null;
   try {
+    // Single query: the arena's match with a fresh countdown OR finish signal.
     const row = await prisma.match.findFirst({
-      where: {
-        ...arenaWhere,
-        status: { in: ["IN_PROGRESS", "PENDING"] },
-        countdownAt: { gte: since },
-      },
-      orderBy: { countdownAt: "desc" },
-      select: { id: true, countdownAt: true },
+      where: { ...arenaWhere, OR: [{ countdownAt: { gte: since } }, { finishVideoAt: { gte: since } }] },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, status: true, countdownAt: true, finishVideoAt: true, finishVideoType: true },
     });
-    if (row?.countdownAt) {
-      const ts = new Date(row.countdownAt).getTime();
-      countdown = { key: `${row.id}:${ts}`, elapsedMs: Date.now() - ts };
+    if (row) {
+      const now = Date.now();
+      if (row.countdownAt && (row.status === "IN_PROGRESS" || row.status === "PENDING")) {
+        const ts = new Date(row.countdownAt).getTime();
+        if (now - ts < WINDOW_MS) countdown = { key: `${row.id}:${ts}`, elapsedMs: now - ts };
+      }
+      if (row.finishVideoAt && row.finishVideoType) {
+        const ts = new Date(row.finishVideoAt).getTime();
+        if (now - ts < WINDOW_MS) finish = { key: `${row.id}:${ts}`, type: row.finishVideoType, elapsedMs: now - ts };
+      }
     }
-  } catch { /* countdownAt column missing — ignore */ }
-
-  try {
-    const row = await prisma.match.findFirst({
-      where: { ...arenaWhere, finishVideoAt: { gte: since } },
-      orderBy: { finishVideoAt: "desc" },
-      select: { id: true, finishVideoAt: true, finishVideoType: true },
-    });
-    if (row?.finishVideoAt && row.finishVideoType) {
-      const ts = new Date(row.finishVideoAt).getTime();
-      finish = { key: `${row.id}:${ts}`, type: row.finishVideoType, elapsedMs: Date.now() - ts };
-    }
-  } catch { /* finishVideo columns missing — ignore */ }
+  } catch { /* new columns missing (pre-migration) — behave as no signal */ }
 
   return NextResponse.json({ countdown, finish });
 }
