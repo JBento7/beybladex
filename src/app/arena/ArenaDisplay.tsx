@@ -388,7 +388,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={launchVideoRef}
-        src="/launch-video.mp4"
+        src="/countdown.mp4"
         playsInline
         preload="auto"
         onError={() => setLaunchOn(false)}
