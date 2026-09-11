@@ -19,6 +19,7 @@ export function scheduleByArena<T>(
   getP1: (m: T) => string,
   getP2: (m: T) => string,
   judges: string[] = [],
+  playerIds: Set<string> = new Set(),
 ): Array<{ match: T; slot: number; arena: number; judgeId: string | null }> {
   const hasJudges = judges.length > 0;
 
@@ -40,13 +41,21 @@ export function scheduleByArena<T>(
     return best;
   }
 
-  // Picks the least-loaded judge available in this slot, never one of the two
-  // players of the match being judged.
+  // Picks the best judge available in this slot, never one of the two players.
+  // Preference: judges who are NOT competing in the tournament (pure judges)
+  // first, then the least-loaded.
   function pickJudge(busy: Set<string>, p1: string, p2: string): string | null {
     let best: string | null = null;
+    const better = (j: string, cur: string | null) => {
+      if (cur === null) return true;
+      const jPlayer = playerIds.has(j) ? 1 : 0;
+      const cPlayer = playerIds.has(cur) ? 1 : 0;
+      if (jPlayer !== cPlayer) return jPlayer < cPlayer; // non-players first
+      return (judgeLoad.get(j) ?? 0) < (judgeLoad.get(cur) ?? 0);
+    };
     for (const j of judges) {
       if (j === p1 || j === p2 || busy.has(j)) continue;
-      if (best === null || (judgeLoad.get(j) ?? 0) < (judgeLoad.get(best) ?? 0)) best = j;
+      if (better(j, best)) best = j;
     }
     return best;
   }

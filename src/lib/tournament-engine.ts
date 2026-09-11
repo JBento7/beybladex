@@ -11,6 +11,61 @@ async function getTournamentJudgeIds(tournamentId: string): Promise<string[]> {
   return judges.map((j) => j.userId);
 }
 
+// Approved participants' userIds — used to prefer non-competing judges.
+async function getTournamentPlayerIds(tournamentId: string): Promise<Set<string>> {
+  const rows = await prisma.tournamentParticipant.findMany({
+    where: { tournamentId, approved: { not: false } },
+    select: { userId: true },
+  });
+  return new Set(rows.map((r) => r.userId));
+}
+
+// When a match is about to start without an assigned judge, try to grab a judge
+// who is free RIGHT NOW (not playing or judging a live match), preferring judges
+// who aren't competing and are the least-loaded. Returns the assigned judgeId or
+// null if none is available. Safe/no-op if the match already has a judge.
+export async function assignFreeJudge(matchId: string): Promise<string | null> {
+  try {
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      select: { id: true, tournamentId: true, player1Id: true, player2Id: true, judgeId: true },
+    });
+    if (!match || match.judgeId) return match?.judgeId ?? null;
+
+    const [judges, playerIds, liveMatches, allTournMatches] = await Promise.all([
+      getTournamentJudgeIds(match.tournamentId),
+      getTournamentPlayerIds(match.tournamentId),
+      prisma.match.findMany({
+        where: { tournamentId: match.tournamentId, status: "IN_PROGRESS", id: { not: matchId } },
+        select: { player1Id: true, player2Id: true, judgeId: true },
+      }),
+      prisma.match.findMany({ where: { tournamentId: match.tournamentId }, select: { judgeId: true } }),
+    ]);
+    if (judges.length === 0) return null;
+
+    // Anyone busy in a live match right now (playing or judging).
+    const busy = new Set<string>();
+    for (const m of liveMatches) { busy.add(m.player1Id); busy.add(m.player2Id); if (m.judgeId) busy.add(m.judgeId); }
+    // Judge workload across the tournament (for balancing).
+    const load = new Map<string, number>();
+    for (const m of allTournMatches) if (m.judgeId) load.set(m.judgeId, (load.get(m.judgeId) ?? 0) + 1);
+
+    let best: string | null = null;
+    for (const j of judges) {
+      if (j === match.player1Id || j === match.player2Id || busy.has(j)) continue;
+      if (best === null) { best = j; continue; }
+      const jP = playerIds.has(j) ? 1 : 0, bP = playerIds.has(best) ? 1 : 0;
+      if (jP !== bP) { if (jP < bP) best = j; continue; } // non-players first
+      if ((load.get(j) ?? 0) < (load.get(best) ?? 0)) best = j;
+    }
+    if (!best) return null;
+    await prisma.match.update({ where: { id: matchId }, data: { judgeId: best } });
+    return best;
+  } catch {
+    return null; // never block the match start
+  }
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -64,7 +119,7 @@ export async function generateRoundRobin(tournamentId: string) {
   const rounds = circleMethodRounds(shuffle(participants).map((p) => p.userId!));
   const matchData: { player1Id: string; player2Id: string }[] = rounds.flat();
 
-  const scheduled = scheduleByArena(matchData, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges);
+  const scheduled = scheduleByArena(matchData, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
 
   await prisma.match.createMany({
     data: scheduled.map(({ match, slot, arena, judgeId }) => ({
@@ -247,7 +302,7 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
     if (a?.userId && b?.userId) pairs.push({ player1Id: a.userId, player2Id: b.userId });
   }
 
-  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges);
+  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
   await prisma.match.createMany({
     data: scheduled.map(({ match, slot, arena, judgeId }, i) => ({
       tournamentId,
@@ -363,7 +418,7 @@ export async function generateGroups(tournamentId: string) {
 
   // Schedule across arenas so no player is double-booked in the same slot,
   // even across different groups.
-  const scheduled = scheduleByArena(allMatches, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges);
+  const scheduled = scheduleByArena(allMatches, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
 
   await prisma.match.createMany({
     data: scheduled.map(({ match, slot, arena, judgeId }) => ({ ...match, arena, slot, judgeId })),
@@ -422,7 +477,7 @@ export async function generateSingleElimination(tournamentId: string) {
   }
 
   // Schedule real round-1 matches across arenas so no player is double-booked.
-  const scheduled = scheduleByArena(realMatches, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges);
+  const scheduled = scheduleByArena(realMatches, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
   for (const { match, slot, arena, judgeId } of scheduled) {
     matches.push({
       tournamentId,
@@ -494,7 +549,7 @@ export async function generateSwissRound(
 
   // Distribute the matches across arenas (and assign judges), like the other
   // formats — otherwise the placar can't tell which battle is in each arena.
-  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges);
+  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
   await prisma.match.createMany({
     data: scheduled.map(({ match, slot, arena, judgeId }, i) => ({
       tournamentId,
@@ -566,7 +621,7 @@ export async function advanceSingleElimination(
   const inheritSets = bracketMatches[0]?.setsToWin ?? null;
   const inheritPoints = bracketMatches[0]?.pointsToWinSet ?? null;
 
-  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges);
+  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
   const matches = scheduled.map(({ match, slot, arena, judgeId }, i) => ({
     tournamentId,
     player1Id: match.player1Id,

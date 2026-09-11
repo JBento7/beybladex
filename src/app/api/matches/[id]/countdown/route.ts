@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { assignFreeJudge } from "@/lib/tournament-engine";
 
 // The judge presses "Iniciar" → stamp the match so the arena display starts the
 // 3-2-1-GO-SHOOT countdown video. Authorized for the judge/organizer, or anyone
@@ -43,6 +44,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   } catch {
     /* body optional */
   }
+
+  // If this match has no judge yet, try to grab one who's free right now.
+  if (!match.judgeId) await assignFreeJudge(params.id);
 
   try {
     await prisma.match.update({
