@@ -228,14 +228,21 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   useEffect(() => {
     if (!launchOn) return;
     const v = launchVideoRef.current;
-    if (!v) return;
+    if (!v) { setLaunchOn(false); return; }
+    // If the file is missing/unplayable, don't black out the telão.
+    if (v.error) { setLaunchOn(false); return; }
     try { v.currentTime = 0; } catch { /* ignore */ }
     v.muted = false;
-    v.play().catch(() => { try { v.muted = true; v.play().catch(() => {}); } catch { /* ignore */ } });
+    v.play().catch(() => {
+      try { v.muted = true; v.play().catch(() => setLaunchOn(false)); } catch { setLaunchOn(false); }
+    });
     const done = () => setLaunchOn(false);
     v.addEventListener("ended", done);
+    // Safety: never stay stuck if the video can't start.
+    const safety = setTimeout(() => { if (v.paused || v.readyState < 2) setLaunchOn(false); }, 2500);
     return () => {
       v.removeEventListener("ended", done);
+      clearTimeout(safety);
       try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
     };
   }, [launchOn]);
@@ -384,6 +391,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         src="/launch-video.mp4"
         playsInline
         preload="auto"
+        onError={() => setLaunchOn(false)}
         style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", objectFit: "contain", background: "#000", zIndex: launchOn ? 75 : -1, opacity: launchOn ? 1 : 0, pointerEvents: "none" }}
       />
 
