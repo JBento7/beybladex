@@ -284,6 +284,16 @@ export default function ScoreModal({
     }
   }
 
+  // Show the launch/countdown video on this match's arena telão (preview, e.g.
+  // so players can see the countdown before the match starts).
+  const [launchSent, setLaunchSent] = useState(false);
+  async function playLaunchVideo() {
+    try {
+      const res = await fetch(`/api/matches/${matchId}/launch-video`, { method: "POST" });
+      if (res.ok) { setLaunchSent(true); setTimeout(() => setLaunchSent(false), 2500); }
+    } catch { /* best-effort */ }
+  }
+
   // Judge starts the battle: fire the countdown on the arena display and reveal
   // the scoring board here (no countdown on the judge's screen).
   async function startBattle() {
@@ -499,6 +509,14 @@ export default function ScoreModal({
                     {isDeck && <> · ciclo {cycleIndex + 1}, batalha {posInCycle + 1}/3</>}
                   </div>
                 </div>
+
+                {/* Preview: play the launch/countdown video on this arena's telão */}
+                <button
+                  onClick={playLaunchVideo}
+                  className={`w-full mb-2 text-xs font-bold px-3 py-2 rounded-lg border transition-colors ${launchSent ? "bg-green-500/20 text-green-400 border-green-500/40" : "bg-[#1a1a1a] text-[#f0a500] border-[#f0a500]/40 hover:bg-[#252525]"}`}
+                >
+                  {launchSent ? "✓ Vídeo enviado ao telão" : "🎬 Vídeo Lançamento (telão desta arena)"}
+                </button>
 
                 {/* 3on3 active beyblades */}
                 {isDeck && L.orderArr && R.orderArr && (
