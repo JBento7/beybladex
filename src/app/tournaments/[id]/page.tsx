@@ -82,9 +82,18 @@ function getRoundName(round: number, totalRounds: number, format?: string, swiss
 type BeybladeInfo = { id: string; name: string; blade: string | null; ratchet: string | null; bit: string | null };
 type ParticipantBeyblades = { userId: string; beyblades: BeybladeInfo[] };
 
+// Blader name for display; admins also see the real name in parentheses.
+function playerLabel(p: { name: string; bladerName?: string | null }, admin = false) {
+  const blader = p.bladerName || p.name;
+  return admin && p.bladerName && p.bladerName.trim() && p.bladerName !== p.name
+    ? `${p.bladerName} (${p.name})`
+    : blader;
+}
+
 function MatchCard({
   match,
   isOrganizer,
+  isAdmin = false,
   tournamentId,
   participantBeyblades,
   arenaCount = 1,
@@ -94,6 +103,7 @@ function MatchCard({
 }: {
   match: MatchWithRelations;
   isOrganizer: boolean;
+  isAdmin?: boolean;
   deckType?: string;
   openJudging?: boolean;
   tournamentId: string;
@@ -120,7 +130,7 @@ function MatchCard({
     return (
       <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-dashed border-gray-700 bg-gray-800/40">
         <span className="text-sm font-semibold text-amber-400 truncate">
-          {match.player1.bladerName || match.player1.name}
+          {playerLabel(match.player1, isAdmin)}
         </span>
         <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-700 text-gray-400 flex-shrink-0">
           Passou (bye)
@@ -148,7 +158,7 @@ function MatchCard({
                 : "text-white"
             }`}
           >
-            {match.player1.bladerName || match.player1.name}
+            {playerLabel(match.player1, isAdmin)}
           </span>
           {isFinished && (
             <span className="text-sm font-bold text-amber-400 flex-shrink-0">
@@ -166,7 +176,7 @@ function MatchCard({
                 : "text-white"
             }`}
           >
-            {match.player2.bladerName || match.player2.name}
+            {playerLabel(match.player2, isAdmin)}
           </span>
           {isFinished && (
             <span className="text-sm font-bold text-amber-400 flex-shrink-0">
@@ -184,7 +194,7 @@ function MatchCard({
         )}
         {match.judge && (
           <span className="text-xs px-2 py-1 rounded-full font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20">
-            ⚖️ {match.judge.bladerName || match.judge.name}
+            ⚖️ {playerLabel(match.judge, isAdmin)}
           </span>
         )}
         {match.isWalkover && (
@@ -238,6 +248,7 @@ function MatchCard({
 
 function BracketView({
   rounds,
+  isAdmin = false,
   totalRounds,
   isOrganizer,
   tournamentId,
@@ -250,6 +261,7 @@ function BracketView({
   rounds: [number, MatchWithRelations[]][];
   totalRounds: number;
   isOrganizer: boolean;
+  isAdmin?: boolean;
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
   deckType?: string;
@@ -279,6 +291,7 @@ function BracketView({
                     <MatchCard
                       match={match}
                       isOrganizer={isOrganizer}
+                      isAdmin={isAdmin}
                       tournamentId={tournamentId}
                       participantBeyblades={participantBeyblades}
                       arenaCount={arenaCount}
@@ -611,8 +624,8 @@ export default async function TournamentDetailPage({
       return {
         id: m.id,
         round: m.round,
-        player1Name: m.player1.bladerName || m.player1.name,
-        player2Name: m.player2.bladerName || m.player2.name,
+        player1Name: playerLabel(m.player1, true),
+        player2Name: playerLabel(m.player2, true),
         player1Id: m.player1.id,
         player2Id: m.player2.id,
         status: m.status,
@@ -831,6 +844,7 @@ export default async function TournamentDetailPage({
                     rounds={sortedRounds}
                     totalRounds={totalBracketRounds}
                     isOrganizer={canJudge}
+                    isAdmin={isAdminUser}
                     tournamentId={tournament.id}
                     participantBeyblades={participantBeyblades}
                     arenaCount={tournament.arenas ?? 1}
@@ -846,6 +860,7 @@ export default async function TournamentDetailPage({
                       <MatchCard
                         match={thirdPlaceMatch}
                         isOrganizer={canJudge}
+                        isAdmin={isAdminUser}
                         arenaCount={tournament.arenas ?? 1}
                         tournamentId={tournament.id}
                         participantBeyblades={participantBeyblades}
@@ -911,6 +926,7 @@ export default async function TournamentDetailPage({
                                   key={match.id}
                                   match={match}
                                   isOrganizer={canJudge}
+                                  isAdmin={isAdminUser}
                                   tournamentId={tournament.id}
                                   participantBeyblades={participantBeyblades}
                                   currentUserId={session?.user.id}
@@ -929,6 +945,7 @@ export default async function TournamentDetailPage({
                             key={match.id}
                             match={match}
                             isOrganizer={canJudge}
+                            isAdmin={isAdminUser}
                             tournamentId={tournament.id}
                             participantBeyblades={participantBeyblades}
                             currentUserId={session?.user.id}
@@ -971,7 +988,7 @@ export default async function TournamentDetailPage({
                               {idx + 1}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="text-sm font-bold text-white truncate">{p.user.bladerName || p.user.name}</div>
+                              <div className="text-sm font-bold text-white truncate">{playerLabel(p.user, isAdminUser)}</div>
                             </div>
                             {classified && <span className="text-[10px] font-black text-[#f0a500] tracking-wide">CLASSIFICADO</span>}
                             <div className="text-sm font-bold text-amber-400 tabular-nums">{p.totalPoints}V</div>
@@ -987,6 +1004,7 @@ export default async function TournamentDetailPage({
                       rounds={knockoutRoundsList}
                       totalRounds={knockoutTotalRounds}
                       isOrganizer={canJudge}
+                      isAdmin={isAdminUser}
                       tournamentId={tournament.id}
                       participantBeyblades={participantBeyblades}
                       arenaCount={tournament.arenas ?? 1}
@@ -1003,6 +1021,7 @@ export default async function TournamentDetailPage({
                         <MatchCard
                           match={thirdPlaceMatch}
                           isOrganizer={canJudge}
+                          isAdmin={isAdminUser}
                           arenaCount={tournament.arenas ?? 1}
                           tournamentId={tournament.id}
                           participantBeyblades={participantBeyblades}
@@ -1082,7 +1101,7 @@ export default async function TournamentDetailPage({
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-white truncate">
-                          {p.user.bladerName || p.user.name}
+                          {playerLabel(p.user, isAdminUser)}
                           {p.user.isGuest && <span className="ml-1.5 text-[10px] text-gray-500 font-normal">convidado</span>}
                         </div>
                       </div>
@@ -1134,7 +1153,7 @@ export default async function TournamentDetailPage({
                                 {idx + 1}.
                               </span>
                               <span className="text-gray-300 flex-1">
-                                {p.user.bladerName || p.user.name}
+                                {playerLabel(p.user, isAdminUser)}
                               </span>
                               <span className="text-amber-400 font-medium text-xs">
                                 {p.totalPoints}pts
@@ -1192,7 +1211,7 @@ export default async function TournamentDetailPage({
                         </div>
                         <div>
                           <div className="text-sm font-medium text-white">
-                            {p.user.bladerName || p.user.name}
+                            {playerLabel(p.user, isAdminUser)}
                             {p.user.isGuest && <span className="ml-1.5 text-[10px] text-gray-500">convidado</span>}
                           </div>
                         </div>
