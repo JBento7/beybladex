@@ -105,6 +105,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const [finishVideo, setFinishVideo] = useState<string | null>(null);
   const finishRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const playedFinishKeyRef = useRef<string | null>(null);
+  // Launch/rules video (admin-triggered per arena).
+  const [launchOn, setLaunchOn] = useState(false);
+  const launchVideoRef = useRef<HTMLVideoElement | null>(null);
+  const playedLaunchKeyRef = useRef<string | null>(null);
 
   // Saved layout overrides from the admin editor (applied over the coded defaults).
   const [layout, setLayout] = useState<Layout | null>(null);
@@ -176,6 +180,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           const d: {
             countdown?: { key: string; elapsedMs: number } | null;
             finish?: { key: string; type: string; elapsedMs: number } | null;
+            launch?: { key: string; elapsedMs: number } | null;
           } = await res.json();
           if (active && d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
             playedKeyRef.current = d.countdown.key;
@@ -184,6 +189,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           if (active && d.finish && d.finish.key !== playedFinishKeyRef.current && d.finish.elapsedMs < 5000) {
             playedFinishKeyRef.current = d.finish.key;
             setFinishVideo(d.finish.type);
+          }
+          if (active && d.launch && d.launch.key !== playedLaunchKeyRef.current && d.launch.elapsedMs < 20000) {
+            playedLaunchKeyRef.current = d.launch.key;
+            setLaunchOn(true);
           }
         }
       } catch { /* ignore */ }
@@ -214,6 +223,22 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
     };
   }, [countdownOn]);
+
+  // Play the launch/rules video when triggered by an admin.
+  useEffect(() => {
+    if (!launchOn) return;
+    const v = launchVideoRef.current;
+    if (!v) return;
+    try { v.currentTime = 0; } catch { /* ignore */ }
+    v.muted = false;
+    v.play().catch(() => { try { v.muted = true; v.play().catch(() => {}); } catch { /* ignore */ } });
+    const done = () => setLaunchOn(false);
+    v.addEventListener("ended", done);
+    return () => {
+      v.removeEventListener("ended", done);
+      try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
+    };
+  }, [launchOn]);
 
   // Play the finish-type video when a finish is scored.
   useEffect(() => {
@@ -300,8 +325,8 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     if (v) {
       try { v.muted = true; await v.play(); v.pause(); v.currentTime = 0; } catch { /* ignore */ }
     }
-    // Prime the finish videos too (unlock autoplay-with-sound on the telão).
-    for (const el of Object.values(finishRefs.current)) {
+    // Prime the finish + launch videos too (unlock autoplay-with-sound).
+    for (const el of [...Object.values(finishRefs.current), launchVideoRef.current]) {
       if (!el) continue;
       try { el.muted = true; await el.play(); el.pause(); el.currentTime = 0; } catch { /* ignore */ }
     }
@@ -350,6 +375,16 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           opacity: countdownOn ? 1 : 0,
           pointerEvents: "none",
         }}
+      />
+
+      {/* Launch/rules video — always mounted; admin triggers it per arena. */}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        ref={launchVideoRef}
+        src="/launch-video.mp4"
+        playsInline
+        preload="auto"
+        style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", objectFit: "contain", background: "#000", zIndex: launchOn ? 75 : -1, opacity: launchOn ? 1 : 0, pointerEvents: "none" }}
       />
 
       {/* Finish-type videos (SPIN/OVER/BURST/EXTREME) — always mounted & primed

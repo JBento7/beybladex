@@ -8,6 +8,7 @@ import StartTournamentButton from "./StartTournamentButton";
 import FinishTournamentButton from "./FinishTournamentButton";
 import ResetTournamentButton from "./ResetTournamentButton";
 import AutoplaySwissButton from "./AutoplaySwissButton";
+import LaunchVideoButton from "./LaunchVideoButton";
 import ScoreModal from "./ScoreModal";
 import PlayerDeckOrder from "./PlayerDeckOrder";
 import ClientJoinButton from "./ClientJoinButton";
@@ -798,6 +799,9 @@ export default async function TournamentDetailPage({
               )}
               {canJudge && tournament.status === "IN_PROGRESS" && (
                 <FinishTournamentButton tournamentId={tournament.id} isOfficial={tournament.isOfficial} />
+              )}
+              {isAdminUser && (
+                <LaunchVideoButton arenas={tournament.arenas ?? 1} />
               )}
               {isAdminUser && tournament.isTest && tournament.format === "ROUND_ROBIN" && tournament.status !== "FINISHED" && (
                 <AutoplaySwissButton tournamentId={tournament.id} />

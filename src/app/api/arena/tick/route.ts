@@ -44,5 +44,15 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* new columns missing (pre-migration) — behave as no signal */ }
 
-  return NextResponse.json({ countdown, finish });
+  // Launch/rules video signal for this arena (admin-triggered, per arena).
+  let launch: { key: string; elapsedMs: number } | null = null;
+  try {
+    const row = await prisma.arenaLayout.findUnique({ where: { key: `launch:arena:${arenaNum}` } });
+    if (row) {
+      const at = JSON.parse(row.data)?.at as number | undefined;
+      if (at && Date.now() - at < 30000) launch = { key: `${arenaNum}:${at}`, elapsedMs: Date.now() - at };
+    }
+  } catch { /* table missing / bad json — ignore */ }
+
+  return NextResponse.json({ countdown, finish, launch });
 }
