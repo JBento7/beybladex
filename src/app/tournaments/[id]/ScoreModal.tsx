@@ -120,6 +120,8 @@ export default function ScoreModal({
   const [showManual, setShowManual] = useState(false);
   // Judge override: start a 3on3 match even without deck orders (player forgot).
   const [forceStart, setForceStart] = useState(false);
+  // Brief visual pulse on the scored side (mobile tap feedback).
+  const [flash, setFlash] = useState<"left" | "right" | null>(null);
 
   // Which battle the judge has started (reveals the scoring board). The 3-2-1
   // countdown plays on the ARENA display, not here.
@@ -235,6 +237,11 @@ export default function ScoreModal({
   async function addPoint(scorerId: string, finishType: FinishType) {
     if (loading || state?.matchFinished || !revealScoring) return;
     setErr(null);
+    // Instant tap feedback: haptic buzz + a visual pulse on the scored side.
+    try { navigator.vibrate?.(25); } catch { /* unsupported */ }
+    const side = scorerId === player1.id ? (leftIsP1 ? "left" : "right") : (leftIsP1 ? "right" : "left");
+    setFlash(side);
+    setTimeout(() => setFlash(null), 350);
     let beybladeId: string | undefined;
 
     if (isDeck) {
@@ -361,29 +368,41 @@ export default function ScoreModal({
     orderArr: leftIsP1 ? p2OrderArr : p1OrderArr,
   };
 
-  // Player scoring column (video layout): 4 finish buttons that directly score.
+  // Player scoring column: the 4 main finishes as big buttons, MISSLAUNCH as a
+  // slim secondary button (rare, avoids mis-taps and saves space on mobile).
   function ScoreColumn({ player, color, side }: { player: Player; color: string; side: "left" | "right" }) {
+    const main = FINISH_BTNS.filter((b) => b.type !== "MISSLAUNCH");
+    const miss = FINISH_BTNS.find((b) => b.type === "MISSLAUNCH");
     return (
       <div className="flex flex-col gap-2">
-        {FINISH_BTNS.map(({ type, label }) => (
+        {main.map(({ type, label }) => (
           <button
             key={type}
             onClick={() => addPoint(player.id, type)}
             disabled={loading}
-            className={`relative rounded-lg border-2 bg-[#141414] hover:brightness-125 disabled:opacity-40 transition-all active:scale-[0.97] px-3 py-2.5 flex items-center ${
+            className={`relative rounded-lg border-2 bg-[#141414] hover:brightness-125 disabled:opacity-40 transition-all active:scale-[0.94] px-3 py-3 flex items-center ${
               side === "right" ? "flex-row-reverse text-right" : "text-left"
             } gap-2`}
             style={{ borderColor: color }}
           >
-            <span className="text-lg font-black tabular-nums" style={{ color }}>
-              +{FINISH_TYPE_POINTS[type]}
-            </span>
+            <span className="text-lg font-black tabular-nums" style={{ color }}>+{FINISH_TYPE_POINTS[type]}</span>
             <span className="flex-1 min-w-0">
               <span className="block text-sm font-black text-white leading-none">{label}</span>
               <span className="block text-[9px] text-gray-500 uppercase tracking-wide">Finish</span>
             </span>
           </button>
         ))}
+        {miss && (
+          <button
+            onClick={() => addPoint(player.id, miss.type)}
+            disabled={loading}
+            className={`rounded-lg border bg-[#141414] hover:brightness-125 disabled:opacity-40 transition-all active:scale-[0.94] px-3 py-1.5 flex items-center justify-center gap-1.5 opacity-80 ${side === "right" ? "flex-row-reverse" : ""}`}
+            style={{ borderColor: `${color}55` }}
+          >
+            <span className="text-xs font-black tabular-nums" style={{ color }}>+1</span>
+            <span className="text-[11px] font-bold text-gray-300">Misslaunch</span>
+          </button>
+        )}
       </div>
     );
   }
@@ -468,14 +487,14 @@ export default function ScoreModal({
                   })}
                 </div>
 
-                {/* Current set big score */}
-                <div className="bg-[#141414] border border-[#222] rounded-xl py-3 mb-3">
+                {/* Current set score (compact) */}
+                <div className="bg-[#141414] border border-[#222] rounded-xl py-2 mb-2">
                   <div className="flex items-center justify-center gap-4">
-                    <span className="text-5xl font-black tabular-nums" style={{ color: L.pts > R.pts ? L.color : "#fff" }}>{L.pts}</span>
-                    <span className="text-2xl text-gray-600 font-bold">:</span>
-                    <span className="text-5xl font-black tabular-nums" style={{ color: R.pts > L.pts ? R.color : "#fff" }}>{R.pts}</span>
+                    <span className={`text-4xl font-black tabular-nums transition-transform ${flash === "left" ? "scale-125" : ""}`} style={{ color: flash === "left" ? L.color : L.pts > R.pts ? L.color : "#fff" }}>{L.pts}</span>
+                    <span className="text-xl text-gray-600 font-bold">:</span>
+                    <span className={`text-4xl font-black tabular-nums transition-transform ${flash === "right" ? "scale-125" : ""}`} style={{ color: flash === "right" ? R.color : R.pts > L.pts ? R.color : "#fff" }}>{R.pts}</span>
                   </div>
-                  <div className="text-center text-[10px] text-gray-500 mt-1">
+                  <div className="text-center text-[10px] text-gray-500 mt-0.5">
                     primeiro a {pointsToWinSet} vence o set
                     {isDeck && <> · ciclo {cycleIndex + 1}, batalha {posInCycle + 1}/3</>}
                   </div>
@@ -613,22 +632,22 @@ export default function ScoreModal({
                       <ScoreColumn player={R.player} color={R.color} side="right" />
                     </div>
 
-                    <div className="mt-3 flex items-center gap-3 flex-wrap">
-                      {loading && <span className="text-xs text-gray-500 animate-pulse">Registrando...</span>}
-                      {/* Relaunch: re-fire the countdown on the telão (misslaunch / early shoot) */}
+                    {/* Sticky action bar — always reachable while scoring on a phone */}
+                    <div className="sticky bottom-0 -mx-4 sm:-mx-5 mt-3 px-4 sm:px-5 pt-2 pb-1 bg-[#0d0d0d]/95 backdrop-blur border-t border-[#2a2a2a] flex items-center gap-2">
+                      {loading && <span className="text-xs text-gray-500 animate-pulse">…</span>}
                       <button
                         onClick={startBattle}
                         disabled={starting}
-                        className="text-sm font-semibold text-blue-300 hover:text-white bg-[#1a1a1a] hover:bg-[#252525] border border-blue-500/40 hover:border-blue-400 px-4 py-2.5 rounded-lg transition-colors disabled:opacity-40"
+                        className="flex-1 text-sm font-bold text-blue-300 hover:text-white bg-[#1a1a1a] hover:bg-[#252525] border border-blue-500/40 hover:border-blue-400 px-3 py-3 rounded-lg transition-colors disabled:opacity-40"
                       >
                         {starting ? "..." : "🔄 Recontagem"}
                       </button>
                       <button
                         onClick={undoPoint}
                         disabled={loading}
-                        className="ml-auto text-sm font-semibold text-gray-300 hover:text-white bg-[#1a1a1a] hover:bg-[#252525] border border-[#3a3a3a] hover:border-red-500/50 px-4 py-2.5 rounded-lg transition-colors disabled:opacity-40"
+                        className="flex-1 text-sm font-bold text-gray-200 hover:text-white bg-[#1a1a1a] hover:bg-[#252525] border border-[#3a3a3a] hover:border-red-500/50 px-3 py-3 rounded-lg transition-colors disabled:opacity-40"
                       >
-                        ↩ Desfazer último ponto
+                        ↩ Desfazer
                       </button>
                     </div>
                   </>
