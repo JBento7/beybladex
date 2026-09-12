@@ -39,6 +39,18 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
   const [advanceMsg, setAdvanceMsg] = useState<string | null>(null);
 
   const [deduping, setDeduping] = useState(false);
+  const [recalcing, setRecalcing] = useState(false);
+
+  async function recalcStandings() {
+    setRecalcing(true);
+    setErr(null);
+    setAdvanceMsg(null);
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/recalc-standings`, { method: "POST" });
+    setRecalcing(false);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) { setAdvanceMsg(`Classificação recalculada (${data.participants} jogadores).`); router.refresh(); }
+    else setAdvanceMsg(data.error || "Erro ao recalcular classificação");
+  }
 
   async function dedupeMatches() {
     setDeduping(true);
@@ -144,6 +156,14 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          <button
+            onClick={recalcStandings}
+            disabled={recalcing}
+            title="Recalcula vitórias/pontos de todos os jogadores a partir das partidas encerradas"
+            className="text-xs font-bold border border-[#f0a500]/40 text-[#f0a500] hover:bg-[#f0a500]/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {recalcing ? "Recalculando..." : "Recalcular Classificação"}
+          </button>
           <button
             onClick={dedupeMatches}
             disabled={deduping}
