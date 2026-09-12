@@ -596,6 +596,112 @@ export async function generateSwissRound(
   });
 }
 
+// Fairness check + repair for a Swiss (ROUND_ROBIN) tournament: some players may
+// have played fewer matches than others (e.g. odd headcounts that dropped a
+// player from a round). This measures each participant's real (non-bye) match
+// count and, for those below the maximum, generates makeup matches pairing them
+// with each other — appended to the current last round so the round-completion
+// / advancement logic keeps waiting until everyone is even. Returns a summary.
+export async function generateMakeupRound(tournamentId: string): Promise<{
+  ok: boolean;
+  reason?: string;
+  target?: number;
+  counts?: { userId: string; count: number }[];
+  added?: number;
+  byeUserId?: string | null;
+}> {
+  const [tournament, participants, allMatches] = await Promise.all([
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true, format: true, qualifiers: true } }),
+    prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" }, select: { userId: true, totalPoints: true } }),
+    prisma.match.findMany({ where: { tournamentId }, select: { round: true, player1Id: true, player2Id: true } }),
+  ]);
+  if (tournament?.format !== "ROUND_ROBIN") return { ok: false, reason: "Disponível apenas no formato Suíço." };
+
+  const participantCount = participants.length;
+  const swissRounds = swissRoundCount(participantCount);
+
+  // Refuse if the knockout phase has begun — rebalancing the Swiss counts then
+  // would reopen a phase that's already closed.
+  const maxRound = allMatches.reduce((mx, m) => Math.max(mx, m.round), 0);
+  if (maxRound === 0) return { ok: false, reason: "O torneio ainda não começou." };
+  if (maxRound > swissRounds) return { ok: false, reason: "O mata-mata já começou; não é possível rebalancear a fase suíça." };
+
+  // Count real (non-bye) matches per approved participant.
+  const ids = new Set(participants.map((p) => p.userId!));
+  const count = new Map<string, number>();
+  for (const id of ids) count.set(id, 0);
+  const faced = new Set<string>();
+  for (const m of allMatches) {
+    if (m.player1Id === m.player2Id) continue;
+    if (ids.has(m.player1Id)) count.set(m.player1Id, (count.get(m.player1Id) ?? 0) + 1);
+    if (ids.has(m.player2Id)) count.set(m.player2Id, (count.get(m.player2Id) ?? 0) + 1);
+    faced.add(`${m.player1Id}|${m.player2Id}`);
+    faced.add(`${m.player2Id}|${m.player1Id}`);
+  }
+
+  const target = Math.max(...count.values());
+  const countsSummary = [...count.entries()].map(([userId, c]) => ({ userId, count: c }));
+
+  // Under-played players, neediest first (fewest games, then by standing).
+  const order = new Map(participants.map((p, i) => [p.userId!, i]));
+  const under = [...ids].filter((id) => (count.get(id) ?? 0) < target)
+    .sort((a, b) => {
+      const d = (count.get(a) ?? 0) - (count.get(b) ?? 0);
+      if (d !== 0) return d;
+      return (order.get(a) ?? 0) - (order.get(b) ?? 0);
+    });
+
+  if (under.length === 0) return { ok: true, target, counts: countsSummary, added: 0, byeUserId: null };
+
+  // Pair under-played players together, preferring opponents they haven't faced.
+  const pairs: { player1Id: string; player2Id: string }[] = [];
+  const remaining = [...under];
+  while (remaining.length >= 2) {
+    const p1 = remaining.shift()!;
+    let idx = remaining.findIndex((p2) => !faced.has(`${p1}|${p2}`));
+    if (idx === -1) idx = 0; // everyone left already faced p1 → allow a rematch
+    const p2 = remaining.splice(idx, 1)[0];
+    pairs.push({ player1Id: p1, player2Id: p2 });
+    faced.add(`${p1}|${p2}`); faced.add(`${p2}|${p1}`);
+  }
+
+  // One left over (odd number of under-played): pair with the least-played field
+  // player they haven't faced, to even them up with minimal new imbalance.
+  let byeUserId: string | null = null;
+  if (remaining.length === 1) {
+    const solo = remaining[0];
+    const candidate = [...ids]
+      .filter((id) => id !== solo && !faced.has(`${solo}|${id}`))
+      .sort((a, b) => (count.get(a) ?? 0) - (count.get(b) ?? 0))[0];
+    if (candidate) {
+      pairs.push({ player1Id: solo, player2Id: candidate });
+      faced.add(`${solo}|${candidate}`); faced.add(`${candidate}|${solo}`);
+    } else {
+      byeUserId = solo; // faced everyone already → unavoidable bye
+    }
+  }
+
+  if (pairs.length === 0) return { ok: true, target, counts: countsSummary, added: 0, byeUserId };
+
+  const judges = await getTournamentJudgeIds(tournamentId);
+  const arenaCount = tournament?.arenas ?? 1;
+  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
+  await prisma.match.createMany({
+    data: scheduled.map(({ match, slot, arena, judgeId }, i) => ({
+      tournamentId,
+      player1Id: match.player1Id,
+      player2Id: match.player2Id,
+      round: maxRound, // append to the current round so advancement waits for them
+      bracketPos: 1000 + i,
+      arena,
+      slot,
+      judgeId,
+    })),
+  });
+
+  return { ok: true, target, counts: countsSummary, added: pairs.length, byeUserId };
+}
+
 export async function advanceSingleElimination(
   tournamentId: string,
   completedRound: number

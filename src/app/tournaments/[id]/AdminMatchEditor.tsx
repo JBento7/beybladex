@@ -40,6 +40,29 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
 
   const [deduping, setDeduping] = useState(false);
   const [recalcing, setRecalcing] = useState(false);
+  const [balancing, setBalancing] = useState(false);
+
+  async function balanceMatches() {
+    setBalancing(true);
+    setErr(null);
+    setAdvanceMsg(null);
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/balance-matches`, { method: "POST" });
+    setBalancing(false);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      if (data.added > 0) {
+        setAdvanceMsg(
+          `Todos devem jogar ${data.target} partida(s). Geradas ${data.added} partida(s) para os jogadores em falta.` +
+          (data.byeUserId ? " (1 jogador ficou sem par e passou de bye.)" : "")
+        );
+        router.refresh();
+      } else {
+        setAdvanceMsg(`Tudo certo: todos jogaram o mesmo número de partidas (${data.target}).`);
+      }
+    } else {
+      setAdvanceMsg(data.error || "Erro ao balancear partidas");
+    }
+  }
 
   async function recalcStandings() {
     setRecalcing(true);
@@ -156,6 +179,14 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          <button
+            onClick={balanceMatches}
+            disabled={balancing}
+            title="Verifica se todos jogaram o mesmo número de partidas e gera partidas para quem ficou em falta"
+            className="text-xs font-bold border border-[#f0a500]/40 text-[#f0a500] hover:bg-[#f0a500]/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {balancing ? "Verificando..." : "Verificar Partidas"}
+          </button>
           <button
             onClick={recalcStandings}
             disabled={recalcing}
