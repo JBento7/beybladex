@@ -52,6 +52,9 @@ export async function GET(
       currentSetBattleCount,
       // Which player is on the X side (other = B side); null until the judge sets it.
       xSidePlayerId: (match as { xSidePlayerId?: string | null }).xSidePlayerId ?? null,
+      arena: (match as { arena?: number | null }).arena ?? 1,
+      player1Id: match.player1Id,
+      player2Id: match.player2Id,
     });
   } catch (err) {
     console.error(err);

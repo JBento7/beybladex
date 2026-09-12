@@ -478,6 +478,7 @@ export async function GET(req: NextRequest) {
   const [oP1FinishesBySet, oP2FinishesBySet] = lr(p1FinishesBySet, p2FinishesBySet);
   const [oP1TotalPoints, oP2TotalPoints] = lr(p1TotalPoints, p2TotalPoints);
   const [oP1Deck, oP2Deck] = lr(p1Deck, p2Deck);
+  const [oP1Id, oP2Id] = lr(match.player1Id, match.player2Id);
   const outHistory = leftIsP1 ? history : history.map((h) => ({ ...h, side: h.side === "p1" ? "p2" : "p1" }));
 
   return NextResponse.json({
@@ -494,6 +495,8 @@ export async function GET(req: NextRequest) {
     match: {
       player1,
       player2,
+      p1Id: oP1Id,
+      p2Id: oP2Id,
       p1Avatar,
       p2Avatar,
       p1Sets: oP1Sets,

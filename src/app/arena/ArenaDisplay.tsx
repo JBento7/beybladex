@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { signOut } from "next-auth/react";
 import { fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type Layout, type FontDef } from "@/lib/arenaLayout";
 import FontLoader from "@/components/FontLoader";
+import { startAnswerer } from "@/lib/arenaLink";
 
 // Fields disabled in the layout editor are hidden from the placar via this ctx.
 const HiddenCtx = createContext<Set<string>>(new Set());
@@ -39,6 +40,8 @@ type HistRow = { side: "p1" | "p2"; finish: "S" | "KO" | "B" | "X"; points: numb
 type Match = {
   player1: string;
   player2: string;
+  p1Id?: string;
+  p2Id?: string;
   p1Avatar: string | null;
   p2Avatar: string | null;
   p1Sets: number;
@@ -109,6 +112,16 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const [launchOn, setLaunchOn] = useState(false);
   const launchVideoRef = useRef<HTMLVideoElement | null>(null);
   const playedLaunchKeyRef = useRef<string | null>(null);
+  // Dedup guards so a trigger from BOTH the P2P link and the server poll doesn't
+  // play twice within a short window.
+  const lastCdRef = useRef(0);
+  const lastFinishRef = useRef(0);
+  const lastLaunchRef = useRef(0);
+  const playCountdown = () => { if (Date.now() - lastCdRef.current < 3000) return; lastCdRef.current = Date.now(); setCountdownOn(true); };
+  const playFinish = (t: string) => { if (Date.now() - lastFinishRef.current < 3000) return; lastFinishRef.current = Date.now(); setFinishVideo(t); };
+  const playLaunch = () => { if (Date.now() - lastLaunchRef.current < 3000) return; lastLaunchRef.current = Date.now(); setLaunchOn(true); };
+  // Live score received over the P2P link (overrides the poll when fresh).
+  const [p2pScore, setP2pScore] = useState<{ byId: Record<string, number>; setsById: Record<string, number>; at: number } | null>(null);
 
   // Saved layout overrides from the admin editor (applied over the coded defaults).
   const [layout, setLayout] = useState<Layout | null>(null);
@@ -149,7 +162,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       setData(d);
       if (d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
         playedKeyRef.current = d.countdown.key;
-        setCountdownOn(true);
+        playCountdown();
       }
     } catch {
       setError("Sem conexão");
@@ -184,15 +197,15 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           } = await res.json();
           if (active && d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
             playedKeyRef.current = d.countdown.key;
-            setCountdownOn(true);
+            playCountdown();
           }
           if (active && d.finish && d.finish.key !== playedFinishKeyRef.current && d.finish.elapsedMs < 5000) {
             playedFinishKeyRef.current = d.finish.key;
-            setFinishVideo(d.finish.type);
+            playFinish(d.finish.type);
           }
           if (active && d.launch && d.launch.key !== playedLaunchKeyRef.current && d.launch.elapsedMs < 20000) {
             playedLaunchKeyRef.current = d.launch.key;
-            setLaunchOn(true);
+            playLaunch();
           }
         }
       } catch { /* ignore */ }
@@ -201,6 +214,23 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     tick();
     return () => { active = false; if (timer) clearTimeout(timer); };
   }, [arena, started, previewParam]);
+
+  // P2P (LAN) link: accept the judge's direct connection for this arena so
+  // triggers + live score arrive instantly and keep working if the internet
+  // drops. Best-effort; the server poll remains the fallback.
+  useEffect(() => {
+    if (arena == null || !started) return;
+    const link = startAnswerer(arena, {
+      onMessage: (m: { type?: string; finishType?: string; byId?: Record<string, number>; setsById?: Record<string, number>; at?: number }) => {
+        if (m?.type === "countdown") playCountdown();
+        else if (m?.type === "finish" && m.finishType) playFinish(m.finishType);
+        else if (m?.type === "launch") playLaunch();
+        else if (m?.type === "state" && m.byId) setP2pScore({ byId: m.byId, setsById: m.setsById ?? {}, at: m.at ?? Date.now() });
+      },
+    });
+    return () => link.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arena, started]);
 
   // Play the countdown video (with its own audio) when triggered.
   useEffect(() => {
@@ -482,7 +512,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         </div>
       ) : (
         <HiddenCtx.Provider value={hiddenFields}>
-          <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} layout={layout} bg={scoreboardBg} customFields={customFields} onTest={() => setCountdownOn(true)} />
+          <Scoreboard arena={arena} data={data!} match={match} build={ARENA_BUILD} layout={layout} bg={scoreboardBg} customFields={customFields} p2p={p2pScore} onTest={() => setCountdownOn(true)} />
         </HiddenCtx.Provider>
       )}
     </div>
@@ -805,8 +835,18 @@ function BeyArt({ layout, side, img, pieces }: { layout: Layout | null; side: "L
   return <LImg layout={layout} k={`beyImg${side}`} src={img} />;
 }
 
-function Scoreboard({ data, match, build, layout, bg, customFields, onTest }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; customFields: CustomFld[]; onTest: () => void }) {
+function Scoreboard({ data, match, build, layout, bg, customFields, p2p, onTest }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; customFields: CustomFld[]; p2p?: { byId: Record<string, number>; setsById: Record<string, number>; at: number } | null; onTest: () => void }) {
   const hidden = useContext(HiddenCtx);
+  // When a fresh P2P (LAN) score from the judge's panel is available, prefer it
+  // over the server-polled values so the telão stays live even if the internet
+  // drops. Falls back to the server values as soon as the P2P signal goes stale.
+  const p2pFresh = !!p2p && Date.now() - p2p.at < 8000;
+  const pick = (id: string | undefined, src: Record<string, number> | undefined, fallback: number) =>
+    p2pFresh && id && src && src[id] != null ? src[id] : fallback;
+  const p1Points = pick(match.p1Id, p2p?.byId, match.p1Points);
+  const p2Points = pick(match.p2Id, p2p?.byId, match.p2Points);
+  const p1Sets = pick(match.p1Id, p2p?.setsById, match.p1Sets);
+  const p2Sets = pick(match.p2Id, p2p?.setsById, match.p2Sets);
   const statusText = data.status === "live" ? "AO VIVO" : data.status === "pending" ? "AGUARDANDO" : "—";
   const partida = data.matchNumber
     ? `${pad2(data.matchNumber)}${data.matchesTotal ? ` / ${pad2(data.matchesTotal)}` : ""}`
@@ -861,16 +901,16 @@ function Scoreboard({ data, match, build, layout, bg, customFields, onTest }: { 
         <LText layout={layout} k="beyNameR">{match.p2ActiveBey || ""}</LText>
 
         {/* Points pips */}
-        <Pips layout={layout} k="pointsL" count={match.p1Points} dir="v" />
-        <Pips layout={layout} k="pointsR" count={match.p2Points} dir="v" />
+        <Pips layout={layout} k="pointsL" count={p1Points} dir="v" />
+        <Pips layout={layout} k="pointsR" count={p2Points} dir="v" />
 
         {/* Score */}
-        <LText layout={layout} k="scoreL">{match.p1Points}</LText>
-        <LText layout={layout} k="scoreR">{match.p2Points}</LText>
+        <LText layout={layout} k="scoreL">{p1Points}</LText>
+        <LText layout={layout} k="scoreR">{p2Points}</LText>
 
         {/* Victories */}
-        <Pips layout={layout} k="victoriesL" count={match.p1Sets} dir="h" />
-        <Pips layout={layout} k="victoriesR" count={match.p2Sets} dir="h" />
+        <Pips layout={layout} k="victoriesL" count={p1Sets} dir="h" />
+        <Pips layout={layout} k="victoriesR" count={p2Sets} dir="h" />
 
         {/* Rodada / Partida / Status */}
         <LText layout={layout} k="rodada">{pad2(match.currentSetNum)}</LText>

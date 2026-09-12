@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
+import { startOfferer } from "@/lib/arenaLink";
 import type { FinishType } from "@prisma/client";
 import DeckOrderPicker, { type BeybladeInfo, comboParts } from "./DeckOrderPicker";
 
@@ -50,6 +51,9 @@ type MatchState = {
   deckOrders: DeckOrderRow[];
   currentSetBattleCount: number;
   xSidePlayerId: string | null;
+  arena?: number | null;
+  player1Id?: string;
+  player2Id?: string;
 };
 
 const P1_COLOR = "#f0a500";
@@ -131,6 +135,17 @@ export default function ScoreModal({
   const router = useRouter();
   const isDeck = deckType === "THREE_ON_THREE";
 
+  // P2P link to this match's arena telão (LAN, works even if internet drops).
+  const linkRef = useRef<ReturnType<typeof startOfferer> | null>(null);
+  const arena = state?.arena ?? null;
+  useEffect(() => {
+    if (!open || !arena) return;
+    const link = startOfferer(arena, {});
+    linkRef.current = link;
+    return () => { link.close(); linkRef.current = null; };
+  }, [open, arena]);
+  const linkSend = (msg: unknown) => { try { linkRef.current?.send(msg); } catch { /* ignore */ } };
+
   const fetchState = useCallback(async () => {
     const res = await fetch(`/api/matches/${matchId}/sets`);
     if (res.ok) setState(await res.json());
@@ -195,6 +210,15 @@ export default function ScoreModal({
   const p1OrderArr = p1Order ? [p1Order.bey1Id, p1Order.bey2Id, p1Order.bey3Id] : null;
   const p2OrderArr = p2Order ? [p2Order.bey1Id, p2Order.bey2Id, p2Order.bey3Id] : null;
 
+  // Mirror the live score to the arena telão over the P2P link.
+  useEffect(() => {
+    const p1 = state?.player1Id, p2 = state?.player2Id;
+    if (!p1 || !p2) return;
+    try {
+      linkRef.current?.send({ type: "state", byId: { [p1]: p1Pts, [p2]: p2Pts }, setsById: { [p1]: p1Sets, [p2]: p2Sets }, at: Date.now() });
+    } catch { /* ignore */ }
+  }, [p1Pts, p2Pts, p1Sets, p2Sets, state?.player1Id, state?.player2Id]);
+
   const bothOrders = !isDeck || (!!p1Order && !!p2Order);
   // 3on3 normally needs both deck orders first — but the judge can override and
   // start anyway if a player forgot to register/pick their deck.
@@ -239,6 +263,10 @@ export default function ScoreModal({
     setErr(null);
     // Instant tap feedback: haptic buzz + a visual pulse on the scored side.
     try { navigator.vibrate?.(25); } catch { /* unsupported */ }
+    // Fire the finish video on the telão instantly over the LAN link.
+    if (["SPIN_FINISH", "OVER_FINISH", "BURST_FINISH", "EXTREME_FINISH"].includes(finishType)) {
+      linkSend({ type: "finish", finishType });
+    }
     const side = scorerId === player1.id ? (leftIsP1 ? "left" : "right") : (leftIsP1 ? "right" : "left");
     setFlash(side);
     setTimeout(() => setFlash(null), 350);
@@ -297,6 +325,7 @@ export default function ScoreModal({
   // so players can see the countdown before the match starts).
   const [launchSent, setLaunchSent] = useState(false);
   async function playLaunchVideo() {
+    linkSend({ type: "launch" }); // instant over LAN
     try {
       const res = await fetch(`/api/matches/${matchId}/launch-video`, { method: "POST" });
       if (res.ok) { setLaunchSent(true); setTimeout(() => setLaunchSent(false), 2500); }
@@ -307,6 +336,7 @@ export default function ScoreModal({
   // the scoring board here (no countdown on the judge's screen).
   async function startBattle() {
     if (starting) return;
+    linkSend({ type: "countdown" }); // instant over LAN
     setStarting(true);
     try {
       await fetch(`/api/matches/${matchId}/countdown`, {
