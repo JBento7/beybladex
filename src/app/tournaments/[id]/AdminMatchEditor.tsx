@@ -53,7 +53,8 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
       if (data.added > 0) {
         setAdvanceMsg(
           `Todos devem jogar ${data.target} partida(s). Geradas ${data.added} partida(s) para os jogadores em falta.` +
-          (data.byeUserId ? " (1 jogador ficou sem par e passou de bye.)" : "")
+          (data.byeUserId ? " (1 jogador ficou sem par e passou de bye.)" : "") +
+          (data.knockoutReset ? " O mata-mata foi desfeito e será refeito quando estas partidas terminarem." : "")
         );
         router.refresh();
       } else {

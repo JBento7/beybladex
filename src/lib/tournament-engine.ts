@@ -609,32 +609,38 @@ export async function generateMakeupRound(tournamentId: string): Promise<{
   counts?: { userId: string; count: number }[];
   added?: number;
   byeUserId?: string | null;
+  knockoutReset?: boolean;
 }> {
   const [tournament, participants, allMatches] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true, format: true, qualifiers: true } }),
     prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" }, select: { userId: true, totalPoints: true } }),
-    prisma.match.findMany({ where: { tournamentId }, select: { round: true, player1Id: true, player2Id: true } }),
+    prisma.match.findMany({ where: { tournamentId }, select: { id: true, round: true, player1Id: true, player2Id: true } }),
   ]);
   if (tournament?.format !== "ROUND_ROBIN") return { ok: false, reason: "Disponível apenas no formato Suíço." };
 
   const participantCount = participants.length;
   const swissRounds = swissRoundCount(participantCount);
 
-  // Refuse if the knockout phase has begun — rebalancing the Swiss counts then
-  // would reopen a phase that's already closed.
   const maxRound = allMatches.reduce((mx, m) => Math.max(mx, m.round), 0);
   if (maxRound === 0) return { ok: false, reason: "O torneio ainda não começou." };
-  if (maxRound > swissRounds) return { ok: false, reason: "O mata-mata já começou; não é possível rebalancear a fase suíça." };
 
-  // Count real (non-bye) matches per approved participant.
+  // Fairness is measured over the SWISS phase only (rounds <= swissRounds); the
+  // knockout is a consequence of those standings.
+  const swissMatches = allMatches.filter((m) => m.round <= swissRounds);
+
+  // Count real (non-bye) SWISS matches per approved participant. Rematch
+  // avoidance still considers every match (knockout included).
   const ids = new Set(participants.map((p) => p.userId!));
   const count = new Map<string, number>();
   for (const id of ids) count.set(id, 0);
   const faced = new Set<string>();
-  for (const m of allMatches) {
+  for (const m of swissMatches) {
     if (m.player1Id === m.player2Id) continue;
     if (ids.has(m.player1Id)) count.set(m.player1Id, (count.get(m.player1Id) ?? 0) + 1);
     if (ids.has(m.player2Id)) count.set(m.player2Id, (count.get(m.player2Id) ?? 0) + 1);
+  }
+  for (const m of allMatches) {
+    if (m.player1Id === m.player2Id) continue;
     faced.add(`${m.player1Id}|${m.player2Id}`);
     faced.add(`${m.player2Id}|${m.player1Id}`);
   }
@@ -683,6 +689,33 @@ export async function generateMakeupRound(tournamentId: string): Promise<{
 
   if (pairs.length === 0) return { ok: true, target, counts: countsSummary, added: 0, byeUserId };
 
+  // If the knockout already started, tear it down: the makeup matches will
+  // change the final Swiss standings, so the bracket must be rebuilt from the
+  // corrected standings once these matches finish (advancement does that
+  // automatically). Remove knockout matches + their child rows and reopen the
+  // tournament, then recompute standings so removed knockout wins stop counting.
+  const knockoutMatches = allMatches.filter((m) => m.round > swissRounds);
+  let knockoutReset = false;
+  if (knockoutMatches.length > 0) {
+    const koIds = knockoutMatches.map((m) => m.id);
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.matchPoint.deleteMany({ where: { matchId: { in: koIds } } });
+        await tx.matchSet.deleteMany({ where: { matchId: { in: koIds } } });
+        try { await tx.matchDeckOrder.deleteMany({ where: { matchId: { in: koIds } } }); } catch { /* pre-migration */ }
+        await tx.match.deleteMany({ where: { id: { in: koIds } } });
+        await tx.tournament.update({ where: { id: tournamentId }, data: { status: "IN_PROGRESS" } });
+      },
+      { maxWait: 15000, timeout: 30000 }
+    );
+    knockoutReset = true;
+    for (const id of ids) await recalculateStandings(tournamentId, id);
+  }
+
+  // Append the makeup matches to the LAST SWISS round so the Swiss phase is only
+  // "complete" (and advancement fires, rebuilding the bracket) once everyone has
+  // played the same number of matches.
+  const targetRound = Math.min(maxRound, swissRounds);
   const judges = await getTournamentJudgeIds(tournamentId);
   const arenaCount = tournament?.arenas ?? 1;
   const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
@@ -691,7 +724,7 @@ export async function generateMakeupRound(tournamentId: string): Promise<{
       tournamentId,
       player1Id: match.player1Id,
       player2Id: match.player2Id,
-      round: maxRound, // append to the current round so advancement waits for them
+      round: targetRound,
       bracketPos: 1000 + i,
       arena,
       slot,
@@ -699,7 +732,7 @@ export async function generateMakeupRound(tournamentId: string): Promise<{
     })),
   });
 
-  return { ok: true, target, counts: countsSummary, added: pairs.length, byeUserId };
+  return { ok: true, target, counts: countsSummary, added: pairs.length, byeUserId, knockoutReset };
 }
 
 export async function advanceSingleElimination(
