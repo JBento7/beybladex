@@ -123,6 +123,21 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   // Live score received over the P2P link (overrides the poll when fresh).
   const [p2pScore, setP2pScore] = useState<{ byId: Record<string, number>; setsById: Record<string, number>; at: number } | null>(null);
 
+  // Polling-rate governors (to reduce Vercel function invocations):
+  //  - liveRef: true while a match is actually live → poll faster; idle → slow.
+  //  - visibleRef: false when the tab is backgrounded → pause polling entirely.
+  //  - p2pFreshRef: last time a P2P (LAN) message arrived → when the direct
+  //    link is feeding us, the server poll can back off since it's just a fallback.
+  const liveRef = useRef(false);
+  const visibleRef = useRef(true);
+  const p2pFreshRef = useRef(0);
+  useEffect(() => {
+    const onVis = () => { visibleRef.current = document.visibilityState !== "hidden"; };
+    document.addEventListener("visibilitychange", onVis);
+    onVis();
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
   // Saved layout overrides from the admin editor (applied over the coded defaults).
   const [layout, setLayout] = useState<Layout | null>(null);
   const [winnerLayout, setWinnerLayout] = useState<Layout | null>(null);
@@ -159,6 +174,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       // the waiting screen. A real gap (a few seconds) still falls through.
       if (!d.match && Date.now() - lastMatchTsRef.current < 6000) return;
       if (d.match) lastMatchTsRef.current = Date.now();
+      liveRef.current = d.status === "live" && !!d.match;
       setData(d);
       if (d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
         playedKeyRef.current = d.countdown.key;
@@ -169,12 +185,22 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     }
   }, [previewParam]);
 
-  // Full scoreboard poll (heavy) — steady 1.5s.
+  // Full scoreboard poll (heavy). Adaptive, self-scheduling to keep Vercel
+  // invocations down: fast while a match is live, slow when idle/backgrounded,
+  // and slower still when the P2P link is actively feeding this telão.
   useEffect(() => {
     if (arena == null || !started) return;
-    load();
-    const t = setInterval(load, 1500);
-    return () => clearInterval(t);
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const run = async () => {
+      if (visibleRef.current) await load();
+      if (!active) return;
+      const p2pFresh = Date.now() - p2pFreshRef.current < 10000;
+      const delay = !visibleRef.current ? 8000 : !liveRef.current ? 6000 : p2pFresh ? 5000 : 3000;
+      timer = setTimeout(run, delay);
+    };
+    run();
+    return () => { active = false; if (timer) clearTimeout(timer); };
   }, [arena, started, load]);
 
   // Lightweight countdown poll (single cheap query) — fast so the video starts
@@ -186,6 +212,9 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     // Self-scheduling loop: the next poll fires ~250ms AFTER the previous one
     // returns, so slow requests never pile up (snappy signal, low DB load).
     const tick = async () => {
+      // Skip the network call when backgrounded; still reschedule slowly so we
+      // resume promptly when the tab returns.
+      if (!visibleRef.current) { if (active) timer = setTimeout(tick, 3000); return; }
       try {
         const url = previewParam ? `/api/arena/tick?n=${previewParam}` : "/api/arena/tick";
         const res = await fetch(url);
@@ -209,7 +238,12 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           }
         }
       } catch { /* ignore */ }
-      if (active) timer = setTimeout(tick, 250);
+      // Adaptive cadence: snappy while live, relaxed when idle, and backed off
+      // when the P2P link is delivering signals directly (server tick is just a
+      // fallback then). This is the single biggest Vercel invocation source.
+      const p2pFresh = Date.now() - p2pFreshRef.current < 10000;
+      const delay = !liveRef.current ? 3000 : p2pFresh ? 2000 : 700;
+      if (active) timer = setTimeout(tick, delay);
     };
     tick();
     return () => { active = false; if (timer) clearTimeout(timer); };
@@ -222,6 +256,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     if (arena == null || !started) return;
     const link = startAnswerer(arena, {
       onMessage: (m: { type?: string; finishType?: string; byId?: Record<string, number>; setsById?: Record<string, number>; at?: number }) => {
+        p2pFreshRef.current = Date.now();
         if (m?.type === "countdown") playCountdown();
         else if (m?.type === "finish" && m.finishType) playFinish(m.finishType);
         else if (m?.type === "launch") playLaunch();

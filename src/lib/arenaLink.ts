@@ -56,14 +56,15 @@ export function startAnswerer(arena: number, h: Handlers) {
   let closed = false;
   let handledId: string | null = null;
   let pc: RTCPeerConnection | null = null;
+  let connected = false;
 
   async function handleOffer(id: string, sdp: RTCSessionDescriptionInit) {
     try { pc?.close(); } catch { /* ignore */ }
     pc = new RTCPeerConnection({ iceServers: ICE });
     pc.ondatachannel = (ev) => {
       const dc = ev.channel;
-      dc.onopen = () => h.onOpen?.();
-      dc.onclose = () => h.onClose?.();
+      dc.onopen = () => { connected = true; h.onOpen?.(); };
+      dc.onclose = () => { connected = false; h.onClose?.(); };
       dc.onmessage = (e) => { try { h.onMessage?.(JSON.parse(e.data)); } catch { /* ignore */ } };
     };
     await pc.setRemoteDescription(sdp);
@@ -81,7 +82,10 @@ export function startAnswerer(arena: number, h: Handlers) {
           await handleOffer(r.signal.id, r.signal.sdp);
         }
       } catch { /* ignore */ }
-      await new Promise((res) => setTimeout(res, 1500));
+      // Back off once we have a live data channel — we only keep polling to catch
+      // a NEW offer (new judge/match), which is rare. This keeps the signaling
+      // poll from being a constant drain on the server.
+      await new Promise((res) => setTimeout(res, connected ? 15000 : 4000));
     }
   })();
 
