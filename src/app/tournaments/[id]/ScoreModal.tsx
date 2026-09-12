@@ -255,13 +255,22 @@ export default function ScoreModal({
     }
 
     setLoading(true);
-    const res = await fetch(`/api/matches/${matchId}/point`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scorerId, finishType, beybladeId: beybladeId || undefined }),
-    });
+    const body = JSON.stringify({ scorerId, finishType, beybladeId: beybladeId || undefined });
+    // Auto-retry on connection drops so a weak signal doesn't lose the point.
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      try {
+        res = await fetch(`/api/matches/${matchId}/point`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+        break; // got a response (ok or error) — stop retrying
+      } catch {
+        setErr(`Sem conexão — reenviando… (${attempt + 1})`);
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
     setLoading(false);
+    if (!res) { setErr("Sem conexão. O ponto não foi registrado — tente de novo."); return; }
     if (res.ok) {
+      setErr(null);
       await fetchState();
       const data = await res.json();
       if (data.matchFinished) router.refresh();
