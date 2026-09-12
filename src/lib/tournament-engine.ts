@@ -357,6 +357,32 @@ export async function advanceSwissTournament(tournamentId: string, completedRoun
   await finalizeTournamentRanking(tournamentId);
 }
 
+// Self-healing advancement for Swiss (ROUND_ROBIN) tournaments: if the latest
+// round is fully finished but the next round / knockout was never generated
+// (e.g. the last match closed via a path that didn't trigger advancement), do
+// it now. Idempotent and cheap — a no-op when the round isn't complete or the
+// next round already exists — so it is safe to call on every page view.
+export async function ensureSwissProgress(tournamentId: string) {
+  const last = await prisma.match.findFirst({
+    where: { tournamentId },
+    orderBy: { round: "desc" },
+    select: { round: true },
+  });
+  if (!last) return;
+  const round = last.round;
+
+  const roundMatches = await prisma.match.findMany({
+    where: { tournamentId, round },
+    select: { status: true },
+  });
+  if (roundMatches.length === 0 || !roundMatches.every((m) => m.status === "FINISHED")) return;
+
+  const nextExists = await prisma.match.count({ where: { tournamentId, round: { gt: round } } });
+  if (nextExists > 0) return;
+
+  await advanceSwissTournament(tournamentId, round);
+}
+
 export async function generateGroups(tournamentId: string) {
   const [rawParticipants, tournament, judges] = await Promise.all([
     prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } }),
@@ -498,6 +524,12 @@ export async function generateSwissRound(
   tournamentId: string,
   round: number
 ) {
+  // Idempotent: never generate a round that already has matches. This protects
+  // against duplicate rounds when advancement is triggered from more than one
+  // place (concurrent match completions, the self-healing page check, etc.).
+  const existing = await prisma.match.count({ where: { tournamentId, round } });
+  if (existing > 0) return;
+
   const [tournament, judges] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
     getTournamentJudgeIds(tournamentId),

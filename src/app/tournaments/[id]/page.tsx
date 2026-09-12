@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSwissProgress } from "@/lib/tournament-engine";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
@@ -332,6 +333,21 @@ export default async function TournamentDetailPage({
 }) {
   try {
   const session = await getServerSession(authOptions);
+
+  // Self-heal Swiss progression before rendering: if the latest round finished
+  // but the next round was never generated (e.g. the final match closed via a
+  // path that didn't advance), generate it now so opening the page is enough.
+  try {
+    const meta = await prisma.tournament.findUnique({
+      where: { id: params.id },
+      select: { format: true, status: true },
+    });
+    if (meta?.format === "ROUND_ROBIN" && meta.status === "IN_PROGRESS") {
+      await ensureSwissProgress(params.id);
+    }
+  } catch (e) {
+    console.error("[tournament page] ensureSwissProgress", e);
+  }
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: params.id },
