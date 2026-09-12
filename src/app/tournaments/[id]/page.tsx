@@ -355,7 +355,7 @@ export default async function TournamentDetailPage({
           winner: { select: { id: true, name: true, bladerName: true } },
           judge: { select: { id: true, name: true, bladerName: true } },
           points: { select: { userId: true, points: true } },
-          sets: { select: { winnerId: true } },
+          sets: { select: { winnerId: true, setNumber: true, player1Points: true, player2Points: true } },
           group: true,
         },
         orderBy: [{ round: "asc" }, { slot: "asc" }, { arena: "asc" }],
@@ -633,6 +633,9 @@ export default async function TournamentDetailPage({
         isWalkover: m.isWalkover,
         winnerId: m.winner?.id ?? null,
         p1Sets, p2Sets, p1Points, p2Points,
+        sets: [...m.sets]
+          .sort((a, b) => a.setNumber - b.setNumber)
+          .map((s) => ({ p1Points: s.player1Points, p2Points: s.player2Points })),
       };
     });
 

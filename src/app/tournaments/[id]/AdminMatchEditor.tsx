@@ -17,7 +17,10 @@ interface MatchRow {
   winnerId: string | null;
   player1Id: string;
   player2Id: string;
+  sets: { p1Points: number; p2Points: number }[];
 }
+
+type EditSet = { p1: number; p2: number };
 
 export default function AdminMatchEditor({ matches }: { matches: MatchRow[] }) {
   const [open, setOpen] = useState(false);
@@ -25,6 +28,43 @@ export default function AdminMatchEditor({ matches }: { matches: MatchRow[] }) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const router = useRouter();
+
+  // Inline score editing (does not reset, does not transmit to arenas).
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editSets, setEditSets] = useState<EditSet[]>([]);
+  const [savingScore, setSavingScore] = useState(false);
+
+  function startEdit(m: MatchRow) {
+    setErr(null);
+    setConfirmId(null);
+    setEditId(m.id);
+    const initial = m.sets.length > 0
+      ? m.sets.map((s) => ({ p1: s.p1Points, p2: s.p2Points }))
+      : [{ p1: 0, p2: 0 }];
+    setEditSets(initial);
+  }
+
+  function updateSet(idx: number, side: "p1" | "p2", value: number) {
+    setEditSets((prev) => prev.map((s, i) => (i === idx ? { ...s, [side]: Math.max(0, value) } : s)));
+  }
+
+  async function saveScore(matchId: string) {
+    setSavingScore(true);
+    setErr(null);
+    const res = await fetch(`/api/admin/matches/${matchId}/set-score`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sets: editSets.map((s) => ({ p1Points: s.p1, p2Points: s.p2 })) }),
+    });
+    setSavingScore(false);
+    if (res.ok) {
+      setEditId(null);
+      router.refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setErr(data.error || "Erro ao salvar placar");
+    }
+  }
 
   async function resetMatch(matchId: string) {
     setResetting(matchId);
@@ -63,7 +103,7 @@ export default function AdminMatchEditor({ matches }: { matches: MatchRow[] }) {
         <div>
           <h2 className="text-base font-bold text-white">Editar Resultados</h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Resete qualquer partida para corrigir o placar. Após o reset, o botão "Placar" reaparece para reinserir o resultado correto.
+            Edite os pontos de qualquer partida diretamente, sem resetar e sem transmitir para as arenas. Use "Resetar" apenas para zerar e reinserir pelo placar.
           </p>
         </div>
         <button
@@ -128,8 +168,17 @@ export default function AdminMatchEditor({ matches }: { matches: MatchRow[] }) {
                         </div>
                       </div>
 
-                      {/* Reset action */}
+                      {/* Actions */}
                       <div className="flex items-center gap-2 flex-shrink-0">
+                        {editId !== m.id && (
+                          <button
+                            onClick={() => startEdit(m)}
+                            disabled={!!resetting || savingScore}
+                            className="text-xs text-gray-300 hover:text-[#f0a500] border border-[#333] hover:border-[#f0a500]/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-30"
+                          >
+                            ✎ Editar Placar
+                          </button>
+                        )}
                         {isConfirming ? (
                           <>
                             <span className="text-xs text-red-400 font-semibold">Resetar? (irreversível)</span>
@@ -157,6 +206,81 @@ export default function AdminMatchEditor({ matches }: { matches: MatchRow[] }) {
                           </button>
                         )}
                       </div>
+
+                      {/* Inline score editor */}
+                      {editId === m.id && (
+                        <div className="w-full mt-3 pt-3 border-t border-[#333]">
+                          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                            <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                              Pontos por set
+                            </div>
+                            <div className="flex items-center gap-3 text-xs">
+                              <span className="text-[#f0a500] font-bold truncate max-w-[9rem]">{m.player1Name}</span>
+                              <span className="text-gray-600">×</span>
+                              <span className="text-[#c8102e] font-bold truncate max-w-[9rem]">{m.player2Name}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            {editSets.map((s, idx) => (
+                              <div key={idx} className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs text-gray-500 w-12">Set {idx + 1}</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={s.p1}
+                                  onChange={(e) => updateSet(idx, "p1", parseInt(e.target.value || "0", 10))}
+                                  className="w-16 bg-[#1a1a1a] border border-[#444] rounded-lg px-2 py-1 text-sm text-white text-center focus:border-[#f0a500] outline-none"
+                                />
+                                <span className="text-gray-600 text-xs">×</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={s.p2}
+                                  onChange={(e) => updateSet(idx, "p2", parseInt(e.target.value || "0", 10))}
+                                  className="w-16 bg-[#1a1a1a] border border-[#444] rounded-lg px-2 py-1 text-sm text-white text-center focus:border-[#c8102e] outline-none"
+                                />
+                                {editSets.length > 1 && (
+                                  <button
+                                    onClick={() => setEditSets((prev) => prev.filter((_, i) => i !== idx))}
+                                    className="text-xs text-gray-500 hover:text-[#c8102e] px-2 py-1"
+                                    title="Remover set"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center gap-2 mt-4 flex-wrap">
+                            <button
+                              onClick={() => setEditSets((prev) => [...prev, { p1: 0, p2: 0 }])}
+                              className="text-xs text-gray-300 hover:text-white border border-[#444] px-3 py-1.5 rounded-lg transition-colors"
+                            >
+                              + Adicionar set
+                            </button>
+                            <div className="flex-1" />
+                            <button
+                              onClick={() => setEditId(null)}
+                              disabled={savingScore}
+                              className="text-xs text-gray-500 hover:text-gray-300 border border-[#333] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={() => saveScore(m.id)}
+                              disabled={savingScore}
+                              className="text-xs bg-[#f0a500] hover:bg-[#d99400] text-black font-bold px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {savingScore ? "Salvando..." : "Salvar Placar"}
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-gray-600 mt-2">
+                            Quem tiver mais pontos vence o set. O vencedor da partida é definido por quem alcançar o número de sets necessário. Não afeta as arenas.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
