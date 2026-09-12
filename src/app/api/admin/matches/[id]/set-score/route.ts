@@ -33,6 +33,7 @@ export async function POST(
     return NextResponse.json({ error: "Corpo inválido" }, { status: 400 });
   }
 
+  try {
   const rawSets = Array.isArray(body.sets) ? body.sets : [];
   const sets = rawSets.map((s) => ({
     p1: Math.max(0, Math.floor(Number(s.p1Points) || 0)),
@@ -109,7 +110,7 @@ export async function POST(
         status: matchWinnerId ? "FINISHED" : sets.length > 0 ? "IN_PROGRESS" : "PENDING",
       },
     });
-  });
+  }, { maxWait: 15000, timeout: 30000 });
 
   await Promise.all([
     recalculateStandings(match.tournamentId, match.player1Id),
@@ -118,30 +119,40 @@ export async function POST(
 
   // If this edit finished the match, run the same round-advancement logic the
   // normal scoring flow uses, so editing the last result of a round still
-  // generates the next Swiss round / knockout.
+  // generates the next Swiss round / knockout. Guard against re-generating a
+  // round that already exists (editing an earlier round after it advanced would
+  // otherwise duplicate the next round).
   if (matchWinnerId) {
     const fmt = match.tournament.format;
     try {
-      if (fmt === "ROUND_ROBIN") {
-        await advanceSwissTournament(match.tournamentId, match.round);
-      } else if (fmt === "SINGLE_ELIMINATION") {
-        await advanceSingleElimination(match.tournamentId, match.round);
-      } else if (fmt === "SWISS") {
-        const roundMatches = await prisma.match.findMany({ where: { tournamentId: match.tournamentId, round: match.round } });
-        if (roundMatches.every((m) => m.status === "FINISHED")) {
-          const participants = await prisma.tournamentParticipant.count({ where: { tournamentId: match.tournamentId } });
-          const maxRounds = Math.ceil(Math.log2(Math.max(2, participants)));
-          if (match.round < maxRounds) await generateSwissRound(match.tournamentId, match.round + 1);
-          else await finalizeTournamentRanking(match.tournamentId);
+      const nextExists = await prisma.match.count({ where: { tournamentId: match.tournamentId, round: { gt: match.round } } });
+      if (nextExists === 0) {
+        if (fmt === "ROUND_ROBIN") {
+          await advanceSwissTournament(match.tournamentId, match.round);
+        } else if (fmt === "SINGLE_ELIMINATION") {
+          await advanceSingleElimination(match.tournamentId, match.round);
+        } else if (fmt === "SWISS") {
+          const roundMatches = await prisma.match.findMany({ where: { tournamentId: match.tournamentId, round: match.round } });
+          if (roundMatches.every((m) => m.status === "FINISHED")) {
+            const participants = await prisma.tournamentParticipant.count({ where: { tournamentId: match.tournamentId } });
+            const maxRounds = Math.ceil(Math.log2(Math.max(2, participants)));
+            if (match.round < maxRounds) await generateSwissRound(match.tournamentId, match.round + 1);
+            else await finalizeTournamentRanking(match.tournamentId);
+          }
+        } else {
+          const allMatches = await prisma.match.findMany({ where: { tournamentId: match.tournamentId } });
+          if (allMatches.every((m) => m.status === "FINISHED")) await finalizeTournamentRanking(match.tournamentId);
         }
-      } else {
-        const allMatches = await prisma.match.findMany({ where: { tournamentId: match.tournamentId } });
-        if (allMatches.every((m) => m.status === "FINISHED")) await finalizeTournamentRanking(match.tournamentId);
       }
     } catch (e) {
+      // Advancement is best-effort; the score edit itself already succeeded.
       console.error("[set-score] advancement failed", e);
     }
   }
 
   return NextResponse.json({ ok: true, p1SetsWon, p2SetsWon, winnerId: matchWinnerId });
+  } catch (err) {
+    console.error("[set-score]", err);
+    return NextResponse.json({ error: `Erro ao salvar: ${String(err)}` }, { status: 500 });
+  }
 }
