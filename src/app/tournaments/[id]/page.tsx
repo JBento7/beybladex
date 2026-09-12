@@ -1069,7 +1069,7 @@ export default async function TournamentDetailPage({
               Spans the full grid width so it isn't squeezed into one column. */}
           {isAdminUser && adminMatchRows.length > 0 && (
             <div className={showSidebar ? "lg:col-span-3" : ""}>
-              <AdminMatchEditor matches={adminMatchRows} />
+              <AdminMatchEditor matches={adminMatchRows} tournamentId={tournament.id} />
             </div>
           )}
 

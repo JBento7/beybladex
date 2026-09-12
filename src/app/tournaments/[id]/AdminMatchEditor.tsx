@@ -22,7 +22,7 @@ interface MatchRow {
 
 type EditSet = { p1: number; p2: number };
 
-export default function AdminMatchEditor({ matches }: { matches: MatchRow[] }) {
+export default function AdminMatchEditor({ matches, tournamentId }: { matches: MatchRow[]; tournamentId: string }) {
   const [open, setOpen] = useState(false);
   const [resetting, setResetting] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -33,6 +33,26 @@ export default function AdminMatchEditor({ matches }: { matches: MatchRow[] }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [editSets, setEditSets] = useState<EditSet[]>([]);
   const [savingScore, setSavingScore] = useState(false);
+
+  // Force round advancement (unstick a round whose next round wasn't generated).
+  const [advancing, setAdvancing] = useState(false);
+  const [advanceMsg, setAdvanceMsg] = useState<string | null>(null);
+
+  async function advanceRound() {
+    setAdvancing(true);
+    setErr(null);
+    setAdvanceMsg(null);
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/advance-round`, { method: "POST" });
+    setAdvancing(false);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      if (data.alreadyGenerated) setAdvanceMsg("A próxima rodada já existe.");
+      else if (data.nextRoundMatches > 0) { setAdvanceMsg(`Rodada ${data.round + 1} gerada.`); router.refresh(); }
+      else { setAdvanceMsg("Fase avançada."); router.refresh(); }
+    } else {
+      setAdvanceMsg(data.error || "Erro ao avançar rodada");
+    }
+  }
 
   function startEdit(m: MatchRow) {
     setErr(null);
@@ -106,14 +126,29 @@ export default function AdminMatchEditor({ matches }: { matches: MatchRow[] }) {
             Edite os pontos de qualquer partida diretamente, sem resetar e sem transmitir para as arenas. Use "Resetar" apenas para zerar e reinserir pelo placar.
           </p>
         </div>
-        <button
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="text-xs font-bold border border-[#c8102e]/40 text-[#c8102e] hover:bg-[#c8102e]/10 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
-        >
-          {open ? "Fechar ▲" : "Editar Partidas ▼"}
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          <button
+            onClick={advanceRound}
+            disabled={advancing}
+            title="Gera a próxima rodada se a atual terminou mas não avançou sozinha"
+            className="text-xs font-bold border border-[#f0a500]/40 text-[#f0a500] hover:bg-[#f0a500]/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {advancing ? "Avançando..." : "Avançar Rodada"}
+          </button>
+          <button
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="text-xs font-bold border border-[#c8102e]/40 text-[#c8102e] hover:bg-[#c8102e]/10 px-3 py-1.5 rounded-lg transition-colors"
+          >
+            {open ? "Fechar ▲" : "Editar Partidas ▼"}
+          </button>
+        </div>
       </div>
+      {advanceMsg && (
+        <div className="mt-3 text-xs px-4 py-2 rounded-lg bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500]">
+          {advanceMsg}
+        </div>
+      )}
 
       {open && (
         <div className="mt-5 space-y-5">

@@ -3,7 +3,13 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { recalculateStandings } from "@/lib/tournament-engine";
+import {
+  recalculateStandings,
+  advanceSwissTournament,
+  advanceSingleElimination,
+  generateSwissRound,
+  finalizeTournamentRanking,
+} from "@/lib/tournament-engine";
 
 // ORGANIZER-only manual score editor. Unlike /reset, this does NOT reset the
 // match — it rewrites the recorded score directly. The admin supplies, per set,
@@ -40,8 +46,9 @@ export async function POST(
       tournamentId: true,
       player1Id: true,
       player2Id: true,
+      round: true,
       setsToWin: true,
-      tournament: { select: { setsToWin: true } },
+      tournament: { select: { setsToWin: true, format: true } },
     },
   });
   if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
@@ -108,6 +115,33 @@ export async function POST(
     recalculateStandings(match.tournamentId, match.player1Id),
     recalculateStandings(match.tournamentId, match.player2Id),
   ]);
+
+  // If this edit finished the match, run the same round-advancement logic the
+  // normal scoring flow uses, so editing the last result of a round still
+  // generates the next Swiss round / knockout.
+  if (matchWinnerId) {
+    const fmt = match.tournament.format;
+    try {
+      if (fmt === "ROUND_ROBIN") {
+        await advanceSwissTournament(match.tournamentId, match.round);
+      } else if (fmt === "SINGLE_ELIMINATION") {
+        await advanceSingleElimination(match.tournamentId, match.round);
+      } else if (fmt === "SWISS") {
+        const roundMatches = await prisma.match.findMany({ where: { tournamentId: match.tournamentId, round: match.round } });
+        if (roundMatches.every((m) => m.status === "FINISHED")) {
+          const participants = await prisma.tournamentParticipant.count({ where: { tournamentId: match.tournamentId } });
+          const maxRounds = Math.ceil(Math.log2(Math.max(2, participants)));
+          if (match.round < maxRounds) await generateSwissRound(match.tournamentId, match.round + 1);
+          else await finalizeTournamentRanking(match.tournamentId);
+        }
+      } else {
+        const allMatches = await prisma.match.findMany({ where: { tournamentId: match.tournamentId } });
+        if (allMatches.every((m) => m.status === "FINISHED")) await finalizeTournamentRanking(match.tournamentId);
+      }
+    } catch (e) {
+      console.error("[set-score] advancement failed", e);
+    }
+  }
 
   return NextResponse.json({ ok: true, p1SetsWon, p2SetsWon, winnerId: matchWinnerId });
 }
