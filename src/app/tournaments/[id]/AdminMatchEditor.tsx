@@ -38,6 +38,23 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
   const [advancing, setAdvancing] = useState(false);
   const [advanceMsg, setAdvanceMsg] = useState<string | null>(null);
 
+  const [deduping, setDeduping] = useState(false);
+
+  async function dedupeMatches() {
+    setDeduping(true);
+    setErr(null);
+    setAdvanceMsg(null);
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/dedupe-matches`, { method: "POST" });
+    setDeduping(false);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      if (data.removed > 0) { setAdvanceMsg(`${data.removed} partida(s) duplicada(s) removida(s).`); router.refresh(); }
+      else setAdvanceMsg("Nenhuma partida duplicada encontrada.");
+    } else {
+      setAdvanceMsg(data.error || "Erro ao remover duplicadas");
+    }
+  }
+
   async function advanceRound() {
     setAdvancing(true);
     setErr(null);
@@ -127,6 +144,14 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          <button
+            onClick={dedupeMatches}
+            disabled={deduping}
+            title="Remove partidas duplicadas (mesma rodada e mesmos jogadores)"
+            className="text-xs font-bold border border-[#c8102e]/40 text-[#c8102e] hover:bg-[#c8102e]/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {deduping ? "Removendo..." : "Remover Duplicadas"}
+          </button>
           <button
             onClick={advanceRound}
             disabled={advancing}
