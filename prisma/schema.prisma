@@ -219,6 +219,7 @@ model TournamentParticipant {
   group      Group?     @relation(fields: [groupId], references: [id])
 
   @@unique([tournamentId, userId])
+  @@index([userId])
 }
 
 model Group {
@@ -267,6 +268,12 @@ model Match {
   sets           MatchSet[]
   beybladeRecords BeybladeMatchRecord[]
   deckOrders     MatchDeckOrder[]
+
+  @@index([tournamentId, round])
+  @@index([tournamentId, status, arena])
+  @@index([player1Id])
+  @@index([player2Id])
+  @@index([judgeId])
 }
 
 model MatchSet {
@@ -282,6 +289,8 @@ model MatchSet {
   match   Match        @relation(fields: [matchId], references: [id])
   winner  User?        @relation("SetWinner", fields: [winnerId], references: [id])
   points  MatchPoint[]
+
+  @@index([matchId])
 }
 
 model MatchPoint {
@@ -299,6 +308,11 @@ model MatchPoint {
   user      User      @relation(fields: [userId], references: [id])
   beyblade  Beyblade? @relation(fields: [beybladeId], references: [id])
   set       MatchSet? @relation(fields: [setId], references: [id])
+
+  @@index([matchId])
+  @@index([setId])
+  @@index([userId])
+  @@index([beybladeId])
 }
 
 model MatchDeckOrder {

@@ -670,6 +670,21 @@ export async function GET() {
         CONSTRAINT "ArenaLayout_pkey" PRIMARY KEY ("id")
       )`,
     },
+
+    // Performance indexes — the Match/MatchPoint/MatchSet tables had none, so the
+    // hot polling endpoints (/api/arena, /api/arena/tick) and standings queries
+    // were doing full table scans. These match the frequent WHERE filters.
+    { name: "idx Match tournament+round", sql: `CREATE INDEX IF NOT EXISTS "Match_tournamentId_round_idx" ON "Match" ("tournamentId", "round")` },
+    { name: "idx Match tournament+status+arena", sql: `CREATE INDEX IF NOT EXISTS "Match_tournamentId_status_arena_idx" ON "Match" ("tournamentId", "status", "arena")` },
+    { name: "idx Match player1", sql: `CREATE INDEX IF NOT EXISTS "Match_player1Id_idx" ON "Match" ("player1Id")` },
+    { name: "idx Match player2", sql: `CREATE INDEX IF NOT EXISTS "Match_player2Id_idx" ON "Match" ("player2Id")` },
+    { name: "idx Match judge", sql: `CREATE INDEX IF NOT EXISTS "Match_judgeId_idx" ON "Match" ("judgeId")` },
+    { name: "idx MatchPoint match", sql: `CREATE INDEX IF NOT EXISTS "MatchPoint_matchId_idx" ON "MatchPoint" ("matchId")` },
+    { name: "idx MatchPoint set", sql: `CREATE INDEX IF NOT EXISTS "MatchPoint_setId_idx" ON "MatchPoint" ("setId")` },
+    { name: "idx MatchPoint user", sql: `CREATE INDEX IF NOT EXISTS "MatchPoint_userId_idx" ON "MatchPoint" ("userId")` },
+    { name: "idx MatchPoint beyblade", sql: `CREATE INDEX IF NOT EXISTS "MatchPoint_beybladeId_idx" ON "MatchPoint" ("beybladeId")` },
+    { name: "idx MatchSet match", sql: `CREATE INDEX IF NOT EXISTS "MatchSet_matchId_idx" ON "MatchSet" ("matchId")` },
+    { name: "idx TournamentParticipant user", sql: `CREATE INDEX IF NOT EXISTS "TournamentParticipant_userId_idx" ON "TournamentParticipant" ("userId")` },
   ];
 
   for (const migration of migrations) {

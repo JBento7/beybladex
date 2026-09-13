@@ -434,7 +434,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         ref={cdVideoRef}
         src="/countdown.mp4"
         playsInline
-        preload="auto"
+        preload="metadata"
         style={{
           position: "fixed",
           top: 0,
@@ -455,7 +455,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         ref={launchVideoRef}
         src="/countdown.mp4"
         playsInline
-        preload="auto"
+        preload="metadata"
         onError={() => setLaunchOn(false)}
         style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", objectFit: "contain", background: "#000", zIndex: launchOn ? 75 : -1, opacity: launchOn ? 1 : 0, pointerEvents: "none" }}
       />
@@ -469,7 +469,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           ref={(el) => { finishRefs.current[ft] = el; }}
           src={`/finish-videos/${ft}.mp4`}
           playsInline
-          preload="auto"
+          preload="metadata"
           style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", objectFit: "cover", background: "#000", zIndex: finishVideo === ft ? 72 : -1, opacity: finishVideo === ft ? 1 : 0, pointerEvents: "none" }}
         />
       ))}

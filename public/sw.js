@@ -4,16 +4,14 @@
 // - Navigations (pages): network-first with a cached fallback, so the app still
 //   opens during a drop.
 // - Live data (/api/*): network-only (never cached) so scores/state stay fresh.
-const CACHE = "lbl-cache-v1";
+const CACHE = "lbl-cache-v2";
 
-// Media that must work offline / never re-download.
+// Only light, always-needed assets are precached on install (this SW is
+// registered app-wide, so precaching must stay cheap for every visitor). The
+// heavy videos (~22MB) are NOT precached — the arena telão caches them on first
+// use via the cache-first fetch handler below (they're fetched when the operator
+// starts the display), so ordinary pages never pay for them.
 const PRECACHE = [
-  "/countdown.mp4",
-  "/finish-videos/SPIN_FINISH.mp4",
-  "/finish-videos/OVER_FINISH.mp4",
-  "/finish-videos/BURST_FINISH.mp4",
-  "/finish-videos/EXTREME_FINISH.mp4",
-  "/nosleep.mp4",
   "/scoreboard-bg.png",
   "/winner-bg.png",
   "/bey-removebg-preview.png",
