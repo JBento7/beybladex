@@ -4,6 +4,39 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// Small in-memory cache for BeyPart image lookups. The telão polls this endpoint
+// constantly and resolves the same part names by case-insensitive match every
+// time (a query that can't use an index). Parts/images change rarely, so caching
+// the name→imageUrl resolution per server instance for a couple of minutes cuts
+// a large number of repeated queries. Trade-off: an edited part image can take
+// up to CACHE_TTL_MS to appear on the telão.
+const CACHE_TTL_MS = 120_000;
+const partImageCache = new Map<string, { url: string | null; at: number }>();
+async function lookupPartImage(categories: string[], rawName: string | null): Promise<string | null> {
+  if (!rawName) return null;
+  const n = rawName.trim();
+  if (!n) return null;
+  const key = `${categories.join(",")}|${n.toLowerCase()}`;
+  const hit = partImageCache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.url;
+  let url: string | null = null;
+  try {
+    const part = await prisma.beyPart.findFirst({
+      where: {
+        category: { in: categories as never },
+        imageUrl: { not: null },
+        OR: [{ name: { equals: n, mode: "insensitive" } }, { fullName: { equals: n, mode: "insensitive" } }],
+      },
+      select: { imageUrl: true },
+    });
+    url = part?.imageUrl ?? null;
+  } catch {
+    url = null;
+  }
+  partImageCache.set(key, { url, at: Date.now() });
+  return url;
+}
+
 // Returns the live scoreboard for one arena. The arena number comes from the
 // logged-in arena user's email (arena{N}@lbl.arena); an ORGANIZER may preview
 // any arena via ?n=N.
@@ -80,7 +113,7 @@ export async function GET(req: NextRequest) {
     { status: "PENDING" as const, phase: "pending" as const },
   ];
 
-  let match: MatchRow = null;
+  let matchRow: MatchRow = null;
   let phase: "live" | "finished" | "pending" = "pending";
   outer: for (const pass of passes) {
     for (const tournament of tournamentTiers) {
@@ -92,7 +125,7 @@ export async function GET(req: NextRequest) {
         continue;
       }
       if (found && found.player1Id !== found.player2Id) {
-        match = found;
+        matchRow = found;
         phase = pass.phase;
         break outer;
       }
@@ -100,7 +133,7 @@ export async function GET(req: NextRequest) {
   }
   const live = phase === "live";
 
-  if (!match) {
+  if (!matchRow) {
     // Nothing is on-air for this arena. Instead of just "aguardando", show the
     // queue of upcoming matches assigned to this arena (in play order).
     let queue: { round: number; player1: string; player2: string; p1Avatar: string | null; p2Avatar: string | null }[] = [];
@@ -130,10 +163,10 @@ export async function GET(req: NextRequest) {
       /* ignore */
     }
 
-    const inProgressTournaments = await prisma.tournament.count({ where: { status: "IN_PROGRESS" } });
-    const matchesThisArena = await prisma.match.count({
-      where: { ...arenaWhere, tournament: { status: "IN_PROGRESS" } },
-    });
+    const [inProgressTournaments, matchesThisArena] = await Promise.all([
+      prisma.tournament.count({ where: { status: "IN_PROGRESS" } }),
+      prisma.match.count({ where: { ...arenaWhere, tournament: { status: "IN_PROGRESS" } } }),
+    ]);
     return NextResponse.json({
       arena: arenaNum,
       status: "idle",
@@ -143,6 +176,9 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // Non-null alias so the async resolver closures below keep the narrowing
+  // (TypeScript widens `match` back to nullable inside nested functions).
+  const match = matchRow;
   const setsToWin = (match as { setsToWin?: number | null }).setsToWin ?? match.tournament.setsToWin;
   const pointsToWinSet = (match as { pointsToWinSet?: number | null }).pointsToWinSet ?? match.tournament.pointsToWinSet;
   const maxSets = setsToWin * 2 - 1;
@@ -168,41 +204,11 @@ export async function GET(req: NextRequest) {
   // Resolve the image of a blade part name (from BeyParts), if any. Matching is
   // lenient: case-insensitive, and by name OR fullName, so a bey auto-links to
   // its part's image even when the name is written slightly differently.
-  async function bladeImage(bladeName: string | null): Promise<string | null> {
-    if (!bladeName) return null;
-    const n = bladeName.trim();
-    try {
-      const part = await prisma.beyPart.findFirst({
-        where: {
-          category: { in: ["BLADE", "MAIN_BLADE", "OVER_BLADE"] },
-          imageUrl: { not: null },
-          OR: [{ name: { equals: n, mode: "insensitive" } }, { fullName: { equals: n, mode: "insensitive" } }],
-        },
-        select: { imageUrl: true },
-      });
-      return part?.imageUrl ?? null;
-    } catch {
-      return null;
-    }
-  }
+  const bladeImage = (bladeName: string | null) =>
+    lookupPartImage(["BLADE", "MAIN_BLADE", "OVER_BLADE"], bladeName);
   // Image of any BeyPart by category + name (lenient match).
-  async function partImage(category: string, name: string | null): Promise<string | null> {
-    if (!name) return null;
-    const n = name.trim();
-    try {
-      const part = await prisma.beyPart.findFirst({
-        where: {
-          category: { in: [category] as never },
-          imageUrl: { not: null },
-          OR: [{ name: { equals: n, mode: "insensitive" } }, { fullName: { equals: n, mode: "insensitive" } }],
-        },
-        select: { imageUrl: true },
-      });
-      return part?.imageUrl ?? null;
-    } catch {
-      return null;
-    }
-  }
+  const partImage = (category: string, name: string | null) =>
+    lookupPartImage([category], name);
   // CX/CX_EXPAND keep the main blade in metal/over blade, not `blade`.
   type BeyLike = { beyLine?: string | null; blade?: string | null; lockChip?: string | null; metalBlade?: string | null; assistBlade?: string | null; overBlade?: string | null };
   const isCXBey = (b: BeyLike | null) => !!b && (b.beyLine === "CX" || b.beyLine === "CX_EXPAND");
@@ -223,156 +229,161 @@ export async function GET(req: NextRequest) {
     return { lock, metal, assist };
   }
 
-  // 3on3: resolve active beyblade name + combo + blade photo for the current battle.
-  let p1ActiveBey: string | null = null;
-  let p2ActiveBey: string | null = null;
-  let p1Combo: string | null = null;
-  let p2Combo: string | null = null;
-  let p1BeyImg: string | null = null;
-  let p2BeyImg: string | null = null;
-  let p1BeyPieces: BeyPieces = null;
-  let p2BeyPieces: BeyPieces = null;
+  // Shared types/helpers for the parallel resolvers below.
+  type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
+  type FinishSet = { setNumber: number; counts: FinishCounts };
+  type HistRow = { side: "p1" | "p2"; finish: "S" | "KO" | "B" | "X"; points: number };
+  const emptyCounts = (): FinishCounts => ({ SPIN: 0, BURST: 0, OVER: 0, EXTREME: 0 });
   const comboOf = (b: { blade?: string | null; ratchet?: string | null; bit?: string | null } | null) =>
     b ? [b.blade, b.ratchet, b.bit].filter(Boolean).join(" ") || null : null;
   const beySelect = { id: true, name: true, beyLine: true, blade: true, ratchet: true, bit: true, lockChip: true, metalBlade: true, assistBlade: true, overBlade: true } as const;
-  if (isDeck) {
-    try {
-      const cycleIndex = Math.floor(currentSetBattleCount / 3);
-      const pos = currentSetBattleCount % 3;
-      const orders = await prisma.matchDeckOrder.findMany({
-        where: { matchId: match.id, setNumber: currentSetNum, cycleIndex },
-      });
-      const beyIds = orders.flatMap((o) => [o.bey1Id, o.bey2Id, o.bey3Id]);
-      const beys = beyIds.length
-        ? await prisma.beyblade.findMany({ where: { id: { in: beyIds } }, select: beySelect })
-        : [];
-      const beyOf = (id: string) => beys.find((b) => b.id === id) ?? null;
-      const o1 = orders.find((o) => o.userId === match.player1Id);
-      const o2 = orders.find((o) => o.userId === match.player2Id);
-      const b1 = o1 ? beyOf([o1.bey1Id, o1.bey2Id, o1.bey3Id][pos]) : null;
-      const b2 = o2 ? beyOf([o2.bey1Id, o2.bey2Id, o2.bey3Id][pos]) : null;
-      p1ActiveBey = b1?.name ?? null;
-      p2ActiveBey = b2?.name ?? null;
-      p1Combo = comboOf(b1);
-      p2Combo = comboOf(b2);
-      [p1BeyImg, p2BeyImg, p1BeyPieces, p2BeyPieces] = await Promise.all([
-        bladeImage(mainBladeName(b1)), bladeImage(mainBladeName(b2)), beyPieces(b1), beyPieces(b2),
-      ]);
-    } catch {
-      /* deck order table may be missing */
-    }
-  } else {
-    // Solo: show each player's beyblade — the one they've been scoring with in
-    // this match, falling back to their first registered bey.
-    try {
-      const pts = await prisma.matchPoint.findMany({
-        where: { matchId: match.id, beybladeId: { not: null } },
-        orderBy: { createdAt: "desc" },
-        select: { userId: true, beybladeId: true },
-      });
-      const latestBeyId = (userId: string) => pts.find((p) => p.userId === userId)?.beybladeId ?? null;
-      // The bey each player registered FOR this tournament (solo = beyblade1).
-      const parts = await prisma.tournamentParticipant.findMany({
-        where: { tournamentId: match.tournamentId, userId: { in: [match.player1Id, match.player2Id] } },
-        select: { userId: true, beyblade1: true },
-      });
-      const registeredBeyId = (userId: string) => parts.find((p) => p.userId === userId)?.beyblade1 ?? null;
-      async function soloBey(userId: string) {
-        // Priority: the bey scored with → the bey selected for the tournament →
-        // the player's first registered bey.
-        const chosenId = latestBeyId(userId) || registeredBeyId(userId);
-        if (chosenId) {
-          const b = await prisma.beyblade.findUnique({ where: { id: chosenId }, select: beySelect });
-          if (b) return b;
-        }
-        return prisma.beyblade.findFirst({
-          where: { userId, hiddenFromCommunity: false },
-          orderBy: { createdAt: "asc" },
-          select: beySelect,
+
+  // (A) 3on3/solo: active beyblade name + combo + blade photo for the current battle.
+  async function resolveBeys() {
+    let p1ActiveBey: string | null = null, p2ActiveBey: string | null = null;
+    let p1Combo: string | null = null, p2Combo: string | null = null;
+    let p1BeyImg: string | null = null, p2BeyImg: string | null = null;
+    let p1BeyPieces: BeyPieces = null, p2BeyPieces: BeyPieces = null;
+    if (isDeck) {
+      try {
+        const cycleIndex = Math.floor(currentSetBattleCount / 3);
+        const pos = currentSetBattleCount % 3;
+        const orders = await prisma.matchDeckOrder.findMany({
+          where: { matchId: match.id, setNumber: currentSetNum, cycleIndex },
         });
+        const beyIds = orders.flatMap((o) => [o.bey1Id, o.bey2Id, o.bey3Id]);
+        const beys = beyIds.length
+          ? await prisma.beyblade.findMany({ where: { id: { in: beyIds } }, select: beySelect })
+          : [];
+        const beyOf = (id: string) => beys.find((b) => b.id === id) ?? null;
+        const o1 = orders.find((o) => o.userId === match.player1Id);
+        const o2 = orders.find((o) => o.userId === match.player2Id);
+        const b1 = o1 ? beyOf([o1.bey1Id, o1.bey2Id, o1.bey3Id][pos]) : null;
+        const b2 = o2 ? beyOf([o2.bey1Id, o2.bey2Id, o2.bey3Id][pos]) : null;
+        p1ActiveBey = b1?.name ?? null;
+        p2ActiveBey = b2?.name ?? null;
+        p1Combo = comboOf(b1);
+        p2Combo = comboOf(b2);
+        [p1BeyImg, p2BeyImg, p1BeyPieces, p2BeyPieces] = await Promise.all([
+          bladeImage(mainBladeName(b1)), bladeImage(mainBladeName(b2)), beyPieces(b1), beyPieces(b2),
+        ]);
+      } catch {
+        /* deck order table may be missing */
       }
-      const [b1, b2] = await Promise.all([soloBey(match.player1Id), soloBey(match.player2Id)]);
-      p1ActiveBey = b1?.name ?? null;
-      p2ActiveBey = b2?.name ?? null;
-      p1Combo = comboOf(b1);
-      p2Combo = comboOf(b2);
-      [p1BeyImg, p2BeyImg, p1BeyPieces, p2BeyPieces] = await Promise.all([
-        bladeImage(mainBladeName(b1)), bladeImage(mainBladeName(b2)), beyPieces(b1), beyPieces(b2),
-      ]);
-    } catch {
-      /* beyblade table issue — leave photos empty */
+    } else {
+      // Solo: show each player's beyblade — the one they've been scoring with in
+      // this match, falling back to their first registered bey.
+      try {
+        const [pts, parts] = await Promise.all([
+          prisma.matchPoint.findMany({
+            where: { matchId: match.id, beybladeId: { not: null } },
+            orderBy: { createdAt: "desc" },
+            select: { userId: true, beybladeId: true },
+          }),
+          prisma.tournamentParticipant.findMany({
+            where: { tournamentId: match.tournamentId, userId: { in: [match.player1Id, match.player2Id] } },
+            select: { userId: true, beyblade1: true },
+          }),
+        ]);
+        const latestBeyId = (userId: string) => pts.find((p) => p.userId === userId)?.beybladeId ?? null;
+        const registeredBeyId = (userId: string) => parts.find((p) => p.userId === userId)?.beyblade1 ?? null;
+        async function soloBey(userId: string) {
+          // Priority: the bey scored with → the bey selected for the tournament →
+          // the player's first registered bey.
+          const chosenId = latestBeyId(userId) || registeredBeyId(userId);
+          if (chosenId) {
+            const b = await prisma.beyblade.findUnique({ where: { id: chosenId }, select: beySelect });
+            if (b) return b;
+          }
+          return prisma.beyblade.findFirst({
+            where: { userId, hiddenFromCommunity: false },
+            orderBy: { createdAt: "asc" },
+            select: beySelect,
+          });
+        }
+        const [b1, b2] = await Promise.all([soloBey(match.player1Id), soloBey(match.player2Id)]);
+        p1ActiveBey = b1?.name ?? null;
+        p2ActiveBey = b2?.name ?? null;
+        p1Combo = comboOf(b1);
+        p2Combo = comboOf(b2);
+        [p1BeyImg, p2BeyImg, p1BeyPieces, p2BeyPieces] = await Promise.all([
+          bladeImage(mainBladeName(b1)), bladeImage(mainBladeName(b2)), beyPieces(b1), beyPieces(b2),
+        ]);
+      } catch {
+        /* beyblade table issue — leave photos empty */
+      }
     }
+    return { p1ActiveBey, p2ActiveBey, p1Combo, p2Combo, p1BeyImg, p2BeyImg, p1BeyPieces, p2BeyPieces };
   }
 
-  // Per-player count of each finish type — both a match total and a per-set
-  // breakdown (so the arena can group finishes under SET 1, SET 2, ...).
-  type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
-  const emptyCounts = (): FinishCounts => ({ SPIN: 0, BURST: 0, OVER: 0, EXTREME: 0 });
-  const p1Finishes = emptyCounts();
-  const p2Finishes = emptyCounts();
-  type FinishSet = { setNumber: number; counts: FinishCounts };
-  let p1FinishesBySet: FinishSet[] = [];
-  let p2FinishesBySet: FinishSet[] = [];
-  try {
-    const setNumById = new Map(match.sets.map((s) => [s.id, s.setNumber]));
-    const pts = await prisma.matchPoint.findMany({
-      where: { matchId: match.id },
-      select: { userId: true, finishType: true, setId: true },
-    });
-    const keyOf: Record<string, keyof FinishCounts> = {
-      SPIN_FINISH: "SPIN",
-      BURST_FINISH: "BURST",
-      OVER_FINISH: "OVER",
-      EXTREME_FINISH: "EXTREME",
-    };
-    const bySet1 = new Map<number, FinishCounts>();
-    const bySet2 = new Map<number, FinishCounts>();
-    for (const p of pts) {
-      const k = keyOf[p.finishType];
-      if (!k) continue;
-      // Legacy points without setId fall back to the current set number.
-      const sn = (p.setId ? setNumById.get(p.setId) : undefined) ?? currentSetNum;
-      const flat = p.userId === match.player1Id ? p1Finishes : p.userId === match.player2Id ? p2Finishes : null;
-      const bucket = p.userId === match.player1Id ? bySet1 : p.userId === match.player2Id ? bySet2 : null;
-      if (!flat || !bucket) continue;
-      flat[k]++;
-      if (!bucket.has(sn)) bucket.set(sn, emptyCounts());
-      bucket.get(sn)![k]++;
-    }
-    const toArr = (m: Map<number, FinishCounts>): FinishSet[] =>
-      [...m.entries()].sort((a, b) => a[0] - b[0]).map(([setNumber, counts]) => ({ setNumber, counts }));
-    p1FinishesBySet = toArr(bySet1);
-    p2FinishesBySet = toArr(bySet2);
-  } catch {
-    /* ignore */
-  }
-
-  // Ordered battle history of the current set (HISTÓRICO DA RODADA):
-  // each scored point with who won it, the finish type and its point value.
-  type HistRow = { side: "p1" | "p2"; finish: "S" | "KO" | "B" | "X"; points: number };
-  const history: HistRow[] = [];
-  if (currentSet) {
+  // (B) Finish-type counts (match total + per set) AND the current set's ordered
+  // battle history — all derived from ONE query over this match's points.
+  async function resolvePoints() {
+    const p1Finishes = emptyCounts(), p2Finishes = emptyCounts();
+    let p1FinishesBySet: FinishSet[] = [], p2FinishesBySet: FinishSet[] = [];
+    const history: HistRow[] = [];
     try {
+      const setNumById = new Map(match.sets.map((s) => [s.id, s.setNumber]));
       const pts = await prisma.matchPoint.findMany({
-        where: { setId: currentSet.id },
+        where: { matchId: match.id },
         orderBy: { createdAt: "asc" },
-        select: { userId: true, finishType: true },
+        select: { userId: true, finishType: true, setId: true },
       });
-      const fmap: Record<string, { k: HistRow["finish"]; p: number }> = {
-        SPIN_FINISH: { k: "S", p: 1 },
-        OVER_FINISH: { k: "KO", p: 2 },
-        BURST_FINISH: { k: "B", p: 2 },
-        EXTREME_FINISH: { k: "X", p: 3 },
+      const keyOf: Record<string, keyof FinishCounts> = { SPIN_FINISH: "SPIN", BURST_FINISH: "BURST", OVER_FINISH: "OVER", EXTREME_FINISH: "EXTREME" };
+      const histOf: Record<string, { k: HistRow["finish"]; p: number }> = {
+        SPIN_FINISH: { k: "S", p: 1 }, OVER_FINISH: { k: "KO", p: 2 }, BURST_FINISH: { k: "B", p: 2 }, EXTREME_FINISH: { k: "X", p: 3 },
       };
+      const bySet1 = new Map<number, FinishCounts>();
+      const bySet2 = new Map<number, FinishCounts>();
       for (const p of pts) {
-        const f = fmap[p.finishType];
-        if (!f) continue;
-        history.push({ side: p.userId === match.player1Id ? "p1" : "p2", finish: f.k, points: f.p });
+        const isP1 = p.userId === match.player1Id;
+        const isP2 = p.userId === match.player2Id;
+        const k = keyOf[p.finishType];
+        if (k && (isP1 || isP2)) {
+          // Legacy points without setId fall back to the current set number.
+          const sn = (p.setId ? setNumById.get(p.setId) : undefined) ?? currentSetNum;
+          const flat = isP1 ? p1Finishes : p2Finishes;
+          const bucket = isP1 ? bySet1 : bySet2;
+          flat[k]++;
+          if (!bucket.has(sn)) bucket.set(sn, emptyCounts());
+          bucket.get(sn)![k]++;
+        }
+        // Current-set history (already ordered by createdAt asc).
+        if (currentSet && p.setId === currentSet.id) {
+          const f = histOf[p.finishType];
+          if (f && (isP1 || isP2)) history.push({ side: isP1 ? "p1" : "p2", finish: f.k, points: f.p });
+        }
       }
+      const toArr = (m: Map<number, FinishCounts>): FinishSet[] =>
+        [...m.entries()].sort((a, b) => a[0] - b[0]).map(([setNumber, counts]) => ({ setNumber, counts }));
+      p1FinishesBySet = toArr(bySet1);
+      p2FinishesBySet = toArr(bySet2);
     } catch {
-      /* setId column may be missing */
+      /* ignore */
+    }
+    return { p1Finishes, p2Finishes, p1FinishesBySet, p2FinishesBySet, history };
+  }
+
+  // (C) Match number within its round.
+  async function resolveMatchNumber() {
+    try {
+      const roundMatches = await prisma.match.findMany({
+        where: { tournamentId: match.tournamentId, round: match.round },
+        orderBy: [{ bracketPos: "asc" }, { slot: "asc" }, { arena: "asc" }, { createdAt: "asc" }],
+        select: { id: true },
+      });
+      const idx = roundMatches.findIndex((m) => m.id === match.id);
+      return { matchNumber: idx >= 0 ? idx + 1 : 0, matchesTotal: roundMatches.length };
+    } catch {
+      return { matchNumber: 0, matchesTotal: 0 };
     }
   }
+
+  // Run the three independent resolvers concurrently instead of in series.
+  const [beyR, ptsR, mnR] = await Promise.all([resolveBeys(), resolvePoints(), resolveMatchNumber()]);
+  const { p1ActiveBey, p2ActiveBey, p1Combo, p2Combo, p1BeyImg, p2BeyImg, p1BeyPieces, p2BeyPieces } = beyR;
+  const { p1Finishes, p2Finishes, p1FinishesBySet, p2FinishesBySet, history } = ptsR;
+  const { matchNumber, matchesTotal } = mnR;
 
   // Winner screen deck: each player's beyblades. Each slot carries either a
   // single blade image or the 3 stacked CX pieces. In 3-on-3 that's the 3 beys
@@ -416,23 +427,6 @@ export async function GET(req: NextRequest) {
       p1Deck = [emptySlot, soloSlot(p1BeyImg, p1BeyPieces), emptySlot];
       p2Deck = [emptySlot, soloSlot(p2BeyImg, p2BeyPieces), emptySlot];
     }
-  }
-
-  // Match number: position of this match WITHIN its round (resets each round),
-  // e.g. "PARTIDA 3 / 8" in round 1, then back to 1 in the next round.
-  let matchNumber = 0;
-  let matchesTotal = 0;
-  try {
-    const roundMatches = await prisma.match.findMany({
-      where: { tournamentId: match.tournamentId, round: match.round },
-      orderBy: [{ bracketPos: "asc" }, { slot: "asc" }, { arena: "asc" }, { createdAt: "asc" }],
-      select: { id: true },
-    });
-    const idx = roundMatches.findIndex((m) => m.id === match.id);
-    matchNumber = idx >= 0 ? idx + 1 : 0;
-    matchesTotal = roundMatches.length;
-  } catch {
-    /* ignore */
   }
 
   // Countdown signal from the judge (plays the 3-2-1 video on this display).

@@ -362,7 +362,18 @@ export async function advanceSwissTournament(tournamentId: string, completedRoun
 // (e.g. the last match closed via a path that didn't trigger advancement), do
 // it now. Idempotent and cheap — a no-op when the round isn't complete or the
 // next round already exists — so it is safe to call on every page view.
+// Throttle so simultaneous page views right after a round ends don't each fire
+// the same 3-query check. One instance checks; others within the window skip.
+const swissProgressChecked = new Map<string, number>();
+const SWISS_PROGRESS_THROTTLE_MS = 15_000;
 export async function ensureSwissProgress(tournamentId: string) {
+  const last = swissProgressChecked.get(tournamentId);
+  if (last && Date.now() - last < SWISS_PROGRESS_THROTTLE_MS) return;
+  swissProgressChecked.set(tournamentId, Date.now());
+  await ensureSwissProgressNow(tournamentId);
+}
+
+async function ensureSwissProgressNow(tournamentId: string) {
   const last = await prisma.match.findFirst({
     where: { tournamentId },
     orderBy: { round: "desc" },
