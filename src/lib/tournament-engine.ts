@@ -541,53 +541,72 @@ export async function generateSwissRound(
   const existing = await prisma.match.count({ where: { tournamentId, round } });
   if (existing > 0) return;
 
-  const [tournament, judges] = await Promise.all([
+  const [tournament, judges, allPrev] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
     getTournamentJudgeIds(tournamentId),
+    prisma.match.findMany({ where: { tournamentId }, select: { player1Id: true, player2Id: true } }),
   ]);
   const arenaCount = tournament?.arenas ?? 1;
 
-  // Build this round's pairings (player1/player2 pairs).
+  // Rematch-avoidance + bye tracking from earlier rounds.
+  const pairedSet = new Set<string>();
+  const hadBye = new Set<string>();
+  for (const m of allPrev) {
+    if (m.player1Id === m.player2Id) { hadBye.add(m.player1Id); continue; } // self-match = bye
+    pairedSet.add(`${m.player1Id}-${m.player2Id}`);
+    pairedSet.add(`${m.player2Id}-${m.player1Id}`);
+  }
+
+  // Ordered player pool: random in round 1, by standing afterwards.
+  const participants =
+    round === 1
+      ? shuffle(await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } }))
+      : await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" } });
+  const pool = participants.map((p) => p.userId!).filter(Boolean);
+
+  // Odd field → exactly one player gets a BYE this round (an automatic win).
+  // Give it to the lowest-ranked player who hasn't had a bye yet (standard
+  // Swiss), so nobody sits out twice before everyone has sat out once — and
+  // nobody is silently dropped and left with fewer matches.
+  let byePlayerId: string | null = null;
+  if (pool.length % 2 === 1) {
+    for (let i = pool.length - 1; i >= 0; i--) {
+      if (!hadBye.has(pool[i])) { byePlayerId = pool[i]; break; }
+    }
+    if (!byePlayerId) byePlayerId = pool[pool.length - 1]; // everyone already byed once
+    const idx = pool.indexOf(byePlayerId);
+    if (idx >= 0) pool.splice(idx, 1);
+  }
+
+  // Build this round's pairings (player1/player2 pairs) from the even pool,
+  // avoiding rematches when possible.
   const pairs: { player1Id: string; player2Id: string }[] = [];
-
-  if (round === 1) {
-    const participants = shuffle(
-      await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } })
-    );
-    for (let i = 0; i < Math.floor(participants.length / 2); i++) {
-      pairs.push({ player1Id: participants[i * 2].userId!, player2Id: participants[i * 2 + 1].userId! });
-    }
-  } else {
-    // Pair by similar points, avoiding rematches from earlier rounds.
-    const participants = await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" } });
-    const previousMatches = await prisma.match.findMany({
-      where: { tournamentId },
-      select: { player1Id: true, player2Id: true },
-    });
-    const pairedSet = new Set<string>();
-    previousMatches.forEach((m) => {
-      pairedSet.add(`${m.player1Id}-${m.player2Id}`);
-      pairedSet.add(`${m.player2Id}-${m.player1Id}`);
-    });
-
-    const unmatched = [...participants];
-    while (unmatched.length >= 2) {
-      const p1 = unmatched.shift()!;
-      let paired = false;
-      for (let i = 0; i < unmatched.length; i++) {
-        const p2 = unmatched[i];
-        if (!pairedSet.has(`${p1.userId}-${p2.userId}`)) {
-          pairs.push({ player1Id: p1.userId!, player2Id: p2.userId! });
-          unmatched.splice(i, 1);
-          paired = true;
-          break;
-        }
-      }
-      if (!paired && unmatched.length > 0) {
-        const p2 = unmatched.shift()!;
-        pairs.push({ player1Id: p1.userId!, player2Id: p2.userId! });
+  const unmatched = [...pool];
+  while (unmatched.length >= 2) {
+    const p1 = unmatched.shift()!;
+    let paired = false;
+    for (let i = 0; i < unmatched.length; i++) {
+      const p2 = unmatched[i];
+      if (!pairedSet.has(`${p1}-${p2}`)) {
+        pairs.push({ player1Id: p1, player2Id: p2 });
+        unmatched.splice(i, 1);
+        paired = true;
+        break;
       }
     }
+    if (!paired && unmatched.length > 0) {
+      const p2 = unmatched.shift()!;
+      pairs.push({ player1Id: p1, player2Id: p2 });
+    }
+  }
+
+  // Create the bye as an auto-finished self-match win (isWalkover marks it as a
+  // Swiss bye so standings count it as a win — see recalculateStandings).
+  if (byePlayerId) {
+    await prisma.match.create({
+      data: { tournamentId, player1Id: byePlayerId, player2Id: byePlayerId, round, winnerId: byePlayerId, status: "FINISHED", isWalkover: true },
+    });
+    await recalculateStandings(tournamentId, byePlayerId);
   }
 
   // Distribute the matches across arenas (and assign judges), like the other
@@ -639,14 +658,19 @@ export async function generateMakeupRound(tournamentId: string): Promise<{
   // knockout is a consequence of those standings.
   const swissMatches = allMatches.filter((m) => m.round <= swissRounds);
 
-  // Count real (non-bye) SWISS matches per approved participant. Rematch
-  // avoidance still considers every match (knockout included).
+  // Count SWISS "participations" per player — a real match OR a bye both count
+  // as playing that round, so a byed player is NOT flagged as under-played.
+  // Rematch avoidance still considers every real match (knockout included).
   const ids = new Set(participants.map((p) => p.userId!));
   const count = new Map<string, number>();
   for (const id of ids) count.set(id, 0);
   const faced = new Set<string>();
   for (const m of swissMatches) {
-    if (m.player1Id === m.player2Id) continue;
+    if (m.player1Id === m.player2Id) {
+      // Bye: counts as one participation for that player.
+      if (ids.has(m.player1Id)) count.set(m.player1Id, (count.get(m.player1Id) ?? 0) + 1);
+      continue;
+    }
     if (ids.has(m.player1Id)) count.set(m.player1Id, (count.get(m.player1Id) ?? 0) + 1);
     if (ids.has(m.player2Id)) count.set(m.player2Id, (count.get(m.player2Id) ?? 0) + 1);
   }
@@ -846,15 +870,19 @@ export async function recalculateStandings(
         status: "FINISHED",
         OR: [{ player1Id: userId }, { player2Id: userId }],
       },
-      select: { winnerId: true, player1Id: true, player2Id: true },
+      select: { winnerId: true, player1Id: true, player2Id: true, isWalkover: true },
     }),
   ]);
 
-  // Exclude bye self-matches (player1 === player2) from win/loss tallies.
+  // Real (played) matches vs Swiss byes. A Swiss bye is a self-match marked
+  // isWalkover with winnerId=self — it counts as a WIN so the player isn't
+  // penalized for sitting out an odd round (standard Swiss). Knockout padding
+  // byes (self-matches WITHOUT isWalkover) are ignored here.
   const realMatches = allMatches.filter((m) => m.player1Id !== m.player2Id);
-  const wins = realMatches.filter((m) => m.winnerId === userId).length;
+  const byeWins = allMatches.filter((m) => m.player1Id === m.player2Id && m.isWalkover && m.winnerId === userId).length;
+  const wins = realMatches.filter((m) => m.winnerId === userId).length + byeWins;
   const losses = realMatches.filter((m) => m.winnerId && m.winnerId !== userId).length;
-  // Round Robin: 1 point per win, no points for finishes/losses.
+  // Round Robin: 1 point per win (bye included), no points for finishes/losses.
   // Other formats keep points based on finish-type scoring.
   const totalPoints = tournament?.format === "ROUND_ROBIN"
     ? wins

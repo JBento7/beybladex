@@ -367,11 +367,13 @@ export async function GET(req: NextRequest) {
   // (C) Match number within its round.
   async function resolveMatchNumber() {
     try {
-      const roundMatches = await prisma.match.findMany({
+      const roundMatchesRaw = await prisma.match.findMany({
         where: { tournamentId: match.tournamentId, round: match.round },
         orderBy: [{ bracketPos: "asc" }, { slot: "asc" }, { arena: "asc" }, { createdAt: "asc" }],
-        select: { id: true },
+        select: { id: true, player1Id: true, player2Id: true },
       });
+      // Byes (self-matches) aren't played, so they don't count in "PARTIDA x/y".
+      const roundMatches = roundMatchesRaw.filter((m) => m.player1Id !== m.player2Id);
       const idx = roundMatches.findIndex((m) => m.id === match.id);
       return { matchNumber: idx >= 0 ? idx + 1 : 0, matchesTotal: roundMatches.length };
     } catch {
