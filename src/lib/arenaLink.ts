@@ -73,19 +73,26 @@ export function startAnswerer(arena: number, h: Handlers) {
     await fetch("/api/arena/rtc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ arena, role: "answer", id, sdp: pc.localDescription }) }).catch(() => {});
   }
 
+  let lastOfferSeen = Date.now(); // reset whenever an offer is present
   (async () => {
     while (!closed) {
       try {
         const r = await fetch(`/api/arena/rtc?arena=${arena}&want=offer`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
-        if (r?.signal?.id && r.signal.id !== handledId && r.signal.sdp) {
-          handledId = r.signal.id;
-          await handleOffer(r.signal.id, r.signal.sdp);
+        if (r?.signal?.id && r.signal.sdp) {
+          lastOfferSeen = Date.now(); // a judge is publishing offers → stay responsive
+          if (r.signal.id !== handledId) {
+            handledId = r.signal.id;
+            await handleOffer(r.signal.id, r.signal.sdp);
+          }
         }
       } catch { /* ignore */ }
-      // Back off once we have a live data channel — we only keep polling to catch
-      // a NEW offer (new judge/match), which is rare. This keeps the signaling
-      // poll from being a constant drain on the server.
-      await new Promise((res) => setTimeout(res, connected ? 15000 : 4000));
+      // Adaptive cadence to avoid a constant drain when no judge is on this LAN:
+      //  - connected: 15s (only need to catch a brand-new offer / new match)
+      //  - offers seen recently (<90s): 4s, so a judge opening a placar connects fast
+      //  - otherwise (no P2P peer around): back off to 30s
+      const sinceOffer = Date.now() - lastOfferSeen;
+      const delay = connected ? 15000 : sinceOffer < 90000 ? 4000 : 30000;
+      await new Promise((res) => setTimeout(res, delay));
     }
   })();
 
