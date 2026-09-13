@@ -117,9 +117,14 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const lastCdRef = useRef(0);
   const lastFinishRef = useRef(0);
   const lastLaunchRef = useRef(0);
-  const playCountdown = () => { if (Date.now() - lastCdRef.current < 3000) return; lastCdRef.current = Date.now(); setCountdownOn(true); };
-  const playFinish = (t: string) => { if (Date.now() - lastFinishRef.current < 3000) return; lastFinishRef.current = Date.now(); setFinishVideo(t); };
-  const playLaunch = () => { if (Date.now() - lastLaunchRef.current < 3000) return; lastLaunchRef.current = Date.now(); setLaunchOn(true); };
+  // Dedup windows sized to cover the whole video playback, so the same logical
+  // event arriving from BOTH the P2P link and the server poll (or a duplicated
+  // signal) can't replay it. Consecutive real events are always spaced well
+  // beyond these windows (each battle has its own start/countdown), so nothing
+  // legitimate is suppressed.
+  const playCountdown = () => { if (Date.now() - lastCdRef.current < 8000) return; lastCdRef.current = Date.now(); setCountdownOn(true); };
+  const playFinish = (t: string) => { if (Date.now() - lastFinishRef.current < 6000) return; lastFinishRef.current = Date.now(); setFinishVideo(t); };
+  const playLaunch = () => { if (Date.now() - lastLaunchRef.current < 8000) return; lastLaunchRef.current = Date.now(); setLaunchOn(true); };
   // Live score received over the P2P link (overrides the poll when fresh).
   const [p2pScore, setP2pScore] = useState<{ byId: Record<string, number>; setsById: Record<string, number>; at: number } | null>(null);
 

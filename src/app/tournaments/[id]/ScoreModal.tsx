@@ -145,6 +145,13 @@ export default function ScoreModal({
     return () => { link.close(); linkRef.current = null; };
   }, [open, arena]);
   const linkSend = (msg: unknown) => { try { linkRef.current?.send(msg); } catch { /* ignore */ } };
+  // Synchronous guards against rapid double-taps. React state (loading/starting)
+  // updates on the next render, so two quick taps both pass a state check and
+  // fire twice — creating duplicate points AND replaying the arena videos. Refs
+  // flip immediately, so the second tap is dropped.
+  const pointBusyRef = useRef(false);
+  const startBusyRef = useRef(false);
+  const launchBusyRef = useRef(0);
 
   const fetchState = useCallback(async () => {
     const res = await fetch(`/api/matches/${matchId}/sets`);
@@ -259,7 +266,8 @@ export default function ScoreModal({
   }
 
   async function addPoint(scorerId: string, finishType: FinishType) {
-    if (loading || state?.matchFinished || !revealScoring) return;
+    if (pointBusyRef.current || loading || state?.matchFinished || !revealScoring) return;
+    pointBusyRef.current = true;
     setErr(null);
     // Instant tap feedback: haptic buzz + a visual pulse on the scored side.
     try { navigator.vibrate?.(25); } catch { /* unsupported */ }
@@ -296,6 +304,7 @@ export default function ScoreModal({
       }
     }
     setLoading(false);
+    pointBusyRef.current = false;
     if (!res) { setErr("Sem conexão. O ponto não foi registrado — tente de novo."); return; }
     if (res.ok) {
       setErr(null);
@@ -325,6 +334,9 @@ export default function ScoreModal({
   // so players can see the countdown before the match starts).
   const [launchSent, setLaunchSent] = useState(false);
   async function playLaunchVideo() {
+    // Ignore repeat taps within the video's lifetime so it doesn't stack.
+    if (Date.now() - launchBusyRef.current < 8000) return;
+    launchBusyRef.current = Date.now();
     linkSend({ type: "launch" }); // instant over LAN
     try {
       const res = await fetch(`/api/matches/${matchId}/launch-video`, { method: "POST" });
@@ -335,7 +347,8 @@ export default function ScoreModal({
   // Judge starts the battle: fire the countdown on the arena display and reveal
   // the scoring board here (no countdown on the judge's screen).
   async function startBattle() {
-    if (starting) return;
+    if (startBusyRef.current || starting) return;
+    startBusyRef.current = true;
     linkSend({ type: "countdown" }); // instant over LAN
     setStarting(true);
     try {
@@ -349,6 +362,8 @@ export default function ScoreModal({
     } finally {
       setStarting(false);
       setStartedKey(startKey);
+      // Brief cooldown so a double-tap can't fire two countdowns.
+      setTimeout(() => { startBusyRef.current = false; }, 1500);
     }
   }
 
