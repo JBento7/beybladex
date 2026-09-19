@@ -4,7 +4,10 @@
 // - Navigations (pages): network-first with a cached fallback, so the app still
 //   opens during a drop.
 // - Live data (/api/*): network-only (never cached) so scores/state stay fresh.
-const CACHE = "lbl-cache-v2";
+// Bump this whenever a cached asset is REPLACED under the same filename
+// (media is served cache-first, so an old copy would otherwise stick around).
+// v3: new countdown.mp4.
+const CACHE = "lbl-cache-v3";
 
 // Only light, always-needed assets are precached on install (this SW is
 // registered app-wide, so precaching must stay cheap for every visitor). The
