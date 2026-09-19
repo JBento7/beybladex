@@ -883,17 +883,19 @@ export async function recalculateStandings(
   ]);
 
   // Real (played) matches vs Swiss byes. A Swiss bye is a self-match marked
-  // isWalkover with winnerId=self — it counts as a WIN so the player isn't
-  // penalized for sitting out an odd round (standard Swiss). Knockout padding
-  // byes (self-matches WITHOUT isWalkover) are ignored here.
+  // isWalkover with winnerId=self; knockout padding byes (self-matches WITHOUT
+  // isWalkover) are ignored here.
   const realMatches = allMatches.filter((m) => m.player1Id !== m.player2Id);
   const byeWins = allMatches.filter((m) => m.player1Id === m.player2Id && m.isWalkover && m.winnerId === userId).length;
-  const wins = realMatches.filter((m) => m.winnerId === userId).length + byeWins;
+  // `wins`/`losses` are the CAREER record: only matches actually played. They
+  // feed tiers, win-rate and the global ranking, so a bye must NOT inflate them.
+  const wins = realMatches.filter((m) => m.winnerId === userId).length;
   const losses = realMatches.filter((m) => m.winnerId && m.winnerId !== userId).length;
-  // Round Robin: 1 point per win (bye included), no points for finishes/losses.
+  // Round Robin (Suíço) score: 1 point per win PLUS the bye, so a player who sat
+  // out an odd round isn't penalized in the standings (standard Swiss).
   // Other formats keep points based on finish-type scoring.
   const totalPoints = tournament?.format === "ROUND_ROBIN"
-    ? wins
+    ? wins + byeWins
     : points.reduce((sum, p) => sum + p.points, 0);
 
   await prisma.tournamentParticipant.update({

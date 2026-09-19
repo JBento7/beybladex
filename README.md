@@ -167,12 +167,25 @@ Três camadas (ver conversa de manutenção):
 
 ## Motor de torneios (`tournament-engine.ts`)
 
-- **Suíço** = formato `ROUND_ROBIN`. Nº de rodadas = `ceil(log2(participantes))`.
-- **Pontuação do suíço:** `totalPoints = vitórias`. Desempate: vitórias →
-  pontos de batalha marcados → saldo. Mesma regra ao vivo e no fechamento.
-- **BYE (nº ímpar de jogadores):** a cada rodada, 1 jogador recebe bye = **vitória
-  automática** (self-match com `isWalkover`). Rodízio justo: ninguém recebe 2 byes
-  antes de todos receberem 1. `recalculateStandings` conta o bye como vitória.
+- **Suíço** = formato `ROUND_ROBIN`. Nº de rodadas = `ceil(log2(participantes))`
+  (`swissRoundCount`). O **mata-mata começa na rodada `swissRounds + 1`** — esse é
+  o limite usado em todo o motor (avanço e ranking final).
+- **Pontuação por finish** (`scoring.ts`): Spin 1 · Over 2 · Burst 2 · Extreme 3 ·
+  Misslaunch 1. O set fecha quando alguém atinge `pointsToWinSet`.
+- **Dois contadores distintos — não confunda:**
+  | Campo | Significado | Alimenta |
+  |---|---|---|
+  | `totalPoints` | Suíço: **vitórias + byes**. Outros formatos: soma dos pontos de batalha | Classificação do torneio |
+  | `wins` / `losses` | **Só partidas realmente jogadas** (bye NÃO conta) | Tiers, win-rate, ranking global, estatísticas de carreira |
+- **Desempate** (ao vivo e no fechamento, idênticos): `totalPoints` → pontos de
+  batalha marcados → saldo (marcados − sofridos).
+- **BYE (nº ímpar de jogadores):** a cada rodada, 1 jogador recebe bye (self-match
+  com `isWalkover`), que **soma no `totalPoints`** para ele não ser penalizado por
+  folgar — mas **não** entra em `wins` (não é vitória de carreira). Rodízio justo:
+  ninguém recebe 2 byes antes de todos receberem 1.
+- **Ranking final** (`finalizeTournamentRanking`): define `placement` e distribui
+  `rankingPoints` ao top 5 (**100/70/50/30/10**). O `/rankings` global soma os
+  `rankingPoints` dos torneios **oficiais e não-teste**.
 - **Avanço automático:** `advanceSwissTournament` / `ensureSwissProgress` gera a
   próxima rodada ou o mata-mata quando a rodada atual termina. A página do
   torneio chama `ensureSwissProgress` no load (com throttle de 15s) para
@@ -188,6 +201,7 @@ Três camadas (ver conversa de manutenção):
 | Avançar Rodada | `/api/admin/tournaments/[id]/advance-round` | Gera a próxima rodada se travou |
 | Remover Duplicadas | `/api/admin/tournaments/[id]/dedupe-matches` | Remove partidas duplicadas |
 | Recalcular Classificação | `/api/admin/tournaments/[id]/recalc-standings` | Recomputa V/pontos de todos |
+| Recalcular Ranking Final | `/api/admin/tournaments/[id]/recalc-ranking` | Refaz colocação + pontos de ranking (funciona em torneio já encerrado) |
 | Verificar Partidas | `/api/admin/tournaments/[id]/balance-matches` | Confere se todos jogaram o mesmo nº e gera partidas de reposição (refaz o mata-mata se preciso) |
 
 ---
@@ -246,6 +260,8 @@ Três camadas (ver conversa de manutenção):
   "Avançar Rodada".
 - **Jogadores com partidas a menos:** "Verificar Partidas".
 - **Placar/pontos errados após edições:** "Recalcular Classificação".
+- **Colocação final / pontos de ranking errados:** "Recalcular Classificação" e
+  depois "Recalcular Ranking Final" (nesta ordem).
 - **Partidas duplicadas:** "Remover Duplicadas".
 - **App lento:** confirme que `/api/migrate` criou os índices.
 - **Vídeo repetindo:** já mitigado (dedup no telão + guardas no juiz);
