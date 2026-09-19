@@ -136,6 +136,29 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const liveRef = useRef(false);
   const visibleRef = useRef(true);
   const p2pFreshRef = useRef(0);
+
+  // Force landscape. When the device is physically portrait (a tablet turned
+  // upright) and the browser won't lock the orientation, we rotate the whole
+  // telão 90° so it still reads as landscape.
+  const [portrait, setPortrait] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: portrait)");
+    const apply = () => setPortrait(mq.matches);
+    apply();
+    // iOS 12 Safari (iPad Mini 2) only has the deprecated addListener API.
+    const legacy = mq as unknown as { addListener?: (cb: () => void) => void; removeListener?: (cb: () => void) => void };
+    if (mq.addEventListener) mq.addEventListener("change", apply);
+    else legacy.addListener?.(apply);
+    // Some browsers only fire orientationchange, not the media query.
+    window.addEventListener("orientationchange", apply);
+    window.addEventListener("resize", apply);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener("change", apply);
+      else legacy.removeListener?.(apply);
+      window.removeEventListener("orientationchange", apply);
+      window.removeEventListener("resize", apply);
+    };
+  }, []);
   useEffect(() => {
     const onVis = () => { visibleRef.current = document.visibilityState !== "hidden"; };
     document.addEventListener("visibilitychange", onVis);
@@ -371,6 +394,17 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
   }
+  // The telão must always be landscape. Ask the browser to lock the orientation
+  // (Chrome/Android/ChromeOS honour this while fullscreen). iPadOS/iOS Safari
+  // has no orientation lock, so the CSS fallback below rotates the content.
+  async function lockLandscape() {
+    try {
+      const o = screen.orientation as unknown as { lock?: (v: string) => Promise<void> } | undefined;
+      await o?.lock?.("landscape");
+    } catch {
+      /* unsupported or refused — CSS fallback keeps it landscape */
+    }
+  }
   async function enterFullscreen() {
     const el = wrapRef.current as unknown as {
       requestFullscreen?: () => Promise<void>;
@@ -382,6 +416,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     } catch {
       /* not supported (iPhone Safari) — Add to Home Screen gives chromeless */
     }
+    await lockLandscape();
   }
   function exitFullscreen() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -426,7 +461,28 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const match = data?.match ?? null;
 
   return (
-    <div ref={wrapRef} style={{ height: "100vh", width: "100vw", background: "#000", color: "#fff", overflow: "hidden", position: "relative" }}>
+    <div
+      ref={wrapRef}
+      style={
+        portrait
+          ? {
+              // Portrait device: lay out a LANDSCAPE box (viewport height wide by
+              // viewport width tall) and rotate it into place, so the telão is
+              // always landscape even if the tablet is turned upright.
+              position: "fixed",
+              top: "50%",
+              left: "50%",
+              width: "100vh",
+              height: "100vw",
+              transform: "translate(-50%, -50%) rotate(90deg)",
+              transformOrigin: "center center",
+              background: "#000",
+              color: "#fff",
+              overflow: "hidden",
+            }
+          : { height: "100vh", width: "100vw", background: "#000", color: "#fff", overflow: "hidden", position: "relative" }
+      }
+    >
       <FontLoader fonts={fonts} />
       {/* nosleep loop (offscreen) */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
@@ -441,11 +497,11 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         playsInline
         preload="metadata"
         style={{
-          position: "fixed",
+          position: "absolute",
           top: 0,
           left: 0,
-          width: "100vw",
-          height: "100vh",
+          width: "100%",
+          height: "100%",
           objectFit: "cover",
           background: "#000",
           zIndex: countdownOn ? 70 : -1,
@@ -462,7 +518,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         playsInline
         preload="metadata"
         onError={() => setLaunchOn(false)}
-        style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", objectFit: "contain", background: "#000", zIndex: launchOn ? 75 : -1, opacity: launchOn ? 1 : 0, pointerEvents: "none" }}
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000", zIndex: launchOn ? 75 : -1, opacity: launchOn ? 1 : 0, pointerEvents: "none" }}
       />
 
       {/* Finish-type videos (SPIN/OVER/BURST/EXTREME) — always mounted & primed
@@ -475,7 +531,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           src={`/finish-videos/${ft}.mp4`}
           playsInline
           preload="metadata"
-          style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", objectFit: "cover", background: "#000", zIndex: finishVideo === ft ? 72 : -1, opacity: finishVideo === ft ? 1 : 0, pointerEvents: "none" }}
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", zIndex: finishVideo === ft ? 72 : -1, opacity: finishVideo === ft ? 1 : 0, pointerEvents: "none" }}
         />
       ))}
 
@@ -666,11 +722,11 @@ function WinnerScreen({ match, winnerSide, layout, bg }: { match: Match; winnerS
             return (
               <div key={k} style={{ position: "absolute", left: `${d.x}%`, top: `${d.y}%`, width: `${d.w}%`, height: `${d.h}%` }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {slot.pieces.assist && <img src={slot.pieces.assist} alt="" onError={fallbackBey} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 1 }} />}
+                {slot.pieces.assist && <img src={slot.pieces.assist} alt="" onError={fallbackBey} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 1 }} />}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {slot.pieces.metal && <img src={slot.pieces.metal} alt="" onError={fallbackBey} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 2 }} />}
+                {slot.pieces.metal && <img src={slot.pieces.metal} alt="" onError={fallbackBey} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 2 }} />}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                {slot.pieces.lock && <img src={slot.pieces.lock} alt="" onError={fallbackBey} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 3 }} />}
+                {slot.pieces.lock && <img src={slot.pieces.lock} alt="" onError={fallbackBey} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 3 }} />}
               </div>
             );
           }
