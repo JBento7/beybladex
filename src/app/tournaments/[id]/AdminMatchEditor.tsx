@@ -41,6 +41,28 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
   const [deduping, setDeduping] = useState(false);
   const [recalcing, setRecalcing] = useState(false);
   const [balancing, setBalancing] = useState(false);
+  const [rankingBusy, setRankingBusy] = useState(false);
+
+  async function recalcRanking() {
+    setRankingBusy(true);
+    setErr(null);
+    setAdvanceMsg(null);
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/recalc-ranking`, { method: "POST" });
+    setRankingBusy(false);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      const top = (data.top ?? []) as { placement: number; name: string; rankingPoints: number; wins: number }[];
+      setAdvanceMsg(
+        "Ranking final recalculado. " +
+          (top.length
+            ? "Top: " + top.map((t) => `${t.placement}º ${t.name} (${t.wins}V, ${t.rankingPoints}pts)`).join(" · ")
+            : "")
+      );
+      router.refresh();
+    } else {
+      setAdvanceMsg(data.error || "Erro ao recalcular ranking");
+    }
+  }
 
   async function balanceMatches() {
     setBalancing(true);
@@ -180,6 +202,14 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          <button
+            onClick={recalcRanking}
+            disabled={rankingBusy}
+            title="Recalcula a colocação final e os pontos de ranking (corrige torneios finalizados com a regra antiga)"
+            className="text-xs font-bold border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {rankingBusy ? "Recalculando..." : "Recalcular Ranking Final"}
+          </button>
           <button
             onClick={balanceMatches}
             disabled={balancing}

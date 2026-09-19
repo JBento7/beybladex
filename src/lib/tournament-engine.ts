@@ -175,9 +175,17 @@ export async function finalizeTournamentRanking(tournamentId: string) {
   }
 
   // A Suíço tournament with a knockout cut: rank the qualifiers by how far they
-  // went in the playoff (round >= 2), and place every non-qualifier below them
-  // by round-robin standings.
-  const playoffMatches = matches.filter((m) => m.round >= 2 && m.player1Id !== m.player2Id);
+  // went in the playoff, and place every non-qualifier below them by round-robin
+  // standings.
+  //
+  // IMPORTANT: the knockout starts AFTER the Swiss phase, at round
+  // `swissRounds + 1` (see generatePlayoffBracket / advanceSwissTournament).
+  // This used to test `round >= 2`, which misclassified every Swiss round from
+  // the 2nd on as a playoff round — so a Suíço was ranked by "the last round in
+  // which the player lost" instead of by wins, and the top-5 ranking points went
+  // to the wrong players. Use the same boundary the rest of the engine uses.
+  const swissRounds = swissRoundCount(participants.length);
+  const playoffMatches = matches.filter((m) => m.round > swissRounds && m.player1Id !== m.player2Id);
   const isSwissPlayoff = tournament?.format === "ROUND_ROBIN" && playoffMatches.length > 0;
 
   let ranked: typeof participants;
