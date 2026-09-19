@@ -561,15 +561,20 @@ export async function generateSwissRound(
   const [tournament, judges, allPrev] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
     getTournamentJudgeIds(tournamentId),
-    prisma.match.findMany({ where: { tournamentId }, select: { player1Id: true, player2Id: true } }),
+    prisma.match.findMany({ where: { tournamentId }, select: { player1Id: true, player2Id: true, isWalkover: true } }),
   ]);
   const arenaCount = tournament?.arenas ?? 1;
 
-  // Rematch-avoidance + bye tracking from earlier rounds.
+  // Rematch-avoidance + bye tracking from earlier rounds. Only SWISS byes
+  // (self-match marked isWalkover) count as "already had a bye" — knockout
+  // padding byes are a different thing and must not block a Swiss bye.
   const pairedSet = new Set<string>();
   const hadBye = new Set<string>();
   for (const m of allPrev) {
-    if (m.player1Id === m.player2Id) { hadBye.add(m.player1Id); continue; } // self-match = bye
+    if (m.player1Id === m.player2Id) {
+      if (m.isWalkover) hadBye.add(m.player1Id);
+      continue;
+    }
     pairedSet.add(`${m.player1Id}-${m.player2Id}`);
     pairedSet.add(`${m.player2Id}-${m.player1Id}`);
   }
@@ -595,52 +600,82 @@ export async function generateSwissRound(
     if (idx >= 0) pool.splice(idx, 1);
   }
 
-  // Build this round's pairings (player1/player2 pairs) from the even pool,
-  // avoiding rematches when possible.
-  const pairs: { player1Id: string; player2Id: string }[] = [];
-  const unmatched = [...pool];
-  while (unmatched.length >= 2) {
-    const p1 = unmatched.shift()!;
-    let paired = false;
-    for (let i = 0; i < unmatched.length; i++) {
-      const p2 = unmatched[i];
-      if (!pairedSet.has(`${p1}-${p2}`)) {
-        pairs.push({ player1Id: p1, player2Id: p2 });
-        unmatched.splice(i, 1);
-        paired = true;
-        break;
-      }
+  // Build this round's pairings from the (even) pool, avoiding rematches.
+  //
+  // A plain greedy pass can strand the last two players against each other even
+  // when a rematch-free pairing exists for the whole round — which unfairly
+  // forces a repeat opponent on them. So try an exhaustive pairing with
+  // backtracking first (bounded, so it can never hang), and only fall back to
+  // greedy if no rematch-free pairing exists at all.
+  type Pair = { player1Id: string; player2Id: string };
+  let steps = 0;
+  const STEP_BUDGET = 50_000;
+  const solve = (list: string[]): Pair[] | null => {
+    if (list.length < 2) return [];
+    if (++steps > STEP_BUDGET) return null;
+    const p1 = list[0];
+    const rest = list.slice(1);
+    for (let i = 0; i < rest.length; i++) {
+      const p2 = rest[i];
+      if (pairedSet.has(`${p1}-${p2}`)) continue;
+      const sub = solve([...rest.slice(0, i), ...rest.slice(i + 1)]);
+      if (sub) return [{ player1Id: p1, player2Id: p2 }, ...sub];
     }
-    if (!paired && unmatched.length > 0) {
-      const p2 = unmatched.shift()!;
+    return null;
+  };
+
+  let pairs = solve(pool);
+  if (!pairs) {
+    // Unavoidable rematches (or budget exhausted): pair by closest standing.
+    pairs = [];
+    const unmatched = [...pool];
+    while (unmatched.length >= 2) {
+      const p1 = unmatched.shift()!;
+      let idx = unmatched.findIndex((p2) => !pairedSet.has(`${p1}-${p2}`));
+      if (idx === -1) idx = 0; // closest in points among those already faced
+      const p2 = unmatched.splice(idx, 1)[0];
       pairs.push({ player1Id: p1, player2Id: p2 });
     }
-  }
-
-  // Create the bye as an auto-finished self-match win (isWalkover marks it as a
-  // Swiss bye so standings count it as a win — see recalculateStandings).
-  if (byePlayerId) {
-    await prisma.match.create({
-      data: { tournamentId, player1Id: byePlayerId, player2Id: byePlayerId, round, winnerId: byePlayerId, status: "FINISHED", isWalkover: true },
-    });
-    await recalculateStandings(tournamentId, byePlayerId);
   }
 
   // Distribute the matches across arenas (and assign judges), like the other
   // formats — otherwise the placar can't tell which battle is in each arena.
   const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
-  await prisma.match.createMany({
-    data: scheduled.map(({ match, slot, arena, judgeId }, i) => ({
+
+  // Create the whole round in ONE statement (bye included). Doing the bye in a
+  // separate write risked leaving a round with only the bye if the second write
+  // failed — and the idempotency guard above would then skip every retry,
+  // permanently stranding the other players with no match that round.
+  const roundMatches: {
+    tournamentId: string; player1Id: string; player2Id: string; round: number;
+    bracketPos: number; arena?: number; slot?: number; judgeId?: string | null;
+    winnerId?: string; status?: "FINISHED"; isWalkover?: boolean;
+  }[] = scheduled.map(({ match, slot, arena, judgeId }, i) => ({
+    tournamentId,
+    player1Id: match.player1Id,
+    player2Id: match.player2Id,
+    round,
+    bracketPos: i + 1,
+    arena,
+    slot,
+    judgeId,
+  }));
+  if (byePlayerId) {
+    // The bye is an auto-finished self-match win (isWalkover marks it as a SWISS
+    // bye, which the standings count in the Suíço score — see recalculateStandings).
+    roundMatches.push({
       tournamentId,
-      player1Id: match.player1Id,
-      player2Id: match.player2Id,
+      player1Id: byePlayerId,
+      player2Id: byePlayerId,
       round,
-      bracketPos: i + 1,
-      arena,
-      slot,
-      judgeId,
-    })),
-  });
+      bracketPos: roundMatches.length + 1,
+      winnerId: byePlayerId,
+      status: "FINISHED",
+      isWalkover: true,
+    });
+  }
+  await prisma.match.createMany({ data: roundMatches });
+  if (byePlayerId) await recalculateStandings(tournamentId, byePlayerId);
 }
 
 // Fairness check + repair for a Swiss (ROUND_ROBIN) tournament: some players may

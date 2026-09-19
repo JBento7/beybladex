@@ -183,6 +183,15 @@ Três camadas (ver conversa de manutenção):
   com `isWalkover`), que **soma no `totalPoints`** para ele não ser penalizado por
   folgar — mas **não** entra em `wins` (não é vitória de carreira). Rodízio justo:
   ninguém recebe 2 byes antes de todos receberem 1.
+- **Garantias do emparelhamento** (`generateSwissRound`) — validadas por simulação
+  (25/24/13/9/7 jogadores, 200 execuções cada):
+  1. **Todos jogam o mesmo número de rodadas** (partida ou bye);
+  2. **No máximo 1 bye por jogador** enquanto houver quem nunca folgou;
+  3. **Zero revanches** — o pareamento usa **backtracking** (com orçamento de
+     passos, para nunca travar) e só cai no guloso se não existir combinação sem
+     revanche;
+  4. A rodada inteira (partidas **+ bye**) é criada em **uma única escrita**, para
+     nunca existir rodada pela metade (a guarda de idempotência impediria o retry).
 - **Ranking final** (`finalizeTournamentRanking`): define `placement` e distribui
   `rankingPoints` ao top 5 (**100/70/50/30/10**). O `/rankings` global soma os
   `rankingPoints` dos torneios **oficiais e não-teste**.
