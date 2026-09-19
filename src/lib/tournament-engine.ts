@@ -188,9 +188,10 @@ export async function finalizeTournamentRanking(tournamentId: string) {
   const playoffMatches = matches.filter((m) => m.round > swissRounds && m.player1Id !== m.player2Id);
   const isSwissPlayoff = tournament?.format === "ROUND_ROBIN" && playoffMatches.length > 0;
 
+  // Who actually reached the knockout bracket (empty when there is no knockout).
+  const inPlayoff = new Set<string>();
   let ranked: typeof participants;
   if (isSwissPlayoff) {
-    const inPlayoff = new Set<string>();
     playoffMatches.forEach((m) => {
       inPlayoff.add(m.player1Id);
       inPlayoff.add(m.player2Id);
@@ -254,14 +255,22 @@ export async function finalizeTournamentRanking(tournamentId: string) {
     });
   }
 
+  // Ranking points are earned in the KNOCKOUT, not in the Swiss standings: when
+  // the event has a bracket, only players who actually reached it score. Everyone
+  // else still gets a placement (for the final table/certificates) but 0 points.
+  // Without a knockout (pure Swiss / other formats) the top placements score.
   await Promise.all(
-    ranked.map((p, idx) =>
-      prisma.tournamentParticipant.update({
+    ranked.map((p, idx) => {
+      const eligible = !isSwissPlayoff || inPlayoff.has(p.userId!);
+      return prisma.tournamentParticipant.update({
         where: { id: p.id },
         // placement is 1-based final standing; feeds certificates and profile badges.
-        data: { rankingPoints: RANKING_POINTS_BY_PLACE[idx] ?? 0, placement: idx + 1 },
-      })
-    )
+        data: {
+          rankingPoints: eligible ? (RANKING_POINTS_BY_PLACE[idx] ?? 0) : 0,
+          placement: idx + 1,
+        },
+      });
+    })
   );
 
   await prisma.tournament.update({

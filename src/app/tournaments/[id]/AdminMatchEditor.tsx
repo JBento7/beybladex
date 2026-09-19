@@ -52,11 +52,16 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
       const top = (data.top ?? []) as { placement: number; name: string; rankingPoints: number; wins: number }[];
+      const warnings = (data.warnings ?? []) as string[];
+      const t = data.tournament ?? {};
       setAdvanceMsg(
-        "Ranking final recalculado. " +
+        "Ranking final recalculado." +
+          ` [${t.knockoutMatches > 0 ? `mata-mata: ${t.knockoutMatches} partidas` : "sem mata-mata"}` +
+          `${t.isOfficial ? "" : " · NÃO OFICIAL"}${t.isTest ? " · TESTE" : ""}]` +
           (top.length
-            ? "Top: " + top.map((t) => `${t.placement}º ${t.name} (${t.wins}V, ${t.rankingPoints}pts)`).join(" · ")
-            : "")
+            ? " Top: " + top.map((x) => `${x.placement}º ${x.name} (${x.wins}V, ${x.rankingPoints}pts)`).join(" · ")
+            : "") +
+          (warnings.length ? " ⚠ " + warnings.join(" ⚠ ") : "")
       );
       router.refresh();
     } else {
