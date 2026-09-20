@@ -42,6 +42,31 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
   const [recalcing, setRecalcing] = useState(false);
   const [balancing, setBalancing] = useState(false);
   const [rankingBusy, setRankingBusy] = useState(false);
+  const [healthBusy, setHealthBusy] = useState(false);
+  const [health, setHealth] = useState<
+    { code: string; severity: string; count: number; detail: string; action: string }[] | null
+  >(null);
+
+  async function runHealth(fix: boolean) {
+    setHealthBusy(true);
+    setErr(null);
+    setAdvanceMsg(null);
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/health`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fix }),
+    });
+    setHealthBusy(false);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setHealth(data.issues ?? []);
+      if (data.healthy) setAdvanceMsg("✅ Nenhum problema encontrado neste torneio.");
+      else if (fix && (data.repaired ?? []).length) setAdvanceMsg("Reparos aplicados: " + data.repaired.join(" · "));
+      router.refresh();
+    } else {
+      setAdvanceMsg(data.error || "Erro no diagnóstico");
+    }
+  }
 
   async function recalcRanking() {
     setRankingBusy(true);
@@ -208,6 +233,14 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           <button
+            onClick={() => runHealth(false)}
+            disabled={healthBusy}
+            title="Procura byes quebrados, duplicatas, rodadas travadas, classificação e pontos de ranking errados"
+            className="text-xs font-bold border border-blue-400/50 text-blue-300 hover:bg-blue-400/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {healthBusy ? "Verificando..." : "🩺 Diagnóstico"}
+          </button>
+          <button
             onClick={recalcRanking}
             disabled={rankingBusy}
             title="Recalcula a colocação final e os pontos de ranking (corrige torneios finalizados com a regra antiga)"
@@ -259,6 +292,36 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
       {advanceMsg && (
         <div className="mt-3 text-xs px-4 py-2 rounded-lg bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500]">
           {advanceMsg}
+        </div>
+      )}
+
+      {health && health.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {health.map((i) => {
+            const c =
+              i.severity === "critical" ? "border-red-600 bg-red-900/20 text-red-300"
+              : i.severity === "high" ? "border-[#f0a500]/50 bg-[#f0a500]/10 text-[#f0a500]"
+              : "border-[#333] bg-[#1a1a1a] text-gray-400";
+            return (
+              <div key={i.code} className={`text-xs px-4 py-2.5 rounded-lg border ${c}`}>
+                <div className="font-bold uppercase tracking-wide">
+                  {i.severity === "critical" ? "🔴 Crítico" : i.severity === "high" ? "🟠 Atenção" : "ℹ️ Info"}
+                  {i.count > 1 ? ` · ${i.count}` : ""}
+                </div>
+                <div className="mt-0.5 text-gray-300">{i.detail}</div>
+                <div className="mt-1 font-semibold">→ {i.action}</div>
+              </div>
+            );
+          })}
+          {health.some((i) => i.code === "broken_byes" || i.code === "stale_standings") && (
+            <button
+              onClick={() => runHealth(true)}
+              disabled={healthBusy}
+              className="text-xs font-bold bg-blue-500 hover:bg-blue-400 text-black px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {healthBusy ? "Reparando..." : "🔧 Reparar automaticamente"}
+            </button>
+          )}
         </div>
       )}
 
