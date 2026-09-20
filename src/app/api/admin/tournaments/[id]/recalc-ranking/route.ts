@@ -22,6 +22,15 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       select: { id: true, status: true, isOfficial: true, isTest: true, format: true, qualifiers: true },
     });
     if (!tournament) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
+    // finalizeTournamentRanking always ends by marking the tournament FINISHED,
+    // so running this on a live event would end it early and publish partial
+    // ranking points. This tool is for repairing events that already ended.
+    if (tournament.status !== "FINISHED") {
+      return NextResponse.json(
+        { error: `O torneio está ${tournament.status === "IN_PROGRESS" ? "em andamento" : "não encerrado"}. Encerre-o primeiro — esta ferramenta recalcula o ranking de torneios já finalizados.` },
+        { status: 400 }
+      );
+    }
 
     const participants = await prisma.tournamentParticipant.findMany({
       where: { tournamentId: params.id, approved: { not: false } },

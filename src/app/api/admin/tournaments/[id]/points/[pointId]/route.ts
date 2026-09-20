@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
+import { recalculateStandings } from "@/lib/tournament-engine";
 import type { FinishType } from "@prisma/client";
 
 // DELETE — remove a single point entry and update set/match counters
@@ -38,6 +39,13 @@ export async function DELETE(
         : { player2Points: { decrement: point.points } },
     });
   }
+
+  // Standings are derived from the recorded results — without this they keep
+  // showing the pre-edit totals (and the ranking is computed from them).
+  await Promise.all([
+    recalculateStandings(params.id, point.match.player1Id),
+    recalculateStandings(params.id, point.match.player2Id),
+  ]);
 
   return NextResponse.json({ ok: true });
 }
@@ -102,6 +110,11 @@ export async function POST(
       ? { player1Points: { increment: points } }
       : { player2Points: { increment: points } },
   });
+
+  await Promise.all([
+    recalculateStandings(params.id, match.player1Id),
+    recalculateStandings(params.id, match.player2Id),
+  ]);
 
   return NextResponse.json({ ok: true });
 }

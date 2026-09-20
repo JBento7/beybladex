@@ -145,13 +145,19 @@ const RANKING_POINTS_BY_PLACE = [100, 70, 50, 30, 10];
 // 1st. Points-based formats (ROUND_ROBIN, GROUPS) are ranked by totalPoints,
 // tie-broken by point differential (points scored - points conceded).
 export async function finalizeTournamentRanking(tournamentId: string) {
-  const [tournament, participants, matches] = await Promise.all([
+  const [tournament, participants, allMatchRows] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true, qualifiers: true } }),
     prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } }),
     prisma.match.findMany({
-      where: { tournamentId, status: "FINISHED" },
+      // Every match, not just finished ones: whether the event HAS a knockout is
+      // a structural fact (the bracket exists), independent of whether it has
+      // been played. Filtering to FINISHED here used to make an unplayed bracket
+      // look like "no knockout", which awarded ranking points on the Swiss
+      // standings to players who never qualified.
+      where: { tournamentId },
       select: {
         round: true,
+        status: true,
         winnerId: true,
         player1Id: true,
         player2Id: true,
@@ -160,11 +166,13 @@ export async function finalizeTournamentRanking(tournamentId: string) {
       },
     }),
   ]);
+  // Results-derived tallies still only consider decided matches.
+  const finishedMatches = allMatchRows.filter((m) => m.status === "FINISHED");
 
   // Point differential and total battle points scored, ignoring bye self-matches.
   const diff = new Map<string, number>();
   const scored = new Map<string, number>();
-  for (const m of matches) {
+  for (const m of finishedMatches) {
     if (m.player1Id === m.player2Id) continue;
     const p1Pts = m.points.filter((p) => p.userId === m.player1Id).reduce((s, p) => s + p.points, 0);
     const p2Pts = m.points.filter((p) => p.userId === m.player2Id).reduce((s, p) => s + p.points, 0);
@@ -185,7 +193,7 @@ export async function finalizeTournamentRanking(tournamentId: string) {
   // which the player lost" instead of by wins, and the top-5 ranking points went
   // to the wrong players. Use the same boundary the rest of the engine uses.
   const swissRounds = swissRoundCount(participants.length);
-  const playoffMatches = matches.filter((m) => m.round > swissRounds && m.player1Id !== m.player2Id);
+  const playoffMatches = allMatchRows.filter((m) => m.round > swissRounds && m.player1Id !== m.player2Id);
   const isSwissPlayoff = tournament?.format === "ROUND_ROBIN" && playoffMatches.length > 0;
 
   // Who actually reached the knockout bracket (empty when there is no knockout).
@@ -228,13 +236,13 @@ export async function finalizeTournamentRanking(tournamentId: string) {
     // The round each player LOST in; the champion never loses (treated as ∞).
     // A later elimination round means a better placement.
     const elimRound = new Map<string, number>();
-    for (const m of matches) {
+    for (const m of finishedMatches) {
       if (m.player1Id === m.player2Id || !m.winnerId || m.isThirdPlace) continue;
       const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
       elimRound.set(loserId, m.round);
     }
     // The third-place match settles the tie between the two semifinal losers.
-    const thirdPlaceMatch = matches.find((m) => m.isThirdPlace && m.winnerId);
+    const thirdPlaceMatch = finishedMatches.find((m) => m.isThirdPlace && m.winnerId);
     ranked = [...participants].sort((a, b) => {
       const aE = elimRound.get(a.userId!) ?? Infinity;
       const bE = elimRound.get(b.userId!) ?? Infinity;
@@ -304,7 +312,33 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
     prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" } }),
   ]);
   const arenaCount = tournament?.arenas ?? 1;
-  const top = participants.slice(0, qualifiers);
+
+  // Who qualifies (and their seeding) must use the SAME tiebreakers as the
+  // standings table and the final ranking — totalPoints alone leaves ties to
+  // whatever order Postgres happens to return, so the wrong player could take
+  // the last spot and seeds could be scrambled among equal records.
+  const decided = await prisma.match.findMany({
+    where: { tournamentId, status: "FINISHED" },
+    select: { player1Id: true, player2Id: true, points: { select: { userId: true, points: true } } },
+  });
+  const scored = new Map<string, number>();
+  const diff = new Map<string, number>();
+  for (const m of decided) {
+    if (m.player1Id === m.player2Id) continue; // byes score nothing
+    const p1 = m.points.filter((p) => p.userId === m.player1Id).reduce((s, p) => s + p.points, 0);
+    const p2 = m.points.filter((p) => p.userId === m.player2Id).reduce((s, p) => s + p.points, 0);
+    scored.set(m.player1Id, (scored.get(m.player1Id) ?? 0) + p1);
+    scored.set(m.player2Id, (scored.get(m.player2Id) ?? 0) + p2);
+    diff.set(m.player1Id, (diff.get(m.player1Id) ?? 0) + (p1 - p2));
+    diff.set(m.player2Id, (diff.get(m.player2Id) ?? 0) + (p2 - p1));
+  }
+  const seeded = [...participants].sort((a, b) => {
+    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+    const bp = (scored.get(b.userId!) ?? 0) - (scored.get(a.userId!) ?? 0);
+    if (bp !== 0) return bp;
+    return (diff.get(b.userId!) ?? 0) - (diff.get(a.userId!) ?? 0);
+  });
+  const top = seeded.slice(0, qualifiers);
   if (top.length < 2) return;
 
   // 2-day tournaments can use different match rules on the knockout day.
@@ -828,6 +862,10 @@ export async function advanceSingleElimination(
 ) {
   const roundMatches = await prisma.match.findMany({
     where: { tournamentId, round: completedRound },
+    // Bracket order matters: the next round pairs winners[0] vs winners[1],
+    // winners[2] vs winners[3]... Without an explicit order Postgres returns
+    // rows arbitrarily, which scrambles the seeding generatePlayoffBracket built.
+    orderBy: [{ bracketPos: "asc" }, { slot: "asc" }, { arena: "asc" }, { createdAt: "asc" }],
   });
 
   // The third-place match shares its round number with the final, but isn't
@@ -848,6 +886,11 @@ export async function advanceSingleElimination(
   }
 
   const nextRound = completedRound + 1;
+  // Idempotent, like generateSwissRound: two matches of the same round finishing
+  // at nearly the same time would otherwise each build the next round, producing
+  // a duplicated bracket.
+  const nextExisting = await prisma.match.count({ where: { tournamentId, round: nextRound } });
+  if (nextExisting > 0) return;
   const [tournament, judges] = await Promise.all([
     prisma.tournament.findUnique({
       where: { id: tournamentId },

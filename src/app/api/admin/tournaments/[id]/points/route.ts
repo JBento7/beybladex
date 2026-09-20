@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { recalculateStandings } from "@/lib/tournament-engine";
 
 // GET — list all matches with points for this tournament
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -47,18 +48,34 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: "Apenas o organizador do torneio pode zerar os pontos" }, { status: 403 });
   }
 
+  // Reset only real matches. A Swiss BYE is a self-match stored as already
+  // FINISHED with winnerId = the player; resetting it to PENDING would leave a
+  // match nobody can ever play, so the round could never complete and the
+  // tournament would be stuck forever. Byes are structural, not a result.
+  const byes = await prisma.match.findMany({
+    where: { tournamentId: params.id },
+    select: { id: true, player1Id: true, player2Id: true },
+  });
+  const byeIds = byes.filter((m) => m.player1Id === m.player2Id).map((m) => m.id);
+
   await prisma.$transaction([
     prisma.matchPoint.deleteMany({ where: { match: { tournamentId: params.id } } }),
     prisma.matchSet.deleteMany({ where: { match: { tournamentId: params.id } } }),
     prisma.match.updateMany({
-      where: { tournamentId: params.id },
+      where: { tournamentId: params.id, id: { notIn: byeIds.length ? byeIds : ["__none__"] } },
       data: { status: "PENDING", winnerId: null },
-    }),
-    prisma.tournamentParticipant.updateMany({
-      where: { tournamentId: params.id },
-      data: { wins: 0, losses: 0, totalPoints: 0 },
     }),
   ]);
 
-  return NextResponse.json({ ok: true });
+  // Recompute instead of zeroing, so the bye wins that are still on record stay
+  // credited (a bye counts in the Suíço score, see recalculateStandings).
+  const participants = await prisma.tournamentParticipant.findMany({
+    where: { tournamentId: params.id },
+    select: { userId: true },
+  });
+  for (const p of participants) {
+    if (p.userId) await recalculateStandings(params.id, p.userId);
+  }
+
+  return NextResponse.json({ ok: true, byesKept: byeIds.length });
 }

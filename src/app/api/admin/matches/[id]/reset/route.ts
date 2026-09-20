@@ -24,6 +24,16 @@ export async function POST(
 
   if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
 
+  // A bye is a self-match stored as already FINISHED. Resetting it to PENDING
+  // would leave a "match" nobody can play, so its round could never complete and
+  // the tournament would stall. Byes aren't a result to correct.
+  if (match.player1Id === match.player2Id) {
+    return NextResponse.json(
+      { error: "Esta entrada é um BYE (passou automaticamente), não uma partida — não pode ser resetada." },
+      { status: 400 }
+    );
+  }
+
   // If the match had a result, undo the beyblade win/loss it credited BEFORE we
   // delete the points (revert reads them to resolve which combos were involved).
   if (
