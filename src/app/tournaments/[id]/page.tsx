@@ -901,9 +901,15 @@ export default async function TournamentDetailPage({
                 const arenaCount = tournament.arenas ?? 1;
                 // Use stored arena/slot from DB — these are fixed at match creation time
                 const useStoredArenas = arenaCount > 1 && roundMatches.some((m) => m.arena != null);
-                const slots = useStoredArenas
-                  ? [...new Set(roundMatches.map((m) => m.slot ?? 0))].sort((a, b) => a - b)
-                  : [];
+                  // Byes aren't played in an arena (no slot/arena), so they must
+                  // not occupy a grid cell — otherwise they collide with the
+                  // match scheduled in slot 0 / arena 1 and one of them is
+                  // silently hidden. They're listed under the grid instead.
+                  const byeMatches = roundMatches.filter((m) => m.player1.id === m.player2.id);
+                  const arenaMatches = roundMatches.filter((m) => m.player1.id !== m.player2.id);
+                  const slots = useStoredArenas
+                    ? [...new Set(arenaMatches.map((m) => m.slot ?? 0))].sort((a, b) => a - b)
+                    : [];
 
                 return (
                   <div key={round} className="bg-gray-900 border border-gray-800 rounded-xl p-6">
@@ -934,7 +940,7 @@ export default async function TournamentDetailPage({
                             style={{ gridTemplateColumns: `repeat(${arenaCount}, minmax(180px, 1fr))` }}
                           >
                             {Array.from({ length: arenaCount }, (_, i) => {
-                              const match = roundMatches.find(
+                              const match = arenaMatches.find(
                                 (m) => (m.slot ?? 0) === slot && (m.arena ?? 1) === i + 1
                               );
                               if (!match) {
@@ -958,6 +964,19 @@ export default async function TournamentDetailPage({
                                 />
                               );
                             })}
+                          </div>
+                        ))}
+                        {byeMatches.map((m) => (
+                          <div
+                            key={m.id}
+                            className="flex items-center justify-between gap-4 p-3 rounded-lg border border-dashed border-gray-700 bg-gray-800/40"
+                          >
+                            <span className="text-sm font-semibold text-amber-400 truncate">
+                              {playerLabel(m.player1, isAdminUser)}
+                            </span>
+                            <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-700 text-gray-400 flex-shrink-0">
+                              Passou (bye)
+                            </span>
                           </div>
                         ))}
                       </div>

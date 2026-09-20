@@ -48,9 +48,22 @@ export async function POST(
       );
     }
 
-    if (tournament._count.participants < 2) {
+    // Count APPROVED participants — that is exactly the set the bracket/round
+    // generators use. Counting every registration let a tournament start with
+    // pending approvals and generate zero (or too few) matches, leaving it
+    // IN_PROGRESS with nothing to play and no way to advance.
+    const approvedCount = await prisma.tournamentParticipant.count({
+      where: { tournamentId: params.id, approved: { not: false } },
+    });
+    const pending = tournament._count.participants - approvedCount;
+    if (approvedCount < 2) {
       return NextResponse.json(
-        { error: "São necessários pelo menos 2 participantes para iniciar" },
+        {
+          error:
+            `São necessários pelo menos 2 participantes APROVADOS para iniciar (aprovados: ${approvedCount}` +
+            (pending > 0 ? `, aguardando aprovação: ${pending}` : "") +
+            ").",
+        },
         { status: 400 }
       );
     }
