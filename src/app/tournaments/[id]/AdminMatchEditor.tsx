@@ -22,7 +22,15 @@ interface MatchRow {
 
 type EditSet = { p1: number; p2: number };
 
-export default function AdminMatchEditor({ matches, tournamentId }: { matches: MatchRow[]; tournamentId: string }) {
+export default function AdminMatchEditor({
+  matches,
+  tournamentId,
+  participants = [],
+}: {
+  matches: MatchRow[];
+  tournamentId: string;
+  participants?: { userId: string; name: string }[];
+}) {
   const [open, setOpen] = useState(false);
   const [resetting, setResetting] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -43,6 +51,36 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
   const [balancing, setBalancing] = useState(false);
   const [rankingBusy, setRankingBusy] = useState(false);
   const [healthBusy, setHealthBusy] = useState(false);
+
+  // Manual podium override (when the recorded matches don't reflect reality).
+  const PODIUM_PTS = [100, 70, 50, 30, 10];
+  const [podiumOpen, setPodiumOpen] = useState(false);
+  const [podium, setPodium] = useState<string[]>(["", "", "", "", ""]);
+  const [podiumBusy, setPodiumBusy] = useState(false);
+
+  async function savePodium() {
+    const order = podium.filter(Boolean);
+    if (!order.length) { setAdvanceMsg("Escolha ao menos o 1º colocado."); return; }
+    if (new Set(order).size !== order.length) { setAdvanceMsg("O mesmo jogador está em duas posições."); return; }
+    setPodiumBusy(true);
+    setErr(null);
+    setAdvanceMsg(null);
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/podium`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ order }),
+    });
+    setPodiumBusy(false);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      const p = (data.podium ?? []) as { placement: number; name: string; rankingPoints: number }[];
+      setAdvanceMsg("Pódio definido: " + p.map((x) => `${x.placement}º ${x.name} (${x.rankingPoints}pts)`).join(" · "));
+      setPodiumOpen(false);
+      router.refresh();
+    } else {
+      setAdvanceMsg(data.error || "Erro ao definir pódio");
+    }
+  }
   const [health, setHealth] = useState<
     { code: string; severity: string; count: number; detail: string; action: string }[] | null
   >(null);
@@ -232,6 +270,15 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          {participants.length > 0 && (
+            <button
+              onClick={() => setPodiumOpen((v) => !v)}
+              title="Define manualmente o 1º ao 5º lugar e os pontos de ranking"
+              className="text-xs font-bold border border-amber-400/50 text-amber-300 hover:bg-amber-400/10 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              🏆 Definir Pódio
+            </button>
+          )}
           <button
             onClick={() => runHealth(false)}
             disabled={healthBusy}
@@ -292,6 +339,52 @@ export default function AdminMatchEditor({ matches, tournamentId }: { matches: M
       {advanceMsg && (
         <div className="mt-3 text-xs px-4 py-2 rounded-lg bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500]">
           {advanceMsg}
+        </div>
+      )}
+
+      {podiumOpen && (
+        <div className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/5 p-4">
+          <div className="text-sm font-bold text-amber-300">Pódio final</div>
+          <p className="text-[11px] text-gray-400 mt-0.5 mb-3">
+            Use quando o resultado registrado não refletir o que aconteceu. Define a colocação e os
+            pontos de ranking direto. Quem não estiver no pódio fica com 0 pontos de ranking.
+          </p>
+          <div className="space-y-2">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs font-black text-amber-300 w-14 flex-shrink-0">
+                  {i + 1}º · {PODIUM_PTS[i]}pts
+                </span>
+                <select
+                  value={podium[i]}
+                  onChange={(e) => setPodium((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
+                  className="flex-1 min-w-0 bg-[#1a1a1a] border border-[#444] rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-amber-400"
+                >
+                  <option value="">— vazio —</option>
+                  {participants.map((p) => (
+                    <option key={p.userId} value={p.userId}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 mt-4">
+            <div className="flex-1" />
+            <button
+              onClick={() => setPodiumOpen(false)}
+              disabled={podiumBusy}
+              className="text-xs text-gray-500 hover:text-gray-300 border border-[#333] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={savePodium}
+              disabled={podiumBusy}
+              className="text-xs bg-amber-400 hover:bg-amber-300 text-black font-bold px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {podiumBusy ? "Salvando..." : "Salvar Pódio"}
+            </button>
+          </div>
         </div>
       )}
 

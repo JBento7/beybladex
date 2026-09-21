@@ -137,7 +137,7 @@ export async function generateRoundRobin(tournamentId: string) {
 
 // Ranking points awarded to the top 5 finishers of an official tournament,
 // added to TournamentParticipant.rankingPoints (which feeds the global ranking).
-const RANKING_POINTS_BY_PLACE = [100, 70, 50, 30, 10];
+export const RANKING_POINTS_BY_PLACE = [100, 70, 50, 30, 10];
 
 // Ranks the final standings, awards rankingPoints to the top 5 and marks the
 // tournament FINISHED. Knockout formats (SINGLE_ELIMINATION) are ranked by how
