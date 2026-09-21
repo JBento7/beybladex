@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { compareRanking } from "@/lib/ranking";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { TierBadge } from "@/components/TierBadge";
@@ -78,16 +79,18 @@ export default async function CommunityPage() {
     const officialBattlePoints = officialBattleByUser.get(p.id) ?? 0;
     const matches = wins + losses;
     const winRate = matches > 0 ? Math.round((wins / matches) * 100) : 0;
-    return { ...p, wins, losses, officialPoints, beyPoints, battlePoints, officialWins, officialBattlePoints, matches, winRate };
+    return { ...p, displayName: p.bladerName ?? p.name, wins, losses, officialPoints, beyPoints, battlePoints, officialWins, officialBattlePoints, matches, winRate };
   });
 
-  // Same order as the tournament classification and the dashboard ranking:
-  // official wins → official battle points scored. (Placement/league points are
-  // a separate metric shown on the card, not the ranking driver.)
-  playersWithStats.sort((a, b) =>
-    b.officialWins - a.officialWins ||
-    b.officialBattlePoints - a.officialBattlePoints ||
-    a.name.localeCompare(b.name)
+  // Same order as the official ranking (/rankings and the dashboard widget):
+  // league points won in official tournaments → name. Players without league
+  // points keep the same order, listed after everyone who is ranked.
+  playersWithStats.sort(
+    (a, b) =>
+      compareRanking(
+        { leaguePoints: a.officialPoints, displayName: a.displayName },
+        { leaguePoints: b.officialPoints, displayName: b.displayName }
+      )
   );
 
   return (

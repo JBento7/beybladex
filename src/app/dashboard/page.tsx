@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { compareRanking, isRanked } from "@/lib/ranking";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = { title: "Painel" };
@@ -130,21 +131,11 @@ export default async function DashboardPage() {
     select: { bladerName: true, avatarUrl: true },
   });
 
-  // Official career wins (ranking metric) and my position in the full ranking.
+  // Official career wins (tier metric) and my position in the official ranking.
   const myRankingRow = ranking.find((r: { userId: string }) => r.userId === userId);
   const myOfficialWins = myRankingRow?._sum.wins ?? 0;
   const myOfficialLosses = myRankingRow?._sum.losses ?? 0;
   const myBattlePoints = battlePointsByUser.get(userId) ?? 0;
-  // Rank = position when sorting everyone by official wins → battle points.
-  const fullSorted = ranking
-    .map((r: { userId: string; _sum: { wins: number | null } }) => ({ userId: r.userId, wins: r._sum.wins ?? 0, bp: battlePointsByUser.get(r.userId) ?? 0 }))
-    .sort((a, b) => b.wins - a.wins || b.bp - a.bp);
-  const myRankIdx = fullSorted.findIndex((r) => r.userId === userId);
-  const myRank = myRankIdx >= 0 ? myRankIdx + 1 : null;
-  const rankedTotal = fullSorted.length;
-  const officialGames = myOfficialWins + myOfficialLosses;
-  const winRate = officialGames > 0 ? Math.round((myOfficialWins / officialGames) * 100) : 0;
-  const { tier, next, progress, toNext } = tierFor(myOfficialWins);
 
   const rankingUserIds = ranking.map((r: { userId: string }) => r.userId);
   const rankingUsers = await prisma.user.findMany({
@@ -152,22 +143,33 @@ export default async function DashboardPage() {
     select: { id: true, name: true, bladerName: true, avatarUrl: true },
   });
   const userMap = Object.fromEntries(rankingUsers.map((u: { id: string; name: string; bladerName: string | null; avatarUrl: string | null }) => [u.id, u]));
-  const rankingList = ranking.map((r: { userId: string; _sum: { rankingPoints: number | null; wins: number | null; losses: number | null } }) => ({
-    ...userMap[r.userId],
-    leaguePoints: r._sum.rankingPoints ?? 0,
-    wins: r._sum.wins ?? 0,
-    losses: r._sum.losses ?? 0,
-    battlePoints: battlePointsByUser.get(r.userId) ?? 0,
-    isMe: r.userId === userId,
-  })).filter((r: { id?: string }) => r.id)
-    // Same order as the tournament classification: official wins → battle
-    // points scored. (Placement points are a separate metric, shown as "Liga".)
-    .sort((a: { wins: number; battlePoints: number; name?: string }, b: { wins: number; battlePoints: number; name?: string }) =>
-      b.wins - a.wins ||
-      b.battlePoints - a.battlePoints ||
-      (a.name ?? "").localeCompare(b.name ?? "")
-    )
-    .slice(0, 10);
+
+  // Official ranking — same data, filter and order as the /rankings page:
+  // league points (placement points won in official tournaments) → name.
+  const fullRanking = ranking
+    .map((r: { userId: string; _sum: { rankingPoints: number | null; wins: number | null; losses: number | null } }) => {
+      const u = userMap[r.userId];
+      return {
+        ...u,
+        displayName: u ? u.bladerName ?? u.name : "",
+        leaguePoints: r._sum.rankingPoints ?? 0,
+        wins: r._sum.wins ?? 0,
+        losses: r._sum.losses ?? 0,
+        battlePoints: battlePointsByUser.get(r.userId) ?? 0,
+        isMe: r.userId === userId,
+      };
+    })
+    .filter((r: { id?: string; leaguePoints: number }) => !!r.id && isRanked(r as { leaguePoints: number; displayName: string }))
+    .sort(compareRanking);
+
+  const myRankIdx = fullRanking.findIndex((r: { isMe: boolean }) => r.isMe);
+  const myRank = myRankIdx >= 0 ? myRankIdx + 1 : null;
+  const rankedTotal = fullRanking.length;
+  const officialGames = myOfficialWins + myOfficialLosses;
+  const winRate = officialGames > 0 ? Math.round((myOfficialWins / officialGames) * 100) : 0;
+  const { tier, next, progress, toNext } = tierFor(myOfficialWins);
+
+  const rankingList = fullRanking.slice(0, 10);
 
   const totalPoints = participations.reduce((sum: number, p: { totalPoints: number }) => sum + p.totalPoints, 0);
   const totalWins = participations.reduce((sum: number, p: { wins: number }) => sum + p.wins, 0);
@@ -371,13 +373,13 @@ export default async function DashboardPage() {
           <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 lg:self-start lg:sticky lg:top-[116px]">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-white">Ranking Oficial</h2>
-              <Link href="/community" className="text-xs text-[#f0a500] hover:underline">Ver tudo →</Link>
+              <Link href="/rankings" className="text-xs text-[#f0a500] hover:underline">Ver tudo →</Link>
             </div>
             {rankingList.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-6">Nenhum dado ainda</p>
             ) : (
               <div className="space-y-2">
-                {rankingList.map((player: { id: string; name: string; bladerName: string | null; avatarUrl: string | null; leaguePoints: number; battlePoints: number; wins: number; losses: number; isMe: boolean }, i: number) => (
+                {rankingList.map((player: { id: string; name: string; bladerName: string | null; displayName: string; avatarUrl: string | null; leaguePoints: number; battlePoints: number; wins: number; losses: number; isMe: boolean }, i: number) => (
                   <Link
                     key={player.id}
                     href={`/community/${player.id}`}
@@ -400,13 +402,13 @@ export default async function DashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className={`text-xs font-semibold truncate ${player.isMe ? "text-[#f0a500]" : "text-white"}`}>
-                        {player.bladerName || player.name}{player.isMe && " (você)"}
+                        {player.displayName}{player.isMe && " (você)"}
                       </div>
-                      <div className="text-[10px] text-gray-500">{player.losses}D · {player.battlePoints} pts{player.leaguePoints > 0 ? ` · Liga ${player.leaguePoints}` : ""}</div>
+                      <div className="text-[10px] text-gray-500">{player.wins}V · {player.losses}D · {player.battlePoints} pts</div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <div className="text-xs font-black text-[#f0a500] leading-none">{player.wins}</div>
-                      <div className="text-[9px] text-gray-500">vit.</div>
+                      <div className="text-xs font-black text-[#f0a500] leading-none">{player.leaguePoints}</div>
+                      <div className="text-[9px] text-gray-500">Liga</div>
                     </div>
                   </Link>
                 ))}

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Navbar from "@/components/Navbar";
 import RankingsTable from "./RankingsTable";
+import { compareRanking, isRanked } from "@/lib/ranking";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Rankings" };
@@ -28,17 +29,20 @@ export default async function RankingsPage() {
     .map((r) => {
       const u = userMap.get(r.userId);
       if (!u) return null;
+      const displayName = u.bladerName ?? u.name;
       return {
         id: u.id,
-        name: u.bladerName ?? u.name,
+        name: displayName,
+        displayName,
         avatarUrl: u.avatarUrl,
         points: r._sum.rankingPoints ?? 0,
+        leaguePoints: r._sum.rankingPoints ?? 0,
         wins: r._sum.wins ?? 0,
         losses: r._sum.losses ?? 0,
       };
     })
-    .filter((r): r is NonNullable<typeof r> => r !== null && r.points > 0)
-    .sort((a, b) => b.points - a.points || (a.name ?? "").localeCompare(b.name ?? ""));
+    .filter((r): r is NonNullable<typeof r> => r !== null && isRanked(r))
+    .sort(compareRanking);
 
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
