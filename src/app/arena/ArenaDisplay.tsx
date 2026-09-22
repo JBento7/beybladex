@@ -186,6 +186,11 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   // can't cut it short.
   const WINNER_MS = 5000;
   const [winnerDone, setWinnerDone] = useState(false);
+  // The judge can tell the instant a point ends the match, and says so over the
+  // P2P link. That arrives before the server has even finished writing the
+  // result, so the winner screen comes up with no wait at all; the polled data
+  // confirms it moments later.
+  const [p2pWinner, setP2pWinner] = useState<{ winnerId: string; at: number } | null>(null);
   // Latest load(), so one-off refreshes don't have to re-create the poll loops.
   const loadRef = useRef<() => Promise<void>>(async () => {});
 
@@ -256,6 +261,8 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       if (d.match) lastMatchTsRef.current = Date.now();
       liveRef.current = d.status === "live" && !!d.match;
       statusRef.current = d.status;
+      // A new live match supersedes any pending P2P end-of-match notice.
+      if (d.status === "live") setP2pWinner(null);
       // Track how long this arena has had nothing to show.
       if (d.match) idleSinceRef.current = 0;
       else {
@@ -275,17 +282,20 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   useEffect(() => { loadRef.current = load; }, [load]);
 
   // Restart the 5s window whenever a NEW finished match appears.
+  const p2pWinnerFresh = !!p2pWinner && Date.now() - p2pWinner.at < 20000;
   const finishedKey =
-    data?.status === "finished" && data.match
-      ? `${data.match.player1}|${data.match.player2}|${data.winnerSide}`
+    (data?.status === "finished" || p2pWinnerFresh) && data?.match
+      ? `${data.match.player1}|${data.match.player2}`
       : null;
+  // The 5s only start once the winner is actually VISIBLE — while the finish
+  // video is still covering it, the clock hasn't started.
   useEffect(() => {
     if (!finishedKey) { setWinnerDone(false); return; }
-    setWinnerDone(false);
+    if (finishVideo) { setWinnerDone(false); return; }
     const t = setTimeout(() => setWinnerDone(true), WINNER_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [finishedKey]);
+  }, [finishedKey, finishVideo]);
 
   // (The refresh burst after a scored finish lives in playFinish — tying it to
   // the finish-video state cancelled it whenever the video ended first.)
@@ -365,9 +375,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   useEffect(() => {
     if (arena == null || !started) return;
     const link = startAnswerer(arena, {
-      onMessage: (m: { type?: string; finishType?: string; byId?: Record<string, number>; setsById?: Record<string, number>; at?: number }) => {
+      onMessage: (m: { type?: string; finishType?: string; winnerId?: string; byId?: Record<string, number>; setsById?: Record<string, number>; at?: number }) => {
         p2pFreshRef.current = Date.now();
-        if (m?.type === "ready") playReady();
+        if (m?.type === "matchEnd" && m.winnerId) { setP2pWinner({ winnerId: m.winnerId, at: Date.now() }); burstRefresh(); }
+        else if (m?.type === "ready") playReady();
         else if (m?.type === "countdown") playCountdown();
         else if (m?.type === "finish" && m.finishType) playFinish(m.finishType);
         else if (m?.type === "launch") playLaunch();
@@ -718,8 +729,19 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         </button>
       )}
 
-      {match && data?.status === "finished" && !winnerDone ? (
-        <WinnerScreen match={match} winnerSide={data.winnerSide ?? "p1"} layout={winnerLayout} bg={winnerBg} />
+      {match && (data?.status === "finished" || p2pWinnerFresh) && !winnerDone ? (
+        <WinnerScreen
+          match={match}
+          winnerSide={
+            data?.status === "finished"
+              ? (data.winnerSide ?? "p1")
+              // p1Id/p2Id already come in display order, so comparing against
+              // them yields the correct side without redoing the mirroring.
+              : p2pWinner?.winnerId === match.p2Id ? "p2" : "p1"
+          }
+          layout={winnerLayout}
+          bg={winnerBg}
+        />
       ) : data?.queue && data.queue.length > 0 && (!match || data.status === "finished") ? (
         <NextMatches arena={arena} queue={data.queue} build={ARENA_BUILD} />
       ) : !match ? (

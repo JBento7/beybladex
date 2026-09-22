@@ -305,6 +305,17 @@ export default function ScoreModal({
     if (["SPIN_FINISH", "OVER_FINISH", "BURST_FINISH", "EXTREME_FINISH"].includes(finishType)) {
       linkSend({ type: "finish", finishType });
     }
+    // Does this point END the match? We can tell right here from the score and
+    // the match rules, so the telão can show the winner the moment the battle
+    // ends — waiting for the server would mean waiting out the whole post-match
+    // pipeline (standings, beyblade stats, next round) plus a poll.
+    {
+      const isP1 = scorerId === player1.id;
+      const nextPts = (isP1 ? p1Pts : p2Pts) + (FINISH_TYPE_POINTS[finishType] ?? 0);
+      if (nextPts >= pointsToWinSet && (isP1 ? p1Sets : p2Sets) + 1 >= setsToWin) {
+        linkSend({ type: "matchEnd", winnerId: scorerId });
+      }
+    }
     const side = scorerId === player1.id ? (leftIsP1 ? "left" : "right") : (leftIsP1 ? "right" : "left");
     setFlash(side);
     setTimeout(() => setFlash(null), 350);
