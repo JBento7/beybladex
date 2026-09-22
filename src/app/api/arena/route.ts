@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
   const include = {
     player1: { select: { id: true, name: true, bladerName: true, avatarUrl: true } },
     player2: { select: { id: true, name: true, bladerName: true, avatarUrl: true } },
-    tournament: { select: { name: true, setsToWin: true, pointsToWinSet: true, deckType: true, location: true, venueName: true } },
+    tournament: { select: { name: true, setsToWin: true, pointsToWinSet: true, deckType: true, location: true, venueName: true, isTest: true } },
     sets: { orderBy: { setNumber: "asc" as const }, include: { points: { select: { id: true } } } },
   };
 
@@ -125,61 +125,60 @@ export async function GET(req: NextRequest) {
   const ONAIR_WINDOW_MS = 25000;
   const onAirSince = new Date(Date.now() - ONAIR_WINDOW_MS);
 
-  // Tournament-level filter, preferring real tournaments over test ones.
-  const tournamentTiers = [{ isTest: false }, {}];
-
-  type MatchRow = Awaited<ReturnType<typeof findOne>>;
-  async function findOne(tournament: object, status: "IN_PROGRESS" | "PENDING" | "FINISHED") {
-    const order =
-      status === "PENDING"
-        ? ({ createdAt: "asc" } as const)
-        : status === "FINISHED"
-          ? ({ updatedAt: "desc" } as const)
-          : ({ createdAt: "desc" } as const);
-    if (status === "FINISHED") {
-      return prisma.match.findFirst({
-        where: { ...arenaWhere, status, tournament, updatedAt: { gte: new Date(Date.now() - FINISHED_WINDOW_MS) } },
-        orderBy: order,
-        include,
-      });
-    }
-    // Live/pending: require a fresh on-air heartbeat (judge has "Placar" open).
+  // Fetch every candidate for this arena in ONE round trip and choose in JS.
+  // This used to walk 3 statuses × 2 tournament tiers with a separate query
+  // each, so landing on a just-finished match cost four sequential round trips
+  // (each carrying the full include) before the winner screen could be built —
+  // which is exactly the transition where latency is most visible.
+  async function loadCandidates() {
+    const recentlyFinished = new Date(Date.now() - FINISHED_WINDOW_MS);
     try {
-      return await prisma.match.findFirst({
-        where: { ...arenaWhere, status, tournament, onAirAt: { gte: onAirSince } },
-        orderBy: order,
+      return await prisma.match.findMany({
+        where: {
+          ...arenaWhere,
+          OR: [
+            { status: "IN_PROGRESS", onAirAt: { gte: onAirSince } },
+            { status: "PENDING", onAirAt: { gte: onAirSince } },
+            { status: "FINISHED", updatedAt: { gte: recentlyFinished } },
+          ],
+        },
         include,
+        take: 24,
       });
     } catch {
-      // onAirAt column missing (pre-migration) — degrade to unfiltered so the
-      // arena still works until /api/migrate is run.
-      return prisma.match.findFirst({ where: { ...arenaWhere, status, tournament }, orderBy: order, include });
+      // onAirAt/updatedAt may be missing pre-migration — degrade gracefully.
+      return prisma.match.findMany({ where: arenaWhere, include, take: 24 });
     }
   }
+  const candidates = (await loadCandidates()).filter((m) => m.player1Id !== m.player2Id);
+  type MatchRow = (typeof candidates)[number] | null;
 
-  // Preference: live in-progress → just-finished (winner screen) → next pending.
-  const passes = [
-    { status: "IN_PROGRESS" as const, phase: "live" as const },
-    { status: "FINISHED" as const, phase: "finished" as const },
-    { status: "PENDING" as const, phase: "pending" as const },
-  ];
+  // Preference: live in-progress → just-finished (winner screen) → next pending;
+  // and within each, a real tournament before a test one.
+  const byStatus = (status: "IN_PROGRESS" | "FINISHED" | "PENDING") => {
+    const rows = candidates.filter((m) => m.status === status);
+    rows.sort((a, b) =>
+      status === "PENDING"
+        ? a.createdAt.getTime() - b.createdAt.getTime()
+        : status === "FINISHED"
+          ? b.updatedAt.getTime() - a.updatedAt.getTime()
+          : b.createdAt.getTime() - a.createdAt.getTime()
+    );
+    return rows.find((m) => !m.tournament.isTest) ?? rows[0] ?? null;
+  };
 
   let matchRow: MatchRow = null;
   let phase: "live" | "finished" | "pending" = "pending";
-  outer: for (const pass of passes) {
-    for (const tournament of tournamentTiers) {
-      let found: MatchRow = null;
-      try {
-        found = await findOne(tournament, pass.status);
-      } catch {
-        // updatedAt column may be missing pre-migration — skip finished lookups.
-        continue;
-      }
-      if (found && found.player1Id !== found.player2Id) {
-        matchRow = found;
-        phase = pass.phase;
-        break outer;
-      }
+  for (const pass of [
+    { status: "IN_PROGRESS" as const, phase: "live" as const },
+    { status: "FINISHED" as const, phase: "finished" as const },
+    { status: "PENDING" as const, phase: "pending" as const },
+  ]) {
+    const found = byStatus(pass.status);
+    if (found) {
+      matchRow = found;
+      phase = pass.phase;
+      break;
     }
   }
   const live = phase === "live";
@@ -408,7 +407,15 @@ export async function GET(req: NextRequest) {
   }
 
   // Run the three independent resolvers concurrently instead of in series.
-  const [beyR, ptsR, mnR] = await Promise.all([resolveBeys(), resolvePoints(), resolveMatchNumber()]);
+  // The winner screen hands over to "próximas partidas", so the queue is fetched
+  // alongside the rest rather than after it — a serial query here would land
+  // exactly on the end-of-match transition, where latency is most visible.
+  const [beyR, ptsR, mnR, queueAfter] = await Promise.all([
+    resolveBeys(),
+    resolvePoints(),
+    resolveMatchNumber(),
+    phase === "finished" ? loadQueue() : Promise.resolve(undefined),
+  ]);
   const { p1ActiveBey, p2ActiveBey, p1Combo, p2Combo, p1BeyImg, p2BeyImg, p1BeyPieces, p2BeyPieces } = beyR;
   const { p1Finishes, p2Finishes, p1FinishesBySet, p2FinishesBySet, history } = ptsR;
   const { matchNumber, matchesTotal } = mnR;
@@ -502,10 +509,6 @@ export async function GET(req: NextRequest) {
   const [oP1Deck, oP2Deck] = lr(p1Deck, p2Deck);
   const [oP1Id, oP2Id] = lr(match.player1Id, match.player2Id);
   const outHistory = leftIsP1 ? history : history.map((h) => ({ ...h, side: h.side === "p1" ? "p2" : "p1" }));
-
-  // The winner screen hands over to "próximas partidas" after 5s, so ship the
-  // queue with it — otherwise the telão would have to wait for another poll.
-  const queueAfter = phase === "finished" ? await loadQueue() : undefined;
 
   return jsonWithEtag(req, {
     arena: arenaNum,
