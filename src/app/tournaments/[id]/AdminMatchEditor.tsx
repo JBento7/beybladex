@@ -51,6 +51,22 @@ export default function AdminMatchEditor({
   const [balancing, setBalancing] = useState(false);
   const [rankingBusy, setRankingBusy] = useState(false);
   const [healthBusy, setHealthBusy] = useState(false);
+  const [cloneBusy, setCloneBusy] = useState(false);
+
+  async function cloneAsTest() {
+    setCloneBusy(true);
+    setErr(null);
+    setAdvanceMsg(null);
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/clone-as-test`, { method: "POST" });
+    setCloneBusy(false);
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setAdvanceMsg(`Cópia de teste criada: "${data.name}" · ${data.participants} jogadores · ${data.arenas} arena(s). Abrindo...`);
+      router.push(`/tournaments/${data.id}`);
+    } else {
+      setAdvanceMsg(data.error || "Erro ao duplicar torneio");
+    }
+  }
 
   // Manual podium override (when the recorded matches don't reflect reality).
   const PODIUM_PTS = [100, 70, 50, 30, 10];
@@ -270,6 +286,14 @@ export default function AdminMatchEditor({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          <button
+            onClick={cloneAsTest}
+            disabled={cloneBusy}
+            title="Cria um torneio de TESTE com os mesmos jogadores e as mesmas configurações, sem resultados — para ensaiar o fluxo sem afetar o ranking"
+            className="text-xs font-bold border border-purple-400/50 text-purple-300 hover:bg-purple-400/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {cloneBusy ? "Duplicando..." : "🧪 Duplicar como Teste"}
+          </button>
           {participants.length > 0 && (
             <button
               onClick={() => setPodiumOpen((v) => !v)}
