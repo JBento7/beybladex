@@ -132,7 +132,30 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   // Starting the countdown always clears the ready screen — that's the cue the
   // players have been waiting on.
   const playCountdown = () => { if (Date.now() - lastCdRef.current < 8000) return; lastCdRef.current = Date.now(); setReadyOn(false); setCountdownOn(true); };
-  const playFinish = (t: string) => { if (Date.now() - lastFinishRef.current < 6000) return; lastFinishRef.current = Date.now(); setFinishVideo(t); };
+  // A scored finish may have just ended the match. The server marks the match
+  // FINISHED early — well before it answers the judge (it still has standings,
+  // beyblade stats and round generation to do) — so the quickest way to the
+  // winner screen is for the display to look again, promptly and repeatedly,
+  // instead of waiting for its next scheduled poll. It loads UNDER the finish
+  // video, so when the video ends the winner is already on screen: no gap.
+  // The burst stops as soon as the result lands.
+  const statusRef = useRef<string | null>(null);
+  const burstRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const burstRefresh = () => {
+    burstRef.current.forEach(clearTimeout);
+    burstRef.current = [500, 1100, 1900, 2900, 4200].map((ms) =>
+      setTimeout(() => {
+        if (statusRef.current === "finished") return; // already showing the winner
+        loadRef.current?.();
+      }, ms)
+    );
+  };
+  const playFinish = (t: string) => {
+    if (Date.now() - lastFinishRef.current < 6000) return;
+    lastFinishRef.current = Date.now();
+    setFinishVideo(t);
+    burstRefresh();
+  };
   const playLaunch = () => { if (Date.now() - lastLaunchRef.current < 8000) return; lastLaunchRef.current = Date.now(); setLaunchOn(true); };
   // Live score received over the P2P link (overrides the poll when fresh).
   const [p2pScore, setP2pScore] = useState<{ byId: Record<string, number>; setsById: Record<string, number>; at: number } | null>(null);
@@ -232,6 +255,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       if (!d.match && Date.now() - lastMatchTsRef.current < 6000) return;
       if (d.match) lastMatchTsRef.current = Date.now();
       liveRef.current = d.status === "live" && !!d.match;
+      statusRef.current = d.status;
       // Track how long this arena has had nothing to show.
       if (d.match) idleSinceRef.current = 0;
       else {
@@ -263,14 +287,8 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finishedKey]);
 
-  // A scored finish may have ended the match. Refresh right as the finish video
-  // wraps up so the winner screen follows it immediately instead of waiting for
-  // the next scheduled poll.
-  useEffect(() => {
-    if (!finishVideo) return;
-    const t = setTimeout(() => { loadRef.current?.(); }, 2500);
-    return () => clearTimeout(t);
-  }, [finishVideo]);
+  // (The refresh burst after a scored finish lives in playFinish — tying it to
+  // the finish-video state cancelled it whenever the video ended first.)
 
   // Full scoreboard poll (heavy). Adaptive, self-scheduling to keep Vercel
   // invocations down: fast while a match is live, slow when idle/backgrounded,
