@@ -87,9 +87,39 @@ export async function GET(req: NextRequest) {
   const arenaWhere =
     arenaNum === 1 ? { OR: [{ arena: 1 }, { arena: null }] } : { arena: arenaNum };
 
-  // How long a just-finished match stays on the winner screen before the arena
-  // falls back to the next match / "aguardando".
-  const FINISHED_WINDOW_MS = 10500;
+  // How long a just-finished match remains available as the winner screen. The
+  // telão decides how long to SHOW it (5s from when it first sees it); this only
+  // has to outlast the poll interval so the display never misses it.
+  const FINISHED_WINDOW_MS = 9000;
+
+  // Upcoming matches for this arena, in play order.
+  async function loadQueue() {
+    try {
+      const ups = await prisma.match.findMany({
+        where: { ...arenaWhere, status: "PENDING", tournament: { status: "IN_PROGRESS" } },
+        orderBy: [{ round: "asc" }, { slot: "asc" }, { bracketPos: "asc" }, { createdAt: "asc" }],
+        take: 12,
+        select: {
+          player1Id: true,
+          player2Id: true,
+          round: true,
+          player1: { select: { name: true, bladerName: true, avatarUrl: true } },
+          player2: { select: { name: true, bladerName: true, avatarUrl: true } },
+        },
+      });
+      return ups
+        .filter((m) => m.player1Id !== m.player2Id)
+        .map((m) => ({
+          round: m.round,
+          player1: m.player1.bladerName || m.player1.name,
+          player2: m.player2.bladerName || m.player2.name,
+          p1Avatar: m.player1.avatarUrl ?? null,
+          p2Avatar: m.player2.avatarUrl ?? null,
+        }));
+    } catch {
+      return [];
+    }
+  }
   // A match only shows while a judge keeps the scoreboard open (heartbeat every
   // 3s). If no heartbeat lands within this window, the arena goes to "aguardando".
   const ONAIR_WINDOW_MS = 25000;
@@ -157,32 +187,7 @@ export async function GET(req: NextRequest) {
   if (!matchRow) {
     // Nothing is on-air for this arena. Instead of just "aguardando", show the
     // queue of upcoming matches assigned to this arena (in play order).
-    let queue: { round: number; player1: string; player2: string; p1Avatar: string | null; p2Avatar: string | null }[] = [];
-    try {
-      const ups = await prisma.match.findMany({
-        where: { ...arenaWhere, status: "PENDING", tournament: { status: "IN_PROGRESS" } },
-        orderBy: [{ round: "asc" }, { slot: "asc" }, { bracketPos: "asc" }, { createdAt: "asc" }],
-        take: 12,
-        select: {
-          player1Id: true,
-          player2Id: true,
-          round: true,
-          player1: { select: { name: true, bladerName: true, avatarUrl: true } },
-          player2: { select: { name: true, bladerName: true, avatarUrl: true } },
-        },
-      });
-      queue = ups
-        .filter((m) => m.player1Id !== m.player2Id)
-        .map((m) => ({
-          round: m.round,
-          player1: m.player1.bladerName || m.player1.name,
-          player2: m.player2.bladerName || m.player2.name,
-          p1Avatar: m.player1.avatarUrl ?? null,
-          p2Avatar: m.player2.avatarUrl ?? null,
-        }));
-    } catch {
-      /* ignore */
-    }
+    const queue = await loadQueue();
 
     const [inProgressTournaments, matchesThisArena] = await Promise.all([
       prisma.tournament.count({ where: { status: "IN_PROGRESS" } }),
@@ -498,9 +503,14 @@ export async function GET(req: NextRequest) {
   const [oP1Id, oP2Id] = lr(match.player1Id, match.player2Id);
   const outHistory = leftIsP1 ? history : history.map((h) => ({ ...h, side: h.side === "p1" ? "p2" : "p1" }));
 
+  // The winner screen hands over to "próximas partidas" after 5s, so ship the
+  // queue with it — otherwise the telão would have to wait for another poll.
+  const queueAfter = phase === "finished" ? await loadQueue() : undefined;
+
   return jsonWithEtag(req, {
     arena: arenaNum,
     status: phase,
+    queue: queueAfter,
     winnerSide,
     tournamentName: match.tournament.name,
     location: match.tournament.venueName || match.tournament.location || null,

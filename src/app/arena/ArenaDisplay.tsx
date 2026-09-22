@@ -157,6 +157,15 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const sleep = (v: boolean) => { asleepRef.current = v; setAsleep(v); };
   const wake = () => { idleSinceRef.current = Date.now(); sleep(false); };
 
+  // The winner screen runs for exactly 5s FROM THE MOMENT THIS DISPLAY FIRST
+  // SEES IT, then hands over to "próximas partidas". Timing it from the display
+  // (rather than from when the match closed on the server) means poll jitter
+  // can't cut it short.
+  const WINNER_MS = 5000;
+  const [winnerDone, setWinnerDone] = useState(false);
+  // Latest load(), so one-off refreshes don't have to re-create the poll loops.
+  const loadRef = useRef<() => Promise<void>>(async () => {});
+
   // Force landscape. When the device is physically portrait (a tablet turned
   // upright) and the browser won't lock the orientation, we rotate the whole
   // telão 90° so it still reads as landscape.
@@ -238,6 +247,30 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       setError("Sem conexão");
     }
   }, [previewParam]);
+
+  useEffect(() => { loadRef.current = load; }, [load]);
+
+  // Restart the 5s window whenever a NEW finished match appears.
+  const finishedKey =
+    data?.status === "finished" && data.match
+      ? `${data.match.player1}|${data.match.player2}|${data.winnerSide}`
+      : null;
+  useEffect(() => {
+    if (!finishedKey) { setWinnerDone(false); return; }
+    setWinnerDone(false);
+    const t = setTimeout(() => setWinnerDone(true), WINNER_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finishedKey]);
+
+  // A scored finish may have ended the match. Refresh right as the finish video
+  // wraps up so the winner screen follows it immediately instead of waiting for
+  // the next scheduled poll.
+  useEffect(() => {
+    if (!finishVideo) return;
+    const t = setTimeout(() => { loadRef.current?.(); }, 2500);
+    return () => clearTimeout(t);
+  }, [finishVideo]);
 
   // Full scoreboard poll (heavy). Adaptive, self-scheduling to keep Vercel
   // invocations down: fast while a match is live, slow when idle/backgrounded,
@@ -667,9 +700,9 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         </button>
       )}
 
-      {match && data?.status === "finished" ? (
+      {match && data?.status === "finished" && !winnerDone ? (
         <WinnerScreen match={match} winnerSide={data.winnerSide ?? "p1"} layout={winnerLayout} bg={winnerBg} />
-      ) : !match && data?.queue && data.queue.length > 0 ? (
+      ) : data?.queue && data.queue.length > 0 && (!match || data.status === "finished") ? (
         <NextMatches arena={arena} queue={data.queue} build={ARENA_BUILD} />
       ) : !match ? (
         <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
