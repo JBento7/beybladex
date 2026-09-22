@@ -374,6 +374,25 @@ export default function ScoreModal({
     } catch { /* best-effort */ }
   }
 
+  // Step 1 of starting a battle: "PRONTOS". The arena telão plays the ready clip
+  // and freezes on its last frame, so the players stay on the ready screen until
+  // the judge actually starts. Tracked per battle, like startedKey.
+  const [readyKey, setReadyKey] = useState<string | null>(null);
+  const readyBusyRef = useRef(false);
+  async function sendReady() {
+    if (readyBusyRef.current) return;
+    readyBusyRef.current = true;
+    linkSend({ type: "ready" }); // instant over LAN
+    try {
+      await fetch(`/api/matches/${matchId}/ready`, { method: "POST" });
+    } catch {
+      /* arena signal is best-effort */
+    } finally {
+      setReadyKey(startKey);
+      setTimeout(() => { readyBusyRef.current = false; }, 1500);
+    }
+  }
+
   // Judge starts the battle: fire the countdown on the arena display and reveal
   // the scoring board here (no countdown on the judge's screen).
   async function startBattle() {
@@ -710,19 +729,40 @@ export default function ScoreModal({
                 )}
 
                 {/* Start button: fires the countdown on the arena display */}
-                {showStart && (
-                  <button
-                    onClick={startBattle}
-                    disabled={starting}
-                    className="w-full mb-1 bg-[#22c55e] hover:bg-[#1ea34d] disabled:opacity-60 text-black font-black text-lg py-4 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
-                  >
-                    ▶ Iniciar {currentSetBattleCount === 0 ? "partida" : `batalha ${currentSetBattleCount + 1}`}
-                  </button>
+                {/* Two steps: PRONTOS holds the players on the ready screen,
+                    then Iniciar fires the countdown and the battle begins. */}
+                {showStart && readyKey !== startKey && (
+                  <>
+                    <button
+                      onClick={sendReady}
+                      className="w-full mb-1 bg-[#f0a500] hover:bg-[#d99400] text-black font-black text-lg py-4 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
+                    >
+                      🙌 PRONTOS?
+                    </button>
+                    <div className="text-center text-[11px] text-gray-500 mb-3">
+                      O telão mostra &quot;PRONTOS&quot; e fica parado nessa tela até você iniciar.
+                    </div>
+                  </>
                 )}
-                {showStart && (
-                  <div className="text-center text-[11px] text-gray-500 mb-3">
-                    A contagem 3-2-1 aparece no telão da arena.
-                  </div>
+                {showStart && readyKey === startKey && (
+                  <>
+                    <button
+                      onClick={startBattle}
+                      disabled={starting}
+                      className="w-full mb-1 bg-[#22c55e] hover:bg-[#1ea34d] disabled:opacity-60 text-black font-black text-lg py-4 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
+                    >
+                      ▶ Iniciar {currentSetBattleCount === 0 ? "partida" : `batalha ${currentSetBattleCount + 1}`}
+                    </button>
+                    <button
+                      onClick={sendReady}
+                      className="w-full mb-1 text-[11px] text-gray-500 hover:text-gray-300 py-1"
+                    >
+                      repetir PRONTOS
+                    </button>
+                    <div className="text-center text-[11px] text-gray-500 mb-3">
+                      Ao iniciar, entra a contagem no telão e volta para o placar.
+                    </div>
+                  </>
                 )}
 
                 {/* Scoring buttons (video layout) */}

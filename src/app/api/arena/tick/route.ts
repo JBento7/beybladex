@@ -54,5 +54,17 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* table missing / bad json — ignore */ }
 
-  return NextResponse.json({ countdown, finish, launch });
+  // "PRONTOS" signal: the telão plays the ready clip and holds on its last
+  // frame until the countdown fires, so the window is wide — the judge may take
+  // a while between asking the players if they're ready and starting.
+  let ready: { key: string; elapsedMs: number } | null = null;
+  try {
+    const row = await prisma.arenaLayout.findUnique({ where: { key: `ready:arena:${arenaNum}` } });
+    if (row) {
+      const at = JSON.parse(row.data)?.at as number | undefined;
+      if (at && Date.now() - at < 30000) ready = { key: `${arenaNum}:${at}`, elapsedMs: Date.now() - at };
+    }
+  } catch { /* table missing / bad json — ignore */ }
+
+  return NextResponse.json({ countdown, finish, launch, ready });
 }

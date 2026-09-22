@@ -122,7 +122,16 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   // signal) can't replay it. Consecutive real events are always spaced well
   // beyond these windows (each battle has its own start/countdown), so nothing
   // legitimate is suppressed.
-  const playCountdown = () => { if (Date.now() - lastCdRef.current < 8000) return; lastCdRef.current = Date.now(); setCountdownOn(true); };
+  // "PRONTOS" overlay: plays once, then STAYS on its last frame until the
+  // countdown starts. `readyOn` keeps the overlay visible (playing or frozen).
+  const [readyOn, setReadyOn] = useState(false);
+  const readyVideoRef = useRef<HTMLVideoElement | null>(null);
+  const playedReadyKeyRef = useRef<string | null>(null);
+  const lastReadyRef = useRef(0);
+  const playReady = () => { if (Date.now() - lastReadyRef.current < 3000) return; lastReadyRef.current = Date.now(); setReadyOn(true); };
+  // Starting the countdown always clears the ready screen — that's the cue the
+  // players have been waiting on.
+  const playCountdown = () => { if (Date.now() - lastCdRef.current < 8000) return; lastCdRef.current = Date.now(); setReadyOn(false); setCountdownOn(true); };
   const playFinish = (t: string) => { if (Date.now() - lastFinishRef.current < 6000) return; lastFinishRef.current = Date.now(); setFinishVideo(t); };
   const playLaunch = () => { if (Date.now() - lastLaunchRef.current < 8000) return; lastLaunchRef.current = Date.now(); setLaunchOn(true); };
   // Live score received over the P2P link (overrides the poll when fresh).
@@ -251,6 +260,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
             countdown?: { key: string; elapsedMs: number } | null;
             finish?: { key: string; type: string; elapsedMs: number } | null;
             launch?: { key: string; elapsedMs: number } | null;
+            ready?: { key: string; elapsedMs: number } | null;
           } = await res.json();
           if (active && d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
             playedKeyRef.current = d.countdown.key;
@@ -259,6 +269,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           if (active && d.finish && d.finish.key !== playedFinishKeyRef.current && d.finish.elapsedMs < 5000) {
             playedFinishKeyRef.current = d.finish.key;
             playFinish(d.finish.type);
+          }
+          if (active && d.ready && d.ready.key !== playedReadyKeyRef.current && d.ready.elapsedMs < 20000) {
+            playedReadyKeyRef.current = d.ready.key;
+            playReady();
           }
           if (active && d.launch && d.launch.key !== playedLaunchKeyRef.current && d.launch.elapsedMs < 20000) {
             playedLaunchKeyRef.current = d.launch.key;
@@ -285,7 +299,8 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     const link = startAnswerer(arena, {
       onMessage: (m: { type?: string; finishType?: string; byId?: Record<string, number>; setsById?: Record<string, number>; at?: number }) => {
         p2pFreshRef.current = Date.now();
-        if (m?.type === "countdown") playCountdown();
+        if (m?.type === "ready") playReady();
+        else if (m?.type === "countdown") playCountdown();
         else if (m?.type === "finish" && m.finishType) playFinish(m.finishType);
         else if (m?.type === "launch") playLaunch();
         else if (m?.type === "state" && m.byId) setP2pScore({ byId: m.byId, setsById: m.setsById ?? {}, at: m.at ?? Date.now() });
@@ -316,6 +331,28 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
     };
   }, [countdownOn]);
+
+  // Play the PRONTOS clip and then freeze on its last frame. We deliberately do
+  // NOT clear `readyOn` when it ends: the overlay stays up (paused on the final
+  // frame) until the judge starts the countdown.
+  useEffect(() => {
+    if (!readyOn) return;
+    const v = readyVideoRef.current;
+    if (!v) { setReadyOn(false); return; }
+    if (v.error) { setReadyOn(false); return; }
+    try { v.currentTime = 0; } catch { /* ignore */ }
+    v.muted = false;
+    v.play().catch(() => {
+      try { v.muted = true; v.play().catch(() => setReadyOn(false)); } catch { setReadyOn(false); }
+    });
+    // Hold the final frame: pausing at the end keeps it painted on screen.
+    const hold = () => { try { v.pause(); } catch { /* ignore */ } };
+    v.addEventListener("ended", hold);
+    return () => {
+      v.removeEventListener("ended", hold);
+      try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
+    };
+  }, [readyOn]);
 
   // Play the launch/rules video when triggered by an admin.
   useEffect(() => {
@@ -438,7 +475,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       try { v.muted = true; await v.play(); v.pause(); v.currentTime = 0; } catch { /* ignore */ }
     }
     // Prime the finish + launch videos too (unlock autoplay-with-sound).
-    for (const el of [...Object.values(finishRefs.current), launchVideoRef.current]) {
+    for (const el of [...Object.values(finishRefs.current), launchVideoRef.current, readyVideoRef.current]) {
       if (!el) continue;
       try { el.muted = true; await el.play(); el.pause(); el.currentTime = 0; } catch { /* ignore */ }
     }
@@ -508,6 +545,17 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           opacity: countdownOn ? 1 : 0,
           pointerEvents: "none",
         }}
+      />
+
+      {/* PRONTOS — plays once then holds on its last frame until the countdown. */}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        ref={readyVideoRef}
+        src="/prontos.mp4"
+        playsInline
+        preload="metadata"
+        onError={() => setReadyOn(false)}
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", zIndex: readyOn ? 71 : -1, opacity: readyOn ? 1 : 0, pointerEvents: "none" }}
       />
 
       {/* Launch/rules video — always mounted; admin triggers it per arena. */}
