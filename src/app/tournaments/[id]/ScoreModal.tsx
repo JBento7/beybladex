@@ -145,6 +145,36 @@ export default function ScoreModal({
     return () => { link.close(); linkRef.current = null; };
   }, [open, arena]);
   const linkSend = (msg: unknown) => { try { linkRef.current?.send(msg); } catch { /* ignore */ } };
+  // Judging happens on a phone held in one hand: go real fullscreen (hides the
+  // browser bars, which is most of the wasted space) and keep the screen awake.
+  const fsRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wakeRef = useRef<any>(null);
+  useEffect(() => {
+    if (!open) return;
+    const el = fsRef.current as unknown as {
+      requestFullscreen?: () => Promise<void>;
+      webkitRequestFullscreen?: () => void;
+    } | null;
+    try {
+      if (el?.requestFullscreen) el.requestFullscreen().catch(() => {});
+      else el?.webkitRequestFullscreen?.(); // iPadOS Safari
+    } catch { /* iPhone Safari has no element fullscreen — the CSS layout covers it */ }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nav = navigator as any;
+    nav.wakeLock?.request?.("screen").then((s: unknown) => { wakeRef.current = s; }).catch(() => {});
+    return () => {
+      try { wakeRef.current?.release?.(); } catch { /* ignore */ }
+      wakeRef.current = null;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const d = document as any;
+        if (document.fullscreenElement) document.exitFullscreen?.();
+        else if (d.webkitFullscreenElement) d.webkitExitFullscreen?.();
+      } catch { /* ignore */ }
+    };
+  }, [open]);
+
   // Synchronous guards against rapid double-taps. React state (loading/starting)
   // updates on the next render, so two quick taps both pass a state check and
   // fire twice — creating duplicate points AND replaying the arena videos. Refs
@@ -444,14 +474,14 @@ export default function ScoreModal({
             key={type}
             onClick={() => addPoint(player.id, type)}
             disabled={loading}
-            className={`relative rounded-lg border-2 bg-[#141414] hover:brightness-125 disabled:opacity-40 transition-all active:scale-[0.94] px-3 py-3 flex items-center ${
+            className={`relative rounded-lg border-2 bg-[#141414] hover:brightness-125 disabled:opacity-40 transition-all active:scale-[0.94] px-3 py-5 flex items-center ${
               side === "right" ? "flex-row-reverse text-right" : "text-left"
             } gap-2`}
             style={{ borderColor: color }}
           >
-            <span className="text-lg font-black tabular-nums" style={{ color }}>+{FINISH_TYPE_POINTS[type]}</span>
+            <span className="text-2xl font-black tabular-nums" style={{ color }}>+{FINISH_TYPE_POINTS[type]}</span>
             <span className="flex-1 min-w-0">
-              <span className="block text-sm font-black text-white leading-none">{label}</span>
+              <span className="block text-base font-black text-white leading-tight">{label}</span>
               <span className="block text-[9px] text-gray-500 uppercase tracking-wide">Finish</span>
             </span>
           </button>
@@ -482,9 +512,16 @@ export default function ScoreModal({
 
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={handleClose} />
-          <div role="dialog" aria-modal="true" className="relative bg-[#0d0d0d] border border-[#2a2a2a] rounded-2xl p-4 sm:p-5 w-full max-w-lg shadow-2xl max-h-[92vh] overflow-y-auto">
+        // Full-bleed on a phone: no backdrop, no card, no rounded corners — the
+        // scoring panel IS the screen. On bigger screens the content stays
+        // centred at a comfortable width. Tapping outside no longer closes it
+        // (a stray tap used to drop the judge out mid-match); use the ✕.
+        <div ref={fsRef} className="fixed inset-0 z-50 bg-[#0d0d0d] flex flex-col overscroll-contain">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative flex-1 min-h-0 overflow-y-auto w-full max-w-2xl mx-auto px-3 sm:px-5 pt-4 pb-2"
+          >
             <button onClick={handleClose} aria-label="Fechar" className="absolute top-3 right-3 z-10 text-gray-400 hover:text-white text-2xl leading-none p-1">✕</button>
 
             {err && (
@@ -552,11 +589,11 @@ export default function ScoreModal({
                 </div>
 
                 {/* Current set score (compact) */}
-                <div className="bg-[#141414] border border-[#222] rounded-xl py-2 mb-2">
+                <div className="bg-[#141414] border border-[#222] rounded-xl py-3 mb-2">
                   <div className="flex items-center justify-center gap-4">
-                    <span className={`text-4xl font-black tabular-nums transition-transform ${flash === "left" ? "scale-125" : ""}`} style={{ color: flash === "left" ? L.color : L.pts > R.pts ? L.color : "#fff" }}>{L.pts}</span>
+                    <span className={`text-6xl font-black tabular-nums transition-transform ${flash === "left" ? "scale-125" : ""}`} style={{ color: flash === "left" ? L.color : L.pts > R.pts ? L.color : "#fff" }}>{L.pts}</span>
                     <span className="text-xl text-gray-600 font-bold">:</span>
-                    <span className={`text-4xl font-black tabular-nums transition-transform ${flash === "right" ? "scale-125" : ""}`} style={{ color: flash === "right" ? R.color : R.pts > L.pts ? R.color : "#fff" }}>{R.pts}</span>
+                    <span className={`text-6xl font-black tabular-nums transition-transform ${flash === "right" ? "scale-125" : ""}`} style={{ color: flash === "right" ? R.color : R.pts > L.pts ? R.color : "#fff" }}>{R.pts}</span>
                   </div>
                   <div className="text-center text-[10px] text-gray-500 mt-0.5">
                     primeiro a {pointsToWinSet} vence o set
