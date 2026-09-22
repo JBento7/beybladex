@@ -103,6 +103,24 @@ export async function POST(
       // heartbeats) doesn't fail with "Unable to start a transaction in time".
     }, { maxWait: 20000, timeout: 20000 });
 
+    // Signal the telão to play this finish's video (SPIN/OVER/BURST/EXTREME).
+    // This MUST be stamped here, right after the point is recorded — not at the
+    // end of the request. On the point that ends a match, everything below runs
+    // first (closing the set and match, crediting stats, generating the next
+    // round or finalizing the ranking), which can take seconds. A stamp made
+    // after that carries a timestamp far later than the actual finish, so the
+    // telão — which already played the video instantly over the P2P link — saw a
+    // "fresh" signal once its dedup window had expired and replayed the video
+    // right before the winner screen.
+    if (["SPIN_FINISH", "OVER_FINISH", "BURST_FINISH", "EXTREME_FINISH"].includes(finishType)) {
+      try {
+        await prisma.match.update({
+          where: { id: params.id },
+          data: { finishVideoAt: new Date(), finishVideoType: finishType },
+        });
+      } catch { /* columns may be missing pre-migration — ignore */ }
+    }
+
     // Check if set is won
     const p1Pts = updatedSet.player1Points;
     const p2Pts = updatedSet.player2Points;
@@ -185,15 +203,8 @@ export async function POST(
       }
     }
 
-    // Signal the telão to play this finish's video (SPIN/OVER/BURST/EXTREME).
-    if (["SPIN_FINISH", "OVER_FINISH", "BURST_FINISH", "EXTREME_FINISH"].includes(finishType)) {
-      try {
-        await prisma.match.update({
-          where: { id: params.id },
-          data: { finishVideoAt: new Date(), finishVideoType: finishType },
-        });
-      } catch { /* columns may be missing pre-migration — ignore */ }
-    }
+    // (The finish-video signal is stamped right after the point is recorded,
+    // above — see the comment there for why it must not happen here.)
 
     return NextResponse.json({ success: true, matchFinished, winnerId: matchWinnerId });
   } catch (err) {
