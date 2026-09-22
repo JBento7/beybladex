@@ -3,6 +3,27 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createHash } from "crypto";
+
+// The telão polls this several times a minute per display, but between points
+// (and while an arena sits idle) the payload is byte-for-byte identical. Tag
+// each response and answer an unchanged one with a bodiless 304, which is the
+// difference between re-sending the whole scoreboard and sending nothing.
+// `Cache-Control: no-cache` — store it, but always revalidate — is what makes
+// the browser send If-None-Match; the client needs no changes, because fetch
+// transparently resolves a 304 with the cached body.
+function jsonWithEtag(req: NextRequest, payload: unknown) {
+  const body = JSON.stringify(payload);
+  const etag = `W/"${createHash("sha1").update(body).digest("base64")}"`;
+  const headers = { ETag: etag, "Cache-Control": "no-cache" };
+  if (req.headers.get("if-none-match") === etag) {
+    return new NextResponse(null, { status: 304, headers });
+  }
+  return new NextResponse(body, {
+    status: 200,
+    headers: { ...headers, "Content-Type": "application/json" },
+  });
+}
 
 // Small in-memory cache for BeyPart image lookups. The telão polls this endpoint
 // constantly and resolves the same part names by case-insensitive match every
@@ -167,7 +188,7 @@ export async function GET(req: NextRequest) {
       prisma.tournament.count({ where: { status: "IN_PROGRESS" } }),
       prisma.match.count({ where: { ...arenaWhere, tournament: { status: "IN_PROGRESS" } } }),
     ]);
-    return NextResponse.json({
+    return jsonWithEtag(req, {
       arena: arenaNum,
       status: "idle",
       match: null,
@@ -477,7 +498,7 @@ export async function GET(req: NextRequest) {
   const [oP1Id, oP2Id] = lr(match.player1Id, match.player2Id);
   const outHistory = leftIsP1 ? history : history.map((h) => ({ ...h, side: h.side === "p1" ? "p2" : "p1" }));
 
-  return NextResponse.json({
+  return jsonWithEtag(req, {
     arena: arenaNum,
     status: phase,
     winnerSide,

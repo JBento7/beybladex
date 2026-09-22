@@ -146,6 +146,17 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const visibleRef = useRef(true);
   const p2pFreshRef = useRef(0);
 
+  // A telão left open between events kept polling around the clock, which is
+  // pure waste (and the bulk of the hosting data transfer). After a long stretch
+  // with no match it goes to sleep and stops calling the server entirely, until
+  // someone taps to wake it.
+  const IDLE_SLEEP_MS = 15 * 60_000;
+  const [asleep, setAsleep] = useState(false);
+  const asleepRef = useRef(false);
+  const idleSinceRef = useRef<number>(0);
+  const sleep = (v: boolean) => { asleepRef.current = v; setAsleep(v); };
+  const wake = () => { idleSinceRef.current = Date.now(); sleep(false); };
+
   // Force landscape. When the device is physically portrait (a tablet turned
   // upright) and the browser won't lock the orientation, we rotate the whole
   // telão 90° so it still reads as landscape.
@@ -212,6 +223,12 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       if (!d.match && Date.now() - lastMatchTsRef.current < 6000) return;
       if (d.match) lastMatchTsRef.current = Date.now();
       liveRef.current = d.status === "live" && !!d.match;
+      // Track how long this arena has had nothing to show.
+      if (d.match) idleSinceRef.current = 0;
+      else {
+        if (!idleSinceRef.current) idleSinceRef.current = Date.now();
+        else if (Date.now() - idleSinceRef.current > IDLE_SLEEP_MS) sleep(true);
+      }
       setData(d);
       if (d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
         playedKeyRef.current = d.countdown.key;
@@ -230,10 +247,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const run = async () => {
-      if (visibleRef.current) await load();
+      if (visibleRef.current && !asleepRef.current) await load();
       if (!active) return;
       const p2pFresh = Date.now() - p2pFreshRef.current < 10000;
-      const delay = !visibleRef.current ? 8000 : !liveRef.current ? 6000 : p2pFresh ? 5000 : 3000;
+      const delay = asleepRef.current ? 5000 : !visibleRef.current ? 8000 : !liveRef.current ? 6000 : p2pFresh ? 5000 : 3000;
       timer = setTimeout(run, delay);
     };
     run();
@@ -251,7 +268,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     const tick = async () => {
       // Skip the network call when backgrounded; still reschedule slowly so we
       // resume promptly when the tab returns.
-      if (!visibleRef.current) { if (active) timer = setTimeout(tick, 3000); return; }
+      if (!visibleRef.current || asleepRef.current) { if (active) timer = setTimeout(tick, 3000); return; }
       try {
         const url = previewParam ? `/api/arena/tick?n=${previewParam}` : "/api/arena/tick";
         const res = await fetch(url);
@@ -582,6 +599,19 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", zIndex: finishVideo === ft ? 72 : -1, opacity: finishVideo === ft ? 1 : 0, pointerEvents: "none" }}
         />
       ))}
+
+      {/* Idle sleep: stops all polling until someone taps. */}
+      {started && asleep && (
+        <div
+          onClick={wake}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 79, background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", cursor: "pointer" }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/lbl-logo.png" alt="LBL" style={{ height: "12vh", width: "auto", opacity: 0.35, marginBottom: "3vh" }} />
+          <div style={{ fontSize: "3vw", fontWeight: 900, color: "#374151", letterSpacing: "0.08em" }}>ARENA {arena} · EM ESPERA</div>
+          <div style={{ color: "#4b5563", fontSize: "1.6vw", marginTop: "2vh" }}>Toque para reativar</div>
+        </div>
+      )}
 
       {/* Start gate */}
       {!started && (
