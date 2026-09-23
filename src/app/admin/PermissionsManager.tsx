@@ -8,6 +8,7 @@ interface User {
   email: string;
   role: string;
   canJudge: boolean;
+  adminCommunity: string | null;
   deleted: boolean;
 }
 
@@ -25,7 +26,7 @@ export default function PermissionsManager() {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  async function toggle(u: User, field: "role" | "canJudge", value: string | boolean) {
+  async function toggle(u: User, field: "role" | "canJudge" | "adminCommunity", value: string | boolean) {
     setTogglingId(`${u.id}:${field}`);
     setError("");
     const res = await fetch(`/api/admin/users/${u.id}`, {
@@ -72,6 +73,7 @@ export default function PermissionsManager() {
                 <th className="text-left py-3 px-2 font-medium">Email</th>
                 <th className="text-left py-3 px-2 font-medium">Administrador</th>
                 <th className="text-left py-3 px-2 font-medium">Pode alterar placares</th>
+                <th className="text-left py-3 px-2 font-medium">Admin de</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#2a2a2a]">
@@ -111,12 +113,29 @@ export default function PermissionsManager() {
                         </span>
                       </label>
                     </td>
+                    <td className="py-3 px-2">
+                      {isAdmin ? (
+                        <select
+                          id={`scope-${u.id}`}
+                          value={u.adminCommunity ?? ""}
+                          disabled={togglingId === `${u.id}:adminCommunity`}
+                          onChange={(e) => toggle(u, "adminCommunity", e.target.value)}
+                          className="bg-[#252525] border border-[#333] rounded-lg px-2 py-1 text-xs text-white"
+                        >
+                          <option value="">Todas (geral)</option>
+                          <option value="lbl">Só LBL</option>
+                          <option value="lbm">Só LBM</option>
+                        </select>
+                      ) : (
+                        <span className="text-xs text-gray-600">—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
               {active.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-6 text-center text-gray-500 text-sm">
+                  <td colSpan={5} className="py-6 text-center text-gray-500 text-sm">
                     Nenhum usuário encontrado
                   </td>
                 </tr>

@@ -707,6 +707,7 @@ export async function GET() {
     // Every existing tournament is LBL's and none is a partnership (defaults).
     { name: "Tournament.communitySlug", sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "communitySlug" TEXT NOT NULL DEFAULT 'lbl'` },
     { name: "Tournament.isPartnership", sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "isPartnership" BOOLEAN NOT NULL DEFAULT false` },
+    { name: "User.adminCommunity", sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "adminCommunity" TEXT` },
     { name: "idx Tournament community", sql: `CREATE INDEX IF NOT EXISTS "Tournament_communitySlug_idx" ON "Tournament" ("communitySlug")` },
     { name: "idx TournamentParticipant user", sql: `CREATE INDEX IF NOT EXISTS "TournamentParticipant_userId_idx" ON "TournamentParticipant" ("userId")` },
   ];

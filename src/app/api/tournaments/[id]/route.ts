@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
@@ -57,6 +58,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getServerSession(authOptions);
+    { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
     if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
     const tournament = await prisma.tournament.findUnique({ where: { id: params.id } });
@@ -125,7 +127,7 @@ export async function PATCH(
     if (isAdmin && eventType) {
       data.isOfficial = eventType !== "BEYENCONTRO";
     }
-    if (isAdmin && ["lbl", "lbm"].includes(community)) data.communitySlug = community;
+    if (isAdmin && !session.user.adminCommunity && ["lbl", "lbm"].includes(community)) data.communitySlug = community;
     if (isAdmin && typeof isPartnership === "boolean") data.isPartnership = isPartnership;
 
     const updated = await prisma.tournament.update({

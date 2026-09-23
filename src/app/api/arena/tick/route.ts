@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { arenaIdentity, arenaMatchWhere, arenaSignalKey } from "@/lib/arenaIdentity";
 
 // Lightweight countdown poll for one arena: a single indexed query returning
 // only the current countdown signal. The telão polls this fast (so the video
@@ -11,14 +12,15 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  let arenaNum: number | null = null;
-  const m = /^arena(\d+)@/i.exec(session.user.email ?? "");
-  if (m) arenaNum = parseInt(m[1]);
-  const q = req.nextUrl.searchParams.get("n");
-  if (q && session.user.role === "ORGANIZER") arenaNum = parseInt(q);
+  const { arena: arenaNum, community } = arenaIdentity(
+    session.user.email,
+    session.user.role,
+    req.nextUrl.searchParams.get("n"),
+    req.nextUrl.searchParams.get("c")
+  );
   if (!arenaNum || Number.isNaN(arenaNum)) return NextResponse.json({ countdown: null });
 
-  const arenaWhere = arenaNum === 1 ? { OR: [{ arena: 1 }, { arena: null }] } : { arena: arenaNum };
+  const arenaWhere = arenaMatchWhere(arenaNum, community);
   const WINDOW_MS = 7000;
   const since = new Date(Date.now() - WINDOW_MS);
 
@@ -47,7 +49,7 @@ export async function GET(req: NextRequest) {
   // Launch/rules video signal for this arena (admin-triggered, per arena).
   let launch: { key: string; elapsedMs: number } | null = null;
   try {
-    const row = await prisma.arenaLayout.findUnique({ where: { key: `launch:arena:${arenaNum}` } });
+    const row = await prisma.arenaLayout.findUnique({ where: { key: arenaSignalKey("launch", community, arenaNum) } });
     if (row) {
       const at = JSON.parse(row.data)?.at as number | undefined;
       if (at && Date.now() - at < 30000) launch = { key: `${arenaNum}:${at}`, elapsedMs: Date.now() - at };
@@ -59,7 +61,7 @@ export async function GET(req: NextRequest) {
   // a while between asking the players if they're ready and starting.
   let ready: { key: string; elapsedMs: number } | null = null;
   try {
-    const row = await prisma.arenaLayout.findUnique({ where: { key: `ready:arena:${arenaNum}` } });
+    const row = await prisma.arenaLayout.findUnique({ where: { key: arenaSignalKey("ready", community, arenaNum) } });
     if (row) {
       const at = JSON.parse(row.data)?.at as number | undefined;
       if (at && Date.now() - at < 30000) ready = { key: `${arenaNum}:${at}`, elapsedMs: Date.now() - at };

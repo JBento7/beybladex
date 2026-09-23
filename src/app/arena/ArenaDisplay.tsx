@@ -5,6 +5,7 @@ import { signOut } from "next-auth/react";
 import { fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type Layout, type FontDef } from "@/lib/arenaLayout";
 import FontLoader from "@/components/FontLoader";
 import { startAnswerer } from "@/lib/arenaLink";
+import { arenaChannel } from "@/lib/arenaIdentity";
 
 // Fields disabled in the layout editor are hidden from the placar via this ctx.
 const HiddenCtx = createContext<Set<string>>(new Set());
@@ -116,7 +117,7 @@ type ArenaData = {
   debug?: { inProgressTournaments: number; matchesThisArena: number };
 };
 
-export default function ArenaDisplay({ arena, previewParam }: { arena: number | null; previewParam: string | null }) {
+export default function ArenaDisplay({ arena, community = "lbl", previewParam }: { arena: number | null; community?: string; previewParam: string | null }) {
   const [data, setData] = useState<ArenaData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -298,7 +299,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
 
   const load = useCallback(async () => {
     try {
-      const url = previewParam ? `/api/arena?n=${previewParam}` : "/api/arena";
+      const url = previewParam ? `/api/arena?${previewParam}` : "/api/arena";
       const res = await fetch(url);
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -391,7 +392,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       // resume promptly when the tab returns.
       if (!visibleRef.current || asleepRef.current) { if (active) timer = setTimeout(tick, 3000); return; }
       try {
-        const url = previewParam ? `/api/arena/tick?n=${previewParam}` : "/api/arena/tick";
+        const url = previewParam ? `/api/arena/tick?${previewParam}` : "/api/arena/tick";
         const res = await fetch(url);
         if (res.ok) {
           const d: {
@@ -434,7 +435,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   // drops. Best-effort; the server poll remains the fallback.
   useEffect(() => {
     if (arena == null || !started) return;
-    const link = startAnswerer(arena, {
+    const link = startAnswerer(arenaChannel(community, arena), {
       onMessage: (m: { type?: string; finishType?: string; winnerId?: string; byId?: Record<string, number>; setsById?: Record<string, number>; at?: number }) => {
         p2pFreshRef.current = Date.now();
         if (m?.type === "matchEnd" && m.winnerId) { setP2pWinner({ winnerId: m.winnerId, at: Date.now(), matchKey: matchKeyRef.current }); burstRefresh(); }
@@ -447,7 +448,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     });
     return () => link.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arena, started]);
+  }, [arena, started, community]);
 
   // Play the countdown video (with its own audio) when triggered.
   useEffect(() => {
@@ -619,7 +620,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       <div style={{ minHeight: "100vh", background: "#000", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
         <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 12 }}>Usuário sem arena</div>
         <div style={{ color: "#9ca3af", fontSize: 14, maxWidth: 420 }}>
-          Faça login com um usuário de arena (arena1@lbl.arena … arena5@lbl.arena). Se for admin, use{" "}
+          Faça login com um usuário de arena (arena1@lbl.arena … arena5@lbl.arena, ou @lbm.arena). Se for admin, use{" "}
           <code style={{ color: BLUE }}>/arena?n=1</code> para pré-visualizar.
         </div>
       </div>

@@ -19,10 +19,17 @@ export async function PATCH(
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
 
-  const { name, email, password, role, canJudge } = await req.json();
+  const { name, email, password, role, canJudge, adminCommunity } = await req.json();
 
   const user = await prisma.user.findUnique({ where: { id: params.id } });
   if (!user) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+
+  // A community-scoped admin can't touch a general admin, and anyone they
+  // promote is scoped to their own community — never above it.
+  const actorScope = session.user.adminCommunity ?? null;
+  if (actorScope && user.role === "ORGANIZER" && !user.adminCommunity) {
+    return NextResponse.json({ error: "Apenas o admin geral pode alterar outro admin geral." }, { status: 403 });
+  }
 
   const data: Record<string, unknown> = {};
   if (name) data.name = name;
@@ -34,13 +41,23 @@ export async function PATCH(
     data.email = email;
   }
   if (password) data.password = await bcrypt.hash(password, 10);
-  if (role) data.role = role === "ORGANIZER" ? "ORGANIZER" : "PARTICIPANT";
+  if (role) {
+    data.role = role === "ORGANIZER" ? "ORGANIZER" : "PARTICIPANT";
+    if (role === "ORGANIZER" && actorScope) data.adminCommunity = actorScope;
+  }
   if (typeof canJudge === "boolean") data.canJudge = canJudge;
+  // Only an unscoped (all-communities) admin can change someone's admin scope.
+  if (adminCommunity !== undefined) {
+    if (session.user.adminCommunity) {
+      return NextResponse.json({ error: "Apenas o admin geral pode alterar a comunidade de um admin." }, { status: 403 });
+    }
+    data.adminCommunity = adminCommunity === "lbl" || adminCommunity === "lbm" ? adminCommunity : null;
+  }
 
   const updated = await prisma.user.update({
     where: { id: params.id },
     data,
-    select: { id: true, name: true, email: true, role: true, canJudge: true },
+    select: { id: true, name: true, email: true, role: true, canJudge: true, adminCommunity: true },
   });
 
   return NextResponse.json(updated);

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { denyOutsideCommunity } from "@/lib/communityScope";
 import { generateMakeupRound } from "@/lib/tournament-engine";
 
 // ORGANIZER-only: check whether every participant played the same number of
@@ -9,6 +10,7 @@ import { generateMakeupRound } from "@/lib/tournament-engine";
 // nobody is disadvantaged.
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
+  { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }

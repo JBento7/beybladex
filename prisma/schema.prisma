@@ -112,6 +112,8 @@ model User {
   isGuest       Boolean  @default(false)
   bladerName    String?
   canJudge      Boolean  @default(false)
+  // Admin scope: null = every community (original LBL organizers); "lbm" = only LBM.
+  adminCommunity String?
   featuredBey1  String?
   featuredBey2  String?
   featuredBey3  String?

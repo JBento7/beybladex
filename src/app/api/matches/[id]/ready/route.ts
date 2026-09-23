@@ -2,7 +2,9 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { arenaSignalKey } from "@/lib/arenaIdentity";
 
 // "PRONTOS": the judge asks the players to get ready. The arena telão plays the
 // PRONTOS clip and then HOLDS on its last frame until the countdown starts, so
@@ -10,11 +12,12 @@ import { prisma } from "@/lib/prisma";
 // Same permission model as scoring.
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
+  { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const match = await prisma.match.findUnique({
     where: { id: params.id },
-    select: { arena: true, judgeId: true, tournament: { select: { organizerId: true, _count: { select: { judges: true } } } } },
+    select: { arena: true, judgeId: true, tournament: { select: { organizerId: true, communitySlug: true, _count: { select: { judges: true } } } } },
   });
   if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
 
@@ -28,7 +31,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   if (!allowed) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
 
   const arena = match.arena ?? 1;
-  const key = `ready:arena:${arena}`;
+  const key = arenaSignalKey("ready", match.tournament.communitySlug, arena);
   try {
     await prisma.arenaLayout.upsert({
       where: { key },

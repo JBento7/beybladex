@@ -20,7 +20,7 @@ async function waitIce(pc: RTCPeerConnection) {
 
 // Judge side (offerer): opens a data channel, publishes an offer, waits for the
 // telão's answer. Returns send()/close()/connected.
-export function startOfferer(arena: number, h: Handlers) {
+export function startOfferer(arena: number | string, h: Handlers) {
   let closed = false;
   const pc = new RTCPeerConnection({ iceServers: ICE });
   const dc = pc.createDataChannel("lbl", { ordered: true });
@@ -36,7 +36,7 @@ export function startOfferer(arena: number, h: Handlers) {
       if (closed) return;
       await fetch("/api/arena/rtc", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ arena, role: "offer", id, sdp: pc.localDescription }) }).catch(() => {});
       for (let i = 0; i < 45 && !closed; i++) {
-        const r = await fetch(`/api/arena/rtc?arena=${arena}&want=answer`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+        const r = await fetch(`/api/arena/rtc?arena=${encodeURIComponent(String(arena))}&want=answer`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
         if (r?.signal?.id === id && r.signal.sdp) { try { await pc.setRemoteDescription(r.signal.sdp); } catch { /* ignore */ } break; }
         await new Promise((res) => setTimeout(res, 1000));
       }
@@ -52,7 +52,7 @@ export function startOfferer(arena: number, h: Handlers) {
 
 // Telão side (answerer): polls for offers on its arena and answers them,
 // receiving messages. Re-answers when a new offer id appears (new judge/match).
-export function startAnswerer(arena: number, h: Handlers) {
+export function startAnswerer(arena: number | string, h: Handlers) {
   let closed = false;
   let handledId: string | null = null;
   let pc: RTCPeerConnection | null = null;
@@ -77,7 +77,7 @@ export function startAnswerer(arena: number, h: Handlers) {
   (async () => {
     while (!closed) {
       try {
-        const r = await fetch(`/api/arena/rtc?arena=${arena}&want=offer`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+        const r = await fetch(`/api/arena/rtc?arena=${encodeURIComponent(String(arena))}&want=offer`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
         if (r?.signal?.id && r.signal.sdp) {
           lastOfferSeen = Date.now(); // a judge is publishing offers → stay responsive
           if (r.signal.id !== handledId) {

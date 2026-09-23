@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
 import { startOfferer } from "@/lib/arenaLink";
+import { arenaChannel } from "@/lib/arenaIdentity";
 import type { FinishType } from "@prisma/client";
 import DeckOrderPicker, { type BeybladeInfo, comboParts } from "./DeckOrderPicker";
 
@@ -52,6 +53,7 @@ type MatchState = {
   currentSetBattleCount: number;
   xSidePlayerId: string | null;
   arena?: number | null;
+  community?: string;
   player1Id?: string;
   player2Id?: string;
 };
@@ -138,12 +140,14 @@ export default function ScoreModal({
   // P2P link to this match's arena telão (LAN, works even if internet drops).
   const linkRef = useRef<ReturnType<typeof startOfferer> | null>(null);
   const arena = state?.arena ?? null;
+  const community = state?.community ?? "lbl";
   useEffect(() => {
     if (!open || !arena) return;
-    const link = startOfferer(arena, {});
+    // Same arena number exists in every community: scope the channel.
+    const link = startOfferer(arenaChannel(community, arena), {});
     linkRef.current = link;
     return () => { link.close(); linkRef.current = null; };
-  }, [open, arena]);
+  }, [open, arena, community]);
   const linkSend = (msg: unknown) => { try { linkRef.current?.send(msg); } catch { /* ignore */ } };
   // Judging happens on a phone held in one hand: go real fullscreen (hides the
   // browser bars, which is most of the wasted space) and keep the screen awake.

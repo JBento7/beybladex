@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createHash } from "crypto";
+import { arenaIdentity, arenaMatchWhere } from "@/lib/arenaIdentity";
 
 // The telão polls this several times a minute per display, but between points
 // (and while an arena sits idle) the payload is byte-for-byte identical. Tag
@@ -65,11 +66,12 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  let arenaNum: number | null = null;
-  const m = /^arena(\d+)@/i.exec(session.user.email ?? "");
-  if (m) arenaNum = parseInt(m[1]);
-  const q = req.nextUrl.searchParams.get("n");
-  if (q && session.user.role === "ORGANIZER") arenaNum = parseInt(q);
+  const { arena: arenaNum, community } = arenaIdentity(
+    session.user.email,
+    session.user.role,
+    req.nextUrl.searchParams.get("n"),
+    req.nextUrl.searchParams.get("c")
+  );
 
   if (!arenaNum || Number.isNaN(arenaNum)) {
     return NextResponse.json({ error: "Arena não identificada", arena: null }, { status: 400 });
@@ -84,8 +86,9 @@ export async function GET(req: NextRequest) {
 
   // Match this arena. In a single-arena tournament matches may be arena 1 or
   // (defensively) null, so arena 1 also picks up null-arena matches.
-  const arenaWhere =
-    arenaNum === 1 ? { OR: [{ arena: 1 }, { arena: null }] } : { arena: arenaNum };
+  // Scoped to this arena's community, so LBL and LBM running at the same time
+  // never see each other's matches on their telões.
+  const arenaWhere = arenaMatchWhere(arenaNum, community);
 
   // How long a just-finished match remains available as the winner screen. The
   // telão decides how long to SHOW it (5s from when it first sees it); this only
@@ -189,7 +192,7 @@ export async function GET(req: NextRequest) {
     const queue = await loadQueue();
 
     const [inProgressTournaments, matchesThisArena] = await Promise.all([
-      prisma.tournament.count({ where: { status: "IN_PROGRESS" } }),
+      prisma.tournament.count({ where: { status: "IN_PROGRESS", communitySlug: community } }),
       prisma.match.count({ where: { ...arenaWhere, tournament: { status: "IN_PROGRESS" } } }),
     ]);
     return jsonWithEtag(req, {

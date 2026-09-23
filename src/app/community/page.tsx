@@ -32,7 +32,7 @@ export default async function CommunityPage() {
 
   const players = await prisma.user.findMany({
     // Arena display accounts (arenaN@lbl.arena) are only scoreboards — hide them.
-    where: { deleted: false, isGuest: false, email: { not: { endsWith: "@lbl.arena" } } },
+    where: { deleted: false, isGuest: false, email: { not: { endsWith: ".arena" } } },
     select: {
       id: true,
       name: true,

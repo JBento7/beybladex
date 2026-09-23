@@ -18,7 +18,7 @@ export async function GET() {
       where: {
         deleted: false,
         isGuest: false,
-        email: { not: { endsWith: "@lbl.arena" } },
+        email: { not: { endsWith: ".arena" } },
       },
       orderBy: { name: "asc" },
       select: {

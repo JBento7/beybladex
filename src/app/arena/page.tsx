@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import ArenaDisplay from "./ArenaDisplay";
+import { arenaIdentity } from "@/lib/arenaIdentity";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -25,16 +26,18 @@ export const viewport = {
 export default async function ArenaPage({
   searchParams,
 }: {
-  searchParams: { n?: string };
+  searchParams: { n?: string; c?: string };
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
   // Arena number: from the arena user's email, or ?n for an organizer preview.
-  let arena: number | null = null;
-  const m = /^arena(\d+)@/i.exec(session.user.email ?? "");
-  if (m) arena = parseInt(m[1]);
-  if (searchParams.n && session.user.role === "ORGANIZER") arena = parseInt(searchParams.n);
+  const { arena, community } = arenaIdentity(session.user.email, session.user.role, searchParams.n, searchParams.c);
+  // Organizer preview carries both arena and community to the API.
+  const preview =
+    session.user.role === "ORGANIZER" && searchParams.n
+      ? `n=${encodeURIComponent(searchParams.n)}${searchParams.c ? `&c=${encodeURIComponent(searchParams.c)}` : ""}`
+      : null;
 
-  return <ArenaDisplay arena={arena} previewParam={searchParams.n ?? null} />;
+  return <ArenaDisplay arena={arena} community={community} previewParam={preview} />;
 }

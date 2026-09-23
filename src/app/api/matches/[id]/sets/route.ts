@@ -14,7 +14,7 @@ export async function GET(
           orderBy: { setNumber: "asc" },
           include: { points: { select: { id: true } } },
         },
-        tournament: { select: { setsToWin: true, pointsToWinSet: true, deckType: true } },
+        tournament: { select: { setsToWin: true, pointsToWinSet: true, deckType: true, communitySlug: true } },
       },
     });
 
@@ -53,6 +53,7 @@ export async function GET(
       // Which player is on the X side (other = B side); null until the judge sets it.
       xSidePlayerId: (match as { xSidePlayerId?: string | null }).xSidePlayerId ?? null,
       arena: (match as { arena?: number | null }).arena ?? 1,
+      community: match.tournament.communitySlug,
       player1Id: match.player1Id,
       player2Id: match.player2Id,
     });

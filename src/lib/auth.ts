@@ -7,26 +7,34 @@ import { prisma } from "./prisma";
 // busy endpoint doesn't query on every request. Short TTL: a permission change
 // (e.g. granting admin) takes effect within this window without a re-login.
 const PERMISSION_TTL_MS = 60_000;
-const permissionCache = new Map<string, { role: string; canJudge: boolean; at: number }>();
+const permissionCache = new Map<string, { role: string; canJudge: boolean; adminCommunity: string | null; at: number }>();
 
-async function livePermissions(userId: string): Promise<{ role: string; canJudge: boolean } | null> {
+async function livePermissions(userId: string): Promise<{ role: string; canJudge: boolean; adminCommunity: string | null } | null> {
   const hit = permissionCache.get(userId);
   if (hit && Date.now() - hit.at < PERMISSION_TTL_MS) {
-    return { role: hit.role, canJudge: hit.canJudge };
+    return { role: hit.role, canJudge: hit.canJudge, adminCommunity: hit.adminCommunity };
   }
   try {
     // Raw query (like authorize) so a missing column can't break sign-in.
-    const rows = await prisma.$queryRaw<{ role: string; canJudge: boolean | null }[]>`
-      SELECT role, "canJudge" FROM "User" WHERE id = ${userId} LIMIT 1
-    `;
+    let rows: { role: string; canJudge: boolean | null; adminCommunity: string | null }[];
+    try {
+      rows = await prisma.$queryRaw<{ role: string; canJudge: boolean | null; adminCommunity: string | null }[]>`
+        SELECT role, "canJudge", "adminCommunity" FROM "User" WHERE id = ${userId} LIMIT 1
+      `;
+    } catch {
+      // adminCommunity column not migrated yet
+      rows = await prisma.$queryRaw<{ role: string; canJudge: boolean | null; adminCommunity: string | null }[]>`
+        SELECT role, "canJudge", NULL AS "adminCommunity" FROM "User" WHERE id = ${userId} LIMIT 1
+      `;
+    }
     const u = rows[0];
-    if (!u) return hit ? { role: hit.role, canJudge: hit.canJudge } : null;
-    const perms = { role: u.role, canJudge: !!u.canJudge };
+    if (!u) return hit ? { role: hit.role, canJudge: hit.canJudge, adminCommunity: hit.adminCommunity } : null;
+    const perms = { role: u.role, canJudge: !!u.canJudge, adminCommunity: u.adminCommunity ?? null };
     permissionCache.set(userId, { ...perms, at: Date.now() });
     return perms;
   } catch {
     // DB hiccup: keep whatever the token already carries.
-    return hit ? { role: hit.role, canJudge: hit.canJudge } : null;
+    return hit ? { role: hit.role, canJudge: hit.canJudge, adminCommunity: hit.adminCommunity } : null;
   }
 }
 
@@ -90,11 +98,9 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         token.role = (user as { id: string; role: string }).role;
         token.canJudge = (user as { canJudge?: boolean }).canJudge ?? false;
-        permissionCache.set(user.id, {
-          role: token.role as string,
-          canJudge: token.canJudge as boolean,
-          at: Date.now(),
-        });
+        // Scope isn't known at sign-in; resolve it right away.
+        const perms = await livePermissions(user.id);
+        token.adminCommunity = perms?.adminCommunity ?? null;
         return token;
       }
       // Sessions are JWT-based, so role/canJudge used to be frozen at sign-in:
@@ -108,6 +114,7 @@ export const authOptions: NextAuthOptions = {
         if (perms) {
           token.role = perms.role;
           token.canJudge = perms.canJudge;
+          token.adminCommunity = perms.adminCommunity;
         }
       }
       return token;
@@ -117,6 +124,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id as string;
         session.user.role = token.role as string;
         session.user.canJudge = (token.canJudge as boolean) ?? false;
+        session.user.adminCommunity = (token.adminCommunity as string | null | undefined) ?? null;
       }
       return session;
     },

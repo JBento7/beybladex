@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(
@@ -10,6 +11,7 @@ export async function POST(
 ) {
   try {
     const session = await getServerSession(authOptions);
+    { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }
     if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
     const { userId, setNumber, cycleIndex, bey1Id, bey2Id, bey3Id } = await req.json();
