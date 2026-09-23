@@ -87,6 +87,8 @@ export async function PATCH(
       eventType, setsToWin, pointsToWinSet, qualifiers,
       bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
       isMultiDay, day2Date, day2SetsToWin, day2PointsToWinSet,
+      community,
+      isPartnership,
     } = await req.json();
 
     if (!name || !format) {
@@ -118,10 +120,13 @@ export async function PATCH(
       day2PointsToWinSet: format === "ROUND_ROBIN" && isMultiDay && day2PointsToWinSet ? Math.min(7, Math.max(4, parseInt(day2PointsToWinSet))) : null,
     };
 
-    // Only admins can change whether a tournament counts as official.
+    // Only admins can change whether a tournament counts as official, which
+    // community hosts it, and whether it is a partnership (ranking scope).
     if (isAdmin && eventType) {
       data.isOfficial = eventType !== "BEYENCONTRO";
     }
+    if (isAdmin && ["lbl", "lbm"].includes(community)) data.communitySlug = community;
+    if (isAdmin && typeof isPartnership === "boolean") data.isPartnership = isPartnership;
 
     const updated = await prisma.tournament.update({
       where: { id: params.id },

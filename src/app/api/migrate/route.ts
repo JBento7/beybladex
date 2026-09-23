@@ -684,6 +684,30 @@ export async function GET() {
     { name: "idx MatchPoint user", sql: `CREATE INDEX IF NOT EXISTS "MatchPoint_userId_idx" ON "MatchPoint" ("userId")` },
     { name: "idx MatchPoint beyblade", sql: `CREATE INDEX IF NOT EXISTS "MatchPoint_beybladeId_idx" ON "MatchPoint" ("beybladeId")` },
     { name: "idx MatchSet match", sql: `CREATE INDEX IF NOT EXISTS "MatchSet_matchId_idx" ON "MatchSet" ("matchId")` },
+    {
+      name: "Community table",
+      sql: `CREATE TABLE IF NOT EXISTS "Community" (
+        "id" TEXT NOT NULL,
+        "slug" TEXT NOT NULL UNIQUE,
+        "name" TEXT NOT NULL,
+        "city" TEXT,
+        "logoUrl" TEXT,
+        "color" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "Community_pkey" PRIMARY KEY ("id")
+      )`,
+    },
+    {
+      name: "Community seed LBL + LBM",
+      sql: `INSERT INTO "Community" ("id","slug","name","city") VALUES
+        ('community_lbl','lbl','Liga Beyblade Londrina','Londrina'),
+        ('community_lbm','lbm','Liga Beyblade Maringá','Maringá')
+        ON CONFLICT ("slug") DO NOTHING`,
+    },
+    // Every existing tournament is LBL's and none is a partnership (defaults).
+    { name: "Tournament.communitySlug", sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "communitySlug" TEXT NOT NULL DEFAULT 'lbl'` },
+    { name: "Tournament.isPartnership", sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "isPartnership" BOOLEAN NOT NULL DEFAULT false` },
+    { name: "idx Tournament community", sql: `CREATE INDEX IF NOT EXISTS "Tournament_communitySlug_idx" ON "Tournament" ("communitySlug")` },
     { name: "idx TournamentParticipant user", sql: `CREATE INDEX IF NOT EXISTS "TournamentParticipant_userId_idx" ON "TournamentParticipant" ("userId")` },
   ];
 

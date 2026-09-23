@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
       eventType, isTest, setsToWin, pointsToWinSet, qualifiers,
       bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
       isMultiDay, day2Date, day2SetsToWin, day2PointsToWinSet,
+      community,
+      isPartnership,
     } = await req.json();
 
     if (!name || !format) {
@@ -57,6 +59,8 @@ export async function POST(req: NextRequest) {
         status: "REGISTRATION",
         isOfficial: session.user.role === "ORGANIZER" && eventType !== "BEYENCONTRO",
         isTest: session.user.role === "ORGANIZER" && !!isTest,
+        communitySlug: ["lbl", "lbm"].includes(community) ? community : "lbl",
+        isPartnership: session.user.role === "ORGANIZER" && !!isPartnership,
         setsToWin: setsToWin ? Math.min(2, Math.max(1, parseInt(setsToWin))) : 2,
         pointsToWinSet: pointsToWinSet ? Math.min(7, Math.max(4, parseInt(pointsToWinSet))) : 4,
         // Suíço only: how many top players advance to the knockout (4/8/16).

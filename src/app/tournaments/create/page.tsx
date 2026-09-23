@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Navbar from "@/components/Navbar";
+import CommunityPicker from "@/components/CommunityPicker";
 
 const FORMATS = [
   {
@@ -40,6 +41,8 @@ export default function CreateTournamentPage() {
     prize: "",
     arenas: "1",
     eventType: "TORNEIO",
+    community: "lbl",
+    isPartnership: false,
     setsToWin: "2",
     pointsToWinSet: "4",
     qualifiers: "8",
@@ -86,6 +89,8 @@ export default function CreateTournamentPage() {
         prize: form.prize || undefined,
         arenas: form.arenas ? parseInt(form.arenas) : 1,
         eventType: isAdmin ? form.eventType : "BEYENCONTRO",
+        community: form.community,
+        isPartnership: isAdmin ? form.isPartnership : false,
         isTest: isAdmin ? isTest : false,
         setsToWin: form.setsToWin,
         pointsToWinSet: form.pointsToWinSet,
@@ -132,6 +137,14 @@ export default function CreateTournamentPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+
+          {isAdmin && (
+            <CommunityPicker
+              community={form.community}
+              partnership={form.isPartnership}
+              onChange={(v) => setForm({ ...form, community: v.community, isPartnership: v.partnership })}
+            />
+          )}
 
           {/* Event Type — admin chooses, player sees fixed notice */}
           <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">

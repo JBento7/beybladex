@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
+import CommunityPicker from "@/components/CommunityPicker";
 
 const FORMATS = [
   {
@@ -36,6 +37,8 @@ type Initial = {
   prize: string | null;
   arenas: number | null;
   isOfficial: boolean;
+  communitySlug: string;
+  isPartnership: boolean;
   setsToWin: number;
   pointsToWinSet: number;
   qualifiers: number | null;
@@ -70,6 +73,8 @@ export default function EditTournamentForm({
     prize: tournament.prize ?? "",
     arenas: tournament.arenas ? String(tournament.arenas) : "1",
     eventType: tournament.isOfficial ? "TORNEIO" : "BEYENCONTRO",
+    community: tournament.communitySlug,
+    isPartnership: tournament.isPartnership,
     setsToWin: String(tournament.setsToWin),
     pointsToWinSet: String(tournament.pointsToWinSet),
     qualifiers: String(tournament.qualifiers ?? 8),
@@ -113,6 +118,8 @@ export default function EditTournamentForm({
         prize: form.prize || undefined,
         arenas: form.arenas ? parseInt(form.arenas) : 1,
         eventType: form.eventType,
+        community: form.community,
+        isPartnership: form.isPartnership,
         setsToWin: form.setsToWin,
         pointsToWinSet: form.pointsToWinSet,
         qualifiers: form.format === "ROUND_ROBIN" ? parseInt(form.qualifiers) : null,
@@ -157,6 +164,14 @@ export default function EditTournamentForm({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+
+          {canChangeEventType && (
+            <CommunityPicker
+              community={form.community}
+              partnership={form.isPartnership}
+              onChange={(v) => setForm({ ...form, community: v.community, isPartnership: v.partnership })}
+            />
+          )}
 
           {/* Event Type — admins can change, others see fixed notice */}
           {canChangeEventType ? (
