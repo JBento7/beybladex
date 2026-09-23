@@ -146,10 +146,30 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   const readyVideoRef = useRef<HTMLVideoElement | null>(null);
   const playedReadyKeyRef = useRef<string | null>(null);
   const lastReadyRef = useRef(0);
-  const playReady = () => { if (Date.now() - lastReadyRef.current < 3000) return; lastReadyRef.current = Date.now(); setReadyOn(true); };
+  // An explicit cue from the judge (PRONTOS, countdown) takes over the screen:
+  // drop any finish/launch overlay still up from the battle that just ended,
+  // instead of leaving it to cover the cue.
+  const finishOnRef = useRef(false);
+  const clearBattleOverlays = () => {
+    finishOnRef.current = false;
+    setFinishVideo(null);
+    setLaunchOn(false);
+  };
+  const playReady = () => {
+    if (Date.now() - lastReadyRef.current < 3000) return;
+    lastReadyRef.current = Date.now();
+    clearBattleOverlays();
+    setReadyOn(true);
+  };
   // Starting the countdown always clears the ready screen — that's the cue the
   // players have been waiting on.
-  const playCountdown = () => { if (Date.now() - lastCdRef.current < 8000) return; lastCdRef.current = Date.now(); setReadyOn(false); setCountdownOn(true); };
+  const playCountdown = () => {
+    if (Date.now() - lastCdRef.current < 8000) return;
+    lastCdRef.current = Date.now();
+    clearBattleOverlays();
+    setReadyOn(false);
+    setCountdownOn(true);
+  };
   // A scored finish may have just ended the match. The server marks the match
   // FINISHED early — well before it answers the judge (it still has standings,
   // beyblade stats and round generation to do) — so the quickest way to the
@@ -170,7 +190,6 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   };
   // Belt and braces: never restart a clip that is still on screen. The time
   // window alone isn't enough if a clip runs longer than it.
-  const finishOnRef = useRef(false);
   const playFinish = (t: string) => {
     if (finishOnRef.current || Date.now() - lastFinishRef.current < 6000) return;
     lastFinishRef.current = Date.now();
@@ -644,7 +663,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           height: "100%",
           objectFit: "cover",
           background: "#000",
-          zIndex: countdownOn ? 70 : -1,
+          zIndex: countdownOn ? 76 : -1,
           opacity: countdownOn ? 1 : 0,
           pointerEvents: "none",
         }}
@@ -658,7 +677,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         playsInline
         preload="metadata"
         onError={() => setReadyOn(false)}
-        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", zIndex: readyOn ? 71 : -1, opacity: readyOn ? 1 : 0, pointerEvents: "none" }}
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", zIndex: readyOn ? 74 : -1, opacity: readyOn ? 1 : 0, pointerEvents: "none" }}
       />
 
       {/* Launch/rules video — always mounted; admin triggers it per arena. */}
@@ -669,7 +688,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         playsInline
         preload="metadata"
         onError={() => setLaunchOn(false)}
-        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000", zIndex: launchOn ? 75 : -1, opacity: launchOn ? 1 : 0, pointerEvents: "none" }}
+        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", background: "#000", zIndex: launchOn ? 78 : -1, opacity: launchOn ? 1 : 0, pointerEvents: "none" }}
       />
 
       {/* Finish-type videos (SPIN/OVER/BURST/EXTREME) — always mounted & primed
@@ -682,7 +701,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           src={`/finish-videos/${ft}.mp4`}
           playsInline
           preload="metadata"
-          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", zIndex: finishVideo === ft ? 72 : -1, opacity: finishVideo === ft ? 1 : 0, pointerEvents: "none" }}
+          style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover", background: "#000", zIndex: finishVideo === ft ? 70 : -1, opacity: finishVideo === ft ? 1 : 0, pointerEvents: "none" }}
         />
       ))}
 
