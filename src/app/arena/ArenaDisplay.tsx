@@ -212,7 +212,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   // P2P link. That arrives before the server has even finished writing the
   // result, so the winner screen comes up with no wait at all; the polled data
   // confirms it moments later.
-  const [p2pWinner, setP2pWinner] = useState<{ winnerId: string; at: number } | null>(null);
+  const [p2pWinner, setP2pWinner] = useState<{ winnerId: string; at: number; matchKey: string | null } | null>(null);
+  // Identity of the match currently on screen, so an end-of-match notice can be
+  // tied to the match it belongs to.
+  const matchKeyRef = useRef<string | null>(null);
   // Latest load(), so one-off refreshes don't have to re-create the poll loops.
   const loadRef = useRef<() => Promise<void>>(async () => {});
 
@@ -283,8 +286,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       if (d.match) lastMatchTsRef.current = Date.now();
       liveRef.current = d.status === "live" && !!d.match;
       statusRef.current = d.status;
-      // A new live match supersedes any pending P2P end-of-match notice.
-      if (d.status === "live") setP2pWinner(null);
+      matchKeyRef.current = d.match ? `${d.match.player1}|${d.match.player2}` : null;
       // Track how long this arena has had nothing to show.
       if (d.match) idleSinceRef.current = 0;
       else {
@@ -304,7 +306,15 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   useEffect(() => { loadRef.current = load; }, [load]);
 
   // Restart the 5s window whenever a NEW finished match appears.
-  const p2pWinnerFresh = !!p2pWinner && Date.now() - p2pWinner.at < 20000;
+  // The notice applies only to the match it was sent for. The server reporting
+  // that match as still "live" just means it hasn't finished writing the result
+  // yet — that must NOT drop the winner screen, which is what made it flash back
+  // to the scoreboard. A genuinely different match on screen does supersede it.
+  const currentMatchKey = data?.match ? `${data.match.player1}|${data.match.player2}` : null;
+  const p2pWinnerFresh =
+    !!p2pWinner &&
+    Date.now() - p2pWinner.at < 20000 &&
+    (p2pWinner.matchKey === null || p2pWinner.matchKey === currentMatchKey);
   const finishedKey =
     (data?.status === "finished" || p2pWinnerFresh) && data?.match
       ? `${data.match.player1}|${data.match.player2}`
@@ -399,7 +409,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     const link = startAnswerer(arena, {
       onMessage: (m: { type?: string; finishType?: string; winnerId?: string; byId?: Record<string, number>; setsById?: Record<string, number>; at?: number }) => {
         p2pFreshRef.current = Date.now();
-        if (m?.type === "matchEnd" && m.winnerId) { setP2pWinner({ winnerId: m.winnerId, at: Date.now() }); burstRefresh(); }
+        if (m?.type === "matchEnd" && m.winnerId) { setP2pWinner({ winnerId: m.winnerId, at: Date.now(), matchKey: matchKeyRef.current }); burstRefresh(); }
         else if (m?.type === "ready") playReady();
         else if (m?.type === "countdown") playCountdown();
         else if (m?.type === "finish" && m.finishType) playFinish(m.finishType);
