@@ -11,6 +11,7 @@ declare module "next-auth" {
       role: string;
       canJudge: boolean;
       adminCommunity?: string | null;
+      homeCommunity?: string | null;
     };
   }
 
@@ -19,6 +20,7 @@ declare module "next-auth" {
     role: string;
     canJudge?: boolean;
     adminCommunity?: string | null;
+    homeCommunity?: string | null;
   }
 }
 
@@ -28,5 +30,6 @@ declare module "next-auth/jwt" {
     role: string;
     canJudge?: boolean;
     adminCommunity?: string | null;
+    homeCommunity?: string | null;
   }
 }

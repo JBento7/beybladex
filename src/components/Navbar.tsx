@@ -4,9 +4,13 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import { communityOf } from "@/lib/communities";
 
 export default function Navbar() {
   const { data: session } = useSession();
+  // The app is branded with the player's own league (logo + accent color).
+  const home = communityOf(session?.user?.homeCommunity);
+  const isLbm = home.slug === "lbm";
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -16,11 +20,11 @@ export default function Navbar() {
     href === "/" ? pathname === "/" : pathname.startsWith(href);
   const linkClass = (href: string) =>
     `transition-colors font-medium text-base ${
-      isActive(href) ? "text-[#f0a500]" : "text-gray-300 hover:text-[#f0a500]"
+      isActive(href) ? "text-[var(--accent)]" : "text-gray-300 hover:text-[var(--accent)]"
     }`;
   const mobileLinkClass = (href: string) =>
     `block px-3 py-2 transition-colors ${
-      isActive(href) ? "text-[#f0a500]" : "text-gray-300 hover:text-[#f0a500]"
+      isActive(href) ? "text-[var(--accent)]" : "text-gray-300 hover:text-[var(--accent)]"
     }`;
 
   useEffect(() => {
@@ -40,7 +44,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16 md:h-[100px]">
           {/* Logo */}
           <Link href="/">
-            <img src="/lblnovo.png" alt="Liga Beyblade Londrina" className="h-14 md:h-[100px] w-auto" />
+            <img src={isLbm ? home.logo : "/lblnovo.png"} alt={home.fullName} className="h-14 md:h-[100px] w-auto" />
           </Link>
 
           {/* Desktop nav */}
@@ -82,11 +86,11 @@ export default function Navbar() {
             {session ? (
               <div className="flex items-center gap-3">
                 <Link href="/profile" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                  <div className="w-11 h-11 rounded-full overflow-hidden border border-[#f0a500]/50 flex-shrink-0">
+                  <div className="w-11 h-11 rounded-full overflow-hidden border border-[var(--accent)]/50 flex-shrink-0">
                     {avatarUrl ? (
                       <img src={avatarUrl} alt={session.user.name ?? ""} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center">
+                      <div className="w-full h-full bg-[var(--accent)]/20 flex items-center justify-center">
                         <img src="/bey-removebg-preview.png" alt="" className="w-6 h-6 object-contain" />
                       </div>
                     )}
@@ -94,7 +98,7 @@ export default function Navbar() {
                   <span className="text-base text-gray-400">
                     {session.user.name}
                     {session.user.role === "ORGANIZER" && (
-                      <span className="ml-1 text-sm bg-[#f0a500] text-black px-1.5 py-0.5 rounded font-semibold">
+                      <span className="ml-1 text-sm bg-[var(--accent)] text-black px-1.5 py-0.5 rounded font-semibold">
                         ADMIN
                       </span>
                     )}
@@ -111,7 +115,7 @@ export default function Navbar() {
               <>
                 <Link
                   href="/login"
-                  className="text-base text-gray-300 hover:text-[#f0a500] transition-colors font-medium"
+                  className="text-base text-gray-300 hover:text-[var(--accent)] transition-colors font-medium"
                 >
                   Entrar
                 </Link>
@@ -127,7 +131,7 @@ export default function Navbar() {
 
           {/* Mobile menu button */}
           <button
-            className="md:hidden text-gray-300 hover:text-[#f0a500] p-2"
+            className="md:hidden text-gray-300 hover:text-[var(--accent)] p-2"
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
             aria-expanded={menuOpen}
@@ -169,8 +173,8 @@ export default function Navbar() {
             )}
             {!session && (
               <>
-                <Link href="/login" className="block px-3 py-2 text-gray-300 hover:text-[#f0a500]" onClick={() => setMenuOpen(false)}>Entrar</Link>
-                <Link href="/register" className="block px-3 py-2 text-[#f0a500] font-semibold" onClick={() => setMenuOpen(false)}>Cadastrar</Link>
+                <Link href="/login" className="block px-3 py-2 text-gray-300 hover:text-[var(--accent)]" onClick={() => setMenuOpen(false)}>Entrar</Link>
+                <Link href="/register" className="block px-3 py-2 text-[var(--accent)] font-semibold" onClick={() => setMenuOpen(false)}>Cadastrar</Link>
               </>
             )}
           </div>

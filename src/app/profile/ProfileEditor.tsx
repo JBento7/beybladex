@@ -77,7 +77,10 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
       setNewPassword("");
       setConfirmPassword("");
       setOpen(false);
-      router.refresh();
+      // Changing league re-brands the whole app (logo, colors), which lives in
+      // the session — reload so it's picked up everywhere at once.
+      if (homeCommunity !== initialCommunity) window.location.reload();
+      else router.refresh();
     }
   }
 

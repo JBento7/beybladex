@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* League accent; CommunityTheme swaps it for the signed-in player's league. */
+:root {
+  --accent: #f0a500;
+}
+
 :root {
   --background: #0a0a0a;
   --foreground: #f5f5f5;

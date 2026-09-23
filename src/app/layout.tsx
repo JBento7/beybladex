@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import CommunityTheme from "@/components/CommunityTheme";
 
 export const metadata: Metadata = {
   title: {
@@ -37,7 +38,10 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className="bg-[#0d0d0d] text-gray-100 min-h-screen">
         <ServiceWorkerRegister />
-        <Providers>{children}</Providers>
+        <Providers>
+          <CommunityTheme />
+          {children}
+        </Providers>
       </body>
     </html>
   );

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions, invalidatePermissions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
@@ -77,6 +77,8 @@ export async function PATCH(req: NextRequest) {
     where: { id: userId },
     data: updates,
   });
+  // The session carries the player's community (drives the app's branding).
+  invalidatePermissions(userId);
 
   return NextResponse.json({ ok: true });
 }
