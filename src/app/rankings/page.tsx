@@ -11,9 +11,9 @@ export const metadata: Metadata = { title: "Rankings" };
 // Three rankings over the same data, differing only in which tournaments count:
 // each community's own events, or the LBL+LBM partnership events.
 const SCOPES = {
-  lbl: { label: "LBL · Londrina", where: { communitySlug: "lbl", isPartnership: false } },
-  lbm: { label: "LBM · Maringá", where: { communitySlug: "lbm", isPartnership: false } },
-  parceria: { label: "LBL + LBM", where: { isPartnership: true } },
+  lbl: { label: "LBL · Londrina", logo: "/lbl-logo.png", where: { communitySlug: "lbl", isPartnership: false } },
+  lbm: { label: "LBM · Maringá", logo: "/lbm-logo.webp", where: { communitySlug: "lbm", isPartnership: false } },
+  parceria: { label: "🤝 LBL + LBM", logo: null, where: { isPartnership: true } },
 } as const;
 type ScopeKey = keyof typeof SCOPES;
 
@@ -66,6 +66,10 @@ export default async function RankingsPage({ searchParams }: { searchParams: { r
                   k === scope ? "bg-[#f0a500] text-black border-[#f0a500]" : "border-[#333] text-gray-300 hover:border-gray-500"
                 }`}
               >
+                {SCOPES[k].logo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={SCOPES[k].logo!} alt="" className="inline-block w-5 h-5 rounded-full object-cover mr-1.5 align-[-4px]" />
+                )}
                 {SCOPES[k].label}
               </a>
             ))}

@@ -2,19 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { COMMUNITY_LIST } from "@/lib/communities";
 
 interface ProfileEditorProps {
   initialName: string;
   initialEmail: string;
   initialBladerName: string;
+  initialCommunity?: string;
 }
 
-export default function ProfileEditor({ initialName, initialEmail, initialBladerName }: ProfileEditorProps) {
+export default function ProfileEditor({ initialName, initialEmail, initialBladerName, initialCommunity = "lbl" }: ProfileEditorProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(initialName);
   const [email, setEmail] = useState(initialEmail);
   const [bladerName, setBladerName] = useState(initialBladerName);
+  const [homeCommunity, setHomeCommunity] = useState(initialCommunity);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -49,7 +52,7 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
       return;
     }
 
-    const body: Record<string, string> = { name: name.trim(), email: email.trim(), bladerName: bladerName.trim() };
+    const body: Record<string, string> = { name: name.trim(), email: email.trim(), bladerName: bladerName.trim(), homeCommunity };
     if (newPassword) {
       body.currentPassword = currentPassword;
       body.newPassword = newPassword;
@@ -117,6 +120,20 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
               placeholder="ex: DranSlayer, VoltKing..."
               className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
             />
+          </div>
+
+          <div>
+            <label htmlFor="homeCommunity" className="block text-sm font-medium text-gray-300 mb-1">Minha comunidade</label>
+            <select
+              id="homeCommunity"
+              value={homeCommunity}
+              onChange={(e) => setHomeCommunity(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none"
+            >
+              {COMMUNITY_LIST.map((c) => (
+                <option key={c.slug} value={c.slug}>{c.name} · {c.fullName}</option>
+              ))}
+            </select>
           </div>
 
           <div>

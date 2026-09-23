@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const userId = session.user.id;
-  const { name, email, currentPassword, newPassword, bladerName } = await req.json();
+  const { name, email, currentPassword, newPassword, bladerName, homeCommunity } = await req.json();
 
   // Fetch current user
   const users = await prisma.$queryRaw<{ id: string; email: string; password: string }[]>`
@@ -52,6 +52,8 @@ export async function PATCH(req: NextRequest) {
     }
     updates.bladerName = (bladerName?.trim() || null) as string;
   }
+
+  if (homeCommunity === "lbl" || homeCommunity === "lbm") updates.homeCommunity = homeCommunity;
 
   if (newPassword !== undefined) {
     if (!currentPassword) {

@@ -38,8 +38,13 @@ export default async function ProfilePage() {
 
   const userId = session.user.id;
 
-  let userRows: { id: string; name: string; email: string; role: string; avatarUrl: string | null; bladerName: string | null; createdAt: Date }[] = [];
+  let userRows: { id: string; name: string; email: string; role: string; avatarUrl: string | null; bladerName: string | null; homeCommunity?: string | null; createdAt: Date }[] = [];
   try {
+    userRows = await prisma.$queryRaw`SELECT id, name, email, role, "createdAt", "avatarUrl", "bladerName", "homeCommunity" FROM "User" WHERE id = ${userId} LIMIT 1`;
+  } catch {
+    userRows = [];
+  }
+  if (!userRows.length) try {
     userRows = await prisma.$queryRaw`SELECT id, name, email, role, "createdAt", "avatarUrl", "bladerName" FROM "User" WHERE id = ${userId} LIMIT 1`;
   } catch {
     try {
@@ -154,7 +159,7 @@ export default async function ProfilePage() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
             <AvatarUpload currentAvatar={user.avatarUrl ?? null} userName={user.name} />
             <div className="flex-1 flex items-start gap-3">
-              <ProfileEditor initialName={user.name} initialEmail={user.email} initialBladerName={user.bladerName ?? ""} />
+              <ProfileEditor initialName={user.name} initialEmail={user.email} initialBladerName={user.bladerName ?? ""} initialCommunity={(user as { homeCommunity?: string | null }).homeCommunity ?? "lbl"} />
               <span className={`mt-1 text-xs px-2 py-1 rounded-full font-semibold shrink-0 ${
                 user.role === "ORGANIZER"
                   ? "bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30"

@@ -38,6 +38,8 @@ export default async function TournamentsPage() {
     format: t.format,
     status: t.status,
     isOfficial: t.isOfficial,
+    communitySlug: t.communitySlug,
+    isPartnership: t.isPartnership,
     prize: t.prize,
     startDate: t.startDate ? t.startDate.toISOString() : null,
     maxParticipants: t.maxParticipants,

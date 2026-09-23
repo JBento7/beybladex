@@ -114,6 +114,8 @@ model User {
   canJudge      Boolean  @default(false)
   // Admin scope: null = every community (original LBL organizers); "lbm" = only LBM.
   adminCommunity String?
+  // Community the player belongs to (badge/filter only — rankings follow the tournament).
+  homeCommunity  String? @default("lbl")
   featuredBey1  String?
   featuredBey2  String?
   featuredBey3  String?

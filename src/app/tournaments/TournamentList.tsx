@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import ShareButton from "@/components/ShareButton";
+import { COMMUNITY_LIST, communityOf } from "@/lib/communities";
 
 type Tournament = {
   id: string;
@@ -11,6 +12,8 @@ type Tournament = {
   format: string;
   status: string;
   isOfficial: boolean;
+  communitySlug: string;
+  isPartnership: boolean;
   prize: string | null;
   startDate: string | null;
   maxParticipants: number | null;
@@ -55,17 +58,22 @@ const SECTIONS: { key: Bucket; label: string; icon: string }[] = [
 export default function TournamentList({ tournaments }: { tournaments: Tournament[] }) {
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"all" | Bucket>("all");
+  // Community filter: a league's own events plus the partnerships it takes part in.
+  const [community, setCommunity] = useState<"all" | string>("all");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return tournaments;
-    return tournaments.filter(
+    const inCommunity = tournaments.filter(
+      (t) => community === "all" || t.communitySlug === community || t.isPartnership
+    );
+    if (!q) return inCommunity;
+    return inCommunity.filter(
       (t) =>
         t.name.toLowerCase().includes(q) ||
         (t.location ?? "").toLowerCase().includes(q) ||
         t.organizer.name.toLowerCase().includes(q)
     );
-  }, [tournaments, query]);
+  }, [tournaments, query, community]);
 
   const counts = useMemo(() => {
     const c: Record<Bucket, number> = { registration: 0, in_progress: 0, upcoming: 0, finished: 0 };
@@ -96,6 +104,18 @@ export default function TournamentList({ tournaments }: { tournaments: Tournamen
             Limpar
           </button>
         )}
+      </div>
+
+      {/* Community */}
+      <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+        <TabBtn active={community === "all"} onClick={() => setCommunity("all")}>Todas as ligas</TabBtn>
+        {COMMUNITY_LIST.map((c) => (
+          <TabBtn key={c.slug} active={community === c.slug} onClick={() => setCommunity(c.slug)}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={c.logo} alt="" className="inline-block w-5 h-5 rounded-full object-cover mr-1.5 align-[-4px]" />
+            {c.name}
+          </TabBtn>
+        ))}
       </div>
 
       {/* Tabs */}
@@ -163,6 +183,7 @@ function Grid({ list }: { list: Tournament[] }) {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${status.style}`}>{status.label}</span>
                   {!t.isOfficial && <span className="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-1 rounded-full font-semibold">🎮 BeyEncontro</span>}
+                  <CommunityBadge slug={t.communitySlug} partnership={t.isPartnership} />
                 </div>
                 <span className="text-xs text-gray-500 font-medium bg-[#252525] px-2.5 py-1 rounded-full">{FORMAT_LABELS[t.format]}</span>
               </div>
@@ -207,5 +228,27 @@ function Grid({ list }: { list: Tournament[] }) {
         );
       })}
     </div>
+  );
+}
+
+// Which league hosts the event — or a partnership between the leagues.
+function CommunityBadge({ slug, partnership }: { slug: string; partnership: boolean }) {
+  if (partnership) {
+    return (
+      <span className="text-xs font-semibold px-2.5 py-1 rounded-full border border-white/20 bg-white/5 text-gray-200">
+        🤝 LBL + LBM
+      </span>
+    );
+  }
+  const c = communityOf(slug);
+  return (
+    <span
+      className="text-xs font-semibold pl-1 pr-2.5 py-0.5 rounded-full border inline-flex items-center gap-1.5"
+      style={{ color: c.color, borderColor: `${c.color}55`, background: `${c.color}1a` }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={c.logo} alt="" className="w-5 h-5 rounded-full object-cover" />
+      {c.name}
+    </span>
   );
 }

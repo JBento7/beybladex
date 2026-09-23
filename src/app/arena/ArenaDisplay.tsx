@@ -6,6 +6,7 @@ import { fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, t
 import FontLoader from "@/components/FontLoader";
 import { startAnswerer } from "@/lib/arenaLink";
 import { arenaChannel } from "@/lib/arenaIdentity";
+import { communityOf } from "@/lib/communities";
 
 // Fields disabled in the layout editor are hidden from the placar via this ctx.
 const HiddenCtx = createContext<Set<string>>(new Set());
@@ -722,7 +723,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
           style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 79, background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", cursor: "pointer" }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/lbl-logo.png" alt="LBL" style={{ height: "12vh", width: "auto", opacity: 0.35, marginBottom: "3vh" }} />
+          <img src={communityOf(community).logo} alt={communityOf(community).name} style={{ height: "12vh", width: "auto", opacity: 0.35, marginBottom: "3vh" }} />
           <div style={{ fontSize: "3vw", fontWeight: 900, color: "#374151", letterSpacing: "0.08em" }}>ARENA {arena} · EM ESPERA</div>
           <div style={{ color: "#4b5563", fontSize: "1.6vw", marginTop: "2vh" }}>Toque para reativar</div>
         </div>
@@ -799,11 +800,11 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
           bg={winnerBg}
         />
       ) : data?.queue && data.queue.length > 0 && (!match || matchOver) ? (
-        <NextMatches arena={arena} queue={data.queue} build={ARENA_BUILD} />
+        <NextMatches arena={arena} queue={data.queue} build={ARENA_BUILD} logo={communityOf(community).logo} />
       ) : !match || matchOver ? (
         <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/lbl-logo.png" alt="LBL" style={{ height: "16vh", width: "auto", opacity: 0.9, marginBottom: "2vh" }} />
+          <img src={communityOf(community).logo} alt={communityOf(community).name} style={{ height: "16vh", width: "auto", opacity: 0.9, marginBottom: "2vh" }} />
           <div style={{ fontSize: "4vw", fontWeight: 900, color: BLUE }}>ARENA {arena}</div>
           <div style={{ color: "#6b7280", fontSize: "2vw", marginTop: "1vh" }}>Aguardando partida...</div>
           <div style={{ color: "#374151", fontSize: 10, marginTop: 6 }}>[{ARENA_BUILD}]</div>
@@ -823,7 +824,8 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
 }
 
 // Shown on the arena between matches: the queue of upcoming matches for this arena.
-function NextMatches({ arena, queue, build }: {
+function NextMatches({ arena, queue, build, logo = "/lbl-logo.png" }: {
+  logo?: string;
   arena: number;
   queue: { round: number; player1: string; player2: string; p1Avatar: string | null; p2Avatar: string | null }[];
   build: string;
@@ -834,7 +836,7 @@ function NextMatches({ arena, queue, build }: {
     <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at top, #17110d 0%, #070605 100%)", display: "flex", flexDirection: "column", alignItems: "center", padding: "3vh 4vw", boxSizing: "border-box", overflow: "hidden" }}>
       <div style={{ position: "absolute", bottom: "0.5vh", right: "1vw", color: "#3a2a1a", fontSize: "0.9vw" }}>[{build}]</div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/lbl-logo.png" alt="LBL" style={{ height: "11vh", width: "auto", marginBottom: "1vh" }} />
+      <img src={logo} alt="" style={{ height: "11vh", width: "auto", marginBottom: "1vh" }} />
       <div style={{ fontSize: "3.4vh", fontWeight: 900, color: GOLD, letterSpacing: "0.1em" }}>ARENA {arena} · PRÓXIMAS PARTIDAS</div>
 
       <div style={{ marginTop: "2.5vh", width: "100%", maxWidth: "70vw", flex: 1, display: "flex", flexDirection: "column", gap: "1.2vh", overflow: "hidden" }}>

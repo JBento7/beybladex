@@ -1,10 +1,6 @@
 "use client";
 
-// Communities using the app. Kept in sync with the rows seeded by /api/migrate.
-export const COMMUNITIES = [
-  { slug: "lbl", name: "LBL", city: "Londrina" },
-  { slug: "lbm", name: "LBM", city: "Maringá" },
-] as const;
+import { COMMUNITY_LIST as COMMUNITIES } from "@/lib/communities";
 
 // Which community hosts the event and whether it is a partnership. A partnership
 // counts ONLY in the shared LBL+LBM ranking; otherwise the event counts in the
@@ -33,7 +29,11 @@ export default function CommunityPicker({
               community === c.slug ? "border-[#f0a500] bg-[#f0a500]/10" : "border-[#333] bg-[#252525] hover:border-gray-600"
             }`}
           >
-            <div className={`font-black text-sm ${community === c.slug ? "text-[#f0a500]" : "text-white"}`}>{c.name}</div>
+            <div className="flex items-center gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={c.logo} alt="" className="w-7 h-7 rounded-full object-cover" />
+              <span className="font-black text-sm" style={{ color: community === c.slug ? c.color : "#fff" }}>{c.name}</span>
+            </div>
             <div className="text-xs text-gray-400">{c.city} · organiza o evento</div>
           </button>
         ))}
