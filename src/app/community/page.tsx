@@ -9,10 +9,13 @@ import { TierBadge } from "@/components/TierBadge";
 
 export const metadata: Metadata = { title: "Comunidade" };
 import Link from "next/link";
+import { COMMUNITY_LIST, communityOf } from "@/lib/communities";
 
-export default async function CommunityPage() {
+// Tabs: everyone ("geral") or only the members of one league.
+export default async function CommunityPage({ searchParams }: { searchParams: { c?: string } }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
+  const tab = COMMUNITY_LIST.some((c) => c.slug === searchParams.c) ? (searchParams.c as string) : "geral";
 
   // Beyblades are hidden once an official tournament is in progress, or
   // once registration is open and the tournament starts within 7 days.
@@ -32,13 +35,24 @@ export default async function CommunityPage() {
 
   const players = await prisma.user.findMany({
     // Arena display accounts (arenaN@lbl.arena) are only scoreboards — hide them.
-    where: { deleted: false, isGuest: false, email: { not: { endsWith: ".arena" } } },
+    where: {
+      deleted: false,
+      isGuest: false,
+      email: { not: { endsWith: ".arena" } },
+      // Players who never picked a league are LBL (the original community).
+      ...(tab === "lbl"
+        ? { OR: [{ homeCommunity: "lbl" }, { homeCommunity: null }] }
+        : tab !== "geral"
+          ? { homeCommunity: tab }
+          : {}),
+    },
     select: {
       id: true,
       name: true,
       bladerName: true,
       role: true,
       avatarUrl: true,
+      homeCommunity: true,
       beyblades: {
         where: { hiddenFromCommunity: false },
         select: { id: true, name: true, wins: true, losses: true },
@@ -96,9 +110,31 @@ export default async function CommunityPage() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-black text-white">
-            Comunidade <span className="text-[#f0a500]">LBL</span>
+            Comunidade{" "}
+            <span style={{ color: tab === "geral" ? "#f0a500" : communityOf(tab).color }}>
+              {tab === "geral" ? "LBL + LBM" : communityOf(tab).name}
+            </span>
           </h1>
           <p className="text-gray-400 mt-1">Conheça os jogadores e suas Beyblades.</p>
+          <div className="flex flex-wrap gap-2 mt-4">
+            {[{ slug: "geral", name: "Geral", logo: null as string | null, color: "#f0a500" }, ...COMMUNITY_LIST].map((c) => {
+              const active = tab === c.slug;
+              return (
+                <Link
+                  key={c.slug}
+                  href={c.slug === "geral" ? "/community" : `/community?c=${c.slug}`}
+                  className="text-sm font-bold px-4 py-2 rounded-lg border transition-colors inline-flex items-center gap-1.5"
+                  style={active ? { background: c.color, borderColor: c.color, color: "#000" } : { borderColor: "#333", color: "#d1d5db" }}
+                >
+                  {c.logo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.logo} alt="" className="w-5 h-5 rounded-full object-cover" />
+                  )}
+                  {c.name}
+                </Link>
+              );
+            })}
+          </div>
         </div>
 
         {beybladesHidden && (
@@ -134,6 +170,13 @@ export default async function CommunityPage() {
                         {player.bladerName || player.name}
                       </span>
                       <TierBadge wins={player.officialWins} />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={communityOf(player.homeCommunity).logo}
+                        alt={communityOf(player.homeCommunity).name}
+                        title={communityOf(player.homeCommunity).fullName}
+                        className="w-5 h-5 rounded-full object-cover flex-shrink-0"
+                      />
                       {player.role === "ORGANIZER" && (
                         <span className="text-xs bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30 px-1.5 py-0.5 rounded font-semibold flex-shrink-0">
                           ADMIN
