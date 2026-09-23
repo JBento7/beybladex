@@ -80,5 +80,10 @@ export async function PATCH(req: NextRequest) {
   // The session carries the player's community (drives the app's branding).
   invalidatePermissions(userId);
 
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true });
+  // Branding reads this cookie on every page (see CommunityTheme).
+  if (updates.homeCommunity) {
+    res.cookies.set("community", String(updates.homeCommunity), { path: "/", maxAge: 31536000, sameSite: "lax" });
+  }
+  return res;
 }

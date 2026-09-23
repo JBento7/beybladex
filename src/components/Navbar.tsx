@@ -5,11 +5,12 @@ import { useSession, signOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { communityOf } from "@/lib/communities";
+import { useHomeCommunity, clearCommunityCookie } from "@/components/CommunityTheme";
 
 export default function Navbar() {
   const { data: session } = useSession();
   // The app is branded with the player's own league (logo + accent color).
-  const home = communityOf(session?.user?.homeCommunity);
+  const home = communityOf(useHomeCommunity());
   const isLbm = home.slug === "lbm";
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -105,7 +106,7 @@ export default function Navbar() {
                   </span>
                 </Link>
                 <button
-                  onClick={() => signOut({ callbackUrl: "/" })}
+                  onClick={() => { clearCommunityCookie(); signOut({ callbackUrl: "/" }); }}
                   className="text-base bg-gray-700 hover:bg-gray-600 px-5 py-2 rounded-lg text-gray-200 transition-colors"
                 >
                   Sair
@@ -164,7 +165,7 @@ export default function Navbar() {
                   </>
                 )}
                 <button
-                  onClick={() => { signOut({ callbackUrl: "/" }); setMenuOpen(false); }}
+                  onClick={() => { clearCommunityCookie(); signOut({ callbackUrl: "/" }); setMenuOpen(false); }}
                   className="block w-full text-left px-3 py-2 text-red-400 hover:text-red-300"
                 >
                   Sair

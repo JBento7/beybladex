@@ -3,6 +3,8 @@ import "./globals.css";
 import { Providers } from "./providers";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import CommunityTheme from "@/components/CommunityTheme";
+import { COMMUNITY_COOKIE } from "@/lib/communities";
+import { cookies } from "next/headers";
 
 export const metadata: Metadata = {
   title: {
@@ -39,8 +41,7 @@ export default function RootLayout({
       <body className="bg-[#0d0d0d] text-gray-100 min-h-screen">
         <ServiceWorkerRegister />
         <Providers>
-          <CommunityTheme />
-          {children}
+          <CommunityTheme initial={cookies().get(COMMUNITY_COOKIE)?.value ?? null}>{children}</CommunityTheme>
         </Providers>
       </body>
     </html>
