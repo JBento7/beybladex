@@ -805,7 +805,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
         <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={communityOf(community).logo} alt={communityOf(community).name} style={{ height: "16vh", width: "auto", opacity: 0.9, marginBottom: "2vh" }} />
-          <div style={{ fontSize: "4vw", fontWeight: 900, color: BLUE }}>ARENA {arena}</div>
+          <div style={{ fontSize: "4vw", fontWeight: 900, color: community === "lbl" ? BLUE : communityOf(community).color }}>ARENA {arena}</div>
           <div style={{ color: "#6b7280", fontSize: "2vw", marginTop: "1vh" }}>Aguardando partida...</div>
           <div style={{ color: "#374151", fontSize: 10, marginTop: 6 }}>[{ARENA_BUILD}]</div>
           {data?.debug && (
