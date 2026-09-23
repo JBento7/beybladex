@@ -27,6 +27,24 @@ const ARENA_BUILD = "v50-queue";
 // Accent used on the start gate / waiting screen.
 const BLUE = "#00aaff";
 
+// Start an overlay clip with sound, falling back to muted if the browser blocks
+// autoplay-with-sound.
+//
+// The fallback has to tell two failures apart. A play() that is INTERRUPTED —
+// by the pause() in an effect cleanup, or by another play() — rejects with
+// AbortError. Treating that as "blocked" and retrying is how a clip ended up
+// playing a second time on its own, after we had already stopped it. Only an
+// actual autoplay rejection should be retried, and never once the effect that
+// started it has been torn down.
+function playOverlay(v: HTMLVideoElement, isCancelled: () => boolean) {
+  try { v.currentTime = 0; } catch { /* ignore */ }
+  v.muted = false;
+  v.play().catch((err: { name?: string } | undefined) => {
+    if (isCancelled() || err?.name === "AbortError") return;
+    try { v.muted = true; v.play().catch(() => {}); } catch { /* ignore */ }
+  });
+}
+
 type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
 
 // Custom scoreboard field added in the layout editor (text or integer).
@@ -150,9 +168,13 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       }, ms)
     );
   };
+  // Belt and braces: never restart a clip that is still on screen. The time
+  // window alone isn't enough if a clip runs longer than it.
+  const finishOnRef = useRef(false);
   const playFinish = (t: string) => {
-    if (Date.now() - lastFinishRef.current < 6000) return;
+    if (finishOnRef.current || Date.now() - lastFinishRef.current < 6000) return;
     lastFinishRef.current = Date.now();
+    finishOnRef.current = true;
     setFinishVideo(t);
     burstRefresh();
   };
@@ -394,17 +416,13 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     if (!countdownOn) return;
     const v = cdVideoRef.current;
     if (!v) return;
-    try { v.currentTime = 0; } catch { /* ignore */ }
-    v.muted = false;
-    // Try with sound; if the browser blocks it, retry muted so at least the
-    // visual plays.
-    v.play().catch(() => {
-      try { v.muted = true; v.play().catch(() => {}); } catch { /* ignore */ }
-    });
+    let cancelled = false;
+    playOverlay(v, () => cancelled);
     const done = () => setCountdownOn(false);
     v.addEventListener("ended", done);
     const safety = setTimeout(done, 12000);
     return () => {
+      cancelled = true;
       v.removeEventListener("ended", done);
       clearTimeout(safety);
       try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
@@ -419,15 +437,13 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     const v = readyVideoRef.current;
     if (!v) { setReadyOn(false); return; }
     if (v.error) { setReadyOn(false); return; }
-    try { v.currentTime = 0; } catch { /* ignore */ }
-    v.muted = false;
-    v.play().catch(() => {
-      try { v.muted = true; v.play().catch(() => setReadyOn(false)); } catch { setReadyOn(false); }
-    });
+    let cancelled = false;
+    playOverlay(v, () => cancelled);
     // Hold the final frame: pausing at the end keeps it painted on screen.
     const hold = () => { try { v.pause(); } catch { /* ignore */ } };
     v.addEventListener("ended", hold);
     return () => {
+      cancelled = true;
       v.removeEventListener("ended", hold);
       try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
     };
@@ -440,16 +456,14 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     if (!v) { setLaunchOn(false); return; }
     // If the file is missing/unplayable, don't black out the telão.
     if (v.error) { setLaunchOn(false); return; }
-    try { v.currentTime = 0; } catch { /* ignore */ }
-    v.muted = false;
-    v.play().catch(() => {
-      try { v.muted = true; v.play().catch(() => setLaunchOn(false)); } catch { setLaunchOn(false); }
-    });
+    let cancelled = false;
+    playOverlay(v, () => cancelled);
     const done = () => setLaunchOn(false);
     v.addEventListener("ended", done);
     // Safety: never stay stuck if the video can't start.
     const safety = setTimeout(() => { if (v.paused || v.readyState < 2) setLaunchOn(false); }, 2500);
     return () => {
+      cancelled = true;
       v.removeEventListener("ended", done);
       clearTimeout(safety);
       try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
@@ -461,13 +475,13 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
     if (!finishVideo) return;
     const v = finishRefs.current[finishVideo];
     if (!v) return;
-    try { v.currentTime = 0; } catch { /* ignore */ }
-    v.muted = false;
-    v.play().catch(() => { try { v.muted = true; v.play().catch(() => {}); } catch { /* ignore */ } });
-    const done = () => setFinishVideo(null);
+    let cancelled = false;
+    playOverlay(v, () => cancelled);
+    const done = () => { finishOnRef.current = false; setFinishVideo(null); };
     v.addEventListener("ended", done);
     const safety = setTimeout(done, 8000);
     return () => {
+      cancelled = true;
       v.removeEventListener("ended", done);
       clearTimeout(safety);
       try { v.pause(); v.currentTime = 0; } catch { /* ignore */ }
