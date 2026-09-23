@@ -36,6 +36,15 @@ const BLUE = "#00aaff";
 // playing a second time on its own, after we had already stopped it. Only an
 // actual autoplay rejection should be retried, and never once the effect that
 // started it has been torn down.
+// Identity of a match that does NOT depend on which side each player is shown
+// on. The telão mirrors the sides every set, so an order-dependent key flips
+// when the set number advances — which made an end-of-match notice look like it
+// belonged to a different match.
+function matchKeyOf(m: { p1Id?: string; p2Id?: string; player1: string; player2: string } | null | undefined) {
+  if (!m) return null;
+  return [m.p1Id ?? m.player1, m.p2Id ?? m.player2].sort().join("|");
+}
+
 function playOverlay(v: HTMLVideoElement, isCancelled: () => boolean) {
   try { v.currentTime = 0; } catch { /* ignore */ }
   v.muted = false;
@@ -305,7 +314,7 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
       if (d.match) lastMatchTsRef.current = Date.now();
       liveRef.current = d.status === "live" && !!d.match;
       statusRef.current = d.status;
-      matchKeyRef.current = d.match ? `${d.match.player1}|${d.match.player2}` : null;
+      matchKeyRef.current = matchKeyOf(d.match);
       // Track how long this arena has had nothing to show.
       if (d.match) idleSinceRef.current = 0;
       else {
@@ -329,15 +338,15 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
   // that match as still "live" just means it hasn't finished writing the result
   // yet — that must NOT drop the winner screen, which is what made it flash back
   // to the scoreboard. A genuinely different match on screen does supersede it.
-  const currentMatchKey = data?.match ? `${data.match.player1}|${data.match.player2}` : null;
+  const currentMatchKey = matchKeyOf(data?.match);
   const p2pWinnerFresh =
     !!p2pWinner &&
     Date.now() - p2pWinner.at < 20000 &&
     (p2pWinner.matchKey === null || p2pWinner.matchKey === currentMatchKey);
   const finishedKey =
-    (data?.status === "finished" || p2pWinnerFresh) && data?.match
-      ? `${data.match.player1}|${data.match.player2}`
-      : null;
+    (data?.status === "finished" || p2pWinnerFresh) && data?.match ? matchKeyOf(data.match) : null;
+  // This arena's current match is over (server said so, or the judge told us).
+  const matchOver = !!data?.match && (data.status === "finished" || p2pWinnerFresh);
   // The 5s only start once the winner is actually VISIBLE — while the finish
   // video is still covering it, the clock hasn't started.
   useEffect(() => {
@@ -772,7 +781,10 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
         </button>
       )}
 
-      {match && (data?.status === "finished" || p2pWinnerFresh) && !winnerDone ? (
+      {/* Once a match is over the scoreboard must never come back for it: after
+          the winner screen it's the upcoming matches, or the waiting screen when
+          this arena has nothing queued. */}
+      {match && matchOver && !winnerDone ? (
         <WinnerScreen
           match={match}
           winnerSide={
@@ -785,9 +797,9 @@ export default function ArenaDisplay({ arena, previewParam }: { arena: number | 
           layout={winnerLayout}
           bg={winnerBg}
         />
-      ) : data?.queue && data.queue.length > 0 && (!match || data.status === "finished") ? (
+      ) : data?.queue && data.queue.length > 0 && (!match || matchOver) ? (
         <NextMatches arena={arena} queue={data.queue} build={ARENA_BUILD} />
-      ) : !match ? (
+      ) : !match || matchOver ? (
         <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/lbl-logo.png" alt="LBL" style={{ height: "16vh", width: "auto", opacity: 0.9, marginBottom: "2vh" }} />
