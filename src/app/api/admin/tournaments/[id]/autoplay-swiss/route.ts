@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
-import { generateSwissRound, advanceSwissTournament, swissRoundCount, recalculateStandings } from "@/lib/tournament-engine";
+import { generateSwissRound, advanceSwissTournament, getSwissRounds, recalculateStandings } from "@/lib/tournament-engine";
 
 // Admin/test-only: simulate the whole Swiss phase of a TEST tournament (random
 // winners), advancing to the knockout. Only pending matches are finished, so it
@@ -38,7 +38,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       if (round1 === 0) await generateSwissRound(tournament.id, 1);
     }
 
-    const swissRounds = swissRoundCount(participantIds.length);
+    const swissRounds = await getSwissRounds(params.id, participantIds.length);
     for (let round = 1; round <= swissRounds; round++) {
       const matches = await prisma.match.findMany({ where: { tournamentId: tournament.id, round } });
       if (matches.length === 0) break; // nothing generated for this round yet

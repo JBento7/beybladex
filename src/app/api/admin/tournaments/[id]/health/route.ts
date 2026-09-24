@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
-import { recalculateStandings, swissRoundCount } from "@/lib/tournament-engine";
+import { recalculateStandings, getSwissRounds } from "@/lib/tournament-engine";
 
 // ORGANIZER-only health check for a tournament. Detects the damage the fixed
 // bugs could have left behind in existing data, and repairs what can be repaired
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }),
     ]);
 
-    const swissRounds = swissRoundCount(participants.length);
+    const swissRounds = await getSwissRounds(params.id, participants.length);
     const issues: { code: string; severity: string; count: number; detail: string; action: string }[] = [];
     const repaired: string[] = [];
 
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const counts = [...played.values()];
     const target = counts.length ? Math.max(...counts) : 0;
     const behind = counts.filter((c) => c < target).length;
-    if (behind) {
+    if (behind && tournament.format === "ROUND_ROBIN") {
       issues.push({
         code: "unequal_matches",
         severity: "high",

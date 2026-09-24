@@ -35,6 +35,15 @@ export default function CommunityTheme({ initial, children }: { initial: string 
     if (!initial && fromSession) writeCommunityCookie(fromSession);
   }, [initial, fromSession]);
 
+  // Keep the browser-tab icon in step with the community (the server sets it
+  // from the cookie; this covers a session-seeded first visit).
+  useEffect(() => {
+    const href = slug === "lbm" ? "/lbm-logo.webp" : "/lbl-logo.png";
+    document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"]').forEach((l) => {
+      if (l.getAttribute("href")?.split("?")[0] !== href) l.href = href;
+    });
+  }, [slug]);
+
   const color = communityOf(slug).color;
   return (
     <CommunityCtx.Provider value={slug}>

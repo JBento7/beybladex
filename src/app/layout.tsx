@@ -6,7 +6,7 @@ import CommunityTheme from "@/components/CommunityTheme";
 import { COMMUNITY_COOKIE } from "@/lib/communities";
 import { cookies } from "next/headers";
 
-export const metadata: Metadata = {
+const baseMetadata: Metadata = {
   title: {
     default: "LBL — Liga Beyblade Londrina",
     template: "%s — LBL",
@@ -26,6 +26,12 @@ export const metadata: Metadata = {
     type: "website",
   },
 };
+
+// The browser-tab icon follows the viewer's community (LBM logo for LBM).
+export function generateMetadata(): Metadata {
+  const lbm = cookies().get(COMMUNITY_COOKIE)?.value === "lbm";
+  return { ...baseMetadata, icons: { icon: lbm ? "/lbm-logo.webp" : "/lbl-logo.png", apple: "/apple-touch-icon.png" } };
+}
 
 export const viewport: Viewport = {
   themeColor: "#0d0d0d",

@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { generateSwissRound, advanceSwissTournament, swissRoundCount, recalculateStandings } from "@/lib/tournament-engine";
+import { generateSwissRound, advanceSwissTournament, getSwissRounds, recalculateStandings } from "@/lib/tournament-engine";
 
 // Admin-only seed for a ready-to-test tournament with test participants that
 // already have registered beys and a selected deck — so the bey selection and
@@ -71,6 +71,8 @@ export async function GET(req: Request) {
         arenas: 1,
         isOfficial: official,
         isTest: true,
+        // A scoped admin's seed lands in their own league.
+        communitySlug: session.user.adminCommunity ?? "lbl",
         setsToWin: multiDay ? 1 : 2,
         pointsToWinSet: 4,
         qualifiers,
@@ -170,7 +172,7 @@ export async function GET(req: Request) {
     if (autoplay) {
       await prisma.tournament.update({ where: { id: tournament.id }, data: { status: "IN_PROGRESS" } });
       await generateSwissRound(tournament.id, 1);
-      const swissRounds = swissRoundCount(participantIds.length);
+      const swissRounds = await getSwissRounds(tournament.id, participantIds.length);
       for (let round = 1; round <= swissRounds; round++) {
         const matches = await prisma.match.findMany({ where: { tournamentId: tournament.id, round } });
         for (const m of matches) {

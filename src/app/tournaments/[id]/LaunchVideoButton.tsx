@@ -3,7 +3,8 @@
 import { useState } from "react";
 
 // Admin-only: play the launch/rules video on a chosen arena's telão.
-export default function LaunchVideoButton({ arenas }: { arenas: number }) {
+// `community` picks WHICH league's arena N — the same number exists in every league.
+export default function LaunchVideoButton({ arenas, community = "lbl" }: { arenas: number; community?: string }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
   const [sent, setSent] = useState<number | null>(null);
@@ -17,7 +18,7 @@ export default function LaunchVideoButton({ arenas }: { arenas: number }) {
       const res = await fetch("/api/admin/arena-launch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ arena }),
+        body: JSON.stringify({ arena, community }),
       });
       if (res.ok) { setSent(arena); setTimeout(() => setSent(null), 2500); }
       else { const d = await res.json().catch(() => ({})); setErr(d.error || "Erro"); }

@@ -58,6 +58,8 @@ export async function POST(req: NextRequest) {
       email,
       password: hash,
       role: role === "ORGANIZER" ? "ORGANIZER" : "PARTICIPANT",
+      // A community-scoped admin can only create admins of their own community.
+      ...(role === "ORGANIZER" && session.user.adminCommunity ? { adminCommunity: session.user.adminCommunity } : {}),
     },
   });
 

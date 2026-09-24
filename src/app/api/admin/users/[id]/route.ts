@@ -11,6 +11,13 @@ async function requireAdmin() {
   return session;
 }
 
+// A community-scoped admin may manage players and admins of their own
+// community, never a general admin or another community's admin.
+function outOfReach(actorScope: string | null | undefined, target: { role: string; adminCommunity: string | null }) {
+  if (!actorScope || target.role !== "ORGANIZER") return false;
+  return target.adminCommunity !== actorScope;
+}
+
 // PATCH /api/admin/users/[id] — edit user
 export async function PATCH(
   req: NextRequest,
@@ -27,8 +34,8 @@ export async function PATCH(
   // A community-scoped admin can't touch a general admin, and anyone they
   // promote is scoped to their own community — never above it.
   const actorScope = session.user.adminCommunity ?? null;
-  if (actorScope && user.role === "ORGANIZER" && !user.adminCommunity) {
-    return NextResponse.json({ error: "Apenas o admin geral pode alterar outro admin geral." }, { status: 403 });
+  if (outOfReach(actorScope, user)) {
+    return NextResponse.json({ error: "Você só pode alterar admins da sua própria comunidade." }, { status: 403 });
   }
 
   const data: Record<string, unknown> = {};
@@ -78,6 +85,9 @@ export async function DELETE(
 
   const user = await prisma.user.findUnique({ where: { id: params.id } });
   if (!user) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+  if (outOfReach(session.user.adminCommunity, user)) {
+    return NextResponse.json({ error: "Você só pode remover admins da sua própria comunidade." }, { status: 403 });
+  }
 
   // Anonymize: mark deleted, scramble name/email, clear password
   await prisma.user.update({

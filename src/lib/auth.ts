@@ -22,11 +22,11 @@ async function livePermissions(userId: string): Promise<{ role: string; canJudge
   }
   try {
     // Raw query (like authorize) so a missing column can't break sign-in.
-    type Row = { role: string; canJudge: boolean | null; adminCommunity: string | null; homeCommunity: string | null };
+    type Row = { role: string; canJudge: boolean | null; adminCommunity: string | null; homeCommunity: string | null; deleted?: boolean | null };
     let rows: Row[];
     try {
       rows = await prisma.$queryRaw<Row[]>`
-        SELECT role, "canJudge", "adminCommunity", "homeCommunity" FROM "User" WHERE id = ${userId} LIMIT 1
+        SELECT role, "canJudge", "adminCommunity", "homeCommunity", deleted FROM "User" WHERE id = ${userId} LIMIT 1
       `;
     } catch {
       // community columns not migrated yet
@@ -36,7 +36,11 @@ async function livePermissions(userId: string): Promise<{ role: string; canJudge
     }
     const u = rows[0];
     if (!u) return hit ? { role: hit.role, canJudge: hit.canJudge, adminCommunity: hit.adminCommunity, homeCommunity: hit.homeCommunity } : null;
-    const perms = { role: u.role, canJudge: !!u.canJudge, adminCommunity: u.adminCommunity ?? null, homeCommunity: u.homeCommunity ?? null };
+    // A deleted account keeps a valid JWT for up to 30 days; strip its powers
+    // on the next request instead of letting it keep admin/judge rights.
+    const perms = u.deleted
+      ? { role: "PARTICIPANT", canJudge: false, adminCommunity: null, homeCommunity: u.homeCommunity ?? null }
+      : { role: u.role, canJudge: !!u.canJudge, adminCommunity: u.adminCommunity ?? null, homeCommunity: u.homeCommunity ?? null };
     permissionCache.set(userId, { ...perms, at: Date.now() });
     return perms;
   } catch {

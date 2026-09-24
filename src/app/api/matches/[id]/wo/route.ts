@@ -48,10 +48,15 @@ export async function POST(
       return NextResponse.json({ error: "Não é possível dar W.O. em uma partida de bye" }, { status: 400 });
     }
 
-    await prisma.match.update({
-      where: { id: params.id },
+    // Conditional write: two concurrent W.O.s (or a W.O. racing the last point)
+    // must not both close the match.
+    const closed = await prisma.match.updateMany({
+      where: { id: params.id, status: { not: "FINISHED" } },
       data: { status: "FINISHED", winnerId, isWalkover: true },
     });
+    if (closed.count === 0) {
+      return NextResponse.json({ error: "Partida já finalizada" }, { status: 409 });
+    }
 
     await Promise.all([
       recalculateStandings(match.tournamentId, match.player1Id),

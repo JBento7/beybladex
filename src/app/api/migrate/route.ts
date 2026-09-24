@@ -710,6 +710,7 @@ export async function GET() {
     { name: "User.adminCommunity", sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "adminCommunity" TEXT` },
     { name: "User.homeCommunity", sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "homeCommunity" TEXT DEFAULT 'lbl'` },
     { name: "Community branding", sql: `UPDATE "Community" SET "logoUrl" = CASE "slug" WHEN 'lbl' THEN '/lbl-logo.png' WHEN 'lbm' THEN '/lbm-logo.webp' END, "color" = CASE "slug" WHEN 'lbl' THEN '#f0a500' WHEN 'lbm' THEN '#6ac146' END WHERE "slug" IN ('lbl','lbm')` },
+    { name: "Tournament.swissRounds", sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "swissRounds" INTEGER` },
     { name: "idx Tournament community", sql: `CREATE INDEX IF NOT EXISTS "Tournament_communitySlug_idx" ON "Tournament" ("communitySlug")` },
     { name: "idx TournamentParticipant user", sql: `CREATE INDEX IF NOT EXISTS "TournamentParticipant_userId_idx" ON "TournamentParticipant" ("userId")` },
   ];

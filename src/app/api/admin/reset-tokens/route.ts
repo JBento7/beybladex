@@ -9,6 +9,11 @@ export async function GET() {
   if (!session || session.user.role !== "ORGANIZER") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
+  // A reset link takes over the account it belongs to — including a general
+  // admin's — so only a general admin may see them.
+  if (session.user.adminCommunity) {
+    return NextResponse.json({ error: "Apenas o admin geral pode ver links de redefinição." }, { status: 403 });
+  }
 
   const tokens = await prisma.passwordResetToken.findMany({
     where: {

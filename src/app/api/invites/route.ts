@@ -11,6 +11,11 @@ export async function POST(_req: NextRequest) {
     if (!session || session.user.role !== "ORGANIZER") {
       return NextResponse.json({ error: "Apenas administradores podem gerar convites" }, { status: 403 });
     }
+    // An invite registers an unscoped (general) admin, so a community-scoped
+    // admin generating one would escalate beyond their own community.
+    if (session.user.adminCommunity) {
+      return NextResponse.json({ error: "Apenas o admin geral pode gerar convites de administrador." }, { status: 403 });
+    }
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);

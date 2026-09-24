@@ -39,11 +39,12 @@ export async function POST(
       prisma.tournamentJudge.deleteMany({ where: { tournamentId: params.id } }),
       prisma.tournamentParticipant.updateMany({
         where: { tournamentId: params.id },
-        data: { totalPoints: 0, wins: 0, losses: 0, rankingPoints: 0, placement: null, groupId: null },
+        data: { totalPoints: 0, wins: 0, losses: 0, rankingPoints: 0, placement: null, groupId: null, finalsSwapUsed: false },
       }),
       prisma.tournament.update({
         where: { id: params.id },
-        data: { status: "REGISTRATION" },
+        // Un-freeze the Swiss round count: the next start re-derives it.
+        data: { status: "REGISTRATION", swissRounds: null },
       }),
     ]);
 

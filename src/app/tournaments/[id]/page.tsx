@@ -820,7 +820,7 @@ export default async function TournamentDetailPage({
                 <FinishTournamentButton tournamentId={tournament.id} isOfficial={tournament.isOfficial} />
               )}
               {isAdminUser && (
-                <LaunchVideoButton arenas={tournament.arenas ?? 1} />
+                <LaunchVideoButton arenas={tournament.arenas ?? 1} community={tournament.communitySlug} />
               )}
               {isAdminUser && tournament.isTest && tournament.format === "ROUND_ROBIN" && tournament.status !== "FINISHED" && (
                 <AutoplaySwissButton tournamentId={tournament.id} />
@@ -1277,6 +1277,10 @@ export default async function TournamentDetailPage({
     </div>
   );
   } catch (e) {
+    // notFound()/redirect() and dynamic-rendering bailouts work by throwing;
+    // swallowing them turned a missing tournament into "Erro ao carregar".
+    const digest = (e as { digest?: unknown } | null)?.digest;
+    if (typeof digest === "string" && (digest.startsWith("NEXT_") || digest === "DYNAMIC_SERVER_USAGE")) throw e;
     console.error("[tournament detail]", e);
     return (
       <div className="min-h-screen bg-[#0d0d0d]">

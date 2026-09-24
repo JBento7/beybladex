@@ -298,10 +298,16 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
     fetch("/api/arena-layout?key=scoreboard::custom").then((r) => (r.ok ? r.json() : null)).then((d) => { if (Array.isArray(d?.layout)) setCustomFields(d.layout as CustomFld[]); }).catch(() => {});
   }, []);
 
+  const loadSeqRef = useRef(0);
+  const lastP2pFinishRef = useRef<{ type: string; at: number } | null>(null);
   const load = useCallback(async () => {
+    // Ignore responses that arrive after a newer request was issued, so a slow
+    // stale reply can't overwrite fresher data.
+    const seq = ++loadSeqRef.current;
     try {
       const url = previewParam ? `/api/arena?${previewParam}` : "/api/arena";
       const res = await fetch(url);
+      if (seq !== loadSeqRef.current) return;
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         setError(j.error || "Erro");
@@ -309,6 +315,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
       }
       setError(null);
       const d: ArenaData = await res.json();
+      if (seq !== loadSeqRef.current) return;
       // Sticky: ignore a transient "no match" right after we had one (e.g. the
       // on-air heartbeat lagging during scoring) so the telão doesn't flicker to
       // the waiting screen. A real gap (a few seconds) still falls through.
@@ -408,11 +415,15 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
           }
           if (active && d.finish && d.finish.key !== playedFinishKeyRef.current && d.finish.elapsedMs < 5000) {
             playedFinishKeyRef.current = d.finish.key;
-            playFinish(d.finish.type);
+            // Already played from the P2P link moments ago — don't replay it.
+            const pf = lastP2pFinishRef.current;
+            if (!(pf && pf.type === d.finish.type && Date.now() - pf.at < 15000)) playFinish(d.finish.type);
           }
           if (active && d.ready && d.ready.key !== playedReadyKeyRef.current && d.ready.elapsedMs < 20000) {
             playedReadyKeyRef.current = d.ready.key;
-            playReady();
+            // A PRONTOS signal older than the last countdown is stale: the
+            // countdown already superseded it.
+            if (Date.now() - d.ready.elapsedMs > lastCdRef.current) playReady();
           }
           if (active && d.launch && d.launch.key !== playedLaunchKeyRef.current && d.launch.elapsedMs < 20000) {
             playedLaunchKeyRef.current = d.launch.key;
@@ -435,10 +446,12 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
   // triggers + live score arrive instantly and keep working if the internet
   // drops. Best-effort; the server poll remains the fallback.
   useEffect(() => {
-    if (arena == null || !started) return;
+    if (arena == null || !started || previewParam) return;
     const link = startAnswerer(arenaChannel(community, arena), {
       onMessage: (m: { type?: string; finishType?: string; winnerId?: string; byId?: Record<string, number>; setsById?: Record<string, number>; at?: number }) => {
         p2pFreshRef.current = Date.now();
+        if (asleepRef.current && m?.type !== "state") wake();
+        if (m?.type === "finish" && m.finishType) lastP2pFinishRef.current = { type: m.finishType, at: Date.now() };
         if (m?.type === "matchEnd" && m.winnerId) { setP2pWinner({ winnerId: m.winnerId, at: Date.now(), matchKey: matchKeyRef.current }); burstRefresh(); }
         else if (m?.type === "ready") playReady();
         else if (m?.type === "countdown") playCountdown();
@@ -449,7 +462,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
     });
     return () => link.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arena, started, community]);
+  }, [arena, started, community, previewParam]);
 
   // Play the countdown video (with its own audio) when triggered.
   useEffect(() => {

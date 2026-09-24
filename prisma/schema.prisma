@@ -180,6 +180,9 @@ model Tournament {
   communitySlug   String  @default("lbl")
   // Partnership event between communities: counts ONLY in the shared ranking.
   isPartnership   Boolean @default(false)
+  // Suíço: number of Swiss rounds, frozen when first needed so approving or
+  // removing a player mid-event can't move the Swiss/knockout boundary.
+  swissRounds     Int?
   setsToWin       Int     @default(2)
   pointsToWinSet  Int     @default(4)
   qualifiers      Int?    // Suíço: how many top players advance to the knockout (16/8/4)

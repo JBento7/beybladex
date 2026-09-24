@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
-import { recalculateStandings, finalizeTournamentRanking, swissRoundCount } from "@/lib/tournament-engine";
+import { recalculateStandings, finalizeTournamentRanking, getSwissRounds } from "@/lib/tournament-engine";
 
 // ORGANIZER-only: recompute the FINAL ranking (placement + rankingPoints) of a
 // tournament, even one already marked FINISHED. Use it to repair events that
@@ -65,7 +65,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     });
 
     // Knockout detection, mirroring the engine's boundary.
-    const swissRounds = swissRoundCount(participants.length);
+    const swissRounds = await getSwissRounds(params.id, participants.length);
     const knockoutMatches = await prisma.match.count({
       where: { tournamentId: params.id, round: { gt: swissRounds } },
     });

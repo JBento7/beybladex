@@ -366,12 +366,17 @@ export default function ScoreModal({
     if (loading) return;
     setErr(null);
     setLoading(true);
-    const res = await fetch(`/api/matches/${matchId}/undo-point`, { method: "DELETE" });
-    setLoading(false);
-    if (res.ok) await fetchState();
-    else {
-      const data = await res.json();
-      setErr(data.error || "Erro ao desfazer ponto");
+    try {
+      const res = await fetch(`/api/matches/${matchId}/undo-point`, { method: "DELETE" });
+      if (res.ok) await fetchState();
+      else {
+        const data = await res.json().catch(() => ({}));
+        setErr(data.error || "Erro ao desfazer ponto");
+      }
+    } catch {
+      setErr("Sem conexão — tente novamente");
+    } finally {
+      setLoading(false);
     }
   }
 

@@ -7,7 +7,7 @@
 // Bump this whenever a cached asset is REPLACED under the same filename
 // (media is served cache-first, so an old copy would otherwise stick around).
 // v4: new countdown.mp4 (let it rip 2.5) + prontos.mp4.
-const CACHE = "lbl-cache-v4";
+const CACHE = "lbl-cache-v5";
 
 // Only light, always-needed assets are precached on install (this SW is
 // registered app-wide, so precaching must stay cheap for every visitor). The

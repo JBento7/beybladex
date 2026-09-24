@@ -46,6 +46,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         // A test event: never official, never counted in the global ranking.
         isTest: true,
         isOfficial: false,
+        // Same league and ranking scope, so the rehearsal runs on the right
+        // telões and its community-scoped admins can manage it.
+        communitySlug: src.communitySlug,
+        isPartnership: src.isPartnership,
         status: "REGISTRATION",
         organizerId: session.user.id,
         maxParticipants: src.maxParticipants,

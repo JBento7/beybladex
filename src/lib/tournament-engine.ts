@@ -192,7 +192,7 @@ export async function finalizeTournamentRanking(tournamentId: string) {
   // the 2nd on as a playoff round — so a Suíço was ranked by "the last round in
   // which the player lost" instead of by wins, and the top-5 ranking points went
   // to the wrong players. Use the same boundary the rest of the engine uses.
-  const swissRounds = swissRoundCount(participants.length);
+  const swissRounds = await getSwissRounds(tournamentId, participants.length);
   const playoffMatches = allMatchRows.filter((m) => m.round > swissRounds && m.player1Id !== m.player2Id);
   const isSwissPlayoff = tournament?.format === "ROUND_ROBIN" && playoffMatches.length > 0;
 
@@ -371,6 +371,30 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
 }
 
 // Number of Swiss rounds for a field (standard: ceil(log2(N))).
+// The Swiss round count for a tournament, frozen on first use. It used to be
+// recomputed from the live approved count everywhere, so approving a late payer
+// or removing a player mid-event (e.g. 16 -> 17 players) moved the boundary
+// between Swiss and knockout: knockout rounds were reclassified as Swiss, a
+// second bracket could be generated, and the final ranking read the wrong
+// rounds. Existing tournaments get frozen at their current count the first time
+// this runs; new ones when round 1 is generated.
+export async function getSwissRounds(tournamentId: string, liveCount?: number): Promise<number> {
+  try {
+    const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { swissRounds: true } });
+    if (t?.swissRounds) return t.swissRounds;
+  } catch {
+    // column not migrated yet — fall back to the live count
+    const n = liveCount ?? (await prisma.tournamentParticipant.count({ where: { tournamentId, approved: { not: false } } }));
+    return swissRoundCount(n);
+  }
+  const n = liveCount ?? (await prisma.tournamentParticipant.count({ where: { tournamentId, approved: { not: false } } }));
+  const rounds = swissRoundCount(n);
+  try {
+    await prisma.tournament.updateMany({ where: { id: tournamentId, swissRounds: null }, data: { swissRounds: rounds } });
+  } catch { /* ignore */ }
+  return rounds;
+}
+
 export function swissRoundCount(participantCount: number): number {
   return Math.max(1, Math.ceil(Math.log2(Math.max(2, participantCount))));
 }
@@ -378,7 +402,36 @@ export function swissRoundCount(participantCount: number): number {
 // Drives a Suíço tournament after each match finishes: play the Swiss rounds
 // (pairing by standings), then cut the top `qualifiers` into a seeded knockout,
 // which then advances like a single-elimination bracket.
-export async function advanceSwissTournament(tournamentId: string, completedRound: number) {
+// Serialize round/bracket generation per tournament. Every generator guards
+// itself with "does the next round exist yet?", but that is check-then-insert:
+// two callers at once (the final point of a round on one Vercel instance and a
+// page-load self-heal on another, or two matches finishing together) both saw
+// "no next round" and both inserted it — duplicating the round, sometimes with
+// different pairings, which the duplicate cleanup can't untangle. A transaction-
+// scoped advisory lock makes the second caller wait and then see the rows the
+// first one committed. Taken ONLY at the exported entry points: inner calls use
+// the *Unlocked bodies, since re-taking the lock from another session would
+// deadlock. The work itself runs on other pooled connections (pool >= 5).
+async function withTournamentLock<T>(tournamentId: string, fn: () => Promise<T>): Promise<T> {
+  return prisma.$transaction(
+    async (tx) => {
+      // $executeRaw: pg_advisory_xact_lock returns void, which $queryRaw can't deserialize.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${tournamentId}))`;
+      return fn();
+    },
+    { maxWait: 20000, timeout: 60000 }
+  );
+}
+
+export function advanceSwissTournament(tournamentId: string, completedRound: number) {
+  return withTournamentLock(tournamentId, () => advanceSwissTournamentUnlocked(tournamentId, completedRound));
+}
+
+export function advanceSingleElimination(tournamentId: string, completedRound: number) {
+  return withTournamentLock(tournamentId, () => advanceSingleEliminationUnlocked(tournamentId, completedRound));
+}
+
+async function advanceSwissTournamentUnlocked(tournamentId: string, completedRound: number) {
   const roundMatches = await prisma.match.findMany({ where: { tournamentId, round: completedRound } });
   if (roundMatches.length === 0 || !roundMatches.every((m) => m.status === "FINISHED")) return;
 
@@ -386,11 +439,11 @@ export async function advanceSwissTournament(tournamentId: string, completedRoun
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { qualifiers: true } }),
     prisma.tournamentParticipant.count({ where: { tournamentId, approved: { not: false } } }),
   ]);
-  const swissRounds = swissRoundCount(participantCount);
+  const swissRounds = await getSwissRounds(tournamentId, participantCount);
 
   // Knockout phase (rounds after the Swiss phase): advance the bracket.
   if (completedRound > swissRounds) {
-    await advanceSingleElimination(tournamentId, completedRound);
+    await advanceSingleEliminationUnlocked(tournamentId, completedRound);
     return;
   }
   // More Swiss rounds to play.
@@ -619,6 +672,8 @@ export async function generateSwissRound(
       ? shuffle(await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } }))
       : await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" } });
   const pool = participants.map((p) => p.userId!).filter(Boolean);
+  // Freeze the Swiss round count at the field that actually starts round 1.
+  if (round === 1) await getSwissRounds(tournamentId, pool.length);
 
   // Odd field → exactly one player gets a BYE this round (an automatic win).
   // Give it to the lowest-ranked player who hasn't had a bye yet (standard
@@ -735,7 +790,7 @@ export async function generateMakeupRound(tournamentId: string): Promise<{
   if (tournament?.format !== "ROUND_ROBIN") return { ok: false, reason: "Disponível apenas no formato Suíço." };
 
   const participantCount = participants.length;
-  const swissRounds = swissRoundCount(participantCount);
+  const swissRounds = await getSwissRounds(tournamentId, participantCount);
 
   const maxRound = allMatches.reduce((mx, m) => Math.max(mx, m.round), 0);
   if (maxRound === 0) return { ok: false, reason: "O torneio ainda não começou." };
@@ -856,7 +911,7 @@ export async function generateMakeupRound(tournamentId: string): Promise<{
   return { ok: true, target, counts: countsSummary, added: pairs.length, byeUserId, knockoutReset };
 }
 
-export async function advanceSingleElimination(
+async function advanceSingleEliminationUnlocked(
   tournamentId: string,
   completedRound: number
 ) {

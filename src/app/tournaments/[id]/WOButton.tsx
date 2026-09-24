@@ -22,18 +22,23 @@ export default function WOButton({
   async function declareWalkover(winnerId: string) {
     setErr(null);
     setLoading(true);
-    const res = await fetch(`/api/matches/${matchId}/wo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ winnerId }),
-    });
-    setLoading(false);
-    if (res.ok) {
-      setOpen(false);
-      router.refresh();
-    } else {
-      const data = await res.json().catch(() => ({}));
-      setErr(data.error || "Erro ao registrar W.O.");
+    try {
+      const res = await fetch(`/api/matches/${matchId}/wo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winnerId }),
+      });
+      if (res.ok) {
+        setOpen(false);
+        router.refresh();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setErr(data.error || "Erro ao registrar W.O.");
+      }
+    } catch {
+      setErr("Sem conexão — tente novamente");
+    } finally {
+      setLoading(false);
     }
   }
 
