@@ -166,7 +166,12 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
     setFinishVideo(null);
     setLaunchOn(false);
   };
-  const playReady = () => {
+  // `sentAt` is when the judge pressed PRONTOS. The same cue reaches us twice
+  // (P2P + server poll); a copy arriving after the countdown already started
+  // must not bring the frozen PRONTOS screen back over the battle. A real new
+  // PRONTOS can't come within seconds of a countdown (a battle takes longer).
+  const playReady = (sentAt: number = Date.now()) => {
+    if (sentAt <= lastCdRef.current || Date.now() - lastCdRef.current < 15000) return;
     if (Date.now() - lastReadyRef.current < 3000) return;
     lastReadyRef.current = Date.now();
     clearBattleOverlays();
@@ -423,7 +428,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
             playedReadyKeyRef.current = d.ready.key;
             // A PRONTOS signal older than the last countdown is stale: the
             // countdown already superseded it.
-            if (Date.now() - d.ready.elapsedMs > lastCdRef.current) playReady();
+            playReady(Date.now() - d.ready.elapsedMs);
           }
           if (active && d.launch && d.launch.key !== playedLaunchKeyRef.current && d.launch.elapsedMs < 20000) {
             playedLaunchKeyRef.current = d.launch.key;
