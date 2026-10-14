@@ -19,6 +19,7 @@ import WOButton from "./WOButton";
 import AdminParticipantManager from "./AdminParticipantManager";
 import AdminMatchEditor from "./AdminMatchEditor";
 import ShareButton from "@/components/ShareButton";
+import { isJudgeAccount } from "@/lib/judgeAccount";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 import type { Metadata } from "next";
 
@@ -628,7 +629,9 @@ export default async function TournamentDetailPage({
     currentBeybladeIds.length === 3;
 
   // Always show the sidebar so players can track standings in real-time.
-  const showSidebar = true;
+  // Judge kiosk accounts only need the tournament name and the matches.
+  const judgeKiosk = isJudgeAccount(session?.user?.email);
+  const showSidebar = !judgeKiosk;
 
   // Admin match editor data: all non-bye matches
   const adminMatchRows = tournament.matches
@@ -678,7 +681,13 @@ export default async function TournamentDetailPage({
     <div className="min-h-screen bg-[#0a0a0a]">
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
+        {judgeKiosk ? (
+          <h1 className="text-2xl font-black text-white mb-5 flex items-center gap-2 flex-wrap">
+            {tournament.name}
+            {tournament.isTest && !/teste/i.test(tournament.name) && <span className="text-xs font-bold px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-400">TESTE</span>}
+          </h1>
+        ) : (
+        /* Header */
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden mb-6">
           {tournament.bannerUrl && (
             <img
@@ -856,6 +865,7 @@ export default async function TournamentDetailPage({
           </div>
           </div>
         </div>
+        )}
 
         <div className={showSidebar ? "grid lg:grid-cols-3 gap-6" : ""}>
           {/* Main content */}
