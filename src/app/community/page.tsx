@@ -38,7 +38,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
     where: {
       deleted: false,
       isGuest: false,
-      email: { not: { endsWith: ".arena" } },
+      NOT: [{ email: { endsWith: ".arena" } }, { email: { endsWith: ".juiz" } }],
       // Players who never picked a league are LBL (the original community).
       ...(tab === "lbl"
         ? { OR: [{ homeCommunity: "lbl" }, { homeCommunity: null }] }

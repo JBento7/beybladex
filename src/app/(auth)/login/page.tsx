@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import { isJudgeAccount } from "@/lib/judgeAccount";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -32,7 +33,7 @@ function LoginForm() {
       if (result?.error) {
         setError("E-mail ou senha inválidos.");
       } else {
-        router.push("/dashboard");
+        router.push(isJudgeAccount(email) ? "/juiz" : "/dashboard");
         router.refresh();
       }
     } catch {

@@ -29,7 +29,7 @@ export default async function RankingsPage({ searchParams }: { searchParams: { r
 
   const userIds = ranking.map((r) => r.userId);
   const users = await prisma.user.findMany({
-    where: { id: { in: userIds }, email: { not: { endsWith: ".arena" } } },
+    where: { id: { in: userIds }, NOT: [{ email: { endsWith: ".arena" } }, { email: { endsWith: ".juiz" } }] },
     select: { id: true, name: true, bladerName: true, avatarUrl: true },
   });
   const userMap = new Map(users.map((u) => [u.id, u]));

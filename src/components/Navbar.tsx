@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { communityOf } from "@/lib/communities";
 import { useHomeCommunity, clearCommunityCookie } from "@/components/CommunityTheme";
+import { isJudgeAccount } from "@/lib/judgeAccount";
 
 export default function Navbar() {
   const { data: session } = useSession();
@@ -38,6 +39,25 @@ export default function Navbar() {
       setAvatarUrl(null);
     }
   }, [session]);
+
+  // Judge accounts get no menu: just the way back to their tournament list.
+  if (isJudgeAccount(session?.user?.email)) {
+    return (
+      <nav className="bg-[#1a1a1a] border-b border-[#2a2a2a] sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+          <Link href="/juiz" className="text-[var(--accent)] font-bold">
+            {pathname === "/juiz" ? "Juiz" : "‹ Torneios"}
+          </Link>
+          <button
+            onClick={() => { clearCommunityCookie(); signOut({ callbackUrl: "/login" }); }}
+            className="text-sm text-gray-400 hover:text-white"
+          >
+            Sair
+          </button>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="bg-[#1a1a1a] border-b border-[#2a2a2a] sticky top-0 z-50">

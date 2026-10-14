@@ -95,7 +95,7 @@ export async function GET(req: Request) {
       const candidates = await prisma.user.findMany({
         where: {
           isGuest: false, deleted: false,
-          email: { not: { endsWith: ".arena" } },
+          NOT: [{ email: { endsWith: ".arena" } }, { email: { endsWith: ".juiz" } }],
           beyblades: { some: { hiddenFromCommunity: false } },
         },
         select: { id: true, beyblades: { where: { hiddenFromCommunity: false }, select: { id: true } } },
