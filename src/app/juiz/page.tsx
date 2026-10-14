@@ -21,11 +21,14 @@ export default async function JudgeHome({ searchParams }: { searchParams: { aba?
   const community = isJudgeAccount(email) ? judgeCommunity(email) : session.user.homeCommunity ?? "lbl";
 
   const all = await prisma.tournament.findMany({
+    // Official events: only the judge's community (and partnerships). Test
+    // events are rehearsals — show them from every community, so a test seeded
+    // by a general admin (which lands in LBL) is still reachable.
     where: {
       status: "IN_PROGRESS",
-      OR: [{ communitySlug: community }, { isPartnership: true }],
+      OR: [{ communitySlug: community }, { isPartnership: true }, { isTest: true }],
     },
-    select: { id: true, name: true, isTest: true, _count: { select: { participants: true } } },
+    select: { id: true, name: true, isTest: true, communitySlug: true, _count: { select: { participants: true } } },
     orderBy: { createdAt: "desc" },
   });
   const official = all.filter((t) => !t.isTest);
@@ -68,6 +71,9 @@ export default async function JudgeHome({ searchParams }: { searchParams: { aba?
                     <div className="text-gray-500 text-xs mt-0.5">{t._count.participants} jogadores</div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {t.isTest && t.communitySlug && t.communitySlug !== community && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#252525] text-gray-400">{t.communitySlug.toUpperCase()}</span>
+                    )}
                     {t.isTest && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-400">TESTE</span>}
                     <span className="text-[var(--accent)] text-xl">›</span>
                   </div>

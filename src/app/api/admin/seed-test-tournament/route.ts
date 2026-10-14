@@ -74,7 +74,8 @@ export async function GET(req: Request) {
         isOfficial: official,
         isTest: true,
         // A scoped admin's seed lands in their own league.
-        communitySlug: session.user.adminCommunity ?? "lbl",
+        // ?c=lbm lets a general admin seed for another community.
+        communitySlug: session.user.adminCommunity ?? (["lbl", "lbm"].includes(url.searchParams.get("c") ?? "") ? url.searchParams.get("c")! : "lbl"),
         setsToWin: multiDay ? 1 : 2,
         pointsToWinSet: 4,
         qualifiers,
