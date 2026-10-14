@@ -12,14 +12,15 @@ export const metadata: Metadata = { title: "Juiz" };
 
 // Home of a judge account: the community's live tournaments, each opening its
 // scoreboard page (where the judge scores the matches).
-export default async function JudgeHome() {
+export default async function JudgeHome({ searchParams }: { searchParams: { aba?: string } }) {
+  const tab = searchParams.aba === "teste" ? "teste" : "oficial";
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login?callbackUrl=/juiz");
 
   const email = session.user.email;
   const community = isJudgeAccount(email) ? judgeCommunity(email) : session.user.homeCommunity ?? "lbl";
 
-  const tournaments = await prisma.tournament.findMany({
+  const all = await prisma.tournament.findMany({
     where: {
       status: "IN_PROGRESS",
       OR: [{ communitySlug: community }, { isPartnership: true }],
@@ -27,19 +28,31 @@ export default async function JudgeHome() {
     select: { id: true, name: true, isTest: true, _count: { select: { participants: true } } },
     orderBy: { createdAt: "desc" },
   });
+  const official = all.filter((t) => !t.isTest);
+  const tests = all.filter((t) => t.isTest);
+  const tournaments = tab === "teste" ? tests : official;
+  const tabClass = (on: boolean) =>
+    `flex-1 text-center py-2 rounded-xl text-sm font-bold transition-colors ${
+      on ? "bg-[var(--accent)] text-black" : "bg-[#1a1a1a] text-gray-400 border border-[#2a2a2a]"
+    }`;
 
   return (
     <div className="min-h-screen bg-[#0f0f0f]">
       <Navbar />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-white mb-1">Torneios em andamento</h1>
-        <p className="text-gray-500 text-sm mb-5">Toque em um torneio para abrir os placares.</p>
+        <p className="text-gray-500 text-sm mb-4">Toque em um torneio para abrir os placares.</p>
+
+        <div className="flex gap-2 mb-5">
+          <Link href="/juiz" className={tabClass(tab === "oficial")}>Oficiais ({official.length})</Link>
+          <Link href="/juiz?aba=teste" className={tabClass(tab === "teste")}>Teste ({tests.length})</Link>
+        </div>
 
         {tournaments.length === 0 ? (
           <div className="text-center text-gray-500 py-16 border border-[#2a2a2a] rounded-2xl">
-            Nenhum torneio em andamento agora.
+ {tab === "teste" ? "Nenhum torneio de teste em andamento." : "Nenhum torneio oficial em andamento agora."}
             <div className="mt-3">
-              <Link href="/juiz" className="text-[var(--accent)] font-semibold">Atualizar</Link>
+              <Link href={tab === "teste" ? "/juiz?aba=teste" : "/juiz"} className="text-[var(--accent)] font-semibold">Atualizar</Link>
             </div>
           </div>
         ) : (
