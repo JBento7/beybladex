@@ -156,7 +156,11 @@ export default function ScoreModal({
   const wakeRef = useRef<any>(null);
   useEffect(() => {
     if (!open) return;
-    const el = fsRef.current as unknown as {
+    // Already fullscreen (judge kiosk mode): leave it alone, and don't exit
+    // fullscreen on close — that would kick the judge out of kiosk mode.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const keepFs = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+    const el = (keepFs ? null : fsRef.current) as unknown as {
       requestFullscreen?: () => Promise<void>;
       webkitRequestFullscreen?: () => void;
     } | null;
@@ -170,7 +174,7 @@ export default function ScoreModal({
     return () => {
       try { wakeRef.current?.release?.(); } catch { /* ignore */ }
       wakeRef.current = null;
-      try {
+      if (!keepFs) try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const d = document as any;
         if (document.fullscreenElement) document.exitFullscreen?.();

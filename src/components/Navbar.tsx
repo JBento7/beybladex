@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { communityOf } from "@/lib/communities";
 import { useHomeCommunity, clearCommunityCookie } from "@/components/CommunityTheme";
 import { isJudgeAccount } from "@/lib/judgeAccount";
+import JudgeKiosk from "@/components/JudgeKiosk";
 
 export default function Navbar() {
   const { data: session } = useSession();
@@ -44,6 +45,7 @@ export default function Navbar() {
   if (isJudgeAccount(session?.user?.email)) {
     return (
       <nav className="bg-[#1a1a1a] border-b border-[#2a2a2a] sticky top-0 z-50">
+        <JudgeKiosk />
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/juiz" className="text-[var(--accent)] font-bold">
             {pathname === "/juiz" ? "Juiz" : "‹ Torneios"}
