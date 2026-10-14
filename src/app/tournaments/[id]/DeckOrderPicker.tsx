@@ -44,11 +44,11 @@ export default function DeckOrderPicker({
   return (
     <div className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
-        <div className="text-xs font-bold" style={{ color }}>
+        <div className="text-base font-bold" style={{ color }}>
           {title}
         </div>
         {selected.length > 0 && (
-          <button type="button" onClick={() => setSelected([])} className="text-[10px] text-gray-500 hover:text-white underline">
+          <button type="button" onClick={() => setSelected([])} className="text-sm text-gray-400 hover:text-white underline px-2 py-1">
             limpar
           </button>
         )}
@@ -64,15 +64,15 @@ export default function DeckOrderPicker({
               key={i}
               type="button"
               onClick={() => id && setSelected(selected.filter((s) => s !== id))}
-              className={`flex-1 rounded-xl border-2 py-2.5 px-1 text-center transition-all ${
+              className={`flex-1 rounded-xl border-2 py-3.5 px-1 text-center transition-all ${
                 b ? "bg-[#252525]" : "border-dashed border-[#333] bg-transparent"
               }`}
               style={{ borderColor: b ? color : undefined }}
             >
-              <div className="text-[10px] font-black mb-0.5" style={{ color: b ? color : "#555" }}>
+              <div className="text-xs font-black mb-0.5" style={{ color: b ? color : "#555" }}>
                 {i + 1}°
               </div>
-              <div className={`text-[11px] font-bold leading-tight ${b ? "text-white" : "text-[#444]"}`}>
+              <div className={`text-sm font-bold leading-tight ${b ? "text-white" : "text-[#444]"}`}>
                 {b ? b.name : "—"}
               </div>
             </button>
@@ -91,14 +91,14 @@ export default function DeckOrderPicker({
                 key={b.id}
                 type="button"
                 onClick={() => tap(b.id)}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border-2 text-left transition-all active:scale-[0.98] ${
+                className={`w-full flex items-center gap-3 px-4 py-4 rounded-xl border-2 text-left transition-all active:scale-[0.98] ${
                   isChosen ? "opacity-30 border-[#333] bg-[#1a1a1a]" : "border-[#333] bg-[#252525] hover:border-[#555]"
                 }`}
               >
-                <span className="text-sm font-black w-6 text-center flex-shrink-0" style={{ color: isChosen ? "#555" : color }}>
+                <span className="text-lg font-black w-7 text-center flex-shrink-0" style={{ color: isChosen ? "#555" : color }}>
                   {isChosen ? `${idx + 1}°` : "·"}
                 </span>
-                <span className="text-sm font-bold text-white">{b.name}</span>
+                <span className="text-base font-bold text-white">{b.name}</span>
                 {comboParts(b) && (
                   <span className="text-xs text-gray-500 font-normal ml-auto truncate">{comboParts(b)}</span>
                 )}
@@ -112,7 +112,7 @@ export default function DeckOrderPicker({
         type="button"
         onClick={() => complete && !busy && onConfirm(selected)}
         disabled={!complete || busy}
-        className="w-full text-sm font-black py-3 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed text-white active:scale-[0.98]"
+        className="w-full text-lg font-black py-4 rounded-xl transition-all disabled:opacity-30 disabled:cursor-not-allowed text-white active:scale-[0.98]"
         style={{ backgroundColor: complete && !busy ? color : "#333" }}
       >
         {busy ? "Enviando..." : complete ? confirmLabel : `Toque nas beyblades (${selected.length}/3)`}
