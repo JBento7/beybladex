@@ -385,7 +385,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
       if (visibleRef.current && !asleepRef.current) await load();
       if (!active) return;
       const p2pFresh = Date.now() - p2pFreshRef.current < 10000;
-      const delay = asleepRef.current ? 5000 : !visibleRef.current ? 8000 : !liveRef.current ? 6000 : p2pFresh ? 5000 : 3000;
+      const delay = asleepRef.current ? 5000 : !visibleRef.current ? 8000 : !liveRef.current ? 4000 : p2pFresh ? 3000 : 1500;
       timer = setTimeout(run, delay);
     };
     run();
@@ -440,7 +440,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
       // when the P2P link is delivering signals directly (server tick is just a
       // fallback then). This is the single biggest Vercel invocation source.
       const p2pFresh = Date.now() - p2pFreshRef.current < 10000;
-      const delay = !liveRef.current ? 3000 : p2pFresh ? 2000 : 700;
+      const delay = !liveRef.current ? 1500 : p2pFresh ? 1500 : 600;
       if (active) timer = setTimeout(tick, delay);
     };
     tick();

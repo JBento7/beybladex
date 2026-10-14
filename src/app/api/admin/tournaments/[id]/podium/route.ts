@@ -1,3 +1,5 @@
+// Heavy tournament work (standings, round generation, ranking): give it room on big events.
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
