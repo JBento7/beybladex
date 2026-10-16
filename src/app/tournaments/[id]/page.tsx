@@ -19,6 +19,7 @@ import WOButton from "./WOButton";
 import AdminParticipantManager from "./AdminParticipantManager";
 import AdminMatchEditor from "./AdminMatchEditor";
 import ShareButton from "@/components/ShareButton";
+import AutoRefresh from "@/components/AutoRefresh";
 import { isJudgeAccount } from "@/lib/judgeAccount";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 import type { Metadata } from "next";
@@ -680,6 +681,14 @@ export default async function TournamentDetailPage({
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <Navbar />
+      {/* Live page: new sign-ups and matches scored by other judges show up
+          on their own, no manual refresh. */}
+      {(tournament.status === "REGISTRATION" || tournament.status === "IN_PROGRESS") && (
+        <AutoRefresh
+          url={`/api/tournaments/${tournament.id}/version`}
+          intervalMs={tournament.status === "IN_PROGRESS" ? 4000 : 8000}
+        />
+      )}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {judgeKiosk ? (
           <h1 className="text-2xl font-black text-white mb-5 flex items-center gap-2 flex-wrap">

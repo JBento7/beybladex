@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Navbar from "@/components/Navbar";
+import AutoRefresh from "@/components/AutoRefresh";
 import { isJudgeAccount, judgeCommunity } from "@/lib/judgeAccount";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,7 @@ export default async function JudgeHome({ searchParams }: { searchParams: { aba?
   return (
     <div className="min-h-screen bg-[#0f0f0f]">
       <Navbar />
+      <AutoRefresh url="/api/tournaments/version" intervalMs={10000} />
       <main className="max-w-2xl mx-auto px-4 py-6">
         <h1 className="text-xl font-bold text-white mb-1">Torneios em andamento</h1>
         <p className="text-gray-500 text-sm mb-4">Toque em um torneio para abrir os placares.</p>

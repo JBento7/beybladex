@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Navbar from "@/components/Navbar";
+import AutoRefresh from "@/components/AutoRefresh";
 import Link from "next/link";
 import TournamentList from "./TournamentList";
 
@@ -60,6 +61,7 @@ export default async function TournamentsPage() {
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
       <Navbar />
+      <AutoRefresh url="/api/tournaments/version" intervalMs={15000} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
