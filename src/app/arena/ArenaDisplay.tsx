@@ -5,6 +5,7 @@ import { signOut } from "next-auth/react";
 import { fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type Layout, type FontDef } from "@/lib/arenaLayout";
 import FontLoader from "@/components/FontLoader";
 import { startAnswerer } from "@/lib/arenaLink";
+import { startKeepAwake } from "@/lib/keepAwake";
 import { arenaChannel } from "@/lib/arenaIdentity";
 import { communityOf } from "@/lib/communities";
 
@@ -125,10 +126,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
 
   const [started, setStarted] = useState(false);
   const [isFs, setIsFs] = useState(false);
-  const noSleepRef = useRef<HTMLVideoElement | null>(null);
   const cdVideoRef = useRef<HTMLVideoElement | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const wakeLockRef = useRef<any>(null);
 
   const [countdownOn, setCountdownOn] = useState(false);
   const playedKeyRef = useRef<string | null>(null);
@@ -546,24 +544,13 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
     };
   }, [finishVideo]);
 
+  // Keep the telão awake for as long as it is running (wake lock + nosleep
+  // video + watchdog that re-arms either if the system drops it).
+  const stopAwakeRef = useRef<(() => void) | null>(null);
   async function acquireWakeLock() {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const nav = navigator as any;
-      if (nav.wakeLock?.request) wakeLockRef.current = await nav.wakeLock.request("screen");
-    } catch {
-      /* fallback video handles it */
-    }
-    try { await noSleepRef.current?.play(); } catch { /* ignore */ }
+    if (!stopAwakeRef.current) stopAwakeRef.current = startKeepAwake();
   }
-
-  useEffect(() => {
-    const onVis = () => {
-      if (document.visibilityState === "visible" && started) acquireWakeLock();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [started]);
+  useEffect(() => () => { stopAwakeRef.current?.(); stopAwakeRef.current = null; }, []);
 
   useEffect(() => {
     // Safari (incl. iPadOS) exposes the fullscreen element/events with a webkit
@@ -672,10 +659,6 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
       }
     >
       <FontLoader fonts={fonts} />
-      {/* nosleep loop (offscreen) */}
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-      <video ref={noSleepRef} src="/nosleep.mp4" muted loop playsInline style={{ position: "fixed", width: 2, height: 2, opacity: 0, top: 0, left: 0, pointerEvents: "none" }} />
-
       {/* Countdown video — always mounted (iOS 12 won't play a display:none video),
           hidden behind everything until it fires. */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}

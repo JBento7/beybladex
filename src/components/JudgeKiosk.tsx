@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { startKeepAwake } from "@/lib/keepAwake";
 
 // Kiosk mode for judge accounts: the whole app runs fullscreen on the judge's
 // phone/tablet and the screen stays awake. Browsers only allow fullscreen from
@@ -37,22 +38,13 @@ export default function JudgeKiosk() {
     document.addEventListener("click", enter, true);
     document.addEventListener("touchend", enter, true);
 
-    // Keep the screen on; the lock is released whenever the tab is hidden.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let lock: any = null;
-    const wake = () => {
-      if (document.visibilityState !== "visible") return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (navigator as any).wakeLock?.request?.("screen").then((l: unknown) => { lock = l; }).catch(() => {});
-    };
-    wake();
-    document.addEventListener("visibilitychange", wake);
+    // Keep the screen on the whole time (wake lock + video fallback + watchdog).
+    const stopAwake = startKeepAwake();
 
     return () => {
       document.removeEventListener("click", enter, true);
       document.removeEventListener("touchend", enter, true);
-      document.removeEventListener("visibilitychange", wake);
-      try { lock?.release?.(); } catch { /* ignore */ }
+      stopAwake();
     };
   }, []);
 
