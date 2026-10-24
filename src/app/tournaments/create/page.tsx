@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Navbar from "@/components/Navbar";
 import CommunityPicker from "@/components/CommunityPicker";
+import { useHomeCommunity } from "@/components/CommunityTheme";
 
 const FORMATS = [
   {
@@ -31,6 +32,8 @@ export default function CreateTournamentPage() {
   const router = useRouter();
   const { data: session } = useSession();
   const isAdmin = session?.user.role === "ORGANIZER";
+  // Start on the admin's own league (it used to always default to LBL).
+  const home = useHomeCommunity();
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -41,7 +44,7 @@ export default function CreateTournamentPage() {
     prize: "",
     arenas: "1",
     eventType: "TORNEIO",
-    community: "lbl",
+    community: home === "lbm" ? "lbm" : "lbl",
     isPartnership: false,
     setsToWin: "2",
     pointsToWinSet: "4",

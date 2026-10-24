@@ -45,6 +45,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Players can't pick a community: their BeyEncontro belongs to their own
+    // league (it used to fall back to LBL, hiding LBM events from LBM judges).
+    let communitySlug = session.user.adminCommunity ?? (["lbl", "lbm"].includes(community) ? community : "lbl");
+    if (session.user.role !== "ORGANIZER") {
+      const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { homeCommunity: true } });
+      communitySlug = me?.homeCommunity && /^[a-z0-9]+$/.test(me.homeCommunity) ? me.homeCommunity : "lbl";
+    }
+
     const tournament = await prisma.tournament.create({
       data: {
         name,
@@ -60,7 +68,7 @@ export async function POST(req: NextRequest) {
         isOfficial: session.user.role === "ORGANIZER" && eventType !== "BEYENCONTRO",
         isTest: session.user.role === "ORGANIZER" && !!isTest,
         // A community-scoped admin always creates in their own community.
-        communitySlug: session.user.adminCommunity ?? (["lbl", "lbm"].includes(community) ? community : "lbl"),
+        communitySlug,
         isPartnership: session.user.role === "ORGANIZER" && !!isPartnership,
         setsToWin: setsToWin ? Math.min(2, Math.max(1, parseInt(setsToWin))) : 2,
         pointsToWinSet: pointsToWinSet ? Math.min(7, Math.max(4, parseInt(pointsToWinSet))) : 4,
