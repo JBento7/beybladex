@@ -45,11 +45,11 @@ export default function ShareButton({
       onClick={handleShare}
       title="Compartilhar"
       aria-label="Compartilhar"
-      className={`inline-flex items-center justify-center rounded-lg bg-[#252525] hover:bg-[#333] text-gray-300 hover:text-white transition-colors ${className}`}
+      className={`inline-flex items-center justify-center rounded-lg bg-field hover:bg-hover text-gray-300 hover:text-white transition-colors ${className}`}
     >
       <span aria-live="polite" className="sr-only">{copied ? "Link copiado" : ""}</span>
       {copied ? (
-        <span className="text-xs px-2">Copiado!</span>
+        <span className="text-xs px-2">Link copiado</span>
       ) : (
         <>
         <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

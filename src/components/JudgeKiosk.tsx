@@ -50,7 +50,7 @@ export default function JudgeKiosk() {
 
   if (!iosHint) return null;
   return (
-    <div className="bg-[#252525] border-b border-[#2a2a2a] px-4 py-2 text-xs text-gray-300 text-center">
+    <div className="bg-field border-b border-line px-4 py-2 text-xs text-gray-300 text-center">
       Para tela cheia no iPhone: toque em <strong>Compartilhar</strong> → <strong>Adicionar à Tela de Início</strong> e abra pelo ícone.
     </div>
   );

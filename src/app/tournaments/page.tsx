@@ -8,6 +8,8 @@ import Link from "next/link";
 import TournamentList from "./TournamentList";
 import { parseStatus, parseLiga } from "@/lib/tournamentFilters";
 import RetryButton from "@/components/RetryButton";
+import PageHeader from "@/components/ui/PageHeader";
+import { ButtonLink } from "@/components/ui/Button";
 
 export const metadata: Metadata = { title: "Torneios" };
 
@@ -40,7 +42,7 @@ export default async function TournamentsPage({
   } catch (e) {
     console.error("[tournaments page]", e);
     return (
-      <div className="min-h-screen bg-[#0d0d0d]">
+      <div className="min-h-screen bg-app">
         <Navbar />
         <main className="max-w-2xl mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-black text-white mb-2">Não foi possível carregar os torneios</h1>
@@ -81,23 +83,16 @@ export default async function TournamentsPage({
   }));
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <AutoRefresh url="/api/tournaments/version" intervalMs={15000} />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-black text-white">Torneios</h1>
-            <p className="text-gray-300 mt-1">Próximos eventos, torneios em andamento e resultados anteriores.</p>
-          </div>
-          {session && (
-            <Link
-              href="/tournaments/create"
-              className="tap inline-flex items-center bg-[#c8102e] hover:bg-[#a00d24] text-white font-bold px-5 rounded-xl transition-colors"
-            >
-              + Criar torneio
-            </Link>
-          )}
+      <main className="mx-auto max-w-content px-4 md:px-6 desk:px-8 py-6 desk:py-8">
+        <div className="mb-6 desk:mb-8">
+          <PageHeader
+            title="Torneios"
+            description="Próximos eventos, torneios em andamento e resultados anteriores."
+            actions={session ? <ButtonLink href="/tournaments/create" variant="primary">Criar torneio</ButtonLink> : undefined}
+          />
         </div>
 
         {tournaments.length === 0 ? (
@@ -108,7 +103,7 @@ export default async function TournamentsPage({
             {session && (
               <Link
                 href="/tournaments/create"
-                className="bg-[#c8102e] hover:bg-[#a00d24] text-white font-bold px-6 py-3 rounded-xl transition-colors inline-block"
+                className="bg-brand-red hover:bg-brand-red-hover text-white font-bold px-6 py-3 rounded-xl transition-colors inline-block"
               >
                 Criar Primeiro Torneio
               </Link>

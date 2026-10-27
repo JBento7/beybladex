@@ -178,25 +178,25 @@ export default async function DashboardPage() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <NewsPopup />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-black text-white">
-            Bem-vindo, <span className="text-[#f0a500]">{currentUser?.bladerName || session.user.name}</span>
+            Bem-vindo, <span className="text-brand-yellow">{currentUser?.bladerName || session.user.name}</span>
             {currentUser?.bladerName && <span className="text-gray-500 text-xl font-normal ml-2">({session.user.name})</span>}!
           </h1>
           <p className="text-gray-400 mt-1">Acompanhe suas partidas, torneios e suba no ranking.</p>
         </div>
 
         {/* Hero player card — tier, rank position, win rate (LBB-style) */}
-        <div className="mb-6 bg-gradient-to-br from-[#1a1a1a] to-[#141414] border border-[#2a2a2a] rounded-2xl p-5 sm:p-6">
+        <div className="mb-6 bg-gradient-to-br from-card to-card border border-line rounded-2xl p-5 sm:p-6">
           <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
             {/* Avatar + tier badge */}
             <div className="relative flex-shrink-0">
-              <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 flex items-center justify-center bg-[#252525]" style={{ borderColor: tier.color }}>
+              <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 flex items-center justify-center bg-field" style={{ borderColor: tier.color }}>
                 {currentUser?.avatarUrl
                   ? <img src={currentUser.avatarUrl} alt="" className="w-full h-full object-cover" />
                   : <img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain" />}
@@ -209,7 +209,7 @@ export default async function DashboardPage() {
             {/* KPIs */}
             <div className="flex-1 min-w-[240px] grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
-                <div className="text-2xl font-black text-[#f0a500] leading-none">{myRank ? `#${myRank}` : "—"}</div>
+                <div className="text-2xl font-black text-brand-yellow leading-none">{myRank ? `#${myRank}` : "—"}</div>
                 <div className="text-[11px] text-gray-500 mt-1">Ranking oficial{rankedTotal ? ` / ${rankedTotal}` : ""}</div>
               </div>
               <div>
@@ -234,7 +234,7 @@ export default async function DashboardPage() {
                 <span style={{ color: tier.color }}>{tier.icon} {tier.name}</span>
                 <span>{toNext > 0 ? `Faltam ${toNext} vitória${toNext > 1 ? "s" : ""} para ` : "Pronto para "}<span style={{ color: next.color }}>{next.icon} {next.name}</span></span>
               </div>
-              <div className="h-2 rounded-full bg-[#111] overflow-hidden">
+              <div className="h-2 rounded-full bg-app overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${Math.round(progress * 100)}%`, background: `linear-gradient(90deg, ${tier.color}, ${next.color})` }} />
               </div>
             </div>
@@ -247,12 +247,12 @@ export default async function DashboardPage() {
             {/* Stats Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
-                { label: "Total de Pontos", value: totalPoints, icon: "⭐", color: "text-[#f0a500]" },
+                { label: "Total de Pontos", value: totalPoints, icon: "⭐", color: "text-brand-yellow" },
                 { label: "Vitórias", value: totalWins, icon: "🏆", color: "text-green-400" },
                 { label: "Derrotas", value: totalLosses, icon: "💀", color: "text-red-400" },
                 { label: "Torneios Ativos", value: activeTournaments, icon: "/bey-removebg-preview.png", color: "text-blue-400" },
               ].map((stat) => (
-                <div key={stat.label} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
+                <div key={stat.label} className="bg-card border border-line rounded-xl p-5">
                   <div className="flex items-center justify-between mb-2">
                     {stat.icon.startsWith("/") ? <img src={stat.icon} alt="" className="w-6 h-6 object-contain" /> : <span className="text-2xl">{stat.icon}</span>}
                   </div>
@@ -264,7 +264,7 @@ export default async function DashboardPage() {
 
             <div className="grid lg:grid-cols-2 gap-6">
           {/* Upcoming Matches */}
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+          <div className="bg-card border border-line rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-4">Próximas Partidas</h2>
             {upcomingMatches.length === 0 ? (
               <p className="text-gray-500 text-sm py-4 text-center">Nenhuma partida agendada</p>
@@ -277,7 +277,7 @@ export default async function DashboardPage() {
                     <Link
                       key={match.id}
                       href={`/tournaments/${match.tournament.id}`}
-                      className="flex items-center justify-between p-3 bg-[#252525] hover:bg-[#2d2d2d] rounded-lg transition-colors"
+                      className="flex items-center justify-between p-3 bg-field hover:bg-field rounded-lg transition-colors"
                     >
                       <div>
                         <div className="text-sm font-medium text-white">vs {opponent.name}</div>
@@ -298,7 +298,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* Recent Match History */}
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+          <div className="bg-card border border-line rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-4">Batalhas Recentes</h2>
             {recentMatches.length === 0 ? (
               <p className="text-gray-500 text-sm py-4 text-center">Nenhum histórico de partidas ainda</p>
@@ -331,7 +331,7 @@ export default async function DashboardPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className={`text-sm font-bold ${isWinner ? "text-[#f0a500]" : "text-gray-500"}`}>
+                        <div className={`text-sm font-bold ${isWinner ? "text-brand-yellow" : "text-gray-500"}`}>
                           +{pointsEarned} pts
                         </div>
                       </div>
@@ -345,7 +345,7 @@ export default async function DashboardPage() {
 
             {/* Finish-type breakdown */}
             {finishTotal > 0 && (
-              <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+              <div className="bg-card border border-line rounded-xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-bold text-white">Suas Finalizações</h2>
                   <span className="text-xs text-gray-500">{finishTotal} no total</span>
@@ -357,7 +357,7 @@ export default async function DashboardPage() {
                         <span className="font-bold" style={{ color: f.color }}>{f.label}</span>
                         <span className="text-gray-400">{f.count} · {f.pct}% · {f.points} pts</span>
                       </div>
-                      <div className="h-2 rounded-full bg-[#111] overflow-hidden">
+                      <div className="h-2 rounded-full bg-app overflow-hidden">
                         <div className="h-full rounded-full" style={{ width: `${f.pct}%`, background: f.color }} />
                       </div>
                     </div>
@@ -368,10 +368,10 @@ export default async function DashboardPage() {
           </div>{/* end left column */}
 
           {/* Right column — Ranking */}
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 lg:self-start lg:sticky lg:top-[116px]">
+          <div className="bg-card border border-line rounded-xl p-5 lg:self-start lg:sticky lg:top-[116px]">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold text-white">Ranking Oficial</h2>
-              <Link href="/community" className="text-xs text-[#f0a500] hover:underline">Ver tudo →</Link>
+              <Link href="/community" className="text-xs text-brand-yellow hover:underline">Ver tudo →</Link>
             </div>
             {rankingList.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-6">Nenhum dado ainda</p>
@@ -383,29 +383,29 @@ export default async function DashboardPage() {
                     href={`/community/${player.id}`}
                     className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors ${
                       player.isMe
-                        ? "bg-[#f0a500]/10 border border-[#f0a500]/30"
-                        : "hover:bg-[#252525]"
+                        ? "bg-brand-yellow/10 border border-brand-yellow/30"
+                        : "hover:bg-field"
                     }`}
                   >
                     <span className={`text-xs font-black w-5 text-center flex-shrink-0 ${
-                      i === 0 ? "text-[#f0a500]" : i === 1 ? "text-gray-300" : i === 2 ? "text-amber-600" : "text-gray-600"
+                      i === 0 ? "text-brand-yellow" : i === 1 ? "text-gray-300" : i === 2 ? "text-amber-600" : "text-gray-600"
                     }`}>
                       {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
                     </span>
-                    <div className="w-7 h-7 rounded-full overflow-hidden border border-[#333] flex-shrink-0 bg-[#252525] flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full overflow-hidden border border-line flex-shrink-0 bg-field flex items-center justify-center">
                       {player.avatarUrl
                         ? <img src={player.avatarUrl} alt="" className="w-full h-full object-cover" />
                         : <img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain" />
                       }
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className={`text-xs font-semibold truncate ${player.isMe ? "text-[#f0a500]" : "text-white"}`}>
+                      <div className={`text-xs font-semibold truncate ${player.isMe ? "text-brand-yellow" : "text-white"}`}>
                         {player.bladerName || player.name}{player.isMe && " (você)"}
                       </div>
                       <div className="text-[10px] text-gray-500">{player.losses}D · {player.battlePoints} pts{player.leaguePoints > 0 ? ` · Liga ${player.leaguePoints}` : ""}</div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <div className="text-xs font-black text-[#f0a500] leading-none">{player.wins}</div>
+                      <div className="text-xs font-black text-brand-yellow leading-none">{player.wins}</div>
                       <div className="text-[9px] text-gray-500">vit.</div>
                     </div>
                   </Link>
@@ -417,14 +417,14 @@ export default async function DashboardPage() {
 
         {/* Organizer Panel */}
         {organizedTournaments.length > 0 && (
-          <div className="mt-6 bg-[#1a1a1a] border border-[#f0a500]/30 rounded-xl p-6">
+          <div className="mt-6 bg-card border border-brand-yellow/30 rounded-xl p-6">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <h2 className="text-lg font-bold text-white">Seus Torneios Ativos</h2>
               <div className="flex items-center gap-3">
 
                 <Link
                   href="/tournaments/create"
-                  className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+                  className="bg-brand-red hover:bg-brand-red-hover text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
                 >
                   + Novo Torneio
                 </Link>
@@ -435,7 +435,7 @@ export default async function DashboardPage() {
                 <Link
                   key={t.id}
                   href={`/tournaments/${t.id}`}
-                  className="bg-[#252525] hover:bg-[#2d2d2d] border border-[#333] rounded-lg p-4 transition-colors"
+                  className="bg-field hover:bg-field border border-line rounded-lg p-4 transition-colors"
                 >
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="font-semibold text-white">{t.name}</span>
@@ -447,7 +447,7 @@ export default async function DashboardPage() {
                     <span>{t._count.participants} participantes</span>
                     <span>·</span>
                     <span className={`font-medium ${
-                      t.status === "IN_PROGRESS" ? "text-green-400" : "text-[#f0a500]"
+                      t.status === "IN_PROGRESS" ? "text-green-400" : "text-brand-yellow"
                     }`}>{STATUS_LABELS[t.status] || t.status}</span>
                   </div>
                 </Link>
@@ -458,7 +458,7 @@ export default async function DashboardPage() {
 
         {/* Create Tournament CTA if no organized tournaments */}
         {organizedTournaments.length === 0 && (
-          <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6 flex items-center justify-between flex-wrap gap-3">
+          <div className="mt-6 bg-card border border-line rounded-xl p-6 flex items-center justify-between flex-wrap gap-3">
             <div>
               <h2 className="text-lg font-bold text-white">Organizar um Torneio</h2>
               <p className="text-gray-500 text-sm mt-1">Crie e gerencie seu próprio campeonato de Beyblade.</p>
@@ -466,7 +466,7 @@ export default async function DashboardPage() {
             <div className="flex items-center gap-3">
               <Link
                 href="/tournaments/create"
-                className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+                className="bg-brand-red hover:bg-brand-red-hover text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
               >
                 + Novo Torneio
               </Link>
@@ -476,10 +476,10 @@ export default async function DashboardPage() {
 
         {/* Beyblade Performance */}
         {beyblades.length > 0 && (
-          <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+          <div className="mt-6 bg-card border border-line rounded-xl p-6">
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <h2 className="text-lg font-bold text-white">Desempenho dos Combos</h2>
-              <Link href="/profile" className="text-xs text-[#f0a500] hover:underline">
+              <Link href="/profile" className="text-xs text-brand-yellow hover:underline">
                 Gerenciar combos →
               </Link>
             </div>
@@ -490,14 +490,14 @@ export default async function DashboardPage() {
                 const points = b.matchPoints.reduce((s: number, mp: { points: number }) => s + mp.points, 0);
                 const parts = [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
                 return (
-                  <div key={b.id} className="bg-[#252525] border border-[#333] rounded-xl p-4">
+                  <div key={b.id} className="bg-field border border-line rounded-xl p-4">
                     <div className="flex items-start justify-between mb-3 gap-2">
                       <div className="min-w-0">
                         <div className="font-bold text-white truncate flex items-center"><img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />{b.name}</div>
                         {parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{parts}</div>}
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <div className="text-lg font-black text-[#f0a500] leading-none">{points}</div>
+                        <div className="text-lg font-black text-brand-yellow leading-none">{points}</div>
                         <div className="text-[10px] text-gray-500">pontos</div>
                       </div>
                     </div>
@@ -524,14 +524,14 @@ export default async function DashboardPage() {
 
         {/* My Tournaments */}
         {participations.length > 0 && (
-          <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+          <div className="mt-6 bg-card border border-line rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-4">Meus Torneios</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {participations.map((p: { id: string; totalPoints: number; wins: number; losses: number; tournament: { id: string; name: string; status: string; isOfficial: boolean } }) => (
                 <Link
                   key={p.id}
                   href={`/tournaments/${p.tournament.id}`}
-                  className="bg-[#252525] border border-[#333] hover:border-amber-500/40 rounded-lg p-4 transition-colors"
+                  className="bg-field border border-line hover:border-amber-500/40 rounded-lg p-4 transition-colors"
                 >
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span className="font-semibold text-white">{p.tournament.name}</span>
@@ -540,7 +540,7 @@ export default async function DashboardPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    <span className="text-[#f0a500] font-bold">{p.totalPoints} pts</span>
+                    <span className="text-brand-yellow font-bold">{p.totalPoints} pts</span>
                     <span className="text-gray-500">·</span>
                     <span className="text-green-400">{p.wins}V</span>
                     <span className="text-red-400">{p.losses}D</span>

@@ -20,13 +20,13 @@ export const metadata: Metadata = { title: "Meu Perfil" };
 
 const finishOrder: FinishType[] = ["EXTREME_FINISH", "BURST_FINISH", "OVER_FINISH", "SPIN_FINISH"];
 const finishColors: Record<string, string> = {
-  EXTREME_FINISH: "bg-[#f0a500] text-black",
+  EXTREME_FINISH: "bg-brand-yellow text-black",
   BURST_FINISH: "bg-purple-500 text-white",
   OVER_FINISH: "bg-blue-500 text-white",
   SPIN_FINISH: "bg-gray-500 text-white",
 };
 const finishBarColors: Record<string, string> = {
-  EXTREME_FINISH: "bg-[#f0a500]",
+  EXTREME_FINISH: "bg-brand-yellow",
   BURST_FINISH: "bg-purple-500",
   OVER_FINISH: "bg-blue-500",
   SPIN_FINISH: "bg-gray-500",
@@ -151,18 +151,18 @@ export default async function ProfilePage() {
   const podiums = first + second + third;
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Profile Header */}
-        <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 mb-6">
+        <div className="bg-card border border-line rounded-2xl p-8 mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
             <AvatarUpload currentAvatar={user.avatarUrl ?? null} userName={user.name} />
             <div className="flex-1 flex items-start gap-3">
               <ProfileEditor initialName={user.name} initialEmail={user.email} initialBladerName={user.bladerName ?? ""} initialCommunity={(user as { homeCommunity?: string | null }).homeCommunity ?? "lbl"} />
               <span className={`mt-1 text-xs px-2 py-1 rounded-full font-semibold shrink-0 ${
                 user.role === "ORGANIZER"
-                  ? "bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30"
+                  ? "bg-brand-yellow/20 text-brand-yellow border border-brand-yellow/30"
                   : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
               }`}>
                 {user.role === "ORGANIZER" ? "Admin" : "Jogador"}
@@ -175,12 +175,12 @@ export default async function ProfilePage() {
         {/* Stats Row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
           {[
-            { label: "Pontos Totais", value: totalPoints, color: "text-[#f0a500]", icon: "⭐" },
+            { label: "Pontos Totais", value: totalPoints, color: "text-brand-yellow", icon: "⭐" },
             { label: "Taxa de Vitória", value: `${winRate}%`, color: "text-green-400", icon: "📈" },
             { label: "Total de Vitórias", value: totalWins, color: "text-green-400", icon: "🏆" },
             { label: "Torneios", value: participations.length, color: "text-blue-400", icon: "/bey-removebg-preview.png" },
           ].map((stat) => (
-            <div key={stat.label} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 text-center">
+            <div key={stat.label} className="bg-card border border-line rounded-xl p-5 text-center">
               <div className="flex justify-center mb-2">{stat.icon.startsWith("/") ? <img src={stat.icon} alt="" className="w-6 h-6 object-contain" /> : <span className="text-2xl">{stat.icon}</span>}</div>
               <div className={`text-2xl font-black ${stat.color} mb-1`}>{stat.value}</div>
               <div className="text-xs text-gray-500">{stat.label}</div>
@@ -192,7 +192,7 @@ export default async function ProfilePage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
             { label: "Pódios", value: podiums, icon: "🏅", border: "border-purple-500/40", bg: "bg-purple-500/10", color: "text-purple-300" },
-            { label: "1º Lugar", value: first, icon: "🥇", border: "border-[#f0a500]/40", bg: "bg-[#f0a500]/10", color: "text-[#f0a500]" },
+            { label: "1º Lugar", value: first, icon: "🥇", border: "border-brand-yellow/40", bg: "bg-brand-yellow/10", color: "text-brand-yellow" },
             { label: "2º Lugar", value: second, icon: "🥈", border: "border-gray-400/40", bg: "bg-gray-400/10", color: "text-gray-300" },
             { label: "3º Lugar", value: third, icon: "🥉", border: "border-orange-500/40", bg: "bg-orange-500/10", color: "text-orange-400" },
           ].map((stat) => (
@@ -206,7 +206,7 @@ export default async function ProfilePage() {
 
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Finish Type Breakdown */}
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+          <div className="bg-card border border-line rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-5">Tipos de Finish (Geral)</h2>
             {allPoints.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-8">Nenhuma partida jogada ainda</p>
@@ -222,7 +222,7 @@ export default async function ProfilePage() {
                         <span className="text-gray-300 font-medium">{FINISH_TYPE_LABELS[type]}</span>
                         <span className="text-gray-400">{data.count}× · +{data.points}pts</span>
                       </div>
-                      <div className="h-2 bg-[#252525] rounded-full overflow-hidden">
+                      <div className="h-2 bg-field rounded-full overflow-hidden">
                         <div
                           className={`h-full ${finishBarColors[type]} rounded-full transition-all`}
                           style={{ width: `${pct}%` }}
@@ -232,7 +232,7 @@ export default async function ProfilePage() {
                     </div>
                   );
                 })}
-                <div className="mt-4 pt-4 border-t border-[#2a2a2a] flex flex-wrap gap-2">
+                <div className="mt-4 pt-4 border-t border-line flex flex-wrap gap-2">
                   {finishOrder.map((type) => (
                     <div key={type} className="flex items-center gap-1.5 text-xs text-gray-400">
                       <div className={`w-2.5 h-2.5 rounded-full ${finishBarColors[type]}`} />
@@ -245,7 +245,7 @@ export default async function ProfilePage() {
           </div>
 
           {/* Tournament History */}
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+          <div className="bg-card border border-line rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-5">Histórico de Torneios</h2>
             <TournamentHistory
               participations={participations.map((p) => ({

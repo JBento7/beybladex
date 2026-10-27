@@ -47,7 +47,7 @@ export default function PermissionsManager() {
   const active = users.filter((u) => !u.deleted);
 
   return (
-    <div className="mt-8 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+    <div className="mt-8 bg-card border border-line rounded-xl p-6">
       <div className="mb-5">
         <h2 className="text-lg font-bold text-white">Dashboard de Autorizações</h2>
         <p className="text-gray-400 text-sm mt-1">
@@ -68,7 +68,7 @@ export default function PermissionsManager() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#2a2a2a] text-gray-400">
+              <tr className="border-b border-line text-gray-400">
                 <th className="text-left py-3 px-2 font-medium">Nome</th>
                 <th className="text-left py-3 px-2 font-medium">Email</th>
                 <th className="text-left py-3 px-2 font-medium">Administrador</th>
@@ -76,11 +76,11 @@ export default function PermissionsManager() {
                 <th className="text-left py-3 px-2 font-medium">Admin de</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#2a2a2a]">
+            <tbody className="divide-y divide-line">
               {active.map((u) => {
                 const isAdmin = u.role === "ORGANIZER";
                 return (
-                  <tr key={u.id} className="hover:bg-[#252525] transition-colors">
+                  <tr key={u.id} className="hover:bg-field transition-colors">
                     <td className="py-3 px-2 font-medium text-white">{u.name}</td>
                     <td className="py-3 px-2 text-gray-400">{u.email}</td>
                     <td className="py-3 px-2">
@@ -90,10 +90,10 @@ export default function PermissionsManager() {
                           checked={isAdmin}
                           disabled={togglingId === `${u.id}:role`}
                           onChange={(e) => toggle(u, "role", e.target.checked ? "ORGANIZER" : "PARTICIPANT")}
-                          className="accent-[#f0a500]"
+                          className="accent-brand-yellow"
                         />
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                          isAdmin ? "bg-[#f0a500]/20 text-[#f0a500]" : "bg-gray-700 text-gray-400"
+                          isAdmin ? "bg-brand-yellow/20 text-brand-yellow" : "bg-gray-700 text-gray-400"
                         }`}>
                           {isAdmin ? "Admin" : "Jogador"}
                         </span>
@@ -106,7 +106,7 @@ export default function PermissionsManager() {
                           checked={isAdmin || u.canJudge}
                           disabled={isAdmin || togglingId === `${u.id}:canJudge`}
                           onChange={(e) => toggle(u, "canJudge", e.target.checked)}
-                          className="accent-[#f0a500]"
+                          className="accent-brand-yellow"
                         />
                         <span className="text-xs text-gray-400">
                           {isAdmin ? "Sim (admin)" : u.canJudge ? "Sim" : "Não"}
@@ -120,7 +120,7 @@ export default function PermissionsManager() {
                           value={u.adminCommunity ?? ""}
                           disabled={togglingId === `${u.id}:adminCommunity`}
                           onChange={(e) => toggle(u, "adminCommunity", e.target.value)}
-                          className="bg-[#252525] border border-[#333] rounded-lg px-2 py-1 text-xs text-white"
+                          className="bg-field border border-line rounded-lg px-2 py-1 text-xs text-white"
                         >
                           <option value="">Todas (geral)</option>
                           <option value="lbl">Só LBL</option>

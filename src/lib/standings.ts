@@ -136,8 +136,14 @@ export function computeSwissFinalPlacement(userIds: string[], matches: Standings
 export function decidedPodium(matches: StandingsMatch[], swissRounds: number): { first?: string; second?: string; third?: string } {
   const playoff = matches.filter((m) => m.round > swissRounds && m.player1Id !== m.player2Id && !m.isThirdPlace);
   if (playoff.length === 0) return {};
-  const lastRound = Math.max(...playoff.map((m) => m.round));
-  const finals = playoff.filter((m) => m.round === lastRound);
+  // The final is the round where the bracket ends, computed from the size of
+  // its first round — not merely "the last round that exists so far".
+  const firstRound = Math.min(...playoff.map((m) => m.round));
+  const firstPlayers = new Set(
+    matches.filter((m) => m.round === firstRound && !m.isThirdPlace).flatMap((m) => [m.player1Id, m.player2Id])
+  ).size;
+  const finalRound = firstRound + Math.max(1, Math.ceil(Math.log2(Math.max(2, firstPlayers)))) - 1;
+  const finals = playoff.filter((m) => m.round === finalRound);
   if (finals.length !== 1) return {};
   const final = finals[0];
   if (final.status !== "FINISHED" || !final.winnerId) return {};
@@ -149,4 +155,26 @@ export function decidedPodium(matches: StandingsMatch[], swissRounds: number): {
     if (thirdMatch.status === "FINISHED" && thirdMatch.winnerId) third = thirdMatch.winnerId;
   }
   return { first, second, third };
+}
+
+/**
+ * Podium of an event for summaries (home page). Knockout events: only what the
+ * bracket decided (decidedPodium). Events without a knockout: the placements
+ * stored when the event was closed, only once it is FINISHED. Never mixes the
+ * Swiss table into a final placement.
+ */
+export function eventPodium(input: {
+  format: string;
+  status: string;
+  swissRounds: number;
+  matches: StandingsMatch[];
+  placements: { userId: string; placement: number | null }[];
+}): { first?: string; second?: string; third?: string } {
+  const { format, status, swissRounds, matches, placements } = input;
+  if (format === "SINGLE_ELIMINATION") return decidedPodium(matches, 0);
+  const hasKnockout = format === "ROUND_ROBIN" && matches.some((m) => m.round > swissRounds && m.player1Id !== m.player2Id);
+  if (hasKnockout) return decidedPodium(matches, swissRounds);
+  if (status !== "FINISHED") return {};
+  const at = (n: number) => placements.find((p) => p.placement === n)?.userId;
+  return { first: at(1), second: at(2), third: at(3) };
 }

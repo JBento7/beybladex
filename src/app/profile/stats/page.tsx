@@ -11,13 +11,13 @@ export const dynamic = "force-dynamic";
 
 const finishOrder: FinishType[] = ["EXTREME_FINISH", "BURST_FINISH", "OVER_FINISH", "SPIN_FINISH"];
 const finishColors: Record<string, string> = {
-  EXTREME_FINISH: "bg-[#f0a500] text-black",
+  EXTREME_FINISH: "bg-brand-yellow text-black",
   BURST_FINISH: "bg-purple-500 text-white",
   OVER_FINISH: "bg-blue-500 text-white",
   SPIN_FINISH: "bg-gray-500 text-white",
 };
 const finishBarColors: Record<string, string> = {
-  EXTREME_FINISH: "bg-[#f0a500]",
+  EXTREME_FINISH: "bg-brand-yellow",
   BURST_FINISH: "bg-purple-500",
   OVER_FINISH: "bg-blue-500",
   SPIN_FINISH: "bg-gray-500",
@@ -54,10 +54,10 @@ export default async function ProfileStatsPage() {
   const maxPoints = Math.max(1, ...combos.map((c) => Math.max(c.pointsScored, c.pointsSuffered)));
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link href="/profile" className="inline-flex items-center gap-2 text-gray-400 hover:text-[#f0a500] text-sm mb-6 transition-colors">
+        <Link href="/profile" className="inline-flex items-center gap-2 text-gray-400 hover:text-brand-yellow text-sm mb-6 transition-colors">
           ← Voltar ao perfil
         </Link>
 
@@ -67,15 +67,15 @@ export default async function ProfileStatsPage() {
         </div>
 
         {combos.length === 0 ? (
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-10 text-center">
+          <div className="bg-card border border-line rounded-xl p-10 text-center">
             <div className="mb-3"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
             <p className="text-gray-500">Nenhum combo cadastrado ainda.</p>
-            <Link href="/profile" className="text-[#f0a500] hover:underline text-sm mt-2 inline-block">Cadastrar combos →</Link>
+            <Link href="/profile" className="text-brand-yellow hover:underline text-sm mt-2 inline-block">Cadastrar combos →</Link>
           </div>
         ) : (
           <div className="space-y-6">
             {combos.map((c) => (
-              <div key={c.id} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6">
+              <div key={c.id} className="bg-card border border-line rounded-2xl p-6">
                 {/* Header */}
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
                   <div>
@@ -97,7 +97,7 @@ export default async function ProfileStatsPage() {
                     <WinLossDonut wins={c.wins} losses={c.losses} />
                     <div className="space-y-1.5 text-sm">
                       <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /><span className="text-gray-300">{c.wins} vitórias</span></div>
-                      <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-[#c8102e]" /><span className="text-gray-300">{c.losses} derrotas</span></div>
+                      <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-brand-red" /><span className="text-gray-300">{c.losses} derrotas</span></div>
                       <div className="text-gray-500 text-xs pt-1">{c.total} batalhas</div>
                     </div>
                   </div>
@@ -109,7 +109,7 @@ export default async function ProfileStatsPage() {
                         <span className="text-green-400 font-medium">Pontos feitos</span>
                         <span className="text-gray-300 font-bold">{c.pointsScored}</span>
                       </div>
-                      <div className="h-3 bg-[#252525] rounded-full overflow-hidden">
+                      <div className="h-3 bg-field rounded-full overflow-hidden">
                         <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${(c.pointsScored / maxPoints) * 100}%` }} />
                       </div>
                     </div>
@@ -118,15 +118,15 @@ export default async function ProfileStatsPage() {
                         <span className="text-red-400 font-medium">Pontos sofridos</span>
                         <span className="text-gray-300 font-bold">{c.pointsSuffered}</span>
                       </div>
-                      <div className="h-3 bg-[#252525] rounded-full overflow-hidden">
-                        <div className="h-full bg-[#c8102e] rounded-full transition-all" style={{ width: `${(c.pointsSuffered / maxPoints) * 100}%` }} />
+                      <div className="h-3 bg-field rounded-full overflow-hidden">
+                        <div className="h-full bg-brand-red rounded-full transition-all" style={{ width: `${(c.pointsSuffered / maxPoints) * 100}%` }} />
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Finish breakdown: scored vs suffered */}
-                <div className="grid sm:grid-cols-2 gap-5 mt-6 pt-5 border-t border-[#2a2a2a]">
+                <div className="grid sm:grid-cols-2 gap-5 mt-6 pt-5 border-t border-line">
                   <div>
                     <h3 className="text-xs font-bold text-green-400 uppercase tracking-wide mb-3">Finishes aplicados</h3>
                     {finishOrder.every((t) => !c.finishesScored[t]) ? (
@@ -144,7 +144,7 @@ export default async function ProfileStatsPage() {
                                 <span className="text-gray-300">{FINISH_TYPE_LABELS[t]}</span>
                                 <span className="text-gray-500">{count}×</span>
                               </div>
-                              <div className="h-1.5 bg-[#252525] rounded-full overflow-hidden">
+                              <div className="h-1.5 bg-field rounded-full overflow-hidden">
                                 <div className={`h-full ${finishBarColors[t]} rounded-full`} style={{ width: `${pct}%` }} />
                               </div>
                             </div>
@@ -170,7 +170,7 @@ export default async function ProfileStatsPage() {
                                 <span className="text-gray-300">{FINISH_TYPE_LABELS[t]}</span>
                                 <span className="text-gray-500">{count}×</span>
                               </div>
-                              <div className="h-1.5 bg-[#252525] rounded-full overflow-hidden">
+                              <div className="h-1.5 bg-field rounded-full overflow-hidden">
                                 <div className={`h-full ${finishBarColors[t]} rounded-full opacity-70`} style={{ width: `${pct}%` }} />
                               </div>
                             </div>
@@ -183,8 +183,8 @@ export default async function ProfileStatsPage() {
 
                 {/* Matchup chart */}
                 {c.matchups.length > 0 && (
-                  <div className="mt-6 pt-5 border-t border-[#2a2a2a]">
-                    <h3 className="text-xs font-bold text-[#f0a500] uppercase tracking-wide mb-4">Desempenho contra cada oponente</h3>
+                  <div className="mt-6 pt-5 border-t border-line">
+                    <h3 className="text-xs font-bold text-brand-yellow uppercase tracking-wide mb-4">Desempenho contra cada oponente</h3>
                     <div className="space-y-4">
                       {c.matchups.slice(0, 10).map((mu) => {
                         const total = mu.wins + mu.losses;
@@ -194,7 +194,7 @@ export default async function ProfileStatsPage() {
                         const scoredEntries = finishOrder.filter((t) => mu.finishesScored[t]);
                         const sufferedEntries = finishOrder.filter((t) => mu.finishesSuffered[t]);
                         return (
-                          <div key={mu.opponentBey} className="bg-[#252525] rounded-xl p-3">
+                          <div key={mu.opponentBey} className="bg-field rounded-xl p-3">
                             {/* Opponent name + win/loss */}
                             <div className="flex items-center justify-between text-xs mb-2">
                               <span className="text-gray-200 font-semibold truncate mr-2 flex items-center gap-1">
@@ -209,9 +209,9 @@ export default async function ProfileStatsPage() {
                               </span>
                             </div>
                             {/* Stacked bar */}
-                            <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden flex mb-3" style={{ width: `${rowPct}%` }}>
+                            <div className="h-2 bg-card rounded-full overflow-hidden flex mb-3" style={{ width: `${rowPct}%` }}>
                               <div className="h-full bg-green-500" style={{ width: total > 0 ? `${(mu.wins / total) * 100}%` : "0%" }} />
-                              <div className="h-full bg-[#c8102e]" style={{ width: total > 0 ? `${(mu.losses / total) * 100}%` : "0%" }} />
+                              <div className="h-full bg-brand-red" style={{ width: total > 0 ? `${(mu.losses / total) * 100}%` : "0%" }} />
                             </div>
                             {/* Finish tags */}
                             {(scoredEntries.length > 0 || sufferedEntries.length > 0) && (

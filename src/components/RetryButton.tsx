@@ -13,7 +13,7 @@ export default function RetryButton({ label = "Tentar novamente" }: { label?: st
       type="button"
       onClick={() => start(() => router.refresh())}
       disabled={pending}
-      className="tap inline-flex items-center justify-center px-6 rounded-xl font-bold bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-60 text-white"
+      className="tap inline-flex items-center justify-center px-6 rounded-xl font-bold bg-brand-red hover:bg-brand-red-hover disabled:opacity-60 text-white"
     >
       {pending ? "Carregando…" : label}
     </button>

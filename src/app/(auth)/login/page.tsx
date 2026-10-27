@@ -47,12 +47,12 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d] flex flex-col items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-app flex flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="mb-8 block">
         <img src="/lblnovo.png" alt="Liga Beyblade Londrina" className="h-14 md:h-[100px] w-auto" />
       </Link>
 
-      <div className="w-full max-w-md bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 shadow-2xl">
+      <div className="w-full max-w-md bg-card border border-line rounded-2xl p-8 shadow-2xl">
         <h1 className="text-2xl font-bold text-white mb-2 text-center">Bem-vindo de volta</h1>
         <p className="text-gray-300 text-center mb-6 text-sm">
           {callbackUrl?.startsWith("/tournaments/create")
@@ -69,7 +69,7 @@ function LoginForm() {
         )}
 
         {verified && (
-          <div aria-live="polite" className="bg-[#f0a500]/10 border border-[#f0a500]/40 text-[#f0a500] text-sm px-4 py-3 rounded-lg mb-4">
+          <div aria-live="polite" className="bg-brand-yellow/10 border border-brand-yellow/40 text-brand-yellow text-sm px-4 py-3 rounded-lg mb-4">
             <img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />E-mail confirmado! Faça login para entrar.
           </div>
         )}
@@ -92,7 +92,7 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="voce@exemplo.com"
-              className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+              className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
             />
           </div>
 
@@ -112,13 +112,13 @@ function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
-                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 pr-12 text-white placeholder-gray-500 outline-none transition-colors"
+                className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 pr-12 text-white placeholder-gray-500 outline-none transition-colors"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                className="absolute inset-y-0 right-0 flex items-center px-3 min-w-[44px] justify-center text-sm font-semibold text-gray-300 hover:text-[#f0a500] transition-colors"
+                className="absolute inset-y-0 right-0 flex items-center px-3 min-w-[44px] justify-center text-sm font-semibold text-gray-300 hover:text-brand-yellow transition-colors"
               >
                 {showPassword ? "Ocultar" : "Mostrar"}
               </button>
@@ -128,7 +128,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#f0a500] hover:bg-[#d4940a] disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold py-3 rounded-xl transition-colors text-base"
+            className="w-full bg-brand-yellow hover:bg-brand-yellow-hover disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold py-3 rounded-xl transition-colors text-base"
           >
             {loading ? "Entrando..." : "Entrar"}
           </button>
@@ -136,7 +136,7 @@ function LoginForm() {
 
         <p className="text-center text-sm text-gray-400 mt-6">
           Não tem uma conta?{" "}
-          <Link href={callbackUrl ? `/register?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/register"} className="text-[#f0a500] hover:text-[#d4940a] font-medium underline-offset-2 hover:underline">
+          <Link href={callbackUrl ? `/register?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/register"} className="text-brand-yellow hover:text-brand-yellow-hover font-medium underline-offset-2 hover:underline">
             Cadastre-se aqui
           </Link>
         </p>
@@ -147,7 +147,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0d0d0d]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-app" />}>
       <LoginForm />
     </Suspense>
   );

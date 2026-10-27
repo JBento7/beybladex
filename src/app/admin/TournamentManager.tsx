@@ -163,7 +163,7 @@ export default function TournamentManager() {
   const selected = tournaments.find((t) => t.id === selectedId);
 
   return (
-    <div className="mt-8 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+    <div className="mt-8 bg-card border border-line rounded-xl p-6">
       <h2 className="text-lg font-bold text-white mb-5">Gerenciar Torneios</h2>
 
       {msg && (
@@ -182,17 +182,17 @@ export default function TournamentManager() {
       ) : (
         <div className="space-y-3">
           {tournaments.map((t) => (
-            <div key={t.id} className="border border-[#2a2a2a] rounded-xl overflow-hidden">
+            <div key={t.id} className="border border-line rounded-xl overflow-hidden">
               {/* Tournament row */}
               {editingId === t.id ? (
-                <div className="p-4 bg-[#252525] space-y-3">
+                <div className="p-4 bg-field space-y-3">
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-gray-400 mb-1 block">Nome</label>
                       <input
                         value={editForm.name}
                         onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                        className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#f0a500]"
+                        className="w-full bg-card border border-line rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-yellow"
                       />
                     </div>
                     <div>
@@ -200,7 +200,7 @@ export default function TournamentManager() {
                       <input
                         value={editForm.prize}
                         onChange={(e) => setEditForm({ ...editForm, prize: e.target.value })}
-                        className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#f0a500]"
+                        className="w-full bg-card border border-line rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-yellow"
                       />
                     </div>
                     <div>
@@ -208,7 +208,7 @@ export default function TournamentManager() {
                       <select
                         value={editForm.status}
                         onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                        className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#f0a500]"
+                        className="w-full bg-card border border-line rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-yellow"
                       >
                         {Object.entries(STATUS_LABELS).map(([k, v]) => (
                           <option key={k} value={k}>{v}</option>
@@ -221,7 +221,7 @@ export default function TournamentManager() {
                         type="number"
                         value={editForm.maxParticipants}
                         onChange={(e) => setEditForm({ ...editForm, maxParticipants: e.target.value })}
-                        className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#f0a500]"
+                        className="w-full bg-card border border-line rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-yellow"
                         placeholder="Sem limite"
                       />
                     </div>
@@ -230,7 +230,7 @@ export default function TournamentManager() {
                       <input
                         value={editForm.description}
                         onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                        className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#f0a500]"
+                        className="w-full bg-card border border-line rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-yellow"
                       />
                     </div>
                   </div>
@@ -238,26 +238,26 @@ export default function TournamentManager() {
                     <button
                       onClick={() => saveEdit(t.id)}
                       disabled={saving}
-                      className="bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-60"
+                      className="bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-60"
                     >
                       {saving ? "Salvando..." : "Salvar"}
                     </button>
                     <button
                       onClick={() => setEditingId(null)}
-                      className="bg-[#333] hover:bg-[#444] text-gray-300 text-sm px-4 py-2 rounded-lg transition-colors"
+                      className="bg-hover hover:bg-hover text-gray-300 text-sm px-4 py-2 rounded-lg transition-colors"
                     >
                       Cancelar
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-between p-4 bg-[#252525] flex-wrap gap-2">
+                <div className="flex items-center justify-between p-4 bg-field flex-wrap gap-2">
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="font-semibold text-white truncate">{t.name}</span>
                     <span className="text-xs text-gray-500 flex-shrink-0">{FORMAT_LABELS[t.format]}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${
                       t.status === "IN_PROGRESS" ? "bg-green-500/20 text-green-400"
-                      : t.status === "REGISTRATION" ? "bg-[#f0a500]/20 text-[#f0a500]"
+                      : t.status === "REGISTRATION" ? "bg-brand-yellow/20 text-brand-yellow"
                       : t.status === "FINISHED" ? "bg-gray-700 text-gray-400"
                       : "bg-gray-700 text-gray-500"
                     }`}>{STATUS_LABELS[t.status]}</span>
@@ -266,14 +266,14 @@ export default function TournamentManager() {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <Link
                       href={`/tournaments/${t.id}`}
-                      className="text-xs text-gray-400 hover:text-[#f0a500] transition-colors px-2 py-1 rounded"
+                      className="text-xs text-gray-400 hover:text-brand-yellow transition-colors px-2 py-1 rounded"
                       target="_blank"
                     >
                       Ver
                     </Link>
                     <button
                       onClick={() => startEdit(t)}
-                      className="text-xs bg-[#333] hover:bg-[#444] text-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+                      className="text-xs bg-hover hover:bg-hover text-gray-300 px-3 py-1.5 rounded-lg transition-colors"
                     >
                       Editar
                     </button>
@@ -281,8 +281,8 @@ export default function TournamentManager() {
                       onClick={() => openPoints(t)}
                       className={`text-xs px-3 py-1.5 rounded-lg transition-colors font-medium ${
                         selectedId === t.id
-                          ? "bg-[#f0a500] text-black"
-                          : "bg-[#f0a500]/20 text-[#f0a500] hover:bg-[#f0a500]/30"
+                          ? "bg-brand-yellow text-black"
+                          : "bg-brand-yellow/20 text-brand-yellow hover:bg-brand-yellow/30"
                       }`}
                     >
                       Pontos
@@ -299,7 +299,7 @@ export default function TournamentManager() {
 
               {/* Points panel */}
               {selectedId === t.id && (
-                <div className="p-4 border-t border-[#2a2a2a] bg-[#1a1a1a]">
+                <div className="p-4 border-t border-line bg-card">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-white text-sm">Pontos — {t.name}</h3>
                     <button
@@ -317,9 +317,9 @@ export default function TournamentManager() {
                   ) : (
                     <div className="space-y-4">
                       {matches.map((match) => (
-                        <div key={match.id} className="border border-[#2a2a2a] rounded-xl overflow-hidden">
+                        <div key={match.id} className="border border-line rounded-xl overflow-hidden">
                           {/* Match header */}
-                          <div className="flex items-center justify-between px-4 py-3 bg-[#252525]">
+                          <div className="flex items-center justify-between px-4 py-3 bg-field">
                             <div className="text-sm">
                               <span className="font-semibold text-white">{match.player1.name}</span>
                               <span className="text-gray-500 mx-2">vs</span>
@@ -328,7 +328,7 @@ export default function TournamentManager() {
                             </div>
                             <div className="flex items-center gap-2">
                               {match.winner && (
-                                <span className="text-xs text-[#f0a500] font-semibold">
+                                <span className="text-xs text-brand-yellow font-semibold">
                                   🏆 {match.winner.name}
                                 </span>
                               )}
@@ -345,13 +345,13 @@ export default function TournamentManager() {
 
                           {/* Sets summary */}
                           {match.sets.length > 0 && (
-                            <div className="px-4 py-2 flex gap-3 bg-[#1d1d1d] border-b border-[#2a2a2a]">
+                            <div className="px-4 py-2 flex gap-3 bg-[#1d1d1d] border-b border-line">
                               {match.sets.map((s) => (
                                 <div key={s.id} className="text-xs text-gray-400">
                                   Set {s.setNumber}: <span className="text-white font-semibold">{s.player1Points}</span>
                                   <span className="text-gray-600">-</span>
                                   <span className="text-white font-semibold">{s.player2Points}</span>
-                                  {s.status === "FINISHED" && <span className="ml-1 text-[#f0a500]">✓</span>}
+                                  {s.status === "FINISHED" && <span className="ml-1 text-brand-yellow">✓</span>}
                                 </div>
                               ))}
                             </div>
@@ -363,18 +363,18 @@ export default function TournamentManager() {
                               <p className="text-xs text-gray-600 text-center py-2">Sem pontos registrados</p>
                             ) : (
                               match.points.map((pt) => (
-                                <div key={pt.id} className="flex items-center justify-between bg-[#252525] rounded-lg px-3 py-2">
+                                <div key={pt.id} className="flex items-center justify-between bg-field rounded-lg px-3 py-2">
                                   <div className="flex items-center gap-2 text-xs">
                                     <span className="text-gray-300 font-medium">{pt.user.name}</span>
                                     <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${
-                                      pt.finishType === "EXTREME_FINISH" ? "bg-[#f0a500] text-black"
+                                      pt.finishType === "EXTREME_FINISH" ? "bg-brand-yellow text-black"
                                       : pt.finishType === "BURST_FINISH" ? "bg-purple-600 text-white"
                                       : pt.finishType === "OVER_FINISH" ? "bg-blue-600 text-white"
                                       : "bg-gray-600 text-white"
                                     }`}>
                                       {FINISH_LABELS[pt.finishType]}
                                     </span>
-                                    <span className="text-[#f0a500] font-bold">+{pt.points}pt</span>
+                                    <span className="text-brand-yellow font-bold">+{pt.points}pt</span>
                                   </div>
                                   <button
                                     onClick={() => deletePoint(t.id, pt.id)}
@@ -393,7 +393,7 @@ export default function TournamentManager() {
                                 <select
                                   value={adding.scorerId}
                                   onChange={(e) => setAdding({ ...adding, scorerId: e.target.value })}
-                                  className="bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-1.5 text-white text-xs outline-none focus:border-[#f0a500]"
+                                  className="bg-card border border-line rounded-lg px-3 py-1.5 text-white text-xs outline-none focus:border-brand-yellow"
                                 >
                                   <option value="">Jogador</option>
                                   <option value={match.player1.id}>{match.player1.name}</option>
@@ -402,7 +402,7 @@ export default function TournamentManager() {
                                 <select
                                   value={adding.finishType}
                                   onChange={(e) => setAdding({ ...adding, finishType: e.target.value })}
-                                  className="bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-1.5 text-white text-xs outline-none focus:border-[#f0a500]"
+                                  className="bg-card border border-line rounded-lg px-3 py-1.5 text-white text-xs outline-none focus:border-brand-yellow"
                                 >
                                   <option value="">Tipo</option>
                                   {Object.entries(FINISH_LABELS).map(([k, v]) => (
@@ -412,7 +412,7 @@ export default function TournamentManager() {
                                 <button
                                   onClick={addPoint}
                                   disabled={!adding.scorerId || !adding.finishType}
-                                  className="bg-[#f0a500] hover:bg-[#d4940a] text-black text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+                                  className="bg-brand-yellow hover:bg-brand-yellow-hover text-black text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
                                 >
                                   Adicionar
                                 </button>
@@ -426,7 +426,7 @@ export default function TournamentManager() {
                             ) : (
                               <button
                                 onClick={() => setAdding({ matchId: match.id, scorerId: "", finishType: "" })}
-                                className="mt-1 w-full text-xs text-[#f0a500] hover:text-[#d4940a] border border-dashed border-[#f0a500]/30 hover:border-[#f0a500]/60 rounded-lg py-2 transition-colors"
+                                className="mt-1 w-full text-xs text-brand-yellow hover:text-brand-yellow-hover border border-dashed border-brand-yellow/30 hover:border-brand-yellow/60 rounded-lg py-2 transition-colors"
                               >
                                 + Adicionar ponto
                               </button>

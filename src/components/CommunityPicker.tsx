@@ -15,7 +15,7 @@ export default function CommunityPicker({
   onChange: (v: { community: string; partnership: boolean }) => void;
 }) {
   return (
-    <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+    <div className="bg-card border border-line rounded-xl p-6">
       <h2 className="text-base font-bold text-white mb-1">Comunidade</h2>
       <p className="text-xs text-gray-500 mb-4">Define em qual ranking o torneio conta.</p>
 
@@ -26,7 +26,7 @@ export default function CommunityPicker({
             type="button"
             onClick={() => onChange({ community: c.slug, partnership })}
             className={`text-left p-4 rounded-xl border-2 transition-all ${
-              community === c.slug ? "border-[#f0a500] bg-[#f0a500]/10" : "border-[#333] bg-[#252525] hover:border-gray-600"
+              community === c.slug ? "border-brand-yellow bg-brand-yellow/10" : "border-line bg-field hover:border-gray-600"
             }`}
           >
             <div className="flex items-center gap-2">
@@ -45,7 +45,7 @@ export default function CommunityPicker({
           type="checkbox"
           checked={partnership}
           onChange={(e) => onChange({ community, partnership: e.target.checked })}
-          className="mt-0.5 w-4 h-4 accent-[#f0a500]"
+          className="mt-0.5 w-4 h-4 accent-brand-yellow"
         />
         <span className="text-sm">
           <span className="font-bold text-white">Torneio em parceria LBL + LBM</span>

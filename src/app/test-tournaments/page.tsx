@@ -19,7 +19,7 @@ const FORMAT_LABELS: Partial<Record<TournamentFormat, string>> & Record<string, 
 
 const STATUS_STYLES: Record<TournamentStatus, { label: string; style: string }> = {
   DRAFT: { label: "Rascunho", style: "bg-gray-700 text-gray-400" },
-  REGISTRATION: { label: "Inscrições Abertas", style: "bg-[#f0a500]/20 text-[#f0a500]" },
+  REGISTRATION: { label: "Inscrições Abertas", style: "bg-brand-yellow/20 text-brand-yellow" },
   IN_PROGRESS: { label: "Em Andamento", style: "bg-green-500/20 text-green-400" },
   FINISHED: { label: "Finalizado", style: "bg-gray-700 text-gray-500" },
 };
@@ -50,7 +50,7 @@ export default async function TestTournamentsPage() {
   const joinedIds = new Set(participations.map((p) => p.tournamentId));
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
@@ -68,7 +68,7 @@ export default async function TestTournamentsPage() {
           </div>
           <Link
             href="/tournaments/create"
-            className="bg-[#c8102e] hover:bg-[#a00d24] text-white font-bold px-5 py-2.5 rounded-xl transition-colors"
+            className="bg-brand-red hover:bg-brand-red-hover text-white font-bold px-5 py-2.5 rounded-xl transition-colors"
           >
             + Criar Torneio
           </Link>
@@ -83,7 +83,7 @@ export default async function TestTournamentsPage() {
             </p>
             <Link
               href="/tournaments/create"
-              className="bg-[#c8102e] hover:bg-[#a00d24] text-white font-bold px-6 py-3 rounded-xl transition-colors inline-block"
+              className="bg-brand-red hover:bg-brand-red-hover text-white font-bold px-6 py-3 rounded-xl transition-colors inline-block"
             >
               Criar Torneio de Teste
             </Link>
@@ -101,7 +101,7 @@ export default async function TestTournamentsPage() {
               return (
                 <div
                   key={t.id}
-                  className="bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#f0a500]/30 rounded-2xl p-6 transition-all flex flex-col"
+                  className="bg-card border border-line hover:border-brand-yellow/30 rounded-2xl p-6 transition-all flex flex-col"
                 >
                   {/* Status badge */}
                   <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -115,7 +115,7 @@ export default async function TestTournamentsPage() {
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-gray-500 font-medium bg-[#252525] px-2.5 py-1 rounded-full">
+                    <span className="text-xs text-gray-500 font-medium bg-field px-2.5 py-1 rounded-full">
                       {FORMAT_LABELS[t.format]}
                     </span>
                   </div>
@@ -128,7 +128,7 @@ export default async function TestTournamentsPage() {
 
                   <div className="mt-auto">
                     {t.prize && (
-                      <div className="mb-4 text-sm bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500] px-3 py-2 rounded-lg font-medium">
+                      <div className="mb-4 text-sm bg-brand-yellow/10 border border-brand-yellow/30 text-brand-yellow px-3 py-2 rounded-lg font-medium">
                         🏆 {t.prize}
                       </div>
                     )}
@@ -152,7 +152,7 @@ export default async function TestTournamentsPage() {
                     <div className="flex items-center gap-3">
                       <Link
                         href={`/tournaments/${t.id}`}
-                        className="flex-1 text-center bg-[#252525] hover:bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                        className="flex-1 text-center bg-field hover:bg-gray-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
                       >
                         Ver Detalhes
                       </Link>
@@ -163,7 +163,7 @@ export default async function TestTournamentsPage() {
                       ) : canJoin ? (
                         <Link
                           href={`/tournaments/${t.id}`}
-                          className="flex-1 text-center bg-[#f0a500] hover:bg-[#d4940a] text-black text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+                          className="flex-1 text-center bg-brand-yellow hover:bg-brand-yellow-hover text-black text-sm font-bold px-4 py-2 rounded-lg transition-colors"
                         >
                           Participar
                         </Link>

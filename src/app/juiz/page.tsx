@@ -53,12 +53,12 @@ export default async function JudgeHome({ searchParams }: { searchParams: { aba?
   const current = TABS.find((x) => x.key === tab)!;
   const tabClass = (on: boolean) =>
     `flex-1 text-center py-2.5 px-1 rounded-xl text-sm font-bold transition-colors ${
-      on ? "bg-[var(--accent)] text-black" : "bg-[#1a1a1a] text-gray-400 border border-[#2a2a2a]"
+      on ? "bg-[var(--accent)] text-black" : "bg-card text-gray-400 border border-line"
     }`;
   const tag = (t: (typeof all)[number]) => (
     <>
       {t.communitySlug && t.communitySlug !== community && (
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#252525] text-gray-400">{t.communitySlug.toUpperCase()}</span>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-field text-gray-400">{t.communitySlug.toUpperCase()}</span>
       )}
       {t.isTest && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-400">TESTE</span>}
     </>
@@ -81,7 +81,7 @@ export default async function JudgeHome({ searchParams }: { searchParams: { aba?
         </div>
 
         {running.length === 0 ? (
-          <div className="text-center text-gray-500 py-12 border border-[#2a2a2a] rounded-2xl">
+          <div className="text-center text-gray-500 py-12 border border-line rounded-2xl">
             {current.empty}
             <div className="mt-3">
               <Link href={current.href} className="text-[var(--accent)] font-semibold">Atualizar</Link>
@@ -93,7 +93,7 @@ export default async function JudgeHome({ searchParams }: { searchParams: { aba?
               <li key={t.id}>
                 <Link
                   href={`/tournaments/${t.id}`}
-                  className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[var(--accent)] transition-colors"
+                  className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-card border border-line hover:border-[var(--accent)] transition-colors"
                 >
                   <div className="min-w-0">
                     <div className="text-white font-bold truncate">{t.name}</div>
@@ -115,7 +115,7 @@ export default async function JudgeHome({ searchParams }: { searchParams: { aba?
             <p className="text-xs text-gray-600 mb-3">Aparecem acima quando o organizador iniciar.</p>
             <ul className="flex flex-col gap-2">
               {waiting.map((t) => (
-                <li key={t.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#141414] border border-[#222] opacity-70">
+                <li key={t.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-card border border-line opacity-70">
                   <div className="min-w-0">
                     <div className="text-gray-300 font-semibold truncate text-sm">{t.name}</div>
                     <div className="text-gray-600 text-xs mt-0.5">{t._count.participants} inscritos · aguardando início</div>

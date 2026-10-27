@@ -89,13 +89,13 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
     <div className="flex flex-col items-start gap-2">
       <div className="relative group">
         <div
-          className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#f0a500]/50 cursor-pointer"
+          className="w-20 h-20 rounded-full overflow-hidden border-2 border-brand-yellow/50 cursor-pointer"
           onClick={() => !uploading && inputRef.current?.click()}
         >
           {avatar ? (
             <img src={avatar} alt={userName} className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center">
+            <div className="w-full h-full bg-brand-yellow/20 flex items-center justify-center">
               <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
             </div>
           )}

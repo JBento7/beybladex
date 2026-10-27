@@ -43,7 +43,7 @@ function FinishBar({ records }: { records: RecordRow[] }) {
         return (
           <div key={key} className="flex items-center gap-2">
             <span className={`text-[10px] font-bold w-14 flex-shrink-0 ${color}`}>{label}</span>
-            <div className="flex-1 bg-[#252525] rounded-full h-2 overflow-hidden">
+            <div className="flex-1 bg-field rounded-full h-2 overflow-hidden">
               <div className={`h-full rounded-full bg-current ${color}`} style={{ width: `${pct}%` }} />
             </div>
             <span className="text-[10px] text-gray-500 w-12 text-right flex-shrink-0">{count} ({pct}%)</span>
@@ -89,16 +89,16 @@ function DrillDown({ records }: { records: RecordRow[] }) {
       {tEntries.map(([tId, t]) => {
         const tOpen = openT === tId;
         return (
-          <div key={tId} className="border border-[#2a2a2a] rounded-xl overflow-hidden">
+          <div key={tId} className="border border-line rounded-xl overflow-hidden">
             {/* Level 1 — Tournament */}
             <button
               onClick={() => { setOpenT(tOpen ? null : tId); setOpenOpp(null); }}
-              className="w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-[#1e1e1e] hover:bg-[#242424] transition-colors text-left"
+              className="w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-card hover:bg-[#242424] transition-colors text-left"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-sm font-semibold text-white truncate">{t.name}</span>
                 {t.isOfficial
-                  ? <span className="text-[9px] font-bold bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30 px-1.5 py-0.5 rounded flex-shrink-0">OFICIAL</span>
+                  ? <span className="text-[9px] font-bold bg-brand-yellow/20 text-brand-yellow border border-brand-yellow/30 px-1.5 py-0.5 rounded flex-shrink-0">OFICIAL</span>
                   : <span className="text-[9px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded flex-shrink-0">BEYENCONTRO</span>}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -109,7 +109,7 @@ function DrillDown({ records }: { records: RecordRow[] }) {
             </button>
 
             {tOpen && (
-              <div className="divide-y divide-[#252525]">
+              <div className="divide-y divide-line">
                 {[...t.opponents.entries()].map(([oppKey, opp]) => {
                   const oppId = `${tId}:${oppKey}`;
                   const oppOpen = openOpp === oppId;
@@ -118,10 +118,10 @@ function DrillDown({ records }: { records: RecordRow[] }) {
                       {/* Level 2 — Opponent */}
                       <button
                         onClick={() => setOpenOpp(oppOpen ? null : oppId)}
-                        className="w-full flex items-center justify-between gap-3 px-5 py-2 bg-[#161616] hover:bg-[#1c1c1c] transition-colors text-left"
+                        className="w-full flex items-center justify-between gap-3 px-5 py-2 bg-card hover:bg-[#1c1c1c] transition-colors text-left"
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#f0a500]/40 flex-shrink-0" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-brand-yellow/40 flex-shrink-0" />
                           <span className="text-sm text-gray-200 font-medium truncate">{opp.name}</span>
                           <span className="text-[10px] text-gray-600 flex-shrink-0">{opp.byBey.size} bey{opp.byBey.size !== 1 ? "s" : ""}</span>
                         </div>
@@ -133,7 +133,7 @@ function DrillDown({ records }: { records: RecordRow[] }) {
                       </button>
 
                       {oppOpen && (
-                        <div className="bg-[#111] px-4 py-3 space-y-2.5">
+                        <div className="bg-app px-4 py-3 space-y-2.5">
                           {[...opp.byBey.entries()].map(([bk, ob]) => {
                             const bW = ob.records.filter(r => r.won).length;
                             const bL = ob.records.filter(r => !r.won).length;
@@ -147,7 +147,7 @@ function DrillDown({ records }: { records: RecordRow[] }) {
                             }
                             return (
                               /* Level 3 — Opponent beyblade */
-                              <div key={bk} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-3">
+                              <div key={bk} className="bg-card border border-line rounded-xl p-3">
                                 <div className="flex items-start justify-between gap-2 mb-2">
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1.5">
@@ -162,7 +162,7 @@ function DrillDown({ records }: { records: RecordRow[] }) {
                                 </div>
                                 <div className="grid grid-cols-3 gap-1.5 text-center mb-2">
                                   {[["text-green-400", bW, "V"], ["text-red-400", bL, "D"], [bS >= bC ? "text-green-400" : "text-red-400", `${bS - bC >= 0 ? "+" : ""}${bS - bC}`, "Saldo"]].map(([c, v, l]) => (
-                                    <div key={String(l)} className="bg-[#252525] rounded-lg py-1.5">
+                                    <div key={String(l)} className="bg-field rounded-lg py-1.5">
                                       <div className={`text-sm font-black ${c}`}>{v}</div>
                                       <div className="text-[9px] text-gray-600">{l}</div>
                                     </div>
@@ -204,7 +204,7 @@ export default function ProfileBeybladeStats({ beyblades }: { beyblades: Beyblad
   if (beyblades.length === 0) return null;
 
   return (
-    <div className="mt-6 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+    <div className="mt-6 bg-card border border-line rounded-xl p-6">
       <h2 className="text-lg font-bold text-white mb-4">Estatísticas por Combo</h2>
       <div className="space-y-2">
         {beyblades.map((b) => {
@@ -215,13 +215,13 @@ export default function ProfileBeybladeStats({ beyblades }: { beyblades: Beyblad
           const conceded = b.records.reduce((s, r) => s + r.pointsConceded, 0);
 
           return (
-            <div key={b.id} className="border border-[#2a2a2a] rounded-xl overflow-hidden">
+            <div key={b.id} className="border border-line rounded-xl overflow-hidden">
               {/* Beyblade header row */}
               <button
                 onClick={() => setOpenBey(isOpen ? null : b.id)}
-                className="w-full flex items-center gap-3 px-4 py-3 bg-[#252525] hover:bg-[#2d2d2d] transition-colors text-left"
+                className="w-full flex items-center gap-3 px-4 py-3 bg-field hover:bg-field transition-colors text-left"
               >
-                <div className="w-8 h-8 rounded-lg bg-[#f0a500]/10 border border-[#f0a500]/20 flex items-center justify-center flex-shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-brand-yellow/10 border border-brand-yellow/20 flex items-center justify-center flex-shrink-0">
                   <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -234,22 +234,22 @@ export default function ProfileBeybladeStats({ beyblades }: { beyblades: Beyblad
                 <div className="flex items-center gap-3 flex-shrink-0 text-xs">
                   <span className="text-green-400 font-bold">{b.wins}V</span>
                   <span className="text-red-400 font-bold">{b.losses}D</span>
-                  <span className={`font-black ${wr >= 50 ? "text-[#f0a500]" : "text-gray-500"}`}>{wr}%</span>
+                  <span className={`font-black ${wr >= 50 ? "text-brand-yellow" : "text-gray-500"}`}>{wr}%</span>
                   <span className="text-gray-600">{isOpen ? "▲" : "▼"}</span>
                 </div>
               </button>
 
               {isOpen && (
-                <div className="bg-[#1a1a1a] p-4 space-y-4">
+                <div className="bg-card p-4 space-y-4">
                   {/* Summary cards */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
                       { label: "Vitórias", value: b.wins, color: "text-green-400" },
                       { label: "Derrotas", value: b.losses, color: "text-red-400" },
-                      { label: "Taxa V.", value: `${wr}%`, color: "text-[#f0a500]" },
+                      { label: "Taxa V.", value: `${wr}%`, color: "text-brand-yellow" },
                       { label: "Saldo pts", value: `${scored - conceded >= 0 ? "+" : ""}${scored - conceded}`, color: scored >= conceded ? "text-green-400" : "text-red-400" },
                     ].map((s) => (
-                      <div key={s.label} className="bg-[#252525] rounded-xl p-2.5 text-center">
+                      <div key={s.label} className="bg-field rounded-xl p-2.5 text-center">
                         <div className={`text-lg font-black ${s.color}`}>{s.value}</div>
                         <div className="text-[9px] text-gray-500 mt-0.5">{s.label}</div>
                       </div>
@@ -258,7 +258,7 @@ export default function ProfileBeybladeStats({ beyblades }: { beyblades: Beyblad
 
                   {/* Finish type breakdown */}
                   {b.records.length > 0 && (
-                    <div className="bg-[#252525] rounded-xl p-3">
+                    <div className="bg-field rounded-xl p-3">
                       <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Tipos de Finish</div>
                       <FinishBar records={b.records} />
                     </div>
@@ -272,7 +272,7 @@ export default function ProfileBeybladeStats({ beyblades }: { beyblades: Beyblad
 
                   {/* Link to full stats page */}
                   <div className="pt-1 text-center">
-                    <Link href={`/beyblade/${b.id}`} className="text-xs text-[#f0a500] hover:underline">
+                    <Link href={`/beyblade/${b.id}`} className="text-xs text-brand-yellow hover:underline">
                       Ver página completa de estatísticas →
                     </Link>
                   </div>

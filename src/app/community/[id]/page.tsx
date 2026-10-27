@@ -21,13 +21,13 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 }
 
 const finishColors: Record<string, string> = {
-  EXTREME_FINISH: "bg-[#f0a500] text-black",
+  EXTREME_FINISH: "bg-brand-yellow text-black",
   BURST_FINISH: "bg-purple-500 text-white",
   OVER_FINISH: "bg-blue-500 text-white",
   SPIN_FINISH: "bg-gray-600 text-white",
 };
 const finishBarColors: Record<string, string> = {
-  EXTREME_FINISH: "bg-[#f0a500]",
+  EXTREME_FINISH: "bg-brand-yellow",
   BURST_FINISH: "bg-purple-500",
   OVER_FINISH: "bg-blue-500",
   SPIN_FINISH: "bg-gray-500",
@@ -40,7 +40,7 @@ export default async function PlayerProfilePage({
   params: { id: string };
 }) {
   const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
+  if (!session) redirect(`/login?callbackUrl=${encodeURIComponent(`/community/${params.id}`)}`);
 
   // redirect to own profile page
   if (params.id === session.user.id) redirect("/profile");
@@ -124,25 +124,25 @@ export default async function PlayerProfilePage({
   }
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back */}
         <Link
           href="/community"
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-[#f0a500] text-sm mb-6 transition-colors"
+          className="inline-flex items-center gap-2 text-gray-400 hover:text-brand-yellow text-sm mb-6 transition-colors"
         >
           ← Comunidade
         </Link>
 
         {/* Profile Header */}
-        <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 mb-6">
+        <div className="bg-card border border-line rounded-2xl p-8 mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#f0a500]/50 flex-shrink-0">
+            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-brand-yellow/50 flex-shrink-0">
               {player.avatarUrl ? (
                 <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center">
+                <div className="w-full h-full bg-brand-yellow/20 flex items-center justify-center">
                   <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
                 </div>
               )}
@@ -153,7 +153,7 @@ export default async function PlayerProfilePage({
                 <TierBadge wins={officialWins} size="md" />
                 <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
                   player.role === "ORGANIZER"
-                    ? "bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30"
+                    ? "bg-brand-yellow/20 text-brand-yellow border border-brand-yellow/30"
                     : "bg-blue-500/20 text-blue-400 border border-blue-500/30"
                 }`}>
                   {player.role === "ORGANIZER" ? "Admin" : "Jogador"}
@@ -181,14 +181,14 @@ export default async function PlayerProfilePage({
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           {[
-            { label: "Pontos Totais", value: totalPoints, color: "text-[#f0a500]", icon: "⭐" },
+            { label: "Pontos Totais", value: totalPoints, color: "text-brand-yellow", icon: "⭐" },
             { label: "Pontos Liga", value: officialPoints, color: "text-blue-400", icon: "🏅" },
             { label: "Pts BeyEncontro", value: beyPoints, color: "text-purple-400", icon: "🎲" },
             { label: "Taxa de Vitória", value: `${winRate}%`, color: "text-green-400", icon: "📈" },
             { label: "Vitórias", value: totalWins, color: "text-green-400", icon: "🏆" },
             { label: "Torneios", value: player.participations.length, color: "text-blue-400", icon: "/bey-removebg-preview.png" },
           ].map((stat) => (
-            <div key={stat.label} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 text-center">
+            <div key={stat.label} className="bg-card border border-line rounded-xl p-5 text-center">
               <div className="flex justify-center mb-2">{stat.icon.startsWith("/") ? <img src={stat.icon} alt="" className="w-6 h-6 object-contain" /> : <span className="text-2xl">{stat.icon}</span>}</div>
               <div className={`text-2xl font-black ${stat.color} mb-1`}>{stat.value}</div>
               <div className="text-xs text-gray-500">{stat.label}</div>
@@ -198,7 +198,7 @@ export default async function PlayerProfilePage({
 
         <div className="grid lg:grid-cols-2 gap-6 mb-6">
           {/* Finish Breakdown */}
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+          <div className="bg-card border border-line rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-5">Tipos de Finish</h2>
             {player.matchPoints.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-8">Nenhuma partida jogada ainda</p>
@@ -214,13 +214,13 @@ export default async function PlayerProfilePage({
                         <span className="text-gray-300 font-medium">{FINISH_TYPE_LABELS[type]}</span>
                         <span className="text-gray-400">{data.count}× · +{data.points}pts</span>
                       </div>
-                      <div className="h-2 bg-[#252525] rounded-full overflow-hidden">
+                      <div className="h-2 bg-field rounded-full overflow-hidden">
                         <div className={`h-full ${finishBarColors[type]} rounded-full`} style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                   );
                 })}
-                <div className="mt-3 pt-3 border-t border-[#2a2a2a] flex flex-wrap gap-2">
+                <div className="mt-3 pt-3 border-t border-line flex flex-wrap gap-2">
                   {finishOrder.map((type) => (
                     finishBreakdown[type] && (
                       <span key={type} className={`text-xs px-2 py-0.5 rounded-full font-semibold ${finishColors[type]}`}>
@@ -234,7 +234,7 @@ export default async function PlayerProfilePage({
           </div>
 
           {/* Tournament History */}
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+          <div className="bg-card border border-line rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-5">Histórico de Torneios</h2>
             {player.participations.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-8">Nenhum torneio ainda</p>
@@ -244,14 +244,14 @@ export default async function PlayerProfilePage({
                   <Link
                     key={i}
                     href={`/tournaments/${p.tournament.id}`}
-                    className="block bg-[#252525] hover:bg-[#2d2d2d] border border-[#333] hover:border-[#f0a500]/30 rounded-lg p-3 transition-colors"
+                    className="block bg-field hover:bg-field border border-line hover:border-brand-yellow/30 rounded-lg p-3 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-sm font-medium text-white">{p.tournament.name}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
                         p.tournament.status === "FINISHED" ? "bg-gray-700 text-gray-400"
                         : p.tournament.status === "IN_PROGRESS" ? "bg-green-500/20 text-green-400"
-                        : "bg-[#f0a500]/20 text-[#f0a500]"
+                        : "bg-brand-yellow/20 text-brand-yellow"
                       }`}>
                         {p.tournament.status === "FINISHED" ? "Finalizado"
                           : p.tournament.status === "IN_PROGRESS" ? "Em Andamento"
@@ -259,14 +259,14 @@ export default async function PlayerProfilePage({
                       </span>
                     </div>
                     <div className="flex items-center gap-3 mt-1.5 text-xs">
-                      <span className="text-[#f0a500] font-bold">{p.totalPoints} pts</span>
+                      <span className="text-brand-yellow font-bold">{p.totalPoints} pts</span>
                       <span className="text-gray-600">·</span>
                       <span className="text-green-400">{p.wins}V</span>
                       <span className="text-red-400">{p.losses}D</span>
                       {p.placement && (
                         <>
                           <span className="text-gray-600">·</span>
-                          <span className="text-[#f0a500]">#{p.placement}</span>
+                          <span className="text-brand-yellow">#{p.placement}</span>
                         </>
                       )}
                     </div>
@@ -278,7 +278,7 @@ export default async function PlayerProfilePage({
         </div>
 
         {/* Beyblades */}
-        <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+        <div className="bg-card border border-line rounded-xl p-6">
           <h2 className="text-lg font-bold text-white mb-5">
             Beyblades de {player.bladerName || player.name}
             {!beybladesHidden && (
@@ -298,7 +298,7 @@ export default async function PlayerProfilePage({
                 const wr = total > 0 ? Math.round((bey.wins / total) * 100) : 0;
                 const parts = [bey.blade, bey.ratchet, bey.bit].filter(Boolean).join(" / ");
                 return (
-                  <div key={bey.id} className="bg-[#252525] border border-[#333] rounded-xl p-4">
+                  <div key={bey.id} className="bg-field border border-line rounded-xl p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <div className="font-bold text-white">{bey.name}</div>
@@ -316,20 +316,20 @@ export default async function PlayerProfilePage({
                         <div className="text-gray-600">D</div>
                       </div>
                       <div>
-                        <div className={`font-black text-base ${wr >= 50 ? "text-[#f0a500]" : "text-gray-400"}`}>{wr}%</div>
+                        <div className={`font-black text-base ${wr >= 50 ? "text-brand-yellow" : "text-gray-400"}`}>{wr}%</div>
                         <div className="text-gray-600">WR</div>
                       </div>
                     </div>
                     {total > 0 && (
-                      <div className="mt-3 h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden">
+                      <div className="mt-3 h-1.5 bg-card rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-[#f0a500] rounded-full"
+                          className="h-full bg-brand-yellow rounded-full"
                           style={{ width: `${wr}%` }}
                         />
                       </div>
                     )}
-                    <div className="mt-3 pt-2 border-t border-[#333]">
-                      <Link href={`/beyblade/${bey.id}`} className="text-xs text-[#f0a500] hover:underline">
+                    <div className="mt-3 pt-2 border-t border-line">
+                      <Link href={`/beyblade/${bey.id}`} className="text-xs text-brand-yellow hover:underline">
                         Ver estatísticas →
                       </Link>
                     </div>

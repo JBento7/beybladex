@@ -190,7 +190,7 @@ export default function AnnouncementManager() {
   }
 
   return (
-    <div className="mt-8 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+    <div className="mt-8 bg-card border border-line rounded-xl p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-white">Recados &amp; Enquetes</h2>
         <button
@@ -198,14 +198,14 @@ export default function AnnouncementManager() {
             setShowForm((v) => !v);
             if (showForm) resetForm();
           }}
-          className="text-sm px-4 py-2 bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold rounded-lg transition-colors"
+          className="text-sm px-4 py-2 bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold rounded-lg transition-colors"
         >
           {showForm ? "Cancelar" : "+ Novo"}
         </button>
       </div>
 
       {showForm && (
-        <div className="mb-6 p-4 rounded-xl border border-[#2a2a2a] bg-[#252525]">
+        <div className="mb-6 p-4 rounded-xl border border-line bg-field">
           {err && (
             <div className="mb-3 text-sm px-4 py-2 rounded-lg bg-red-900/30 border border-red-700 text-red-400">
               {err}
@@ -216,7 +216,7 @@ export default function AnnouncementManager() {
             <button
               onClick={() => setType("NEWS")}
               className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${
-                type === "NEWS" ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-400 border border-[#333]"
+                type === "NEWS" ? "bg-brand-yellow text-black" : "bg-card text-gray-400 border border-line"
               }`}
             >
               Recado
@@ -224,7 +224,7 @@ export default function AnnouncementManager() {
             <button
               onClick={() => setType("POLL")}
               className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${
-                type === "POLL" ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-400 border border-[#333]"
+                type === "POLL" ? "bg-brand-yellow text-black" : "bg-card text-gray-400 border border-line"
               }`}
             >
               Enquete
@@ -235,32 +235,32 @@ export default function AnnouncementManager() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Título"
-            className="w-full mb-2 bg-[#1a1a1a] border border-[#333] rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#f0a500]"
+            className="w-full mb-2 bg-card border border-line rounded-lg p-2 text-sm text-white focus:outline-none focus:border-brand-yellow"
           />
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder={type === "NEWS" ? "Conteúdo do recado" : "Descrição/introdução da enquete"}
             rows={3}
-            className="w-full mb-2 bg-[#1a1a1a] border border-[#333] rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#f0a500]"
+            className="w-full mb-2 bg-card border border-line rounded-lg p-2 text-sm text-white focus:outline-none focus:border-brand-yellow"
           />
 
           {type === "POLL" && (
             <div className="flex flex-col gap-3 mt-2">
               {questions.map((q, qi) => (
-                <div key={qi} className="rounded-lg border border-[#333] bg-[#1a1a1a] p-3">
+                <div key={qi} className="rounded-lg border border-line bg-card p-3">
                   <div className="flex items-start gap-2 mb-2">
                     <span className="mt-2 text-xs font-bold text-gray-500 shrink-0">#{qi + 1}</span>
                     <input
                       value={q.text}
                       onChange={(e) => updateQuestion(qi, { text: e.target.value })}
                       placeholder="Texto da pergunta"
-                      className="flex-1 bg-[#252525] border border-[#333] rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#f0a500]"
+                      className="flex-1 bg-field border border-line rounded-lg p-2 text-sm text-white focus:outline-none focus:border-brand-yellow"
                     />
                     {questions.length > 1 && (
                       <button
                         onClick={() => removeQuestion(qi)}
-                        className="px-3 py-2 rounded-lg bg-[#252525] border border-[#333] text-gray-400 hover:text-red-400 transition-colors shrink-0"
+                        className="px-3 py-2 rounded-lg bg-field border border-line text-gray-400 hover:text-red-400 transition-colors shrink-0"
                         title="Remover pergunta"
                       >
                         ×
@@ -272,7 +272,7 @@ export default function AnnouncementManager() {
                     <button
                       onClick={() => updateQuestion(qi, { type: "TEXT" })}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                        q.type === "TEXT" ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 border border-[#333]"
+                        q.type === "TEXT" ? "bg-brand-yellow text-black" : "bg-field text-gray-400 border border-line"
                       }`}
                     >
                       Texto descritivo
@@ -280,7 +280,7 @@ export default function AnnouncementManager() {
                     <button
                       onClick={() => updateQuestion(qi, { type: "CHECKBOX" })}
                       className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                        q.type === "CHECKBOX" ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 border border-[#333]"
+                        q.type === "CHECKBOX" ? "bg-brand-yellow text-black" : "bg-field text-gray-400 border border-line"
                       }`}
                     >
                       Múltipla escolha
@@ -295,12 +295,12 @@ export default function AnnouncementManager() {
                             value={opt}
                             onChange={(e) => updateOption(qi, oi, e.target.value)}
                             placeholder={`Opção ${oi + 1}`}
-                            className="flex-1 bg-[#252525] border border-[#333] rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#f0a500]"
+                            className="flex-1 bg-field border border-line rounded-lg p-2 text-sm text-white focus:outline-none focus:border-brand-yellow"
                           />
                           {q.options.length > 2 && (
                             <button
                               onClick={() => removeOption(qi, oi)}
-                              className="px-3 rounded-lg bg-[#252525] border border-[#333] text-gray-400 hover:text-red-400 transition-colors"
+                              className="px-3 rounded-lg bg-field border border-line text-gray-400 hover:text-red-400 transition-colors"
                             >
                               ×
                             </button>
@@ -309,7 +309,7 @@ export default function AnnouncementManager() {
                       ))}
                       <button
                         onClick={() => addOption(qi)}
-                        className="text-xs text-[#f0a500] hover:text-[#d4940a] font-bold self-start"
+                        className="text-xs text-brand-yellow hover:text-brand-yellow-hover font-bold self-start"
                       >
                         + Adicionar opção
                       </button>
@@ -320,7 +320,7 @@ export default function AnnouncementManager() {
 
               <button
                 onClick={addQuestion}
-                className="text-sm text-[#f0a500] hover:text-[#d4940a] font-bold self-start"
+                className="text-sm text-brand-yellow hover:text-brand-yellow-hover font-bold self-start"
               >
                 + Adicionar pergunta
               </button>
@@ -330,7 +330,7 @@ export default function AnnouncementManager() {
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="w-full mt-4 bg-[#c8102e] hover:bg-[#a50d26] disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-colors"
+            className="w-full mt-4 bg-brand-red hover:bg-brand-red-hover disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-colors"
           >
             {saving ? "Salvando..." : "Publicar"}
           </button>
@@ -344,12 +344,12 @@ export default function AnnouncementManager() {
       ) : (
         <div className="flex flex-col gap-2">
           {announcements.map((a) => (
-            <div key={a.id} className="rounded-xl border border-[#2a2a2a] bg-[#252525]">
+            <div key={a.id} className="rounded-xl border border-line bg-field">
               <div className="p-3 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      a.type === "POLL" ? "bg-blue-900/40 text-blue-400" : "bg-[#f0a500]/20 text-[#f0a500]"
+                      a.type === "POLL" ? "bg-blue-900/40 text-blue-400" : "bg-brand-yellow/20 text-brand-yellow"
                     }`}>
                       {a.type === "POLL" ? "ENQUETE" : "RECADO"}
                     </span>
@@ -375,20 +375,20 @@ export default function AnnouncementManager() {
                   {a.type === "POLL" && (
                     <button
                       onClick={() => viewResponses(a.id)}
-                      className="text-xs px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#333] text-gray-300 rounded-lg transition-colors"
+                      className="text-xs px-3 py-1.5 bg-card hover:bg-hover text-gray-300 rounded-lg transition-colors"
                     >
                       {responsesFor === a.id ? "Ocultar" : "Respostas"}
                     </button>
                   )}
                   <button
                     onClick={() => toggleActive(a)}
-                    className="text-xs px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#333] text-gray-300 rounded-lg transition-colors"
+                    className="text-xs px-3 py-1.5 bg-card hover:bg-hover text-gray-300 rounded-lg transition-colors"
                   >
                     {a.active ? "Desativar" : "Ativar"}
                   </button>
                   <button
                     onClick={() => handleDelete(a.id)}
-                    className="text-xs px-3 py-1.5 bg-[#c8102e]/20 hover:bg-[#c8102e]/40 text-red-400 rounded-lg transition-colors"
+                    className="text-xs px-3 py-1.5 bg-brand-red/20 hover:bg-brand-red/40 text-red-400 rounded-lg transition-colors"
                   >
                     Excluir
                   </button>
@@ -396,7 +396,7 @@ export default function AnnouncementManager() {
               </div>
 
               {responsesFor === a.id && (
-                <div className="border-t border-[#2a2a2a] p-3">
+                <div className="border-t border-line p-3">
                   {loadingResponses ? (
                     <p className="text-gray-500 text-xs py-2 text-center">Carregando...</p>
                   ) : responses.length === 0 ? (
@@ -404,7 +404,7 @@ export default function AnnouncementManager() {
                   ) : (
                     <div className="flex flex-col gap-2">
                       {responses.map((r) => (
-                        <div key={r.id} className="p-2 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] flex items-start justify-between gap-2">
+                        <div key={r.id} className="p-2 rounded-lg bg-card border border-line flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="text-xs font-bold text-white">{r.user.bladerName || r.user.name}</div>
                             <div className="flex flex-col gap-1 mt-1">
@@ -421,7 +421,7 @@ export default function AnnouncementManager() {
                             className={`text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 transition-colors ${
                               r.validated
                                 ? "bg-green-900/40 text-green-400"
-                                : "bg-[#252525] text-gray-400 hover:bg-[#333]"
+                                : "bg-field text-gray-400 hover:bg-hover"
                             }`}
                           >
                             {r.validated ? "Validado ✓" : "Validar"}

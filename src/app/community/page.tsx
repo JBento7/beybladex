@@ -105,7 +105,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
   );
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
@@ -138,7 +138,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
         </div>
 
         {beybladesHidden && (
-          <div className="mb-6 text-sm bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500] px-4 py-3 rounded-lg font-medium">
+          <div className="mb-6 text-sm bg-brand-yellow/10 border border-brand-yellow/30 text-brand-yellow px-4 py-3 rounded-lg font-medium">
             🔒 Há um torneio oficial em curso (inscrições ou em andamento). As beyblades dos jogadores ficam ocultas até o término do torneio.
           </div>
         )}
@@ -151,22 +151,22 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
               <Link
                 key={player.id}
                 href={`/community/${player.id}`}
-                className="bg-[#1a1a1a] border border-[#2a2a2a] hover:border-[#f0a500]/40 rounded-2xl p-6 transition-all hover:shadow-lg hover:shadow-[#f0a500]/5 group"
+                className="bg-card border border-line hover:border-brand-yellow/40 rounded-2xl p-6 transition-all hover:shadow-lg hover:shadow-brand-yellow/5 group"
               >
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-5">
-                  <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-[#f0a500]/30 flex-shrink-0">
+                  <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-brand-yellow/30 flex-shrink-0">
                     {player.avatarUrl ? (
                       <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full bg-[#f0a500]/20 flex items-center justify-center">
+                      <div className="w-full h-full bg-brand-yellow/20 flex items-center justify-center">
                         <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
                       </div>
                     )}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-white truncate group-hover:text-[#f0a500] transition-colors">
+                      <span className="font-bold text-white truncate group-hover:text-brand-yellow transition-colors">
                         {player.bladerName || player.name}
                       </span>
                       <TierBadge wins={player.officialWins} />
@@ -178,7 +178,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
                         className="w-5 h-5 rounded-full object-cover flex-shrink-0"
                       />
                       {player.role === "ORGANIZER" && (
-                        <span className="text-xs bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30 px-1.5 py-0.5 rounded font-semibold flex-shrink-0">
+                        <span className="text-xs bg-brand-yellow/20 text-brand-yellow border border-brand-yellow/30 px-1.5 py-0.5 rounded font-semibold flex-shrink-0">
                           ADMIN
                         </span>
                       )}
@@ -193,21 +193,21 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-2 mb-2">
-                  <div className="bg-[#252525] rounded-lg p-3 text-center">
+                  <div className="bg-field rounded-lg p-3 text-center">
                     <div className="text-lg font-black text-green-400">{player.wins}</div>
                     <div className="text-xs text-gray-500">Vitórias</div>
                   </div>
-                  <div className="bg-[#252525] rounded-lg p-3 text-center">
-                    <div className="text-lg font-black text-[#f0a500]">{player.winRate}%</div>
+                  <div className="bg-field rounded-lg p-3 text-center">
+                    <div className="text-lg font-black text-brand-yellow">{player.winRate}%</div>
                     <div className="text-xs text-gray-500">Taxa V.</div>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-5">
-                  <div className="bg-[#252525] rounded-lg p-3 text-center">
+                  <div className="bg-field rounded-lg p-3 text-center">
                     <div className="text-lg font-black text-blue-400">{player.officialPoints}</div>
                     <div className="text-xs text-gray-500">Pontos Liga</div>
                   </div>
-                  <div className="bg-[#252525] rounded-lg p-3 text-center">
+                  <div className="bg-field rounded-lg p-3 text-center">
                     <div className="text-lg font-black text-purple-400">{player.beyPoints}</div>
                     <div className="text-xs text-gray-500">Pts BeyEncontro</div>
                   </div>
@@ -222,9 +222,9 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
                       const t = bey.wins + bey.losses;
                       const wr = t > 0 ? Math.round((bey.wins / t) * 100) : 0;
                       return (
-                        <div key={bey.id} className="flex items-center justify-between text-xs bg-[#252525] rounded-lg px-3 py-2">
+                        <div key={bey.id} className="flex items-center justify-between text-xs bg-field rounded-lg px-3 py-2">
                           <span className="text-gray-300 truncate mr-2 flex items-center gap-1"><img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />{bey.name}</span>
-                          <span className="text-[#f0a500] font-semibold flex-shrink-0">{wr}% WR</span>
+                          <span className="text-brand-yellow font-semibold flex-shrink-0">{wr}% WR</span>
                         </div>
                       );
                     })}

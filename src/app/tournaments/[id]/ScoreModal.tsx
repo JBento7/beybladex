@@ -517,7 +517,7 @@ export default function ScoreModal({
             key={type}
             onClick={() => addPoint(player.id, type)}
             disabled={loading}
-            className={`relative rounded-lg border-2 bg-[#141414] hover:brightness-125 disabled:opacity-40 transition-all active:scale-[0.94] px-3 py-3 min-h-[64px] flex-1 flex items-center ${
+            className={`relative rounded-lg border-2 bg-card hover:brightness-125 disabled:opacity-40 transition-all active:scale-[0.94] px-3 py-3 min-h-[64px] flex-1 flex items-center ${
               side === "right" ? "flex-row-reverse text-right" : "text-left"
             } gap-2`}
             style={{ borderColor: color }}
@@ -533,7 +533,7 @@ export default function ScoreModal({
           <button
             onClick={() => addPoint(player.id, miss.type)}
             disabled={loading}
-            className={`rounded-lg border bg-[#141414] hover:brightness-125 disabled:opacity-40 transition-all active:scale-[0.94] px-3 py-3.5 flex items-center justify-center gap-2 opacity-90 ${side === "right" ? "flex-row-reverse" : ""}`}
+            className={`rounded-lg border bg-card hover:brightness-125 disabled:opacity-40 transition-all active:scale-[0.94] px-3 py-3.5 flex items-center justify-center gap-2 opacity-90 ${side === "right" ? "flex-row-reverse" : ""}`}
             style={{ borderColor: `${color}55` }}
           >
             <span className="text-lg font-black tabular-nums" style={{ color }}>+1</span>
@@ -548,7 +548,7 @@ export default function ScoreModal({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-sm bg-[#c8102e] hover:bg-[#a00d24] text-white font-bold px-4 py-2.5 rounded-lg transition-colors"
+        className="text-sm bg-brand-red hover:bg-brand-red-hover text-white font-bold px-4 py-2.5 rounded-lg transition-colors"
       >
         Placar
       </button>
@@ -559,7 +559,7 @@ export default function ScoreModal({
         // scoring panel IS the screen. On bigger screens the content stays
         // centred at a comfortable width. Tapping outside no longer closes it
         // (a stray tap used to drop the judge out mid-match); use the ✕.
-        <div ref={fsRef} className="fixed inset-0 z-50 bg-[#0d0d0d] flex flex-col overscroll-contain">
+        <div ref={fsRef} className="fixed inset-0 z-50 bg-app flex flex-col overscroll-contain">
           <div
             role="dialog"
             aria-modal="true"
@@ -573,16 +573,16 @@ export default function ScoreModal({
             {!state ? (
               <div className="py-10 text-center">
                 <div className="text-base text-gray-500 animate-pulse mb-6">Carregando partida...</div>
-                <button onClick={handleClose} className="text-base font-bold text-gray-200 bg-[#1a1a1a] border border-[#3a3a3a] rounded-xl px-8 py-3.5">Fechar</button>
+                <button onClick={handleClose} className="text-base font-bold text-gray-200 bg-card border border-line rounded-xl px-8 py-3.5">Fechar</button>
               </div>
             ) : state.matchFinished ? (
               <div className="text-center py-8">
                 <div className="text-5xl mb-3">🏆</div>
-                <div className="text-2xl font-black text-[#f0a500] mb-1">
+                <div className="text-2xl font-black text-brand-yellow mb-1">
                   {(state.winnerId === player1.id ? p1Name : p2Name)} venceu!
                 </div>
                 <div className="text-gray-400 text-base mb-6">Partida encerrada ({p1Sets} × {p2Sets})</div>
-                <button onClick={handleClose} className="w-full bg-[#c8102e] hover:bg-[#a00d24] text-white text-lg font-bold px-6 py-4 rounded-xl transition-colors">
+                <button onClick={handleClose} className="w-full bg-brand-red hover:bg-brand-red-hover text-white text-lg font-bold px-6 py-4 rounded-xl transition-colors">
                   Fechar
                 </button>
               </div>
@@ -591,11 +591,11 @@ export default function ScoreModal({
                 {/* Scoreboard header: name tags + round */}
                 <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-2 items-start mb-2">
                   <div
-                    className="px-3 py-3 border-b-4 bg-[#141414]"
+                    className="px-3 py-3 border-b-4 bg-card"
                     style={{ borderColor: L.color, clipPath: "polygon(0 0,100% 0,90% 100%,0 100%)" }}
                   >
                     <div className="text-base sm:text-lg font-black text-white truncate">{L.name}</div>
-                    {bSideId && <div className={`text-xs font-black tracking-widest ${L.player.id === bSideId ? "text-[#00aaff]" : "text-[#f0a500]"}`}>{L.player.id === bSideId ? "B SIDE" : "X SIDE"}</div>}
+                    {bSideId && <div className={`text-xs font-black tracking-widest ${L.player.id === bSideId ? "text-[#00aaff]" : "text-brand-yellow"}`}>{L.player.id === bSideId ? "B SIDE" : "X SIDE"}</div>}
                   </div>
                   <div className="text-center px-2">
                     <div className="text-3xl font-black text-white leading-none">R{currentSetNum}</div>
@@ -604,17 +604,17 @@ export default function ScoreModal({
                     </div>
                   </div>
                   <div
-                    className="px-3 py-3 border-b-4 bg-[#141414] text-right"
+                    className="px-3 py-3 border-b-4 bg-card text-right"
                     style={{ borderColor: R.color, clipPath: "polygon(10% 0,100% 0,100% 100%,0 100%)" }}
                   >
                     <div className="text-base sm:text-lg font-black text-white truncate">{R.name}</div>
-                    {bSideId && <div className={`text-xs font-black tracking-widest ${R.player.id === bSideId ? "text-[#00aaff]" : "text-[#f0a500]"}`}>{R.player.id === bSideId ? "B SIDE" : "X SIDE"}</div>}
+                    {bSideId && <div className={`text-xs font-black tracking-widest ${R.player.id === bSideId ? "text-[#00aaff]" : "text-brand-yellow"}`}>{R.player.id === bSideId ? "B SIDE" : "X SIDE"}</div>}
                   </div>
                 </div>
 
                 {/* Sets won pips */}
                 <div className="relative flex items-center justify-center gap-1.5 mb-3 min-h-[44px]">
-                  <button onClick={handleClose} aria-label="Fechar" className="absolute right-0 top-0 w-11 h-11 flex items-center justify-center rounded-full bg-[#1a1a1a] border border-[#2a2a2a] text-gray-300 hover:text-white text-xl leading-none">✕</button>
+                  <button onClick={handleClose} aria-label="Fechar" className="absolute right-0 top-0 w-11 h-11 flex items-center justify-center rounded-full bg-card border border-line text-gray-300 hover:text-white text-xl leading-none">✕</button>
                   {Array.from({ length: maxSets }).map((_, i) => {
                     const s = state.sets[i];
                     const won = s?.status === "FINISHED" ? s.winnerId : null;
@@ -635,7 +635,7 @@ export default function ScoreModal({
                 </div>
 
                 {/* Current set score (compact) */}
-                <div className={`bg-[#141414] border border-[#222] rounded-xl mb-3 ${revealScoring ? "py-2" : "py-4"}`}>
+                <div className={`bg-card border border-line rounded-xl mb-3 ${revealScoring ? "py-2" : "py-4"}`}>
                   <div className="flex items-center justify-center gap-4">
                     <span className={`${revealScoring ? "text-7xl" : "text-8xl"} font-black tabular-nums transition-transform ${flash === "left" ? "scale-125" : ""}`} style={{ color: flash === "left" ? L.color : L.pts > R.pts ? L.color : "#fff" }}>{L.pts}</span>
                     <span className="text-3xl text-gray-600 font-bold">:</span>
@@ -650,14 +650,14 @@ export default function ScoreModal({
                 {/* Preview: play the launch/countdown video on this arena's telão */}
                 <button
                   onClick={playLaunchVideo}
-                  className={`w-full mb-3 font-bold px-3 rounded-xl border transition-colors ${revealScoring ? "text-sm py-2.5 [@media(max-height:780px)]:hidden" : "text-base py-4"} ${launchSent ? "bg-green-500/20 text-green-400 border-green-500/40" : "bg-[#1a1a1a] text-[#f0a500] border-[#f0a500]/40 hover:bg-[#252525]"}`}
+                  className={`w-full mb-3 font-bold px-3 rounded-xl border transition-colors ${revealScoring ? "text-sm py-2.5 [@media(max-height:780px)]:hidden" : "text-base py-4"} ${launchSent ? "bg-green-500/20 text-green-400 border-green-500/40" : "bg-card text-brand-yellow border-brand-yellow/40 hover:bg-field"}`}
                 >
                   {launchSent ? "✓ Vídeo enviado ao telão" : "🎬 Vídeo Lançamento (telão desta arena)"}
                 </button>
 
                 {/* 3on3 active beyblades */}
                 {isDeck && L.orderArr && R.orderArr && (
-                  <div className="bg-[#141414] border border-[#222] rounded-xl px-4 py-4 mb-3 flex items-center gap-3">
+                  <div className="bg-card border border-line rounded-xl px-4 py-4 mb-3 flex items-center gap-3">
                     <ActiveBey beyblades={L.beyblades} order={L.orderArr} positionInCycle={posInCycle} color={L.color} align="left" />
                     <span className="text-gray-600 font-black text-base">VS</span>
                     <ActiveBey beyblades={R.beyblades} order={R.orderArr} positionInCycle={posInCycle} color={R.color} align="right" />
@@ -667,8 +667,8 @@ export default function ScoreModal({
                 {/* Waiting for player deck orders (3on3) */}
                 {waitingOrders && (
                   <div className="mb-3">
-                    <div className="bg-[#f0a500]/10 border border-[#f0a500]/30 rounded-xl px-4 py-5 text-center mb-3">
-                      <div className="text-xl font-black text-[#f0a500] mb-1">Aguardando ordem dos decks</div>
+                    <div className="bg-brand-yellow/10 border border-brand-yellow/30 rounded-xl px-4 py-5 text-center mb-3">
+                      <div className="text-xl font-black text-brand-yellow mb-1">Aguardando ordem dos decks</div>
                       <div className="text-base text-gray-300">Os jogadores escolhem a ordem no próprio celular.</div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-3">
@@ -683,7 +683,7 @@ export default function ScoreModal({
                     </div>
 
                     {/* Judge fallback: set orders manually */}
-                    <button onClick={() => setShowManual((v) => !v)} className="w-full text-base font-bold text-gray-200 bg-[#1a1a1a] hover:bg-[#252525] border border-[#3a3a3a] rounded-xl py-4 transition-colors">
+                    <button onClick={() => setShowManual((v) => !v)} className="w-full text-base font-bold text-gray-200 bg-card hover:bg-field border border-line rounded-xl py-4 transition-colors">
                       {showManual ? "Ocultar ordem manual" : "✍️ Definir ordem manualmente (juiz)"}
                     </button>
                     {showManual && (
@@ -703,10 +703,10 @@ export default function ScoreModal({
                     )}
 
                     {/* Judge override: start without a deck (player forgot to register). */}
-                    <div className="mt-3 border-t border-[#2a2a2a] pt-3">
+                    <div className="mt-3 border-t border-line pt-3">
                       <button
                         onClick={() => setForceStart(true)}
-                        className="w-full bg-[#c8102e]/80 hover:bg-[#c8102e] text-white text-lg font-bold py-4 rounded-xl transition-colors"
+                        className="w-full bg-brand-red/80 hover:bg-brand-red text-white text-lg font-bold py-4 rounded-xl transition-colors"
                       >
                         ▶ Iniciar sem deck
                       </button>
@@ -719,8 +719,8 @@ export default function ScoreModal({
 
                 {/* Stadium side selection — before the first battle */}
                 {needSides && gateReady && (
-                  <div className="mb-3 bg-[#141414] border border-[#f0a500]/40 rounded-xl p-4">
-                    <div className="text-center text-lg font-black text-[#f0a500] tracking-wide mb-1">LADO DA ARENA</div>
+                  <div className="mb-3 bg-card border border-brand-yellow/40 rounded-xl p-4">
+                    <div className="text-center text-lg font-black text-brand-yellow tracking-wide mb-1">LADO DA ARENA</div>
                     <div className="text-center text-sm text-gray-300 mb-4">Toque no jogador que vai ficar no <b className="text-[#00aaff]">B side</b> (o outro fica no <b className="text-white">X side</b> automaticamente).</div>
                     <div className="grid grid-cols-2 gap-3">
                       {/* Clicking a player puts THEM on B side → the other is X side. */}
@@ -751,7 +751,7 @@ export default function ScoreModal({
                       <b className="text-[#00aaff]">{state.xSidePlayerId === player1.id ? p2Name : p1Name}</b> = B side (esquerda) ·{" "}
                       <b className="text-white">{state.xSidePlayerId === player1.id ? p1Name : p2Name}</b> = X side
                     </span>
-                    <button onClick={() => chooseSide(null)} className="text-sm font-bold text-gray-200 bg-[#1a1a1a] border border-[#3a3a3a] rounded-lg px-4 py-2">trocar</button>
+                    <button onClick={() => chooseSide(null)} className="text-sm font-bold text-gray-200 bg-card border border-line rounded-lg px-4 py-2">trocar</button>
                   </div>
                 )}
 
@@ -762,7 +762,7 @@ export default function ScoreModal({
                   <>
                     <button
                       onClick={sendReady}
-                      className="w-full mb-2 bg-[#f0a500] hover:bg-[#d99400] text-black font-black text-2xl py-6 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
+                      className="w-full mb-2 bg-brand-yellow hover:bg-brand-yellow-hover text-black font-black text-2xl py-6 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
                     >
                       🙌 PRONTOS?
                     </button>
@@ -782,7 +782,7 @@ export default function ScoreModal({
                     </button>
                     <button
                       onClick={sendReady}
-                      className="w-full mb-2 text-base font-bold text-gray-300 hover:text-white bg-[#1a1a1a] border border-[#3a3a3a] rounded-xl py-3.5"
+                      className="w-full mb-2 text-base font-bold text-gray-300 hover:text-white bg-card border border-line rounded-xl py-3.5"
                     >
                       repetir PRONTOS
                     </button>
@@ -809,19 +809,19 @@ export default function ScoreModal({
                     </div>
 
                     {/* Sticky action bar — always reachable while scoring on a phone */}
-                    <div className="sticky bottom-0 -mx-3 sm:-mx-5 mt-3 px-3 sm:px-5 pt-2 pb-2 bg-[#0d0d0d]/95 backdrop-blur border-t border-[#2a2a2a] flex items-center gap-2">
+                    <div className="sticky bottom-0 -mx-3 sm:-mx-5 mt-3 px-3 sm:px-5 pt-2 pb-2 bg-app/95 backdrop-blur border-t border-line flex items-center gap-2">
                       {loading && <span className="text-base text-gray-500 animate-pulse">…</span>}
                       <button
                         onClick={startBattle}
                         disabled={starting}
-                        className="flex-1 text-base font-bold text-blue-300 hover:text-white bg-[#1a1a1a] hover:bg-[#252525] border border-blue-500/40 hover:border-blue-400 px-3 py-4 rounded-xl transition-colors disabled:opacity-40"
+                        className="flex-1 text-base font-bold text-blue-300 hover:text-white bg-card hover:bg-field border border-blue-500/40 hover:border-blue-400 px-3 py-4 rounded-xl transition-colors disabled:opacity-40"
                       >
                         {starting ? "..." : "🔄 Recontagem"}
                       </button>
                       <button
                         onClick={undoPoint}
                         disabled={loading}
-                        className="flex-1 text-base font-bold text-gray-200 hover:text-white bg-[#1a1a1a] hover:bg-[#252525] border border-[#3a3a3a] hover:border-red-500/50 px-3 py-4 rounded-xl transition-colors disabled:opacity-40"
+                        className="flex-1 text-base font-bold text-gray-200 hover:text-white bg-card hover:bg-field border border-line hover:border-red-500/50 px-3 py-4 rounded-xl transition-colors disabled:opacity-40"
                       >
                         ↩ Desfazer
                       </button>
@@ -857,7 +857,7 @@ function SoloSelector({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-[#141414] border-2 rounded-xl px-3 py-3 text-base text-white outline-none"
+      className="w-full bg-card border-2 rounded-xl px-3 py-3 text-base text-white outline-none"
       style={{ borderColor: color }}
     >
       {beyblades.map((b) => (

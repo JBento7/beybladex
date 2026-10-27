@@ -94,7 +94,7 @@ function StatBars({ stats }: { stats: CombinedStats }) {
       {active.map((s) => (
         <div key={s.key} className="flex items-center gap-1.5">
           <span className="text-[11px] font-bold w-8 text-right" style={{ color: s.color }}>{s.label}</span>
-          <div className="flex-1 h-1.5 bg-[#111] rounded-full overflow-hidden">
+          <div className="flex-1 h-1.5 bg-app rounded-full overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${(stats[s.key] / maxVal) * 100}%`, backgroundColor: s.color }} />
           </div>
           <span className="text-[11px] font-bold text-white w-6 text-right">{stats[s.key]}</span>
@@ -137,7 +137,7 @@ function partsList(b: DeckBeyInfo): string {
 
 function PartThumb({ img, label }: { img: string | null; label: string }) {
   return (
-    <div className="w-12 h-12 rounded-lg bg-[#1a1a1a] border border-[#333] overflow-hidden flex items-center justify-center flex-shrink-0">
+    <div className="w-12 h-12 rounded-lg bg-card border border-line overflow-hidden flex items-center justify-center flex-shrink-0">
       {img
         ? <img src={img} alt={label} className="w-full h-full object-contain p-0.5" /> // eslint-disable-line @next/next/no-img-element
         : <span className="text-[8px] text-gray-700 text-center leading-tight px-0.5">{label}</span>
@@ -147,15 +147,15 @@ function PartThumb({ img, label }: { img: string | null; label: string }) {
 }
 
 function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
-  const slotColors  = ["border-[#f0a500]/50", "border-[#c8102e]/50", "border-blue-500/50"];
-  const slotAccents = ["text-[#f0a500]", "text-[#c8102e]", "text-blue-400"];
+  const slotColors  = ["border-brand-yellow/50", "border-brand-red/50", "border-blue-500/50"];
+  const slotAccents = ["text-brand-yellow", "text-danger", "text-blue-400"];
   const parts = partsList(bey);
   const hasCXSplit = isCX(bey.beyLine);
 
   return (
-    <div className={`bg-[#252525] border ${slotColors[slot]} rounded-xl overflow-hidden flex flex-col`}>
+    <div className={`bg-field border ${slotColors[slot]} rounded-xl overflow-hidden flex flex-col`}>
       {/* Header */}
-      <div className="px-3 pt-3 pb-2 border-b border-[#333]">
+      <div className="px-3 pt-3 pb-2 border-b border-line">
         <div className="flex items-center gap-2 mb-0.5">
           <span className={`text-[10px] font-black ${slotAccents[slot]} uppercase tracking-wider`}>
             Bey {slot + 1}
@@ -167,7 +167,7 @@ function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
         {bey.weight != null && (
           <div className="text-[10px] mt-0.5">
             <span className="text-gray-500">Peso total: </span>
-            <span className="font-bold text-[#f0a500]">{bey.weight}g</span>
+            <span className="font-bold text-brand-yellow">{bey.weight}g</span>
             {bey.weightMissing > 0 && <span className="text-gray-600"> (+{bey.weightMissing} sem peso)</span>}
           </div>
         )}
@@ -202,7 +202,7 @@ function BeyCard({ bey, slot }: { bey: DeckBeyInfo; slot: number }) {
           </div>
         ) : (
           <div className="flex gap-3 items-start">
-            <div className="w-14 h-14 flex-shrink-0 rounded-lg bg-[#1a1a1a] border border-[#333] overflow-hidden flex items-center justify-center">
+            <div className="w-14 h-14 flex-shrink-0 rounded-lg bg-card border border-line overflow-hidden flex items-center justify-center">
               {bey.bladeImageUrl
                 ? <img src={bey.bladeImageUrl} alt={bey.blade ?? "blade"} className="w-full h-full object-contain p-1" /> // eslint-disable-line @next/next/no-img-element
                 : <span className="text-[9px] text-gray-700 text-center leading-tight px-1">{bey.blade ?? "Blade"}</span>
@@ -295,7 +295,7 @@ export default async function MyDeckSection({
     });
 
     if (!participation) return (
-      <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+      <div className="bg-card border border-line rounded-xl p-6">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h2 className="text-lg font-bold text-white">{title}</h2>
           {!readOnly && <MyDeckEditor allBeyblades={allUserBeyblades} currentIds={[]} isFeatured={false} />}
@@ -413,13 +413,13 @@ export default async function MyDeckSection({
   const isFeatured = deckSource?.type === "featured";
 
   return (
-    <div className={`bg-[#1a1a1a] border rounded-xl p-6 ${isFeatured ? "border-[#f0a500]/30" : "border-[#2a2a2a]"}`}>
+    <div className={`bg-card border rounded-xl p-6 ${isFeatured ? "border-brand-yellow/30" : "border-line"}`}>
       <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-white">{title}</h2>
             {isFeatured && (
-              <span className="text-[10px] font-black bg-[#f0a500] text-black px-2 py-0.5 rounded-full tracking-wider">
+              <span className="text-[10px] font-black bg-brand-yellow text-black px-2 py-0.5 rounded-full tracking-wider">
                 DESTAQUE
               </span>
             )}
@@ -429,7 +429,7 @@ export default async function MyDeckSection({
               {deckSource.name}
               <span className={`ml-2 text-xs px-2 py-0.5 rounded-full font-medium ${
                 deckSource.status === "IN_PROGRESS"   ? "bg-green-500/20 text-green-400"
-                : deckSource.status === "REGISTRATION" ? "bg-[#f0a500]/20 text-[#f0a500]"
+                : deckSource.status === "REGISTRATION" ? "bg-brand-yellow/20 text-brand-yellow"
                 : "bg-gray-700 text-gray-400"
               }`}>
                 {statusLabel[deckSource.status] ?? deckSource.status}

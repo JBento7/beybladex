@@ -6,6 +6,7 @@ import {
   computeSwissStandings,
   computeSwissFinalPlacement,
   decidedPodium,
+  eventPodium,
   type StandingsMatch,
 } from "../src/lib/standings.ts";
 
@@ -95,4 +96,16 @@ test("no podium is invented for an unfinished bracket", () => {
 test("unfinished and third-place matches are ignored in the Swiss table", () => {
   const rows = computeSwissStandings(["A", "B"], [{ round: 1, status: "IN_PROGRESS", player1Id: "A", player2Id: "B", winnerId: null }], 1);
   assert.ok(rows.every((r) => r.played === 0 && r.swissPoints === 0));
+});
+
+test("event podium: knockout decides, pure Swiss uses stored placement only when finished", () => {
+  const all = [...swiss, ...knockout];
+  assert.deepEqual(eventPodium({ format: "ROUND_ROBIN", status: "FINISHED", swissRounds: 4, matches: all, placements: [] }), { first: "A", second: "C", third: "E" });
+  // Knockout not finished (both semis played, final not created yet):
+  // nothing decided, even if placements were stored.
+  const half = [...swiss, m(5, "A", "D", "A"), m(5, "E", "C", "C")];
+  assert.deepEqual(eventPodium({ format: "ROUND_ROBIN", status: "FINISHED", swissRounds: 4, matches: half, placements: [{ userId: "A", placement: 1 }] }), {});
+  const pl = [{ userId: "B", placement: 1 }, { userId: "A", placement: 2 }];
+  assert.deepEqual(eventPodium({ format: "ROUND_ROBIN", status: "FINISHED", swissRounds: 4, matches: swiss, placements: pl }), { first: "B", second: "A", third: undefined });
+  assert.deepEqual(eventPodium({ format: "ROUND_ROBIN", status: "IN_PROGRESS", swissRounds: 4, matches: swiss, placements: pl }), {});
 });

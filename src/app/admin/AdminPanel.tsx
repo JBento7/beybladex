@@ -83,19 +83,19 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="bg-[#1a1a1a] border border-[#c8102e]/30 rounded-xl p-6">
+    <div className="bg-card border border-brand-red/30 rounded-xl p-6">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h2 className="text-lg font-bold text-white">Criar Torneio Oficial</h2>
         <div className="flex items-center gap-3">
           <button
             onClick={generateInvite}
-            className="bg-[#252525] hover:bg-[#303030] border border-[#333] text-gray-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            className="bg-field hover:bg-hover border border-line text-gray-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
           >
             🔗 Gerar Link de Convite
           </button>
           <button
             onClick={() => setOpen(!open)}
-            className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+            className="bg-brand-red hover:bg-brand-red-hover text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
           >
             {open ? "Cancelar" : "+ Novo Torneio Oficial"}
           </button>
@@ -103,13 +103,13 @@ export default function AdminPanel() {
       </div>
 
       {inviteLink && (
-        <div className="mb-4 bg-[#f0a500]/10 border border-[#f0a500]/30 rounded-lg p-3">
+        <div className="mb-4 bg-brand-yellow/10 border border-brand-yellow/30 rounded-lg p-3">
           <div className="text-xs text-gray-400 mb-1">Link de convite gerado:</div>
           <div className="flex items-center gap-2">
-            <code className="text-[#f0a500] text-xs flex-1 break-all">{inviteLink}</code>
+            <code className="text-brand-yellow text-xs flex-1 break-all">{inviteLink}</code>
             <button
               onClick={() => { navigator.clipboard.writeText(inviteLink); }}
-              className="text-xs bg-[#f0a500] text-black font-bold px-2 py-1 rounded flex-shrink-0"
+              className="text-xs bg-brand-yellow text-black font-bold px-2 py-1 rounded flex-shrink-0"
             >
               Copiar
             </button>
@@ -140,14 +140,14 @@ export default function AdminPanel() {
                   className={`text-left p-3 rounded-xl border transition-all ${
                     form.eventType === t.value
                       ? t.value === "TORNEIO"
-                        ? "border-[#f0a500] bg-[#f0a500]/10"
+                        ? "border-brand-yellow bg-brand-yellow/10"
                         : "border-blue-500 bg-blue-500/10"
-                      : "border-[#333] bg-[#252525] hover:border-gray-600"
+                      : "border-line bg-field hover:border-gray-600"
                   }`}
                 >
                   <div className={`font-semibold text-sm mb-0.5 ${
                     form.eventType === t.value
-                      ? t.value === "TORNEIO" ? "text-[#f0a500]" : "text-blue-400"
+                      ? t.value === "TORNEIO" ? "text-brand-yellow" : "text-blue-400"
                       : "text-white"
                   }`}>{t.label}</div>
                   <div className="text-xs text-gray-500">{t.desc}</div>
@@ -168,7 +168,7 @@ export default function AdminPanel() {
                 onChange={handleChange}
                 required
                 placeholder="ex: LBL Open 2025"
-                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
               />
             </div>
 
@@ -182,7 +182,7 @@ export default function AdminPanel() {
                 value={form.prize}
                 onChange={handleChange}
                 placeholder="ex: R$ 500,00 + Troféu"
-                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
               />
             </div>
           </div>
@@ -197,7 +197,7 @@ export default function AdminPanel() {
               onChange={handleChange}
               rows={2}
               placeholder="Descreva o torneio oficial..."
-              className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors resize-none"
+              className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors resize-none"
             />
           </div>
 
@@ -210,7 +210,7 @@ export default function AdminPanel() {
                 name="format"
                 value={form.format}
                 onChange={handleChange}
-                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
               >
                 {FORMATS.map((f) => (
                   <option key={f.value} value={f.value}>{f.label}</option>
@@ -224,7 +224,7 @@ export default function AdminPanel() {
                 name="deckType"
                 value={form.deckType}
                 onChange={handleChange}
-                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
               >
                 {DECK_TYPES.map((d) => (
                   <option key={d.value} value={d.value}>{d.label}</option>
@@ -246,7 +246,7 @@ export default function AdminPanel() {
                 value={form.maxParticipants}
                 onChange={handleChange}
                 placeholder="Ilimitado"
-                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
               />
             </div>
 
@@ -262,7 +262,7 @@ export default function AdminPanel() {
                 value={form.arenas}
                 onChange={handleChange}
                 placeholder="1"
-                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
               />
             </div>
 
@@ -276,7 +276,7 @@ export default function AdminPanel() {
                 value={form.startDate}
                 onChange={handleChange}
                 disabled={dateTBD}
-                className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors disabled:opacity-50"
+                className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none transition-colors disabled:opacity-50"
               />
               <label className="flex items-center gap-2 mt-2 text-sm text-gray-400 cursor-pointer">
                 <input
@@ -286,7 +286,7 @@ export default function AdminPanel() {
                     setDateTBD(e.target.checked);
                     if (e.target.checked) setForm({ ...form, startDate: "" });
                   }}
-                  className="accent-[#f0a500]"
+                  className="accent-brand-yellow"
                 />
                 Data a definir
               </label>
@@ -296,7 +296,7 @@ export default function AdminPanel() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-60 text-white font-black text-base py-3 rounded-xl transition-colors"
+            className="w-full bg-brand-red hover:bg-brand-red-hover disabled:opacity-60 text-white font-black text-base py-3 rounded-xl transition-colors"
           >
             {loading ? "Criando..." : "🏆 Criar Torneio Oficial"}
           </button>

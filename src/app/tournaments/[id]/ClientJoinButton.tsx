@@ -111,20 +111,28 @@ export default function ClientJoinButton({
         return;
       }
     }
+    if (loading) return; // a second tap while sending must not register twice
     setErr(null);
     setLoading(true);
-    const res = await fetch(`/api/tournaments/${tournamentId}/join`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ beybladeIds: ids }),
-    });
-    setLoading(false);
-    if (res.ok) {
-      setShowModal(false);
-      router.refresh();
-    } else {
-      const data = await res.json();
-      setErr(data.error || "Erro ao se inscrever no torneio");
+    try {
+      const res = await fetch(`/api/tournaments/${tournamentId}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ beybladeIds: ids }),
+      });
+      if (res.ok) {
+        // The page re-renders with a permanent "Você está inscrito" card (the
+        // confirmation doesn't depend on a temporary toast).
+        setShowModal(false);
+        router.refresh();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setErr(data.error || "Não foi possível concluir a inscrição. Tente novamente.");
+      }
+    } catch {
+      setErr("Sem conexão. Verifique a internet e tente novamente — sua seleção foi mantida.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -149,10 +157,11 @@ export default function ClientJoinButton({
   return (
     <>
       <button
+        type="button"
         onClick={() => setShowModal(true)}
-        className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-2.5 rounded-xl transition-colors"
+        className="inline-flex items-center justify-center min-h-12 px-5 rounded-ctl bg-brand-red hover:bg-brand-red-hover text-white text-small font-semibold transition-colors duration-150"
       >
-        Participar do Torneio
+        Inscrever-se
       </button>
 
       {showModal && (
@@ -163,8 +172,9 @@ export default function ClientJoinButton({
           <div
             role="dialog"
             aria-modal="true"
+            aria-label="Inscrição no torneio"
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col"
+            className="bg-card border border-line rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col"
           >
             <div className="flex items-start justify-between gap-2 mb-1">
               <h2 className="text-lg font-bold text-white">Inscrição no Torneio</h2>
@@ -176,7 +186,7 @@ export default function ClientJoinButton({
             ) : loadError ? (
               <div className="text-center py-6">
                 <p className="text-red-400 text-sm mb-2">Erro ao carregar seus combos.</p>
-                <button onClick={() => setShowModal(false)} className="text-[#f0a500] text-sm underline">
+                <button onClick={() => setShowModal(false)} className="text-brand-yellow text-sm underline">
                   Fechar e tentar novamente
                 </button>
               </div>
@@ -184,15 +194,15 @@ export default function ClientJoinButton({
               /* ── Ask: use featured deck? ── */
               <div className="flex flex-col flex-1">
                 <p className="text-sm text-gray-400 mb-5">
-                  Você tem um <span className="text-[#f0a500] font-semibold">Deck Destaque</span> salvo. Deseja usá-lo?
+                  Você tem um <span className="text-brand-yellow font-semibold">Deck Destaque</span> salvo. Deseja usá-lo?
                 </p>
 
                 {/* Featured deck preview */}
                 <div className="mb-5 space-y-2">
                   {featuredBeys.slice(0, required).map((b, i) => {
-                    const slotColors = ["text-[#f0a500]", "text-[#c8102e]", "text-blue-400"];
+                    const slotColors = ["text-brand-yellow", "text-danger", "text-blue-400"];
                     return (
-                      <div key={b.id} className="flex items-center gap-3 bg-[#252525] border border-[#f0a500]/20 rounded-xl p-3">
+                      <div key={b.id} className="flex items-center gap-3 bg-field border border-brand-yellow/20 rounded-xl p-3">
                         <span className={`text-xs font-black w-10 flex-shrink-0 ${slotColors[i]}`}>Bey {i + 1}</span>
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-sm text-white truncate">{b.name}</div>
@@ -207,7 +217,7 @@ export default function ClientJoinButton({
                 </div>
 
                 {err && (
-                  <div className="mb-3 text-sm px-3 py-2 rounded-lg bg-red-900/30 border border-red-700 text-red-400">
+                  <div role="alert" className="mb-3 text-sm px-3 py-2 rounded-lg bg-danger-bg border border-danger/40 text-danger">
                     {err}
                   </div>
                 )}
@@ -215,14 +225,14 @@ export default function ClientJoinButton({
                 <div className="flex gap-3 mt-auto">
                   <button
                     onClick={() => { setDeckStep("manual"); setSelected([]); }}
-                    className="flex-1 bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold py-2.5 rounded-xl transition-colors text-sm"
+                    className="flex-1 bg-field hover:bg-hover text-gray-300 font-semibold py-2.5 rounded-xl transition-colors text-sm"
                   >
                     Escolher manualmente
                   </button>
                   <button
                     onClick={() => handleJoin(featuredSlice)}
                     disabled={loading}
-                    className="flex-1 bg-[#f0a500] hover:bg-[#d4940a] disabled:opacity-50 text-black font-bold py-2.5 rounded-xl transition-colors text-sm"
+                    className="flex-1 bg-brand-yellow hover:bg-brand-yellow-hover disabled:opacity-50 text-black font-bold py-2.5 rounded-xl transition-colors text-sm"
                   >
                     {loading ? "Inscrevendo..." : "Usar Deck Destaque"}
                   </button>
@@ -238,7 +248,7 @@ export default function ClientJoinButton({
                 </p>
 
                 {err && (
-                  <div className="mb-3 text-sm px-3 py-2 rounded-lg bg-red-900/30 border border-red-700 text-red-400">
+                  <div role="alert" className="mb-3 text-sm px-3 py-2 rounded-lg bg-danger-bg border border-danger/40 text-danger">
                     {err}
                   </div>
                 )}
@@ -250,7 +260,7 @@ export default function ClientJoinButton({
                 )}
 
                 {isOfficial && required > 1 && (
-                  <div className="mb-3 text-[10px] text-gray-600 bg-[#252525] rounded-lg px-3 py-2">
+                  <div className="mb-3 text-[10px] text-gray-600 bg-field rounded-lg px-3 py-2">
                     Torneio oficial — as 3 beyblades não podem compartilhar nenhuma peça (blade, ratchet, bit).
                   </div>
                 )}
@@ -259,7 +269,7 @@ export default function ClientJoinButton({
                   {beyblades.length === 0 ? (
                     <div className="text-center py-6">
                       <p className="text-gray-400 text-sm">Você não tem combos cadastrados.</p>
-                      <a href="/profile" className="text-[#f0a500] text-sm underline mt-1 inline-block">
+                      <a href="/profile" className="text-brand-yellow text-sm underline mt-1 inline-block">
                         Cadastrar combos no perfil →
                       </a>
                     </div>
@@ -273,16 +283,16 @@ export default function ClientJoinButton({
                           onClick={() => toggleSelect(b.id)}
                           className={`w-full text-left p-3 rounded-xl border transition-all ${
                             isSelected
-                              ? "border-[#f0a500] bg-[#f0a500]/10"
-                              : "border-[#333] bg-[#252525] hover:border-gray-600"
+                              ? "border-brand-yellow bg-brand-yellow/10"
+                              : "border-line bg-field hover:border-gray-600"
                           }`}
                         >
                           <div className="flex items-center gap-3">
                             <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${
-                              isSelected ? "border-[#f0a500] bg-[#f0a500]" : "border-gray-600"
+                              isSelected ? "border-brand-yellow bg-brand-yellow" : "border-gray-600"
                             }`} />
                             <div className="flex-1 min-w-0">
-                              <div className={`font-semibold text-sm truncate ${isSelected ? "text-[#f0a500]" : "text-white"}`}>
+                              <div className={`font-semibold text-sm truncate ${isSelected ? "text-brand-yellow" : "text-white"}`}>
                                 {b.name}
                               </div>
                               <div className="flex items-center gap-1.5 mt-0.5">
@@ -301,14 +311,14 @@ export default function ClientJoinButton({
                   {featuredReady && required > 1 ? (
                     <button
                       onClick={() => { setDeckStep("ask"); setErr(null); }}
-                      className="flex-shrink-0 bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold px-3 py-2.5 rounded-xl transition-colors text-sm"
+                      className="flex-shrink-0 bg-field hover:bg-hover text-gray-300 font-semibold px-3 py-2.5 rounded-xl transition-colors text-sm"
                     >
                       ← Destaque
                     </button>
                   ) : (
                     <button
                       onClick={() => setShowModal(false)}
-                      className="flex-1 bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
+                      className="flex-1 bg-field hover:bg-hover text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
                     >
                       Cancelar
                     </button>

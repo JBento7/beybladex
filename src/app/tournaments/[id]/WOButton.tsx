@@ -54,7 +54,7 @@ export default function WOButton({
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => !loading && setOpen(false)} />
-          <div role="dialog" aria-modal="true" className="relative bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+          <div role="dialog" aria-modal="true" className="relative bg-card border border-line rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h3 className="text-lg font-bold text-white mb-1">Declarar W.O.</h3>
             <p className="text-sm text-gray-400 mb-4">
               Selecione o jogador <strong>ausente</strong>. A vitória será dada automaticamente ao adversário, sem disputa de sets.
@@ -70,7 +70,7 @@ export default function WOButton({
               <button
                 onClick={() => declareWalkover(player2.id)}
                 disabled={loading}
-                className="p-3 rounded-xl border-2 border-[#333] hover:border-[#c8102e] bg-[#252525] text-left transition-all disabled:opacity-50"
+                className="p-3 rounded-xl border-2 border-line hover:border-brand-red bg-field text-left transition-all disabled:opacity-50"
               >
                 <div className="text-sm font-bold text-white">{player1.bladerName || player1.name} ausente</div>
                 <div className="text-xs text-gray-500 mt-0.5">
@@ -80,7 +80,7 @@ export default function WOButton({
               <button
                 onClick={() => declareWalkover(player1.id)}
                 disabled={loading}
-                className="p-3 rounded-xl border-2 border-[#333] hover:border-[#c8102e] bg-[#252525] text-left transition-all disabled:opacity-50"
+                className="p-3 rounded-xl border-2 border-line hover:border-brand-red bg-field text-left transition-all disabled:opacity-50"
               >
                 <div className="text-sm font-bold text-white">{player2.bladerName || player2.name} ausente</div>
                 <div className="text-xs text-gray-500 mt-0.5">
@@ -92,7 +92,7 @@ export default function WOButton({
             <button
               onClick={() => setOpen(false)}
               disabled={loading}
-              className="w-full mt-4 bg-[#252525] hover:bg-[#333] disabled:opacity-50 text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
+              className="w-full mt-4 bg-field hover:bg-hover disabled:opacity-50 text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
             >
               Cancelar
             </button>

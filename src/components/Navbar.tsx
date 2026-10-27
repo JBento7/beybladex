@@ -8,27 +8,23 @@ import { communityOf } from "@/lib/communities";
 import { useHomeCommunity, clearCommunityCookie } from "@/components/CommunityTheme";
 import { isJudgeAccount } from "@/lib/judgeAccount";
 import JudgeKiosk from "@/components/JudgeKiosk";
+import Sidebar from "@/components/shell/Sidebar";
+import MobileNavigation from "@/components/shell/MobileNavigation";
+import AccountMenu from "@/components/shell/AccountMenu";
+import { sectionTitle } from "@/components/shell/navItems";
+import { buttonClass } from "@/components/ui/Button";
 
+// App shell chrome, rendered by every page that already includes <Navbar />:
+// side menu (tablet/desktop), header (all sizes) and bottom bar (phones).
+// The `data-app-shell` marker lets globals.css offset the page content.
 export default function Navbar() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   // The app is branded with the player's own league (logo + accent color).
   const home = communityOf(useHomeCommunity());
   const isLbm = home.slug === "lbm";
-  const pathname = usePathname();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const logo = isLbm ? home.logo : "/lblnovo.png";
+  const pathname = usePathname() ?? "/";
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-
-  // Active-link styling: highlight the current section
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
-  const linkClass = (href: string) =>
-    `transition-colors font-medium text-base ${
-      isActive(href) ? "text-[var(--accent)]" : "text-gray-300 hover:text-[var(--accent)]"
-    }`;
-  const mobileLinkClass = (href: string) =>
-    `block px-3 py-3 transition-colors ${
-      isActive(href) ? "text-[var(--accent)]" : "text-gray-300 hover:text-[var(--accent)]"
-    }`;
 
   useEffect(() => {
     if (session) {
@@ -41,10 +37,12 @@ export default function Navbar() {
     }
   }, [session]);
 
+  const doSignOut = () => { clearCommunityCookie(); signOut({ callbackUrl: "/" }); };
+
   // Judge accounts get no menu: just the way back to their tournament list.
   if (isJudgeAccount(session?.user?.email)) {
     return (
-      <nav className="bg-[#1a1a1a] border-b border-[#2a2a2a] sticky top-0 z-50">
+      <nav className="bg-shell border-b border-line sticky top-0 z-50">
         <JudgeKiosk />
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link href="/juiz" className="text-[var(--accent)] font-bold">
@@ -52,7 +50,7 @@ export default function Navbar() {
           </Link>
           <button
             onClick={() => { clearCommunityCookie(); signOut({ callbackUrl: "/login" }); }}
-            className="text-sm text-gray-400 hover:text-white"
+            className="tap text-sm text-gray-400 hover:text-white"
           >
             Sair
           </button>
@@ -61,149 +59,36 @@ export default function Navbar() {
     );
   }
 
+  const signedIn = !!session;
+  const isOrganizer = session?.user.role === "ORGANIZER";
+
   return (
-    <nav aria-label="Principal" className="bg-[#1a1a1a] border-b border-[#2a2a2a] sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 md:h-[100px]">
-          {/* Logo */}
-          <Link href="/">
-            <img src={isLbm ? home.logo : "/lblnovo.png"} alt={home.fullName} className="h-14 md:h-[100px] w-auto" />
+    <>
+      <span data-app-shell hidden />
+      <Sidebar pathname={pathname} signedIn={signedIn} isOrganizer={isOrganizer} logo={logo} logoAlt={home.fullName} />
+      <header className="sticky top-0 z-30 bg-shell border-b border-line">
+        <div className="mx-auto max-w-content flex items-center gap-3 min-h-[var(--header-h)] px-4 md:px-6 desk:px-8">
+          {/* Phones have no side menu, so the logo lives in the header. */}
+          <Link href="/" aria-label="LBL — página inicial" className="md:hidden shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={logo} alt={home.fullName} className="h-9 w-auto max-w-[96px] object-contain" />
           </Link>
-
-          {/* Desktop nav */}
-          <div className="hidden lg:flex items-center gap-6">
-            <Link href="/tournaments" className={linkClass("/tournaments")}>
-              Torneios
-            </Link>
-            <Link href="/quick-match" className={linkClass("/quick-match")}>
-              Partidas Rápidas
-            </Link>
-            <Link href="/community" className={linkClass("/community")}>
-              Comunidade
-            </Link>
-            {session && (
-              <>
-                <Link href="/dashboard" className={linkClass("/dashboard")}>
-                  Painel
-                </Link>
-                <Link href="/profile" className={linkClass("/profile")}>
-                  Perfil
-                </Link>
-                <Link href="/beyparts" className={linkClass("/beyparts")}>
-                  BeyParts
-                </Link>
-                <Link href="/rankings" className={linkClass("/rankings")}>
-                  Rankings
-                </Link>
-                {session.user.role === "ORGANIZER" && (
-                  <Link href="/admin" className={linkClass("/admin")}>
-                    Admin
-                  </Link>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Auth buttons */}
-          <div className="hidden lg:flex items-center gap-3">
-            {session ? (
-              <div className="flex items-center gap-3">
-                <Link href="/profile" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                  <div className="w-11 h-11 rounded-full overflow-hidden border border-[var(--accent)]/50 flex-shrink-0">
-                    {avatarUrl ? (
-                      <img src={avatarUrl} alt={session.user.name ?? ""} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-[var(--accent)]/20 flex items-center justify-center">
-                        <img src="/bey-removebg-preview.png" alt="" className="w-6 h-6 object-contain" />
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-base text-gray-400">
-                    {session.user.name}
-                    {session.user.role === "ORGANIZER" && (
-                      <span className="ml-1 text-sm bg-[var(--accent)] text-black px-1.5 py-0.5 rounded font-semibold">
-                        ADMIN
-                      </span>
-                    )}
-                  </span>
-                </Link>
-                <button
-                  onClick={() => { clearCommunityCookie(); signOut({ callbackUrl: "/" }); }}
-                  className="text-base bg-gray-700 hover:bg-gray-600 px-5 py-2 rounded-lg text-gray-200 transition-colors"
-                >
-                  Sair
-                </button>
-              </div>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="text-base text-gray-300 hover:text-[var(--accent)] transition-colors font-medium"
-                >
-                  Entrar
-                </Link>
-                <Link
-                  href="/register"
-                  className="text-base bg-[#c8102e] hover:bg-[#a00d24] text-white px-5 py-2 rounded-lg font-semibold transition-colors"
-                >
-                  Cadastrar
-                </Link>
-              </>
-            )}
-          </div>
-
-          {/* Mobile menu button */}
-          <button
-            className="tap lg:hidden inline-flex items-center justify-center text-gray-200 hover:text-[var(--accent)] p-2"
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-controls="menu-movel"
-            aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
-            aria-expanded={menuOpen}
-          >
-            <svg aria-hidden="true" className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              {menuOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              )}
-            </svg>
-          </button>
+          <p className="flex-1 min-w-0 truncate font-display text-title-3 text-fg" aria-hidden="true">
+            {sectionTitle(pathname)}
+          </p>
+          {status === "loading" ? (
+            <span className="w-24 h-9 rounded-ctl bg-field animate-pulse" aria-hidden="true" />
+          ) : signedIn ? (
+            <AccountMenu name={session.user.name ?? "Conta"} avatarUrl={avatarUrl} isOrganizer={isOrganizer} onSignOut={doSignOut} />
+          ) : (
+            <div className="flex items-center gap-2">
+              <Link href={`/login?callbackUrl=${encodeURIComponent(pathname)}`} className={buttonClass("secondary", "sm")}>Entrar</Link>
+              <Link href="/register" className={buttonClass("primary", "sm", "hidden sm:inline-flex")}>Criar conta</Link>
+            </div>
+          )}
         </div>
-
-        {/* Mobile menu */}
-        {menuOpen && (
-          <div id="menu-movel" className="lg:hidden pb-4 pt-2 border-t border-[#2a2a2a] space-y-2">
-            <Link href="/tournaments" className={mobileLinkClass("/tournaments")} onClick={() => setMenuOpen(false)}>Torneios</Link>
-            <Link href="/quick-match" className={mobileLinkClass("/quick-match")} onClick={() => setMenuOpen(false)}>Partidas Rápidas</Link>
-            <Link href="/community" className={mobileLinkClass("/community")} onClick={() => setMenuOpen(false)}>Comunidade</Link>
-            {session && (
-              <>
-                <Link href="/dashboard" className={mobileLinkClass("/dashboard")} onClick={() => setMenuOpen(false)}>Painel</Link>
-                <Link href="/profile" className={mobileLinkClass("/profile")} onClick={() => setMenuOpen(false)}>Perfil</Link>
-                <Link href="/beyparts" className={mobileLinkClass("/beyparts")} onClick={() => setMenuOpen(false)}>BeyParts</Link>
-                <Link href="/rankings" className={mobileLinkClass("/rankings")} onClick={() => setMenuOpen(false)}>Rankings</Link>
-                {session.user.role === "ORGANIZER" && (
-                  <>
-                    <Link href="/admin" className={mobileLinkClass("/admin")} onClick={() => setMenuOpen(false)}>Admin</Link>
-                  </>
-                )}
-                <button
-                  onClick={() => { clearCommunityCookie(); signOut({ callbackUrl: "/" }); setMenuOpen(false); }}
-                  className="block w-full text-left px-3 py-2 text-red-400 hover:text-red-300"
-                >
-                  Sair
-                </button>
-              </>
-            )}
-            {!session && (
-              <>
-                <Link href="/login" className="block px-3 py-2 text-gray-300 hover:text-[var(--accent)]" onClick={() => setMenuOpen(false)}>Entrar</Link>
-                <Link href="/register" className="block px-3 py-2 text-[var(--accent)] font-semibold" onClick={() => setMenuOpen(false)}>Cadastrar</Link>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </nav>
+      </header>
+      <MobileNavigation pathname={pathname} signedIn={signedIn} isOrganizer={isOrganizer} onSignOut={doSignOut} />
+    </>
   );
 }

@@ -146,7 +146,7 @@ function ArenaGrid({
   const slots = [...new Set(matches.map((m) => m.slot))].sort((a, b) => a - b);
 
   return (
-    <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
+    <div className="bg-card border border-line rounded-xl p-5">
       {label && <h2 className="text-sm font-bold text-white mb-3">{label}</h2>}
       <div className="overflow-x-auto">
         {arenas > 1 && (
@@ -155,7 +155,7 @@ function ArenaGrid({
             style={{ gridTemplateColumns: `repeat(${arenas}, minmax(160px, 1fr))` }}
           >
             {Array.from({ length: arenas }, (_, i) => (
-              <div key={i} className="text-center text-xs font-bold text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/20 rounded-lg py-1.5">
+              <div key={i} className="text-center text-xs font-bold text-brand-yellow bg-brand-yellow/10 border border-brand-yellow/20 rounded-lg py-1.5">
                 Arena {i + 1}
               </div>
             ))}
@@ -171,7 +171,7 @@ function ArenaGrid({
               const match = matches.find((m) => m.slot === slot && m.arena === i + 1);
               if (!match) {
                 return (
-                  <div key={i} className="border border-dashed border-[#333] rounded-xl flex items-center justify-center py-6">
+                  <div key={i} className="border border-dashed border-line rounded-xl flex items-center justify-center py-6">
                     <span className="text-gray-700 text-xs">livre</span>
                   </div>
                 );
@@ -180,9 +180,9 @@ function ArenaGrid({
                 // Completed match — show result in fixed cell
                 const loser = match.winner === match.p1 ? match.p2 : match.p1;
                 return (
-                  <div key={match.id} className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl p-3 opacity-80">
+                  <div key={match.id} className="bg-card border border-line rounded-xl p-3 opacity-80">
                     {match.label && (
-                      <p className="text-[10px] font-bold text-[#f0a500] uppercase tracking-wide mb-2 text-center">{match.label}</p>
+                      <p className="text-[10px] font-bold text-brand-yellow uppercase tracking-wide mb-2 text-center">{match.label}</p>
                     )}
                     <p className="text-xs text-green-400 font-semibold text-center mb-1">🏅 {match.winner}</p>
                     <p className="text-xs text-gray-600 line-through text-center">{loser}</p>
@@ -190,9 +190,9 @@ function ArenaGrid({
                 );
               }
               return (
-                <div key={match.id} className="bg-[#252525] border border-[#333] rounded-xl p-3">
+                <div key={match.id} className="bg-field border border-line rounded-xl p-3">
                   {match.label && (
-                    <p className="text-[10px] font-bold text-[#f0a500] uppercase tracking-wide mb-2 text-center">{match.label}</p>
+                    <p className="text-[10px] font-bold text-brand-yellow uppercase tracking-wide mb-2 text-center">{match.label}</p>
                   )}
                   <p className="text-xs text-gray-500 mb-2 text-center">Clique no vencedor</p>
                   <div className="space-y-2">
@@ -200,7 +200,7 @@ function ArenaGrid({
                       <button
                         key={player}
                         onClick={() => onWinner(match.id, player)}
-                        className="w-full bg-[#1a1a1a] hover:bg-[#f0a500]/10 hover:border-[#f0a500] border border-[#333] text-white font-semibold text-sm py-2.5 px-3 rounded-xl transition-all"
+                        className="w-full bg-card hover:bg-brand-yellow/10 hover:border-brand-yellow border border-line text-white font-semibold text-sm py-2.5 px-3 rounded-xl transition-all"
                       >
                         {player}
                       </button>
@@ -349,7 +349,7 @@ export default function QuickTournamentPage() {
     : null;
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
 
       <main className="max-w-2xl mx-auto px-4 py-8">
@@ -362,7 +362,7 @@ export default function QuickTournamentPage() {
               <p className="text-gray-400 text-sm mt-1">Sem cadastro. Tudo fica salvo no seu navegador.</p>
             </div>
 
-            <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 space-y-4">
+            <div className="bg-card border border-line rounded-xl p-5 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1.5">Nome do Torneio <span className="text-gray-600 font-normal">(opcional)</span></label>
                 <input
@@ -370,7 +370,7 @@ export default function QuickTournamentPage() {
                   value={state.title}
                   onChange={(e) => save({ ...state, title: e.target.value })}
                   placeholder="ex: Torneio da Galera"
-                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                  className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                 />
               </div>
 
@@ -382,7 +382,7 @@ export default function QuickTournamentPage() {
                   max="20"
                   value={state.arenas}
                   onChange={(e) => save({ ...state, arenas: Math.max(1, parseInt(e.target.value) || 1) })}
-                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+                  className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
                 />
                 <p className="text-xs text-gray-500 mt-1">Partidas divididas por arena automaticamente</p>
               </div>
@@ -399,11 +399,11 @@ export default function QuickTournamentPage() {
                       onClick={() => save({ ...state, format: f.value })}
                       className={`text-left p-3 rounded-xl border transition-all ${
                         state.format === f.value
-                          ? "border-[#f0a500] bg-[#f0a500]/10"
-                          : "border-[#333] bg-[#252525] hover:border-gray-600"
+                          ? "border-brand-yellow bg-brand-yellow/10"
+                          : "border-line bg-field hover:border-gray-600"
                       }`}
                     >
-                      <div className={`font-semibold text-sm mb-0.5 ${state.format === f.value ? "text-[#f0a500]" : "text-white"}`}>{f.label}</div>
+                      <div className={`font-semibold text-sm mb-0.5 ${state.format === f.value ? "text-brand-yellow" : "text-white"}`}>{f.label}</div>
                       <div className="text-xs text-gray-500">{f.desc}</div>
                     </button>
                   ))}
@@ -411,7 +411,7 @@ export default function QuickTournamentPage() {
               </div>
             </div>
 
-            <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
+            <div className="bg-card border border-line rounded-xl p-5">
               <h2 className="text-sm font-bold text-white mb-3">Participantes ({state.participants.length})</h2>
               <div className="flex gap-2 mb-3">
                 <input
@@ -420,11 +420,11 @@ export default function QuickTournamentPage() {
                   onChange={(e) => setNameInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addParticipant(); } }}
                   placeholder="Nome do participante"
-                  className="flex-1 bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors text-sm"
+                  className="flex-1 bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors text-sm"
                 />
                 <button
                   onClick={addParticipant}
-                  className="bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold px-4 py-2.5 rounded-lg transition-colors text-sm"
+                  className="bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold px-4 py-2.5 rounded-lg transition-colors text-sm"
                 >
                   + Add
                 </button>
@@ -435,7 +435,7 @@ export default function QuickTournamentPage() {
               ) : (
                 <div className="space-y-1.5">
                   {state.participants.map((p, i) => (
-                    <div key={p} className="flex items-center justify-between bg-[#252525] rounded-lg px-3 py-2">
+                    <div key={p} className="flex items-center justify-between bg-field rounded-lg px-3 py-2">
                       <span className="text-sm text-white">
                         <span className="text-gray-500 mr-2">#{i + 1}</span>{p}
                       </span>
@@ -449,7 +449,7 @@ export default function QuickTournamentPage() {
             <button
               onClick={startTournament}
               disabled={state.participants.length < 2}
-              className="w-full bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-40 disabled:cursor-not-allowed text-white font-black py-3 rounded-xl transition-colors"
+              className="w-full bg-brand-red hover:bg-brand-red-hover disabled:opacity-40 disabled:cursor-not-allowed text-white font-black py-3 rounded-xl transition-colors"
             >
               Iniciar Torneio →
             </button>
@@ -468,7 +468,7 @@ export default function QuickTournamentPage() {
               </div>
               <button
                 onClick={reset}
-                className="text-xs text-gray-500 hover:text-red-400 border border-[#333] hover:border-red-400/50 px-3 py-1.5 rounded-lg transition-colors"
+                className="text-xs text-gray-500 hover:text-red-400 border border-line hover:border-red-400/50 px-3 py-1.5 rounded-lg transition-colors"
               >
                 Reiniciar
               </button>
@@ -476,13 +476,13 @@ export default function QuickTournamentPage() {
 
             {/* Champion banner */}
             {state.phase === "finished" && (
-              <div className="bg-[#f0a500]/10 border border-[#f0a500]/40 rounded-xl p-5 text-center">
+              <div className="bg-brand-yellow/10 border border-brand-yellow/40 rounded-xl p-5 text-center">
                 <img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto mb-2" />
-                <div className="text-lg font-black text-[#f0a500] mb-1">Torneio Encerrado!</div>
+                <div className="text-lg font-black text-brand-yellow mb-1">Torneio Encerrado!</div>
                 <div className="text-white font-bold">
                   🏆 Campeão: {elimChampion ?? rrChampion}
                 </div>
-                <button onClick={() => setShowSummary(true)} className="mt-3 text-xs text-[#f0a500] underline">
+                <button onClick={() => setShowSummary(true)} className="mt-3 text-xs text-brand-yellow underline">
                   Ver resumo completo
                 </button>
               </div>
@@ -490,11 +490,11 @@ export default function QuickTournamentPage() {
 
             {/* RR Standings */}
             {state.format === "ROUND_ROBIN" && rrStandings.length > 0 && (
-              <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
+              <div className="bg-card border border-line rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-sm font-bold text-white">Classificação</h2>
                   {hasPlayoffs(state.participants) && (
-                    <span className="text-[10px] text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/30 px-2 py-0.5 rounded-full">Top 4 → Playoffs</span>
+                    <span className="text-[10px] text-brand-yellow bg-brand-yellow/10 border border-brand-yellow/30 px-2 py-0.5 rounded-full">Top 4 → Playoffs</span>
                   )}
                 </div>
                 <div className="space-y-1.5">
@@ -502,19 +502,19 @@ export default function QuickTournamentPage() {
                     const isTop4 = hasPlayoffs(state.participants) && i < 4;
                     return (
                       <div key={p.name} className={`flex items-center justify-between rounded-lg px-3 py-2 ${
-                        i === 0 ? "bg-[#f0a500]/10 border border-[#f0a500]/30"
-                        : isTop4 ? "bg-[#252525] border border-[#333]"
-                        : "bg-[#252525] opacity-50"
+                        i === 0 ? "bg-brand-yellow/10 border border-brand-yellow/30"
+                        : isTop4 ? "bg-field border border-line"
+                        : "bg-field opacity-50"
                       }`}>
                         <div className="flex items-center gap-2">
-                          <span className={`text-xs font-bold w-5 text-center ${i === 0 ? "text-[#f0a500]" : isTop4 ? "text-gray-400" : "text-gray-600"}`}>#{i + 1}</span>
+                          <span className={`text-xs font-bold w-5 text-center ${i === 0 ? "text-brand-yellow" : isTop4 ? "text-gray-400" : "text-gray-600"}`}>#{i + 1}</span>
                           <span className={`text-sm ${isTop4 ? "text-white" : "text-gray-500"}`}>{p.name}</span>
                           {isTop4 && hasPlayoffs(state.participants) && semiMatches.length === 0 && state.phase === "playing" && (
-                            <span className="text-[10px] text-[#f0a500] hidden sm:inline">playoffs</span>
+                            <span className="text-[10px] text-brand-yellow hidden sm:inline">playoffs</span>
                           )}
                         </div>
                         <div className="flex gap-3 text-xs">
-                          <span className="text-[#f0a500] font-bold">{p.points}pts</span>
+                          <span className="text-brand-yellow font-bold">{p.points}pts</span>
                           <span className="text-gray-500">{p.wins}V {p.losses}D</span>
                         </div>
                       </div>
@@ -577,9 +577,9 @@ export default function QuickTournamentPage() {
               ));
             })()}
 
-            <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 text-center">
+            <div className="bg-card border border-line rounded-xl p-5 text-center">
               <p className="text-gray-500 text-xs mb-2">Quer salvar seu histórico e estatísticas de beyblade?</p>
-              <Link href="/register" className="text-[#f0a500] font-bold text-sm hover:underline">
+              <Link href="/register" className="text-brand-yellow font-bold text-sm hover:underline">
                 Criar uma conta gratuita →
               </Link>
             </div>
@@ -590,7 +590,7 @@ export default function QuickTournamentPage() {
       {/* Summary modal */}
       {showSummary && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-sm">
+          <div className="bg-card border border-line rounded-2xl p-6 w-full max-w-sm">
             <h3 className="font-bold text-white mb-4">Resumo — {state.title || "Torneio Rápido"}</h3>
             {state.format === "ROUND_ROBIN" ? (
               <>
@@ -603,11 +603,11 @@ export default function QuickTournamentPage() {
                   ))}
                 </div>
                 {(semiMatches.length > 0 || finalMatches.length > 0) && (
-                  <div className="border-t border-[#333] pt-3 mb-4">
-                    <p className="text-xs font-bold text-[#f0a500] mb-2 uppercase">Playoffs</p>
+                  <div className="border-t border-line pt-3 mb-4">
+                    <p className="text-xs font-bold text-brand-yellow mb-2 uppercase">Playoffs</p>
                     {[...semiMatches, ...finalMatches].filter((m) => m.winner).map((m) => (
                       <div key={m.id} className="text-xs text-gray-400 mb-1">
-                        <span className="text-[#f0a500] font-semibold">{m.label}: </span>
+                        <span className="text-brand-yellow font-semibold">{m.label}: </span>
                         <span className="text-white">{m.winner}</span> def. {m.winner === m.p1 ? m.p2 : m.p1}
                       </div>
                     ))}
@@ -619,7 +619,7 @@ export default function QuickTournamentPage() {
             )}
             <button
               onClick={() => setShowSummary(false)}
-              className="w-full bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold py-2.5 rounded-xl transition-colors text-sm"
+              className="w-full bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold py-2.5 rounded-xl transition-colors text-sm"
             >
               Fechar
             </button>

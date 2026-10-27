@@ -209,7 +209,7 @@ function StatBars({ part }: { part: BeyPart }) {
               </span>
               <span className="text-[10px] font-bold text-white">{val ?? "—"}</span>
             </div>
-            <div className="h-1.5 bg-[#111] rounded-full overflow-hidden">
+            <div className="h-1.5 bg-app rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all"
                 style={{ width: `${pct}%`, backgroundColor: sd.color }}
@@ -330,7 +330,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <div onClick={(e) => e.stopPropagation()} className="bg-card border border-line rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold text-white mb-0.5">{part.name}</h2>
         <p className="text-sm text-gray-500 mb-4 flex items-center gap-1.5">{CATEGORY_LABELS[part.category]} · <LineBadge line={part.line} /></p>
 
@@ -347,7 +347,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Ex: Low Rush"
-              className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
+              className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
             />
           </div>
         )}
@@ -360,7 +360,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={isBit ? "Ex: LR" : "Nome da peça"}
-            className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
+            className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
           />
           {isBit && (
             <p className="text-[11px] text-gray-500 mt-1">É o que aparece na montagem dos combos no perfil.</p>
@@ -368,8 +368,8 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
         </div>
 
         {/* Live preview */}
-        <div className="flex gap-3 mb-5 p-3 bg-[#252525] rounded-xl border border-[#333]">
-          <div className="w-16 h-16 rounded-lg bg-[#111] border border-[#333] flex-shrink-0 overflow-hidden flex items-center justify-center">
+        <div className="flex gap-3 mb-5 p-3 bg-field rounded-xl border border-line">
+          <div className="w-16 h-16 rounded-lg bg-app border border-line flex-shrink-0 overflow-hidden flex items-center justify-center">
             {preview.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={preview.imageUrl} alt={part.name} className="w-full h-full object-contain" />
@@ -392,7 +392,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="w-full mb-2 flex items-center justify-center gap-2 bg-[#252525] hover:bg-[#2e2e2e] border border-dashed border-[#444] hover:border-[#f0a500] disabled:opacity-50 text-gray-300 text-sm font-medium py-2.5 rounded-lg transition-colors"
+            className="w-full mb-2 flex items-center justify-center gap-2 bg-field hover:bg-[#2e2e2e] border border-dashed border-line hover:border-brand-yellow disabled:opacity-50 text-gray-300 text-sm font-medium py-2.5 rounded-lg transition-colors"
           >
             {uploading ? (
               <span className="text-gray-500">Enviando...</span>
@@ -418,7 +418,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
             placeholder="Ou cole uma URL..."
-            className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
+            className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
           />
         </div>
 
@@ -431,7 +431,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
             value={weight}
             onChange={(e) => setWeight(e.target.value)}
             placeholder="—"
-            className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
+            className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
           />
           {suggestedWeight != null && (
             <p className="text-[11px] text-gray-500 mt-1">
@@ -451,13 +451,13 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
                   onClick={() => setPartType(partType === pt ? "" : pt)}
                   className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all ${
                     partType === pt
-                      ? "border-[#f0a500] bg-[#f0a500]/10"
-                      : "border-[#333] bg-[#252525] hover:border-gray-500"
+                      ? "border-brand-yellow bg-brand-yellow/10"
+                      : "border-line bg-field hover:border-gray-500"
                   }`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={PART_TYPE_IMAGES[pt]} alt={PART_TYPE_LABELS[pt]} className="w-8 h-8 object-contain" />
-                  <span className={`text-[10px] font-semibold ${partType === pt ? "text-[#f0a500]" : "text-gray-400"}`}>
+                  <span className={`text-[10px] font-semibold ${partType === pt ? "text-brand-yellow" : "text-gray-400"}`}>
                     {PART_TYPE_LABELS[pt]}
                   </span>
                 </button>
@@ -467,7 +467,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
         )}
 
         {isAutoType && axes.length > 0 && (
-          <p className="text-[11px] text-gray-500 mb-4 bg-[#252525] px-3 py-2 rounded-lg">
+          <p className="text-[11px] text-gray-500 mb-4 bg-field px-3 py-2 rounded-lg">
             Tipo detectado automaticamente pelo stat dominante.
           </p>
         )}
@@ -485,7 +485,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
                   value={stats[key] ?? ""}
                   onChange={(e) => setStats((prev) => ({ ...prev, [key]: e.target.value }))}
                   placeholder="—"
-                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
+                  className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
                 />
               </div>
             );
@@ -493,7 +493,7 @@ function EditPartModal({ part, onClose, onSaved }: EditModalProps) {
         </div>
 
         <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold py-2.5 rounded-xl transition-colors">
+          <button onClick={onClose} className="flex-1 bg-field hover:bg-hover text-gray-300 font-semibold py-2.5 rounded-xl transition-colors">
             Cancelar
           </button>
           <button onClick={handleSave} disabled={saving} className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold py-2.5 rounded-xl transition-colors">
@@ -522,9 +522,9 @@ function PartCard({ part, onEdit, onDelete, deleting, isAdmin }: {
   const weightIsReference = part.weight == null && displayWeight != null;
 
   return (
-    <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden flex flex-col">
+    <div className="bg-card border border-line rounded-xl overflow-hidden flex flex-col">
       {/* Image */}
-      <div className="h-32 bg-[#0d0d0d] flex items-center justify-center border-b border-[#222]">
+      <div className="h-32 bg-app flex items-center justify-center border-b border-line">
         {part.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={part.imageUrl} alt={part.name} className="h-full w-full object-contain p-2" />
@@ -550,8 +550,8 @@ function PartCard({ part, onEdit, onDelete, deleting, isAdmin }: {
               <span
                 className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap border ${
                   weightIsReference
-                    ? "text-[#f0a500]/70 bg-[#f0a500]/5 border-[#f0a500]/20"
-                    : "text-[#f0a500] bg-[#f0a500]/10 border-[#f0a500]/30"
+                    ? "text-brand-yellow/70 bg-brand-yellow/5 border-brand-yellow/20"
+                    : "text-brand-yellow bg-brand-yellow/10 border-brand-yellow/30"
                 }`}
                 title={weightIsReference ? "Peso de referência (não salvo)" : "Peso"}
               >
@@ -586,7 +586,7 @@ function PartCard({ part, onEdit, onDelete, deleting, isAdmin }: {
 
         {isAdmin && (
           <div className="flex gap-2 mt-auto">
-            <button onClick={onEdit} className="flex-1 text-xs bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold py-1.5 rounded-lg transition-colors">
+            <button onClick={onEdit} className="flex-1 text-xs bg-field hover:bg-hover text-gray-300 font-semibold py-1.5 rounded-lg transition-colors">
               Editar
             </button>
             <button onClick={onDelete} disabled={deleting} className="flex-1 text-xs bg-red-900/30 hover:bg-red-900/50 text-red-400 font-semibold py-1.5 rounded-lg transition-colors disabled:opacity-50">
@@ -757,9 +757,9 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
     .sort(sortParts);
 
   return (
-    <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl">
+    <div className="bg-card border border-line rounded-xl">
       {/* Sticky header + tabs */}
-      <div className="sticky top-[64px] md:top-[100px] z-30 bg-[#1a1a1a] border-b border-[#2a2a2a] px-4 sm:px-6 pt-5 pb-3">
+      <div className="sticky top-[var(--header-h)] z-20 bg-card border-b border-line px-4 sm:px-6 pt-5 pb-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
           <div className="min-w-0">
             <h2 className="text-lg font-bold text-white">Catálogo de Peças</h2>
@@ -771,14 +771,14 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
                 <button
                   onClick={() => handleBackfillWeights(false)}
                   disabled={backfilling}
-                  className="text-xs bg-[#252525] hover:bg-[#333] disabled:opacity-50 text-gray-300 font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                  className="text-xs bg-field hover:bg-hover disabled:opacity-50 text-gray-300 font-semibold px-3 py-1.5 rounded-lg transition-colors"
                 >
                   {backfilling ? "Processando..." : "Preencher pesos (só vazios)"}
                 </button>
                 <button
                   onClick={() => handleBackfillWeights(true)}
                   disabled={backfilling}
-                  className="text-xs bg-[#f0a500]/15 hover:bg-[#f0a500]/25 border border-[#f0a500]/40 disabled:opacity-50 text-[#f0a500] font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                  className="text-xs bg-brand-yellow/15 hover:bg-brand-yellow/25 border border-brand-yellow/40 disabled:opacity-50 text-brand-yellow font-semibold px-3 py-1.5 rounded-lg transition-colors"
                   title="Aplica os pesos da tabela oficial, sobrescrevendo os existentes"
                 >
                   {backfilling ? "Processando..." : "Atualizar pela tabela oficial"}
@@ -797,7 +797,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Pesquisar peça..."
-              className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
+              className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors"
             />
             {search && (
               <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
@@ -821,7 +821,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
                 setSearch("");
               }}
               className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${
-                activeLine === line ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 hover:text-white"
+                activeLine === line ? "bg-brand-yellow text-black" : "bg-field text-gray-400 hover:text-white"
               }`}
             >
               {["RATCHET", "BIT"].includes(line)
@@ -833,11 +833,11 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
 
         {/* Category sub-tabs */}
         {LINE_CATEGORIES[activeLine].length > 1 && (
-          <div className="flex flex-wrap gap-1.5 pt-1.5 pl-1 border-l-2 border-[#333]">
+          <div className="flex flex-wrap gap-1.5 pt-1.5 pl-1 border-l-2 border-line">
             <button
               onClick={() => setActiveCategory(null)}
               className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-                activeCategory === null ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+                activeCategory === null ? "bg-hover text-white" : "text-gray-500 hover:text-gray-300"
               }`}
             >
               Todas
@@ -847,7 +847,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
                 className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-                  activeCategory === cat ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+                  activeCategory === cat ? "bg-hover text-white" : "text-gray-500 hover:text-gray-300"
                 }`}
               >
                 {CATEGORY_LABELS[cat]}
@@ -858,11 +858,11 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
 
         {/* Ratchet size sub-tabs (shown inside sticky bar too) */}
         {activeLine === "RATCHET" && ratchetSizes.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pt-1.5 pl-1 border-l-2 border-[#333]">
+          <div className="flex flex-wrap gap-1.5 pt-1.5 pl-1 border-l-2 border-line">
             <button
               onClick={() => setActiveRatchetSize(null)}
               className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-                activeRatchetSize === null ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+                activeRatchetSize === null ? "bg-hover text-white" : "text-gray-500 hover:text-gray-300"
               }`}
             >
               Todos
@@ -872,7 +872,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
                 key={size}
                 onClick={() => setActiveRatchetSize(size)}
                 className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
-                  activeRatchetSize === size ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+                  activeRatchetSize === size ? "bg-hover text-white" : "text-gray-500 hover:text-gray-300"
                 }`}
               >
                 {size} lâminas
@@ -882,13 +882,13 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
         )}
 
         {/* Filtro por tipo + ordenação */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3 mt-2 border-t border-[#2a2a2a]">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-3 mt-2 border-t border-line">
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Tipo</span>
             <button
               onClick={() => setTypeFilter(null)}
               className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-                typeFilter === null ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+                typeFilter === null ? "bg-hover text-white" : "text-gray-500 hover:text-gray-300"
               }`}
             >
               Todos
@@ -898,7 +898,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
                 key={pt}
                 onClick={() => setTypeFilter(typeFilter === pt ? null : pt)}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-                  typeFilter === pt ? "bg-[#f0a500] text-black" : "text-gray-500 hover:text-gray-300"
+                  typeFilter === pt ? "bg-brand-yellow text-black" : "text-gray-500 hover:text-gray-300"
                 }`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -918,7 +918,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
                 key={key}
                 onClick={() => setSortBy(key)}
                 className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-                  sortBy === key ? "bg-[#333] text-white" : "text-gray-500 hover:text-gray-300"
+                  sortBy === key ? "bg-hover text-white" : "text-gray-500 hover:text-gray-300"
                 }`}
               >
                 {label}
@@ -942,7 +942,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
           <p className="text-red-400 text-sm mb-3">{loadError}</p>
           <button
             onClick={() => { setLoading(true); fetchParts(); }}
-            className="text-[#f0a500] hover:underline text-sm font-medium"
+            className="text-brand-yellow hover:underline text-sm font-medium"
           >
             Tentar novamente
           </button>
@@ -962,7 +962,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
             ))}
             {/* Add new card — admin only */}
             {isAdmin && (
-              <div className="bg-[#111] border border-dashed border-[#333] rounded-xl p-3 flex flex-col justify-between min-h-[80px]">
+              <div className="bg-app border border-dashed border-line rounded-xl p-3 flex flex-col justify-between min-h-[80px]">
                 <div className="text-xs font-semibold text-gray-500 mb-2">Novo ratchet</div>
                 <input
                   type="text"
@@ -970,12 +970,12 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
                   onChange={(e) => setNewNames((prev) => ({ ...prev, RATCHET: e.target.value }))}
                   onKeyDown={(e) => { if (e.key === "Enter") handleAdd("RATCHET"); }}
                   placeholder="Ex: 3-60"
-                  className="bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
+                  className="bg-card border border-line focus:border-brand-yellow rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
                 />
                 <button
                   onClick={() => handleAdd("RATCHET")}
                   disabled={saving === "RATCHET" || !newNames.RATCHET.trim()}
-                  className="bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-40 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                  className="bg-brand-red hover:bg-brand-red-hover disabled:opacity-40 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
                 >
                   {saving === "RATCHET" ? "..." : "+ Adicionar"}
                 </button>
@@ -991,7 +991,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
             const items = partsByCategory(category);
             return (
               <div key={category}>
-                <h3 className="text-sm font-bold text-[#f0a500] mb-3">{CATEGORY_LABELS[category]}</h3>
+                <h3 className="text-sm font-bold text-brand-yellow mb-3">{CATEGORY_LABELS[category]}</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {items.map((p) => (
                     <PartCard
@@ -1006,7 +1006,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
 
                   {/* Add new card — admin only */}
                   {isAdmin && (
-                    <div className="bg-[#111] border border-dashed border-[#333] rounded-xl p-3 flex flex-col justify-between min-h-[80px]">
+                    <div className="bg-app border border-dashed border-line rounded-xl p-3 flex flex-col justify-between min-h-[80px]">
                       <div className="text-xs font-semibold text-gray-500 mb-2">Nova peça</div>
                       {category === "BIT" && (
                         <input
@@ -1015,7 +1015,7 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
                           onChange={(e) => setNewBitFullName(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter") handleAdd(category); }}
                           placeholder="Nome..."
-                          className="bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
+                          className="bg-card border border-line focus:border-brand-yellow rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
                         />
                       )}
                       <input
@@ -1024,12 +1024,12 @@ export default function BeyPartsManager({ isAdmin = false }: { isAdmin?: boolean
                         onChange={(e) => setNewNames((prev) => ({ ...prev, [category]: e.target.value }))}
                         onKeyDown={(e) => { if (e.key === "Enter") handleAdd(category); }}
                         placeholder={category === "BIT" ? "Nome simplificado..." : "Nome..."}
-                        className="bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
+                        className="bg-card border border-line focus:border-brand-yellow rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-600 outline-none transition-colors mb-2"
                       />
                       <button
                         onClick={() => handleAdd(category)}
                         disabled={saving === category || !newNames[category].trim()}
-                        className="bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-40 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                        className="bg-brand-red hover:bg-brand-red-hover disabled:opacity-40 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
                       >
                         {saving === category ? "..." : "+ Adicionar"}
                       </button>

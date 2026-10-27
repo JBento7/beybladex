@@ -47,7 +47,7 @@ export default async function ArenaLayoutPage() {
   const profile = { name: me?.bladerName || me?.name || "JOGADOR", avatar: me?.avatarUrl ?? null, deck };
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <div className="max-w-6xl mx-auto px-4 py-6">
         <h1 className="text-2xl font-black text-white mb-1">Editor de layout do placar</h1>

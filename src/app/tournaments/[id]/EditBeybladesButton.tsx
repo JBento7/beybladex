@@ -92,7 +92,7 @@ export default function EditBeybladesButton({
     <>
       <button
         onClick={() => setShowModal(true)}
-        className="text-sm bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold px-4 py-2 rounded-lg transition-colors"
+        className="text-sm bg-field hover:bg-hover text-gray-300 font-semibold px-4 py-2 rounded-lg transition-colors"
       >
         Editar combos
       </button>
@@ -106,7 +106,7 @@ export default function EditBeybladesButton({
             role="dialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col"
+            className="bg-card border border-line rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col"
           >
             <h2 className="text-lg font-bold text-white mb-1">Editar Combos do Torneio</h2>
             <p className="text-sm text-gray-400 mb-4">
@@ -129,7 +129,7 @@ export default function EditBeybladesButton({
                   <p className="text-red-400 text-sm mb-2">Erro ao carregar seus combos.</p>
                   <button
                     onClick={() => setShowModal(false)}
-                    className="text-[#f0a500] text-sm underline"
+                    className="text-brand-yellow text-sm underline"
                   >
                     Fechar e tentar novamente
                   </button>
@@ -139,7 +139,7 @@ export default function EditBeybladesButton({
                   <p className="text-gray-400 text-sm">Você não tem combos cadastrados.</p>
                   <a
                     href="/profile"
-                    className="text-[#f0a500] text-sm underline mt-1 inline-block"
+                    className="text-brand-yellow text-sm underline mt-1 inline-block"
                   >
                     Cadastrar combos no perfil →
                   </a>
@@ -170,20 +170,20 @@ export default function EditBeybladesButton({
                       onClick={() => toggleSelect(b.id)}
                       className={`w-full text-left p-3 rounded-xl border transition-all ${
                         isSelected
-                          ? "border-[#f0a500] bg-[#f0a500]/10"
-                          : "border-[#333] bg-[#252525] hover:border-gray-600"
+                          ? "border-brand-yellow bg-brand-yellow/10"
+                          : "border-line bg-field hover:border-gray-600"
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <div
                           className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${
                             isSelected
-                              ? "border-[#f0a500] bg-[#f0a500]"
+                              ? "border-brand-yellow bg-brand-yellow"
                               : "border-gray-600"
                           }`}
                         />
                         <div>
-                          <div className={`font-semibold text-sm ${isSelected ? "text-[#f0a500]" : "text-white"}`}>
+                          <div className={`font-semibold text-sm ${isSelected ? "text-brand-yellow" : "text-white"}`}>
                             {b.name}
                           </div>
                           {parts && (
@@ -201,7 +201,7 @@ export default function EditBeybladesButton({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowModal(false)}
-                className="flex-1 bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
+                className="flex-1 bg-field hover:bg-hover text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
               >
                 Cancelar
               </button>

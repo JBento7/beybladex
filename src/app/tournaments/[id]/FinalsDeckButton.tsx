@@ -54,16 +54,16 @@ export default function FinalsDeckButton({ tournamentId, currentDeckIds }: { tou
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-sm bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold px-4 py-2 rounded-lg transition-colors"
+        className="text-sm bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold px-4 py-2 rounded-lg transition-colors"
       >
         🔧 Trocar 1 combo (finais)
       </button>
 
       {open && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setOpen(false)}>
-          <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()} className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col">
+          <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()} className="bg-card border border-line rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col">
             <h2 className="text-lg font-bold text-white mb-1">Deck das Finais</h2>
-            <p className="text-sm text-gray-400 mb-3">Você pode alterar <b className="text-[#f0a500]">apenas 1 combo</b> do seu deck para o mata-mata. Escolha 3.</p>
+            <p className="text-sm text-gray-400 mb-3">Você pode alterar <b className="text-brand-yellow">apenas 1 combo</b> do seu deck para o mata-mata. Escolha 3.</p>
 
             {err && <div className="mb-3 text-sm px-3 py-2 rounded-lg bg-red-900/30 border border-red-700 text-red-400">{err}</div>}
 
@@ -75,11 +75,11 @@ export default function FinalsDeckButton({ tournamentId, currentDeckIds }: { tou
                 const isOriginal = currentDeckIds.includes(b.id);
                 return (
                   <button key={b.id} onClick={() => toggle(b.id)}
-                    className={`w-full text-left p-3 rounded-xl border-2 transition-all ${isSel ? "border-[#f0a500] bg-[#f0a500]/10" : "border-[#333] bg-[#252525] hover:border-gray-600"}`}>
+                    className={`w-full text-left p-3 rounded-xl border-2 transition-all ${isSel ? "border-brand-yellow bg-brand-yellow/10" : "border-line bg-field hover:border-gray-600"}`}>
                     <div className="flex items-center gap-3">
-                      <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${isSel ? "border-[#f0a500] bg-[#f0a500]" : "border-gray-600"}`} />
+                      <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${isSel ? "border-brand-yellow bg-brand-yellow" : "border-gray-600"}`} />
                       <div className="flex-1 min-w-0">
-                        <div className={`font-semibold text-sm truncate ${isSel ? "text-[#f0a500]" : "text-white"}`}>{b.name}</div>
+                        <div className={`font-semibold text-sm truncate ${isSel ? "text-brand-yellow" : "text-white"}`}>{b.name}</div>
                         {comboParts(b) && <div className="text-xs text-gray-500 truncate">{comboParts(b)}</div>}
                       </div>
                       {isOriginal && <span className="text-[10px] text-gray-500 flex-shrink-0">do deck</span>}
@@ -92,7 +92,7 @@ export default function FinalsDeckButton({ tournamentId, currentDeckIds }: { tou
             {changed > 1 && <div className="mb-2 text-xs text-yellow-400">⚠️ Você alterou mais de 1 combo — só é permitido trocar um.</div>}
 
             <div className="flex gap-3">
-              <button onClick={() => setOpen(false)} className="flex-1 bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold py-2.5 rounded-xl transition-colors">Cancelar</button>
+              <button onClick={() => setOpen(false)} className="flex-1 bg-field hover:bg-hover text-gray-300 font-semibold py-2.5 rounded-xl transition-colors">Cancelar</button>
               <button onClick={save} disabled={loading || !valid} className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold py-2.5 rounded-xl transition-colors">
                 {loading ? "Salvando..." : `Salvar (${selected.length}/3)`}
               </button>

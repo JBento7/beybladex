@@ -48,16 +48,16 @@ export default function RankingsTable({
     <div>
       {/* Podium */}
       {top3.length > 0 && (
-        <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 mb-6">
+        <div className="bg-card border border-line rounded-2xl p-8 mb-6">
           <div className="flex items-end justify-center gap-6 sm:gap-10">
             {podiumOrder.map((r) => {
               if (!r) return null;
               const rank = top3.indexOf(r) + 1;
               const isFirst = rank === 1;
-              const ringColor = rank === 1 ? "ring-[#f0a500]" : rank === 2 ? "ring-gray-400" : "ring-orange-500";
+              const ringColor = rank === 1 ? "ring-brand-yellow" : rank === 2 ? "ring-gray-400" : "ring-orange-500";
               const boxColor =
                 rank === 1
-                  ? "bg-[#f0a500] text-black"
+                  ? "bg-brand-yellow text-black"
                   : rank === 2
                   ? "bg-gray-500 text-white"
                   : "bg-orange-600 text-white";
@@ -68,7 +68,7 @@ export default function RankingsTable({
                     <div
                       className={`rounded-full overflow-hidden ring-4 ${ringColor} ${
                         isFirst ? "w-24 h-24" : "w-20 h-20"
-                      } bg-[#252525] flex items-center justify-center`}
+                      } bg-field flex items-center justify-center`}
                     >
                       {r.avatarUrl ? (
                         <img src={r.avatarUrl} alt={r.name} className="w-full h-full object-cover" />
@@ -103,7 +103,7 @@ export default function RankingsTable({
             setPage(1);
           }}
           placeholder="Buscar jogador..."
-          className="flex-1 bg-[#1a1a1a] border border-[#2a2a2a] focus:border-[#f0a500] rounded-xl px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+          className="flex-1 bg-card border border-line focus:border-brand-yellow rounded-xl px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
         />
         <select
           value={pageSize}
@@ -111,7 +111,7 @@ export default function RankingsTable({
             setPageSize(Number(e.target.value));
             setPage(1);
           }}
-          className="bg-[#1a1a1a] border border-[#2a2a2a] focus:border-[#f0a500] rounded-xl px-4 py-2.5 text-white outline-none transition-colors"
+          className="bg-card border border-line focus:border-brand-yellow rounded-xl px-4 py-2.5 text-white outline-none transition-colors"
         >
           {PAGE_SIZE_OPTIONS.map((n) => (
             <option key={n} value={n}>
@@ -122,8 +122,8 @@ export default function RankingsTable({
       </div>
 
       {/* Table */}
-      <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden">
-        <div className="grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-[#2a2a2a]">
+      <div className="bg-card border border-line rounded-xl overflow-hidden">
+        <div className="grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-3 text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-line">
           <span>Posição</span>
           <span>Jogador</span>
           <span className="text-right">Pontos</span>
@@ -137,25 +137,25 @@ export default function RankingsTable({
             return (
               <div
                 key={r.id}
-                className={`grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-3.5 items-center border-b border-[#222] last:border-0 ${
-                  isMe ? "bg-[#f0a500]/5" : ""
+                className={`grid grid-cols-[auto_1fr_auto] gap-4 px-5 py-3.5 items-center border-b border-line last:border-0 ${
+                  isMe ? "bg-brand-yellow/5" : ""
                 }`}
               >
                 <span className="text-gray-400 font-semibold text-sm w-10">#{idx + 1}</span>
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full overflow-hidden bg-[#252525] flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-full overflow-hidden bg-field flex items-center justify-center shrink-0">
                     {r.avatarUrl ? (
                       <img src={r.avatarUrl} alt={r.name} className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-sm text-gray-500">{r.name.charAt(0).toUpperCase()}</span>
                     )}
                   </div>
-                  <span className={`font-semibold truncate ${isMe ? "text-[#f0a500]" : "text-white"}`}>
+                  <span className={`font-semibold truncate ${isMe ? "text-brand-yellow" : "text-white"}`}>
                     {r.name}
                     {isMe && <span className="ml-2 text-xs text-gray-500">(você)</span>}
                   </span>
                 </div>
-                <span className="text-[#f0a500] font-bold text-right">{r.points}</span>
+                <span className="text-brand-yellow font-bold text-right">{r.points}</span>
               </div>
             );
           })
@@ -168,7 +168,7 @@ export default function RankingsTable({
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="px-3 py-1.5 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] text-gray-300 text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#f0a500]/40"
+            className="px-3 py-1.5 rounded-lg bg-card border border-line text-gray-300 text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:border-brand-yellow/40"
           >
             ←
           </button>
@@ -178,7 +178,7 @@ export default function RankingsTable({
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="px-3 py-1.5 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] text-gray-300 text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:border-[#f0a500]/40"
+            className="px-3 py-1.5 rounded-lg bg-card border border-line text-gray-300 text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:border-brand-yellow/40"
           >
             →
           </button>

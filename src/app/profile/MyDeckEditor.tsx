@@ -78,7 +78,7 @@ export default function MyDeckEditor({
       <div className="flex items-center gap-2">
         <button
           onClick={() => { setSelected(currentIds); setErr(null); setOpen(true); }}
-          className="text-xs font-semibold text-[#f0a500] hover:text-[#d4940a] transition-colors border border-[#f0a500]/30 hover:border-[#f0a500]/60 px-2.5 py-1 rounded-lg"
+          className="text-xs font-semibold text-brand-yellow hover:text-brand-yellow-hover transition-colors border border-brand-yellow/30 hover:border-brand-yellow/60 px-2.5 py-1 rounded-lg"
         >
           {isFeatured ? "Editar Deck" : "Definir Deck Destaque"}
         </button>
@@ -102,7 +102,7 @@ export default function MyDeckEditor({
             role="dialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col"
+            className="bg-card border border-line rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col"
           >
             <div className="flex items-start justify-between gap-2 mb-1">
               <h2 className="text-lg font-bold text-white">Deck Destaque</h2>
@@ -125,25 +125,25 @@ export default function MyDeckEditor({
                 allBeyblades.map((b) => {
                   const isSelected = selected.includes(b.id);
                   const slotIdx = selected.indexOf(b.id);
-                  const slotColors = ["text-[#f0a500]", "text-[#c8102e]", "text-blue-400"];
+                  const slotColors = ["text-brand-yellow", "text-danger", "text-blue-400"];
                   return (
                     <button
                       key={b.id}
                       onClick={() => toggle(b.id)}
                       className={`w-full text-left p-3 rounded-xl border transition-all ${
                         isSelected
-                          ? "border-[#f0a500] bg-[#f0a500]/10"
-                          : "border-[#333] bg-[#252525] hover:border-gray-600"
+                          ? "border-brand-yellow bg-brand-yellow/10"
+                          : "border-line bg-field hover:border-gray-600"
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center text-[10px] font-black ${
-                          isSelected ? "border-[#f0a500] bg-[#f0a500] text-black" : "border-gray-600"
+                          isSelected ? "border-brand-yellow bg-brand-yellow text-black" : "border-gray-600"
                         }`}>
                           {isSelected ? slotIdx + 1 : ""}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className={`font-semibold text-sm truncate ${isSelected ? "text-[#f0a500]" : "text-white"}`}>
+                          <div className={`font-semibold text-sm truncate ${isSelected ? "text-brand-yellow" : "text-white"}`}>
                             {b.name}
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5">
@@ -166,14 +166,14 @@ export default function MyDeckEditor({
             <div className="flex gap-3">
               <button
                 onClick={() => setOpen(false)}
-                className="flex-1 bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
+                className="flex-1 bg-field hover:bg-hover text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={save}
                 disabled={saving || selected.length === 0}
-                className="flex-1 bg-[#f0a500] hover:bg-[#d4940a] disabled:opacity-50 text-black font-bold py-2.5 rounded-xl transition-colors"
+                className="flex-1 bg-brand-yellow hover:bg-brand-yellow-hover disabled:opacity-50 text-black font-bold py-2.5 rounded-xl transition-colors"
               >
                 {saving ? "Salvando..." : `Salvar (${selected.length})`}
               </button>

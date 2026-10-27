@@ -11,7 +11,7 @@ export default async function CombosPage() {
   if (!session) redirect("/login");
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d] text-white">
+    <div className="min-h-screen bg-app text-white">
       <Navbar />
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="mb-6">

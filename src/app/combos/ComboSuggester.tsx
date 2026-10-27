@@ -80,7 +80,7 @@ export default function ComboSuggester() {
               className={`rounded-xl py-3 px-2 text-center font-semibold transition-all border ${
                 active
                   ? "border-transparent text-white"
-                  : "bg-[#1a1a1a] border-[#2a2a2a] text-gray-400 hover:border-[#3a3a3a]"
+                  : "bg-card border-line text-gray-400 hover:border-line"
               }`}
               style={active ? { backgroundColor: s.color } : undefined}
             >
@@ -97,7 +97,7 @@ export default function ComboSuggester() {
           type="checkbox"
           checked={ownedOnly}
           onChange={(e) => setOwnedOnly(e.target.checked)}
-          className="w-4 h-4 accent-[#f0a500]"
+          className="w-4 h-4 accent-brand-yellow"
         />
         <span className="text-sm text-gray-300">Usar apenas as peças que eu tenho cadastradas</span>
       </label>
@@ -105,13 +105,13 @@ export default function ComboSuggester() {
       {loading && <div className="text-center text-gray-400 py-12">Calculando combos…</div>}
 
       {error && (
-        <div className="bg-[#c8102e]/10 border border-[#c8102e]/40 rounded-xl p-4 text-[#ff6b81] text-sm">
+        <div className="bg-brand-red/10 border border-brand-red/40 rounded-xl p-4 text-[#ff6b81] text-sm">
           {error}
         </div>
       )}
 
       {!loading && !error && data && data.suggestions.length === 0 && (
-        <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-8 text-center text-gray-400">
+        <div className="bg-card border border-line rounded-xl p-8 text-center text-gray-400">
           {ownedOnly
             ? "Você ainda não tem peças suficientes cadastradas (precisa de blade, ratchet e bit)."
             : "Nenhuma peça cadastrada no sistema ainda."}
@@ -123,7 +123,7 @@ export default function ComboSuggester() {
           {data.suggestions.map((sug, i) => (
             <div
               key={`${sug.blade.id}-${sug.ratchet.id}-${sug.bit.id}`}
-              className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4"
+              className="bg-card border border-line rounded-xl p-4"
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -162,7 +162,7 @@ export default function ComboSuggester() {
                   <span className="text-[#22c55e]">🌍 Meta {sug.metaScore.toFixed(0)}</span>
                 )}
                 {sug.sampleSize > 0 && (
-                  <span className="text-[#f0a500]">
+                  <span className="text-brand-yellow">
                     📊 {sug.communityScore.toFixed(0)}% win ({sug.sampleSize} partidas)
                   </span>
                 )}
@@ -177,11 +177,11 @@ export default function ComboSuggester() {
 
 function PartCell({ label, part }: { label: string; part: Part }) {
   return (
-    <div className="bg-[#252525] rounded-lg p-2 flex items-center gap-2">
+    <div className="bg-field rounded-lg p-2 flex items-center gap-2">
       {part.imageUrl ? (
         <img src={part.imageUrl} alt={part.name} className="w-9 h-9 object-contain flex-shrink-0" />
       ) : (
-        <div className="w-9 h-9 rounded bg-[#333] flex-shrink-0" />
+        <div className="w-9 h-9 rounded bg-hover flex-shrink-0" />
       )}
       <div className="min-w-0">
         <div className="text-[10px] text-gray-500 uppercase tracking-wide flex items-center gap-1">

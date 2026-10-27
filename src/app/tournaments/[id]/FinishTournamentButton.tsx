@@ -35,7 +35,7 @@ export default function FinishTournamentButton({
     <div className="flex flex-col items-start gap-2">
       <button
         onClick={() => setShowModal(true)}
-        className="bg-[#c8102e] hover:bg-[#a30d25] text-white font-bold px-6 py-2.5 rounded-xl transition-colors"
+        className="bg-brand-red hover:bg-[#a30d25] text-white font-bold px-6 py-2.5 rounded-xl transition-colors"
       >
         🏁 Encerrar {isOfficial ? "Torneio" : "BeyEncontro"}
       </button>
@@ -50,7 +50,7 @@ export default function FinishTournamentButton({
             role="dialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md"
+            className="bg-card border border-line rounded-2xl p-6 w-full max-w-md"
           >
             <h2 className="text-lg font-bold text-white mb-1">
               Encerrar {isOfficial ? "torneio" : "BeyEncontro"}?
@@ -76,14 +76,14 @@ export default function FinishTournamentButton({
               <button
                 onClick={() => setShowModal(false)}
                 disabled={loading}
-                className="flex-1 bg-[#252525] hover:bg-[#333] disabled:opacity-50 text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
+                className="flex-1 bg-field hover:bg-hover disabled:opacity-50 text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={loading}
-                className="flex-1 bg-[#c8102e] hover:bg-[#a30d25] disabled:opacity-60 text-white font-bold py-2.5 rounded-xl transition-colors"
+                className="flex-1 bg-brand-red hover:bg-[#a30d25] disabled:opacity-60 text-white font-bold py-2.5 rounded-xl transition-colors"
               >
                 {loading ? "Encerrando..." : "Confirmar e encerrar"}
               </button>

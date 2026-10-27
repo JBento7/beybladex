@@ -79,7 +79,7 @@ export default function StartTournamentButton({
             role="dialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+            className="bg-card border border-line rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
           >
             <h2 className="text-lg font-bold text-white mb-1">Confirmar início do torneio</h2>
             <p className="text-sm text-gray-400 mb-4">
@@ -97,7 +97,7 @@ export default function StartTournamentButton({
               max={20}
               value={arenas}
               onChange={(e) => setArenas(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-              className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors mb-4"
+              className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none transition-colors mb-4"
             />
 
             {allowJudges && (
@@ -113,7 +113,7 @@ export default function StartTournamentButton({
                   onChange={(e) =>
                     setJudgeCount(Math.max(0, Math.min(candidates.length, parseInt(e.target.value) || 0)))
                   }
-                  className="w-full bg-[#252525] border border-[#333] focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors mb-3"
+                  className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none transition-colors mb-3"
                 />
 
                 {judgeCount > 0 && (
@@ -133,7 +133,7 @@ export default function StartTournamentButton({
                     {candidates.length === 0 ? (
                       <p className="text-xs text-gray-500 mb-4">Nenhum candidato disponível.</p>
                     ) : (
-                      <div className="max-h-52 overflow-y-auto rounded-lg border border-[#333] divide-y divide-[#2a2a2a] mb-1">
+                      <div className="max-h-52 overflow-y-auto rounded-lg border border-line divide-y divide-line mb-1">
                         {candidates.map((c) => {
                           const checked = selectedJudges.includes(c.id);
                           const disabled =
@@ -142,7 +142,7 @@ export default function StartTournamentButton({
                             <label
                               key={c.id}
                               className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
-                                disabled ? "opacity-40 cursor-not-allowed" : "hover:bg-[#252525]"
+                                disabled ? "opacity-40 cursor-not-allowed" : "hover:bg-field"
                               }`}
                             >
                               <input
@@ -150,11 +150,11 @@ export default function StartTournamentButton({
                                 checked={checked}
                                 disabled={disabled}
                                 onChange={() => toggleJudge(c.id)}
-                                className="w-4 h-4 accent-[#f0a500]"
+                                className="w-4 h-4 accent-brand-yellow"
                               />
                               <span className="text-sm text-white flex-1 truncate">{c.name}</span>
                               {c.isAdmin && (
-                                <span className="text-[10px] bg-[#f0a500]/20 text-[#f0a500] px-1.5 py-0.5 rounded font-semibold">
+                                <span className="text-[10px] bg-brand-yellow/20 text-brand-yellow px-1.5 py-0.5 rounded font-semibold">
                                   ADMIN
                                 </span>
                               )}
@@ -193,7 +193,7 @@ export default function StartTournamentButton({
               <button
                 onClick={() => setShowModal(false)}
                 disabled={loading}
-                className="flex-1 bg-[#252525] hover:bg-[#333] disabled:opacity-50 text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
+                className="flex-1 bg-field hover:bg-hover disabled:opacity-50 text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
               >
                 Cancelar
               </button>

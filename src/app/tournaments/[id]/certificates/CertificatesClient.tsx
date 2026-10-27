@@ -257,14 +257,14 @@ function CertificateCard({
       <div className="flex gap-2">
         <button
           onClick={() => fileRef.current?.click()}
-          className="px-4 py-2 bg-[#252525] hover:bg-[#333] text-gray-300 text-sm font-semibold rounded-lg transition-colors"
+          className="px-4 py-2 bg-field hover:bg-hover text-gray-300 text-sm font-semibold rounded-lg transition-colors"
         >
           📷 Foto do participante
         </button>
         <button
           onClick={handleDownload}
           disabled={downloading}
-          className="px-4 py-2 bg-[#f0a500] hover:bg-amber-400 disabled:opacity-50 text-black text-sm font-bold rounded-lg transition-colors"
+          className="px-4 py-2 bg-brand-yellow hover:bg-amber-400 disabled:opacity-50 text-black text-sm font-bold rounded-lg transition-colors"
         >
           {downloading ? "Gerando..." : "⬇ Baixar PNG"}
         </button>
@@ -312,7 +312,7 @@ export default function CertificatesClient({
             key={p.placement}
             onClick={() => setActiveIdx(i)}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
-              activeIdx === i ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 hover:text-white"
+              activeIdx === i ? "bg-brand-yellow text-black" : "bg-field text-gray-400 hover:text-white"
             }`}
           >
             {p.placement === 1 ? "🥇 Campeão" : `${p.placement}º Lugar`}

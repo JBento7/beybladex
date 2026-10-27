@@ -103,7 +103,7 @@ export default function PlayerDeckOrder({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="text-xs bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold px-3 py-1.5 rounded-lg transition-colors"
+        className="text-xs bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold px-3 py-1.5 rounded-lg transition-colors"
       >
         Minha ordem (3 on 3)
       </button>
@@ -111,7 +111,7 @@ export default function PlayerDeckOrder({
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setOpen(false)} />
-          <div className="relative bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-card border border-line rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-white">Ordem do meu deck</h3>
               <button onClick={() => setOpen(false)} aria-label="Fechar" className="text-gray-400 hover:text-white text-2xl leading-none p-2 -m-2">✕</button>
@@ -144,7 +144,7 @@ export default function PlayerDeckOrder({
                       {[myOrder.bey1Id, myOrder.bey2Id, myOrder.bey3Id].map((id, i) => {
                         const b = beyblades.find((x) => x.id === id);
                         return (
-                          <div key={id} className="bg-[#252525] border border-[#333] rounded-lg px-3 py-2">
+                          <div key={id} className="bg-field border border-line rounded-lg px-3 py-2">
                             <div className="text-[10px] font-black" style={{ color }}>{i + 1}°</div>
                             <div className="text-xs text-white font-bold">{b?.name ?? "—"}</div>
                           </div>

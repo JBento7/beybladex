@@ -18,14 +18,14 @@ export default async function BeyPartsPage() {
   const isAdmin = session.user.role === "ORGANIZER";
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-3xl font-black text-white">BeyParts</h1>
             {isAdmin && (
-              <span className="bg-[#f0a500] text-black text-xs font-black px-2.5 py-1 rounded-full">
+              <span className="bg-brand-yellow text-black text-xs font-black px-2.5 py-1 rounded-full">
                 ADMIN
               </span>
             )}

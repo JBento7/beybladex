@@ -93,7 +93,7 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
         </div>
         <button
           onClick={() => { setOpen(!open); setError(""); setSuccess(""); }}
-          className="text-xs px-3 py-1 bg-[#2a2a2a] hover:bg-[#333] text-gray-300 rounded-lg transition-colors border border-[#3a3a3a]"
+          className="text-xs px-3 py-1 bg-field hover:bg-hover text-gray-300 rounded-lg transition-colors border border-line"
         >
           Editar Perfil
         </button>
@@ -114,14 +114,14 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              Nome Blader <span className="text-[#f0a500] text-xs font-normal">(aparece nos torneios)</span>
+              Nome Blader <span className="text-brand-yellow text-xs font-normal">(aparece nos torneios)</span>
             </label>
             <input
               type="text"
               value={bladerName}
               onChange={(e) => setBladerName(e.target.value)}
               placeholder="ex: DranSlayer, VoltKing..."
-              className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+              className="w-full bg-gray-800 border border-gray-700 focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
             />
           </div>
 
@@ -131,7 +131,7 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
               id="homeCommunity"
               value={homeCommunity}
               onChange={(e) => setHomeCommunity(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none"
+              className="w-full bg-gray-800 border border-gray-700 focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none"
             >
               {COMMUNITY_LIST.map((c) => (
                 <option key={c.slug} value={c.slug}>{c.name} · {c.fullName}</option>
@@ -146,7 +146,7 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+              className="w-full bg-gray-800 border border-gray-700 focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
             />
           </div>
 
@@ -157,12 +157,12 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
+              className="w-full bg-gray-800 border border-gray-700 focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none transition-colors"
             />
           </div>
 
           <div className="pt-2">
-            <div className="border-t border-[#2a2a2a] pt-4">
+            <div className="border-t border-line pt-4">
               <p className="text-sm text-gray-500 mb-3 font-medium">Alterar Senha (opcional)</p>
             </div>
 
@@ -174,7 +174,7 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                  className="w-full bg-gray-800 border border-gray-700 focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                 />
               </div>
 
@@ -185,7 +185,7 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                  className="w-full bg-gray-800 border border-gray-700 focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                 />
               </div>
 
@@ -196,7 +196,7 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-gray-800 border border-gray-700 focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+                  className="w-full bg-gray-800 border border-gray-700 focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
                 />
               </div>
             </div>
@@ -206,14 +206,14 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
             <button
               type="submit"
               disabled={loading}
-              className="bg-[#f0a500] hover:bg-[#d4940a] disabled:opacity-60 text-black font-bold px-5 py-2 rounded-lg transition-colors text-sm"
+              className="bg-brand-yellow hover:bg-brand-yellow-hover disabled:opacity-60 text-black font-bold px-5 py-2 rounded-lg transition-colors text-sm"
             >
               {loading ? "Salvando..." : "Salvar"}
             </button>
             <button
               type="button"
               onClick={() => { setOpen(false); setError(""); setName(initialName); setEmail(initialEmail); setBladerName(initialBladerName); }}
-              className="bg-[#2a2a2a] hover:bg-[#333] text-gray-300 px-5 py-2 rounded-lg transition-colors text-sm"
+              className="bg-field hover:bg-hover text-gray-300 px-5 py-2 rounded-lg transition-colors text-sm"
             >
               Cancelar
             </button>

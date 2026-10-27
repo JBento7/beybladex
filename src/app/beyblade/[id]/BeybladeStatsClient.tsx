@@ -51,7 +51,7 @@ function FinishBar({ records }: { records: RecordRow[] }) {
         return (
           <div key={key} className="flex items-center gap-2">
             <span className={`text-[10px] font-bold w-14 flex-shrink-0 ${color}`}>{label}</span>
-            <div className="flex-1 bg-[#252525] rounded-full h-2 overflow-hidden">
+            <div className="flex-1 bg-field rounded-full h-2 overflow-hidden">
               <div className={`h-full rounded-full bg-current ${color}`} style={{ width: `${pct}%` }} />
             </div>
             <span className="text-[10px] text-gray-400 w-10 text-right flex-shrink-0">{count} ({pct}%)</span>
@@ -75,10 +75,10 @@ function SummaryCards({ records }: { records: RecordRow[] }) {
       {[
         { label: "Vitórias", value: wins, color: "text-green-400" },
         { label: "Derrotas", value: losses, color: "text-red-400" },
-        { label: "Taxa V.", value: `${wr}%`, color: "text-[#f0a500]" },
+        { label: "Taxa V.", value: `${wr}%`, color: "text-brand-yellow" },
         { label: "Saldo pts", value: scored - conceded >= 0 ? `+${scored - conceded}` : `${scored - conceded}`, color: scored >= conceded ? "text-green-400" : "text-red-400" },
       ].map((s) => (
-        <div key={s.label} className="bg-[#252525] rounded-xl p-3 text-center">
+        <div key={s.label} className="bg-field rounded-xl p-3 text-center">
           <div className={`text-xl font-black ${s.color}`}>{s.value}</div>
           <div className="text-[10px] text-gray-500 mt-0.5">{s.label}</div>
         </div>
@@ -155,16 +155,16 @@ function TournamentAccordion({ records }: { records: RecordRow[] }) {
       {tournamentEntries.map(([tId, t]) => {
         const tOpen = openTournament === tId;
         return (
-          <div key={tId} className="border border-[#2a2a2a] rounded-xl overflow-hidden">
+          <div key={tId} className="border border-line rounded-xl overflow-hidden">
             {/* Level 1 — Tournament header */}
             <button
               onClick={() => { setOpenTournament(tOpen ? null : tId); setOpenOpponent(null); }}
-              className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-[#1a1a1a] hover:bg-[#212121] transition-colors text-left"
+              className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-card hover:bg-[#212121] transition-colors text-left"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="font-semibold text-sm text-white truncate">{t.name}</span>
                 {t.isOfficial
-                  ? <span className="text-[9px] font-bold bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30 px-1.5 py-0.5 rounded flex-shrink-0">OFICIAL</span>
+                  ? <span className="text-[9px] font-bold bg-brand-yellow/20 text-brand-yellow border border-brand-yellow/30 px-1.5 py-0.5 rounded flex-shrink-0">OFICIAL</span>
                   : <span className="text-[9px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded flex-shrink-0">BEYENCONTRO</span>
                 }
               </div>
@@ -176,7 +176,7 @@ function TournamentAccordion({ records }: { records: RecordRow[] }) {
             </button>
 
             {tOpen && (
-              <div className="divide-y divide-[#252525]">
+              <div className="divide-y divide-line">
                 {[...t.opponents.entries()].map(([oppKey, opp]) => {
                   const oppOpenKey = `${tId}:${oppKey}`;
                   const oppOpen = openOpponent === oppOpenKey;
@@ -185,10 +185,10 @@ function TournamentAccordion({ records }: { records: RecordRow[] }) {
                       {/* Level 2 — Opponent player row */}
                       <button
                         onClick={() => setOpenOpponent(oppOpen ? null : oppOpenKey)}
-                        className="w-full flex items-center justify-between gap-3 px-5 py-2.5 bg-[#161616] hover:bg-[#1d1d1d] transition-colors text-left"
+                        className="w-full flex items-center justify-between gap-3 px-5 py-2.5 bg-card hover:bg-[#1d1d1d] transition-colors text-left"
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#f0a500]/50 flex-shrink-0" />
+                          <div className="w-1.5 h-1.5 rounded-full bg-brand-yellow/50 flex-shrink-0" />
                           <span className="text-sm text-gray-200 font-medium truncate">{opp.name}</span>
                           <span className="text-[10px] text-gray-600 flex-shrink-0">
                             {opp.byBey.size} beyblade{opp.byBey.size !== 1 ? "s" : ""}
@@ -202,7 +202,7 @@ function TournamentAccordion({ records }: { records: RecordRow[] }) {
                       </button>
 
                       {oppOpen && (
-                        <div className="bg-[#111] px-5 py-3 space-y-3">
+                        <div className="bg-app px-5 py-3 space-y-3">
                           {[...opp.byBey.entries()].map(([beyKey, ob]) => {
                             const bWins = ob.records.filter((r) => r.won).length;
                             const bLosses = ob.records.filter((r) => !r.won).length;
@@ -229,7 +229,7 @@ function TournamentAccordion({ records }: { records: RecordRow[] }) {
 
                             return (
                               /* Level 3 — Opponent beyblade card */
-                              <div key={beyKey} className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-3">
+                              <div key={beyKey} className="bg-card border border-line rounded-xl p-3">
                                 <div className="flex items-start justify-between gap-2 mb-2">
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1.5 mb-0.5">
@@ -248,15 +248,15 @@ function TournamentAccordion({ records }: { records: RecordRow[] }) {
                                 </div>
 
                                 <div className="grid grid-cols-3 gap-2 text-center mb-2">
-                                  <div className="bg-[#252525] rounded-lg py-1.5">
+                                  <div className="bg-field rounded-lg py-1.5">
                                     <div className="text-sm font-black text-green-400">{bWins}</div>
                                     <div className="text-[9px] text-gray-600">Vitórias</div>
                                   </div>
-                                  <div className="bg-[#252525] rounded-lg py-1.5">
+                                  <div className="bg-field rounded-lg py-1.5">
                                     <div className="text-sm font-black text-red-400">{bLosses}</div>
                                     <div className="text-[9px] text-gray-600">Derrotas</div>
                                   </div>
-                                  <div className="bg-[#252525] rounded-lg py-1.5">
+                                  <div className="bg-field rounded-lg py-1.5">
                                     <div className={`text-sm font-black ${bScored >= bConceded ? "text-green-400" : "text-red-400"}`}>
                                       {bScored - bConceded >= 0 ? "+" : ""}{bScored - bConceded}
                                     </div>
@@ -317,14 +317,14 @@ export default function BeybladeStatsClient({ records }: { records: RecordRow[] 
   return (
     <div>
       {/* Tab bar */}
-      <div className="flex gap-1 bg-[#161616] p-1 rounded-xl mb-5">
+      <div className="flex gap-1 bg-card p-1 rounded-xl mb-5">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-colors ${
               tab === t.key
-                ? "bg-[#f0a500] text-black"
+                ? "bg-brand-yellow text-black"
                 : "text-gray-400 hover:text-white"
             }`}
           >
@@ -336,7 +336,7 @@ export default function BeybladeStatsClient({ records }: { records: RecordRow[] 
       <SummaryCards records={filtered} />
 
       {/* Finish type breakdown */}
-      <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4 mb-5">
+      <div className="bg-card border border-line rounded-xl p-4 mb-5">
         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Tipos de Finish</h3>
         <FinishBar records={filtered} />
       </div>

@@ -92,12 +92,12 @@ export default function UserManager() {
   const deleted = users.filter((u) => u.deleted);
 
   return (
-    <div className="mt-8 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+    <div className="mt-8 bg-card border border-line rounded-xl p-6">
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-lg font-bold text-white">Gerenciar Usuários</h2>
         <button
           onClick={() => (showForm && !editingId ? setShowForm(false) : openCreate())}
-          className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+          className="bg-brand-red hover:bg-brand-red-hover text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
         >
           {showForm && !editingId ? "Cancelar" : "+ Novo Usuário"}
         </button>
@@ -106,7 +106,7 @@ export default function UserManager() {
       {showForm && (
         <form
           onSubmit={handleSave}
-          className="mb-6 bg-[#252525] border border-[#333] rounded-xl p-4 space-y-3"
+          className="mb-6 bg-field border border-line rounded-xl p-4 space-y-3"
         >
           <h3 className="text-sm font-bold text-white mb-1">
             {editingId ? "Editar Usuário" : "Criar Novo Usuário"}
@@ -127,7 +127,7 @@ export default function UserManager() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
                 placeholder="Nome completo"
-                className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-3 py-2 text-white placeholder-gray-500 outline-none text-sm"
+                className="w-full bg-card border border-line focus:border-brand-yellow rounded-lg px-3 py-2 text-white placeholder-gray-500 outline-none text-sm"
               />
             </div>
             <div>
@@ -140,7 +140,7 @@ export default function UserManager() {
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 required
                 placeholder="email@exemplo.com"
-                className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-3 py-2 text-white placeholder-gray-500 outline-none text-sm"
+                className="w-full bg-card border border-line focus:border-brand-yellow rounded-lg px-3 py-2 text-white placeholder-gray-500 outline-none text-sm"
               />
             </div>
             <div>
@@ -154,7 +154,7 @@ export default function UserManager() {
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 required={!editingId}
                 placeholder={editingId ? "Nova senha (opcional)" : "Senha"}
-                className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-3 py-2 text-white placeholder-gray-500 outline-none text-sm"
+                className="w-full bg-card border border-line focus:border-brand-yellow rounded-lg px-3 py-2 text-white placeholder-gray-500 outline-none text-sm"
               />
             </div>
             <div>
@@ -162,7 +162,7 @@ export default function UserManager() {
               <select
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] rounded-lg px-3 py-2 text-white outline-none text-sm"
+                className="w-full bg-card border border-line focus:border-brand-yellow rounded-lg px-3 py-2 text-white outline-none text-sm"
               >
                 <option value="PARTICIPANT">Jogador</option>
                 <option value="ORGANIZER">Admin</option>
@@ -173,14 +173,14 @@ export default function UserManager() {
             <button
               type="submit"
               disabled={saving}
-              className="bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-60 text-white font-bold px-5 py-2 rounded-lg transition-colors text-sm"
+              className="bg-brand-red hover:bg-brand-red-hover disabled:opacity-60 text-white font-bold px-5 py-2 rounded-lg transition-colors text-sm"
             >
               {saving ? "Salvando..." : editingId ? "Salvar" : "Criar Usuário"}
             </button>
             <button
               type="button"
               onClick={() => { setShowForm(false); setEditingId(null); }}
-              className="bg-[#333] hover:bg-[#444] text-gray-300 font-semibold px-5 py-2 rounded-lg transition-colors text-sm"
+              className="bg-hover hover:bg-hover text-gray-300 font-semibold px-5 py-2 rounded-lg transition-colors text-sm"
             >
               Cancelar
             </button>
@@ -195,7 +195,7 @@ export default function UserManager() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[#2a2a2a] text-gray-400">
+                <tr className="border-b border-line text-gray-400">
                   <th className="text-left py-3 px-2 font-medium">Nome</th>
                   <th className="text-left py-3 px-2 font-medium">Email</th>
                   <th className="text-left py-3 px-2 font-medium">Papel</th>
@@ -204,16 +204,16 @@ export default function UserManager() {
                   <th className="text-left py-3 px-2 font-medium">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#2a2a2a]">
+              <tbody className="divide-y divide-line">
                 {active.map((u) => (
-                  <tr key={u.id} className="hover:bg-[#252525] transition-colors">
+                  <tr key={u.id} className="hover:bg-field transition-colors">
                     <td className="py-3 px-2 font-medium text-white">{u.name}</td>
                     <td className="py-3 px-2 text-gray-400">{u.email}</td>
                     <td className="py-3 px-2">
                       <span
                         className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                           u.role === "ORGANIZER"
-                            ? "bg-[#f0a500]/20 text-[#f0a500]"
+                            ? "bg-brand-yellow/20 text-brand-yellow"
                             : "bg-gray-700 text-gray-400"
                         }`}
                       >
@@ -226,7 +226,7 @@ export default function UserManager() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => openEdit(u)}
-                          className="text-[#f0a500] hover:text-amber-300 transition-colors text-xs font-medium"
+                          className="text-brand-yellow hover:text-amber-300 transition-colors text-xs font-medium"
                         >
                           Editar
                         </button>
@@ -258,7 +258,7 @@ export default function UserManager() {
               </summary>
               <div className="mt-2 space-y-1">
                 {deleted.map((u) => (
-                  <div key={u.id} className="flex items-center gap-3 py-1.5 px-2 bg-[#252525] rounded text-xs text-gray-600">
+                  <div key={u.id} className="flex items-center gap-3 py-1.5 px-2 bg-field rounded text-xs text-gray-600">
                     <span>{u.id}</span>
                     <span>·</span>
                     <span>{u._count.participations} torneios preservados</span>

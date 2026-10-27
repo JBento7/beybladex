@@ -106,17 +106,17 @@ function RegisterForm() {
 
   const isOrganizer = inviteToken && inviteValid === true;
   const inputCls = (bad?: string) =>
-    `tap w-full bg-[#252525] border ${bad ? "border-red-400" : "border-[#444]"} focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 text-white outline-none transition-colors`;
+    `tap w-full bg-field border ${bad ? "border-red-400" : "border-line"} focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 text-white outline-none transition-colors`;
   const errorText = (id: string, msg?: string) =>
     msg ? <p id={`${id}-erro`} className="mt-1.5 text-sm text-red-300">{msg}</p> : null;
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d] flex flex-col items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-app flex flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="mb-8 block">
         <img src="/lblnovo.png" alt="LBL — página inicial" className="h-14 md:h-[90px] w-auto" />
       </Link>
 
-      <div className="w-full max-w-md bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6 sm:p-8 shadow-2xl">
+      <div className="w-full max-w-md bg-card border border-line rounded-2xl p-6 sm:p-8 shadow-2xl">
         <h1 className="text-2xl font-bold text-white mb-2 text-center">Criar conta</h1>
         <p className="text-gray-300 text-center mb-4 text-sm">
           {isOrganizer
@@ -127,9 +127,9 @@ function RegisterForm() {
         {inviteToken && (
           <div className={`text-sm px-3 py-2 rounded-lg mb-4 text-center font-medium ${
             inviteChecking
-              ? "bg-[#252525] text-gray-300"
+              ? "bg-field text-gray-300"
               : inviteValid
-              ? "bg-[#f0a500]/10 border border-[#f0a500]/30 text-amber-200"
+              ? "bg-brand-yellow/10 border border-brand-yellow/30 text-amber-200"
               : "bg-red-900/30 border border-red-700 text-red-300"
           }`}>
             {inviteChecking
@@ -218,7 +218,7 @@ function RegisterForm() {
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                 aria-pressed={showPassword}
-                className="absolute inset-y-0 right-0 flex items-center justify-center min-w-[44px] px-3 text-sm font-semibold text-gray-300 hover:text-[#f0a500] transition-colors"
+                className="absolute inset-y-0 right-0 flex items-center justify-center min-w-[44px] px-3 text-sm font-semibold text-gray-300 hover:text-brand-yellow transition-colors"
               >
                 {showPassword ? "Ocultar" : "Mostrar"}
               </button>
@@ -247,7 +247,7 @@ function RegisterForm() {
                 onClick={() => setShowConfirmPassword((v) => !v)}
                 aria-label={showConfirmPassword ? "Ocultar confirmação de senha" : "Mostrar confirmação de senha"}
                 aria-pressed={showConfirmPassword}
-                className="absolute inset-y-0 right-0 flex items-center justify-center min-w-[44px] px-3 text-sm font-semibold text-gray-300 hover:text-[#f0a500] transition-colors"
+                className="absolute inset-y-0 right-0 flex items-center justify-center min-w-[44px] px-3 text-sm font-semibold text-gray-300 hover:text-brand-yellow transition-colors"
               >
                 {showConfirmPassword ? "Ocultar" : "Mostrar"}
               </button>
@@ -258,7 +258,7 @@ function RegisterForm() {
           <button
             type="submit"
             disabled={loading || (!!inviteToken && inviteChecking)}
-            className="tap w-full bg-[#f0a500] hover:bg-[#d4940a] disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold rounded-xl transition-colors text-base mt-2"
+            className="tap w-full bg-brand-yellow hover:bg-brand-yellow-hover disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold rounded-xl transition-colors text-base mt-2"
           >
             {loading ? "Criando conta..." : "Criar conta"}
           </button>
@@ -266,7 +266,7 @@ function RegisterForm() {
 
         <p className="text-center text-sm text-gray-300 mt-6">
           Já tem uma conta?{" "}
-          <Link href={callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/login"} className="text-[#f0a500] hover:text-[#d4940a] font-medium underline-offset-2 hover:underline">
+          <Link href={callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/login"} className="text-brand-yellow hover:text-brand-yellow-hover font-medium underline-offset-2 hover:underline">
             Entrar
           </Link>
         </p>
@@ -277,7 +277,7 @@ function RegisterForm() {
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0d0d0d]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-app" />}>
       <RegisterForm />
     </Suspense>
   );

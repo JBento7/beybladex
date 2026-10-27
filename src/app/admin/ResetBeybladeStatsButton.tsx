@@ -27,14 +27,14 @@ export default function ResetBeybladeStatsButton() {
   }
 
   return (
-    <div className="bg-[#1a1a1a] border border-[#c8102e]/30 rounded-xl p-6 mt-8">
+    <div className="bg-card border border-brand-red/30 rounded-xl p-6 mt-8">
       <h2 className="text-lg font-bold text-white mb-1">Zerar Estatísticas dos Combos</h2>
       <p className="text-gray-400 text-sm mb-4">
         Zera vitórias e derrotas de TODOS os combos de TODOS os usuários cadastrados. Essa ação não pode ser desfeita.
       </p>
 
       {message && (
-        <div className="mb-3 text-sm px-4 py-2 rounded-lg bg-[#252525] border border-[#333] text-gray-300">
+        <div className="mb-3 text-sm px-4 py-2 rounded-lg bg-field border border-line text-gray-300">
           {message}
         </div>
       )}
@@ -45,14 +45,14 @@ export default function ResetBeybladeStatsButton() {
           <button
             onClick={handleReset}
             disabled={loading}
-            className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+            className="bg-brand-red hover:bg-brand-red-hover text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
           >
             {loading ? "Zerando..." : "Sim, zerar tudo"}
           </button>
           <button
             onClick={() => setConfirming(false)}
             disabled={loading}
-            className="bg-[#252525] hover:bg-[#303030] border border-[#333] text-gray-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+            className="bg-field hover:bg-hover border border-line text-gray-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>
@@ -60,7 +60,7 @@ export default function ResetBeybladeStatsButton() {
       ) : (
         <button
           onClick={() => { setConfirming(true); setMessage(null); }}
-          className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+          className="bg-brand-red hover:bg-brand-red-hover text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
         >
           Zerar estatísticas de todos os combos
         </button>

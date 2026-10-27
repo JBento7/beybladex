@@ -33,7 +33,7 @@ function VerifyEmailContent() {
   }, [token]);
 
   return (
-    <div className="w-full max-w-md bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 shadow-2xl text-center">
+    <div className="w-full max-w-md bg-card border border-line rounded-2xl p-8 shadow-2xl text-center">
       {status === "loading" && (
         <>
           <div className="mb-4 flex justify-center animate-spin"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain" /></div>
@@ -47,7 +47,7 @@ function VerifyEmailContent() {
           <p className="text-gray-400 text-sm mb-6">Sua conta está ativa. Faça login para entrar.</p>
           <Link
             href="/login"
-            className="inline-block bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold px-8 py-3 rounded-xl transition-colors"
+            className="inline-block bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold px-8 py-3 rounded-xl transition-colors"
           >
             Ir para o Login
           </Link>
@@ -60,7 +60,7 @@ function VerifyEmailContent() {
           <p className="text-gray-400 text-sm mb-6">{message}</p>
           <Link
             href="/login"
-            className="inline-block text-[#f0a500] hover:text-[#d4940a] text-sm font-medium"
+            className="inline-block text-brand-yellow hover:text-brand-yellow-hover text-sm font-medium"
           >
             ← Voltar ao login
           </Link>
@@ -72,7 +72,7 @@ function VerifyEmailContent() {
 
 export default function VerifyEmailPage() {
   return (
-    <div className="min-h-screen bg-[#0d0d0d] flex flex-col items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-app flex flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="mb-8 block">
         <img src="/lblnovo.png" alt="Liga Beyblade Londrina" className="h-14 md:h-20 w-auto" />
       </Link>

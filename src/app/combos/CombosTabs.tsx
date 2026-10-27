@@ -9,7 +9,7 @@ export default function CombosTabs() {
 
   return (
     <div>
-      <div className="flex gap-2 mb-6 border-b border-[#2a2a2a]">
+      <div className="flex gap-2 mb-6 border-b border-line">
         <TabButton active={tab === "suggest"} onClick={() => setTab("suggest")}>
           Sugestões
         </TabButton>
@@ -37,7 +37,7 @@ function TabButton({
       onClick={onClick}
       className={`px-4 py-2.5 font-semibold text-sm -mb-px border-b-2 transition-colors ${
         active
-          ? "border-[#f0a500] text-[#f0a500]"
+          ? "border-brand-yellow text-brand-yellow"
           : "border-transparent text-gray-400 hover:text-gray-200"
       }`}
     >

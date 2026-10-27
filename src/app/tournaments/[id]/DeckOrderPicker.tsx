@@ -42,7 +42,7 @@ export default function DeckOrderPicker({
   }
 
   return (
-    <div className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl p-4">
+    <div className="bg-card border border-line rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="text-base font-bold" style={{ color }}>
           {title}
@@ -65,7 +65,7 @@ export default function DeckOrderPicker({
               type="button"
               onClick={() => id && setSelected(selected.filter((s) => s !== id))}
               className={`flex-1 rounded-xl border-2 py-3.5 px-1 text-center transition-all ${
-                b ? "bg-[#252525]" : "border-dashed border-[#333] bg-transparent"
+                b ? "bg-field" : "border-dashed border-line bg-transparent"
               }`}
               style={{ borderColor: b ? color : undefined }}
             >
@@ -92,7 +92,7 @@ export default function DeckOrderPicker({
                 type="button"
                 onClick={() => tap(b.id)}
                 className={`w-full flex items-center gap-3 px-4 py-4 rounded-xl border-2 text-left transition-all active:scale-[0.98] ${
-                  isChosen ? "opacity-30 border-[#333] bg-[#1a1a1a]" : "border-[#333] bg-[#252525] hover:border-[#555]"
+                  isChosen ? "opacity-30 border-line bg-card" : "border-line bg-field hover:border-[#555]"
                 }`}
               >
                 <span className="text-lg font-black w-7 text-center flex-shrink-0" style={{ color: isChosen ? "#555" : color }}>

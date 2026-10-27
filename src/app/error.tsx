@@ -16,8 +16,8 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center p-8">
-      <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 max-w-md w-full text-center">
+    <div className="min-h-screen bg-app flex items-center justify-center p-8">
+      <div className="bg-card border border-line rounded-2xl p-8 max-w-md w-full text-center">
         <div className="mb-4 flex justify-center"><img src="/bey-removebg-preview.png" alt="" className="w-12 h-12 object-contain" /></div>
         <h2 className="text-xl font-bold text-white mb-2">Algo deu errado</h2>
         <p className="text-gray-300 text-sm mb-6">
@@ -26,7 +26,7 @@ export default function Error({
         <div className="flex items-center justify-center gap-3">
           <button
             onClick={() => reset()}
-            className="tap bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold text-sm px-5 rounded-lg transition-colors"
+            className="tap bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold text-sm px-5 rounded-lg transition-colors"
           >
             Tentar novamente
           </button>

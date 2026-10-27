@@ -41,7 +41,7 @@ export default async function BeybladeStatsPage({ params }: { params: { id: stri
 
   if (beyblade.hiddenFromCommunity && !isOwner) {
     return (
-      <div className="min-h-screen bg-[#0d0d0d]">
+      <div className="min-h-screen bg-app">
         <Navbar />
         <main className="max-w-2xl mx-auto px-4 py-16 text-center">
           <div className="text-4xl mb-4">🔒</div>
@@ -99,21 +99,21 @@ export default async function BeybladeStatsPage({ params }: { params: { id: stri
     : [beyblade.blade, beyblade.ratchet, beyblade.bit].filter(Boolean).join(" / ");
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
         {/* Back link */}
         <Link
           href={`/community/${beyblade.userId}`}
-          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#f0a500] transition-colors mb-5"
+          className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand-yellow transition-colors mb-5"
         >
           ← {beyblade.user.bladerName ?? beyblade.user.name}
         </Link>
 
         {/* Header */}
-        <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6 mb-6">
+        <div className="bg-card border border-line rounded-2xl p-6 mb-6">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-[#f0a500]/10 border border-[#f0a500]/20 flex items-center justify-center flex-shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-brand-yellow/10 border border-brand-yellow/20 flex items-center justify-center flex-shrink-0">
               <img src="/bey-removebg-preview.png" alt="" className="w-7 h-7 object-contain" />
             </div>
             <div className="flex-1 min-w-0">
@@ -124,7 +124,7 @@ export default async function BeybladeStatsPage({ params }: { params: { id: stri
               {parts && <p className="text-xs text-gray-500 mb-2">{parts}</p>}
               <Link
                 href={`/community/${beyblade.userId}`}
-                className="text-xs text-[#f0a500] hover:underline"
+                className="text-xs text-brand-yellow hover:underline"
               >
                 {beyblade.user.bladerName ?? beyblade.user.name}
               </Link>
@@ -136,9 +136,9 @@ export default async function BeybladeStatsPage({ params }: { params: { id: stri
             {[
               { label: "Vitórias", value: wins, color: "text-green-400" },
               { label: "Derrotas", value: losses, color: "text-red-400" },
-              { label: "Taxa V.", value: `${wr}%`, color: "text-[#f0a500]" },
+              { label: "Taxa V.", value: `${wr}%`, color: "text-brand-yellow" },
             ].map((s) => (
-              <div key={s.label} className="bg-[#252525] rounded-xl p-3 text-center">
+              <div key={s.label} className="bg-field rounded-xl p-3 text-center">
                 <div className={`text-2xl font-black ${s.color}`}>{s.value}</div>
                 <div className="text-[10px] text-gray-500 mt-0.5">{s.label}</div>
               </div>
@@ -148,7 +148,7 @@ export default async function BeybladeStatsPage({ params }: { params: { id: stri
 
         {/* Tabs + content */}
         {records.length === 0 ? (
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-10 text-center">
+          <div className="bg-card border border-line rounded-2xl p-10 text-center">
             <div className="text-3xl mb-3">📊</div>
             <p className="text-gray-500 text-sm">Nenhuma batalha registrada ainda.</p>
             <p className="text-gray-600 text-xs mt-1">Os dados aparecem após a beyblade participar de partidas em torneios.</p>

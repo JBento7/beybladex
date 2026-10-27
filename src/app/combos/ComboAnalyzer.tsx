@@ -122,8 +122,8 @@ export default function ComboAnalyzer() {
               onClick={() => chooseLine(l)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                 line === l
-                  ? "bg-[#f0a500] text-black"
-                  : "bg-[#1a1a1a] border border-[#333] text-gray-400 hover:text-white"
+                  ? "bg-brand-yellow text-black"
+                  : "bg-card border border-line text-gray-400 hover:text-white"
               }`}
             >
               <LineButtonLabel line={l} />
@@ -161,7 +161,7 @@ export default function ComboAnalyzer() {
                       onChange={(e) =>
                         setPicks((p) => ({ ...p, [slot.key]: e.target.value }))
                       }
-                      className="w-full bg-[#252525] border border-[#3a3a3a] rounded-lg px-3 py-2.5 text-white text-sm focus:border-[#f0a500] outline-none"
+                      className="w-full bg-field border border-line rounded-lg px-3 py-2.5 text-white text-sm focus:border-brand-yellow outline-none"
                     >
                       <option value="">
                         {opts.length ? "Selecione…" : "Nenhuma peça cadastrada"}
@@ -181,7 +181,7 @@ export default function ComboAnalyzer() {
           <button
             onClick={analyze}
             disabled={!ready || analyzing}
-            className="mt-4 w-full sm:w-auto bg-[#f0a500] hover:bg-[#d99400] disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold px-6 py-3 rounded-xl transition-colors"
+            className="mt-4 w-full sm:w-auto bg-brand-yellow hover:bg-brand-yellow-hover disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold px-6 py-3 rounded-xl transition-colors"
           >
             {analyzing ? "Analisando…" : "Analisar combo"}
           </button>
@@ -189,7 +189,7 @@ export default function ComboAnalyzer() {
       )}
 
       {error && (
-        <div className="mb-4 bg-[#c8102e]/10 border border-[#c8102e]/40 rounded-xl p-4 text-[#ff6b81] text-sm">
+        <div className="mb-4 bg-brand-red/10 border border-brand-red/40 rounded-xl p-4 text-[#ff6b81] text-sm">
           {error}
         </div>
       )}
@@ -201,7 +201,7 @@ export default function ComboAnalyzer() {
             <StepBadge n={3} />
             <h3 className="font-bold text-white">Resultado</h3>
           </div>
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5">
+          <div className="bg-card border border-line rounded-xl p-5">
             {/* Veredito */}
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -232,7 +232,7 @@ export default function ComboAnalyzer() {
                 </span>
                 <span>Top {Math.max(1, 100 - analysis.percentile)}%</span>
               </div>
-              <div className="h-2.5 rounded-full bg-[#2a2a2a] overflow-hidden">
+              <div className="h-2.5 rounded-full bg-field overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
@@ -266,11 +266,11 @@ export default function ComboAnalyzer() {
             </div>
 
             {/* Meta mundial (tier list) */}
-            <div className="mb-4 bg-[#252525] border border-[#2a2a2a] rounded-lg p-3">
+            <div className="mb-4 bg-field border border-line rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-gray-400 uppercase tracking-wide">🌍 Meta mundial</span>
                 {analysis.metaScore !== null && (
-                  <span className="text-sm font-bold text-[#f0a500]">
+                  <span className="text-sm font-bold text-brand-yellow">
                     {analysis.metaScore.toFixed(0)}/100
                   </span>
                 )}
@@ -298,7 +298,7 @@ export default function ComboAnalyzer() {
 
             {/* Win rate */}
             {analysis.communityScore !== null && (
-              <div className="mb-4 text-sm text-[#f0a500]">
+              <div className="mb-4 text-sm text-brand-yellow">
                 📊 Win rate da comunidade: <b>{analysis.communityScore.toFixed(0)}%</b> em{" "}
                 {analysis.sampleSize} partidas
               </div>
@@ -313,10 +313,10 @@ export default function ComboAnalyzer() {
             </div>
 
             {/* Razões */}
-            <div className="border-t border-[#2a2a2a] pt-3 space-y-1.5">
+            <div className="border-t border-line pt-3 space-y-1.5">
               {analysis.reasons.map((r, i) => (
                 <div key={i} className="flex gap-2 text-sm text-gray-300">
-                  <span className="text-[#f0a500]">•</span>
+                  <span className="text-brand-yellow">•</span>
                   <span>{r}</span>
                 </div>
               ))}
@@ -330,7 +330,7 @@ export default function ComboAnalyzer() {
 
 function StepBadge({ n }: { n: number }) {
   return (
-    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#f0a500] text-black text-xs font-black flex-shrink-0">
+    <span className="flex items-center justify-center w-6 h-6 rounded-full bg-brand-yellow text-black text-xs font-black flex-shrink-0">
       {n}
     </span>
   );

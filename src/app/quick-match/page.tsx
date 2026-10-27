@@ -8,6 +8,6 @@ export const metadata = { title: "Partidas Rápidas" };
 
 export default async function QuickMatchPage() {
   const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
+  if (!session) redirect("/login?callbackUrl=%2Fquick-match"); // keep the intent after login
   return <QuickMatch />;
 }

@@ -164,18 +164,18 @@ export default function NewsPopup() {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={close} />
-      <div className="relative bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[85vh] overflow-y-auto">
+      <div className="relative bg-card border border-line rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[85vh] overflow-y-auto">
         <h2 className="text-xl font-black text-white mb-4">📣 Novidades</h2>
 
         {tournaments.length > 0 && (
           <div className="mb-5">
-            <h3 className="text-sm font-bold text-[#f0a500] mb-2">Torneios</h3>
+            <h3 className="text-sm font-bold text-brand-yellow mb-2">Torneios</h3>
             <div className="flex flex-col gap-2">
               {tournaments.map((t) => (
-                <div key={t.id} className="rounded-xl border border-[#2a2a2a] bg-[#252525] overflow-hidden">
+                <div key={t.id} className="rounded-xl border border-line bg-field overflow-hidden">
                   <a
                     href={`/tournaments/${t.id}`}
-                    className="block p-3 hover:border-[#f0a500] transition-colors"
+                    className="block p-3 hover:border-brand-yellow transition-colors"
                   >
                     <div className="text-sm font-bold text-white">{t.name}</div>
                     <div className="text-xs text-gray-400 mt-0.5">
@@ -186,7 +186,7 @@ export default function NewsPopup() {
                   {seenIds.has(`tournament:${t.id}`) && (
                     <button
                       onClick={() => hideForever(`tournament:${t.id}`)}
-                      className="w-full text-xs text-gray-500 hover:text-gray-300 border-t border-[#2a2a2a] py-1.5 transition-colors"
+                      className="w-full text-xs text-gray-500 hover:text-gray-300 border-t border-line py-1.5 transition-colors"
                     >
                       Não mostrar novamente
                     </button>
@@ -199,10 +199,10 @@ export default function NewsPopup() {
 
         {news.length > 0 && (
           <div className="mb-5">
-            <h3 className="text-sm font-bold text-[#f0a500] mb-2">Avisos</h3>
+            <h3 className="text-sm font-bold text-brand-yellow mb-2">Avisos</h3>
             <div className="flex flex-col gap-2">
               {news.map((n) => (
-                <div key={n.id} className="rounded-xl border border-[#2a2a2a] bg-[#252525] overflow-hidden">
+                <div key={n.id} className="rounded-xl border border-line bg-field overflow-hidden">
                   <div className="p-3">
                     <div className="text-sm font-bold text-white">{n.title}</div>
                     <div className="text-xs text-gray-400 mt-1 whitespace-pre-wrap">{n.content}</div>
@@ -210,7 +210,7 @@ export default function NewsPopup() {
                   {seenIds.has(`news:${n.id}`) && (
                     <button
                       onClick={() => hideForever(`news:${n.id}`)}
-                      className="w-full text-xs text-gray-500 hover:text-gray-300 border-t border-[#2a2a2a] py-1.5 transition-colors"
+                      className="w-full text-xs text-gray-500 hover:text-gray-300 border-t border-line py-1.5 transition-colors"
                     >
                       Não mostrar novamente
                     </button>
@@ -223,10 +223,10 @@ export default function NewsPopup() {
 
         {remainingPolls.length > 0 && (
           <div className="mb-5">
-            <h3 className="text-sm font-bold text-[#f0a500] mb-2">Enquetes</h3>
+            <h3 className="text-sm font-bold text-brand-yellow mb-2">Enquetes</h3>
             <div className="flex flex-col gap-3">
               {remainingPolls.map((p) => (
-                <div key={p.id} className="p-3 rounded-xl border border-[#2a2a2a] bg-[#252525]">
+                <div key={p.id} className="p-3 rounded-xl border border-line bg-field">
                   <div className="text-sm font-bold text-white">{p.title}</div>
                   <div className="text-xs text-gray-400 mt-1 mb-3 whitespace-pre-wrap">{p.content}</div>
 
@@ -242,7 +242,7 @@ export default function NewsPopup() {
                             value={(answers[p.id]?.[q.id] as string) || ""}
                             onChange={(e) => setTextAnswer(p.id, q.id, e.target.value)}
                             placeholder="Sua resposta..."
-                            className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg p-2 text-sm text-white focus:outline-none focus:border-[#f0a500]"
+                            className="w-full bg-card border border-line rounded-lg p-2 text-sm text-white focus:outline-none focus:border-brand-yellow"
                             rows={3}
                           />
                         ) : (
@@ -255,7 +255,7 @@ export default function NewsPopup() {
                                     type="checkbox"
                                     checked={selected}
                                     onChange={() => toggleOption(p.id, q.id, opt)}
-                                    className="accent-[#f0a500]"
+                                    className="accent-brand-yellow"
                                   />
                                   {opt}
                                 </label>
@@ -274,7 +274,7 @@ export default function NewsPopup() {
                   <button
                     onClick={() => submitPoll(p)}
                     disabled={submitting === p.id}
-                    className="mt-3 text-xs bg-[#f0a500] hover:bg-[#d4940a] disabled:opacity-50 text-black font-bold px-4 py-1.5 rounded-lg transition-colors"
+                    className="mt-3 text-xs bg-brand-yellow hover:bg-brand-yellow-hover disabled:opacity-50 text-black font-bold px-4 py-1.5 rounded-lg transition-colors"
                   >
                     {submitting === p.id ? "Enviando..." : "Enviar resposta"}
                   </button>
@@ -286,7 +286,7 @@ export default function NewsPopup() {
 
         <button
           onClick={close}
-          className="w-full bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
+          className="w-full bg-field hover:bg-hover text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
         >
           Fechar
         </button>

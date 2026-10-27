@@ -452,7 +452,7 @@ export default function BeybladeManager() {
     options: BeyPart[];
     onChange: (v: string) => void;
   }) {
-    const inputClass = "w-full bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-3 py-2.5 text-white outline-none transition-colors text-sm";
+    const inputClass = "w-full bg-card border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-3 py-2.5 text-white outline-none transition-colors text-sm";
 
     return (
       <div>
@@ -499,12 +499,12 @@ export default function BeybladeManager() {
   }
 
   return (
-    <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6">
+    <div className="bg-card border border-line rounded-xl p-6">
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-lg font-bold text-white">Meus Combos (Beyblades)</h2>
         <button
           onClick={() => (showForm ? setShowForm(false) : openCreate())}
-          className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
+          className="bg-brand-red hover:bg-brand-red-hover text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors"
         >
           {showForm ? "Cancelar" : "+ Adicionar Combo"}
         </button>
@@ -523,7 +523,7 @@ export default function BeybladeManager() {
       )}
 
       {showForm && (
-        <form onSubmit={handleSave} className="mb-5 bg-[#252525] border border-[#333] rounded-xl p-4 space-y-4">
+        <form onSubmit={handleSave} className="mb-5 bg-field border border-line rounded-xl p-4 space-y-4">
           {error && (
             <div className="text-red-400 text-sm bg-red-900/20 border border-red-700/30 px-3 py-2 rounded-lg">
               {error}
@@ -541,7 +541,7 @@ export default function BeybladeManager() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
               placeholder="ex: Meu Atacante"
-              className="w-full bg-[#1a1a1a] border border-[#333] focus:border-[#f0a500] focus:ring-1 focus:ring-[#f0a500] rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
+              className="w-full bg-card border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
             />
           </div>
 
@@ -555,7 +555,7 @@ export default function BeybladeManager() {
                   type="button"
                   onClick={() => setForm({ ...EMPTY, name: form.name, beyLine: line })}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                    form.beyLine === line ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] border border-[#333] text-gray-400 hover:text-white"
+                    form.beyLine === line ? "bg-brand-yellow text-black" : "bg-card border border-line text-gray-400 hover:text-white"
                   }`}
                 >
                   <LineButtonLabel line={line} />
@@ -636,7 +636,7 @@ export default function BeybladeManager() {
                 const withImg = sel.filter((p) => !!p.imageUrl);
                 if (sel.length === 0) return null;
                 return (
-                  <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-3">
+                  <div className="bg-card border border-line rounded-xl px-4 py-3">
                     <p className="text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">Imagens no placar</p>
                     {withImg.length > 0 ? (
                       <div className="flex items-center gap-3 flex-wrap">
@@ -659,9 +659,9 @@ export default function BeybladeManager() {
 
               {/* Total weight preview */}
               {formWeight.known > 0 && (
-                <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-4 py-3 flex items-center justify-between">
+                <div className="bg-card border border-line rounded-xl px-4 py-3 flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Peso total</span>
-                  <span className="text-lg font-black text-[#f0a500]">
+                  <span className="text-lg font-black text-brand-yellow">
                     {formWeight.total}g
                     {formWeight.missing > 0 && (
                       <span className="text-[10px] font-medium text-gray-500 ml-1">(peças sem peso: {formWeight.missing})</span>
@@ -672,7 +672,7 @@ export default function BeybladeManager() {
 
               {/* Combined radar chart preview */}
               {Object.values(combinedStats).some((v) => v > 0) && (
-                <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4">
+                <div className="bg-card border border-line rounded-xl p-4">
                   <p className="text-xs font-bold text-gray-400 mb-3 text-center uppercase tracking-wider">Stats do Combo</p>
                   <div className="flex flex-col items-center gap-3">
                     <CombinedRadarChart stats={combinedStats} size={160} />
@@ -680,7 +680,7 @@ export default function BeybladeManager() {
                       {STAT_DEFS.filter((s) => combinedStats[s.key] > 0).map((s) => (
                         <div key={s.key} className="flex items-center gap-2">
                           <span className="text-[10px] font-bold w-14 text-right" style={{ color: s.color }}>{s.label}</span>
-                          <div className="flex-1 h-1.5 bg-[#111] rounded-full overflow-hidden">
+                          <div className="flex-1 h-1.5 bg-app rounded-full overflow-hidden">
                             <div
                               className="h-full rounded-full"
                               style={{
@@ -702,7 +702,7 @@ export default function BeybladeManager() {
           <button
             type="submit"
             disabled={saving}
-            className="bg-[#c8102e] hover:bg-[#a00d24] disabled:opacity-60 text-white font-bold px-6 py-2.5 rounded-lg transition-colors"
+            className="bg-brand-red hover:bg-brand-red-hover disabled:opacity-60 text-white font-bold px-6 py-2.5 rounded-lg transition-colors"
           >
             {saving ? "Salvando..." : editingId ? "Salvar Alterações" : "Adicionar"}
           </button>
@@ -716,7 +716,7 @@ export default function BeybladeManager() {
           <p className="text-red-400 text-sm mb-3">Erro ao carregar seus combos.</p>
           <button
             onClick={() => { setLoading(true); fetchBeyblades(); }}
-            className="text-[#f0a500] hover:underline text-sm font-medium"
+            className="text-brand-yellow hover:underline text-sm font-medium"
           >
             Tentar novamente
           </button>
@@ -738,7 +738,7 @@ export default function BeybladeManager() {
                 key={k}
                 onClick={() => setSortBy(k)}
                 className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                  sortBy === k ? "bg-[#f0a500] text-black" : "bg-[#252525] text-gray-400 hover:text-white"
+                  sortBy === k ? "bg-brand-yellow text-black" : "bg-field text-gray-400 hover:text-white"
                 }`}
               >
                 {SORT_LABELS[k]}
@@ -754,13 +754,13 @@ export default function BeybladeManager() {
             const weight = comboWeight(partsOf(b));
             const type = comboType(partsOf(b));
             return (
-              <div key={b.id} className="bg-[#252525] border border-[#333] rounded-xl p-4">
+              <div key={b.id} className="bg-field border border-line rounded-xl p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="min-w-0">
                     <div className="font-bold text-white truncate flex items-center gap-1.5">
                       {b.name}
                       {b.hiddenFromCommunity && (
-                        <span className="text-[10px] bg-[#f0a500]/20 text-[#f0a500] border border-[#f0a500]/30 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">
+                        <span className="text-[10px] bg-brand-yellow/20 text-brand-yellow border border-brand-yellow/30 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">
                           🔒 Trancado
                         </span>
                       )}
@@ -780,7 +780,7 @@ export default function BeybladeManager() {
                     {weight.known > 0 && (
                       <div className="text-xs mt-1">
                         <span className="text-gray-500">Peso total: </span>
-                        <span className="font-bold text-[#f0a500]">{weight.total}g</span>
+                        <span className="font-bold text-brand-yellow">{weight.total}g</span>
                         {weight.missing > 0 && (
                           <span className="text-gray-600"> (+{weight.missing} sem peso)</span>
                         )}
@@ -817,12 +817,12 @@ export default function BeybladeManager() {
                         <button
                           onClick={() => handleToggleHidden(b)}
                           disabled={togglingId === b.id}
-                          className={`disabled:opacity-50 transition-colors text-xs ${b.hiddenFromCommunity ? "text-[#f0a500]" : "text-gray-600 hover:text-[#f0a500]"}`}
+                          className={`disabled:opacity-50 transition-colors text-xs ${b.hiddenFromCommunity ? "text-brand-yellow" : "text-gray-600 hover:text-brand-yellow"}`}
                           title={b.hiddenFromCommunity ? "Destrancar" : "Trancar"}
                         >
                           {b.hiddenFromCommunity ? "🔒" : "🔓"}
                         </button>
-                        <button onClick={() => openEdit(b)} disabled={deletingId === b.id} className="text-gray-600 hover:text-[#f0a500] disabled:opacity-50 transition-colors text-xs" title="Editar">✎</button>
+                        <button onClick={() => openEdit(b)} disabled={deletingId === b.id} className="text-gray-600 hover:text-brand-yellow disabled:opacity-50 transition-colors text-xs" title="Editar">✎</button>
                         <button onClick={() => { setDeleteError(""); setConfirmingId(b.id); }} disabled={deletingId === b.id} className="text-gray-600 hover:text-red-400 disabled:opacity-50 transition-colors text-xs" title="Remover">✕</button>
                         <button onClick={() => setConfirmResetId(b.id)} disabled={deletingId === b.id} className="text-gray-600 hover:text-amber-400 disabled:opacity-50 transition-colors text-xs" title="Zerar estatísticas">↺</button>
                       </>
@@ -843,7 +843,7 @@ export default function BeybladeManager() {
                     <div className="text-xs text-gray-500">Taxa</div>
                   </div>
                   <div>
-                    <div className="text-lg font-black text-[#f0a500]">{b.points ?? 0}</div>
+                    <div className="text-lg font-black text-brand-yellow">{b.points ?? 0}</div>
                     <div className="text-xs text-gray-500">Pts</div>
                   </div>
                 </div>

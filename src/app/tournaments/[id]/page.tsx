@@ -145,7 +145,7 @@ function MatchCard({
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-400">
       {roundLabel && <span className="font-semibold text-gray-300">{roundLabel}</span>}
       {match.arena != null && arenaCount > 1 && (
-        <span className="px-2 py-0.5 rounded-full font-bold bg-[#f0a500]/10 text-amber-200 border border-[#f0a500]/30">Arena {match.arena}</span>
+        <span className="px-2 py-0.5 rounded-full font-bold bg-brand-yellow/10 text-amber-200 border border-brand-yellow/30">Arena {match.arena}</span>
       )}
     </div>
   );
@@ -785,7 +785,7 @@ export default async function TournamentDetailPage({
           <div className="hidden lg:block overflow-x-auto">
             <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: `repeat(${arenaCount}, minmax(180px, 1fr))` }}>
               {Array.from({ length: arenaCount }, (_, i) => (
-                <div key={i} className="text-center text-xs font-bold text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/20 rounded-lg py-1.5">
+                <div key={i} className="text-center text-xs font-bold text-brand-yellow bg-brand-yellow/10 border border-brand-yellow/20 rounded-lg py-1.5">
                   Arena {i + 1}
                 </div>
               ))}
@@ -995,7 +995,7 @@ export default async function TournamentDetailPage({
             {swissRows.map((r, i) => {
               const classified = knockoutPlayers.has(r.userId);
               return (
-                <tr key={r.userId} className={`border-b border-gray-800/60 ${classified ? "bg-[#f0a500]/5" : ""}`}>
+                <tr key={r.userId} className={`border-b border-gray-800/60 ${classified ? "bg-brand-yellow/5" : ""}`}>
                   <td className="py-2 pr-2 font-bold text-gray-300 tabular-nums">{i + 1}</td>
                   <td className="py-2 pr-2">
                     <span className="font-semibold text-white break-anywhere">{nameOf(r.userId)}</span>
@@ -1140,9 +1140,9 @@ export default async function TournamentDetailPage({
         </a>
       )}
       {canSwapFinals && (
-        <div className="bg-[#1a1a1a] border border-[#f0a500]/40 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+        <div className="bg-card border border-brand-yellow/40 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <div className="font-bold text-[#f0a500]">Você se classificou! 🎉</div>
+            <div className="font-bold text-brand-yellow">Você se classificou! 🎉</div>
             <div className="text-xs text-gray-300 mt-0.5">Pode trocar <b className="text-white">1 combo</b> do seu deck para o mata-mata.</div>
           </div>
           <FinalsDeckButton tournamentId={tournament.id} currentDeckIds={currentBeybladeIds} />
@@ -1281,7 +1281,7 @@ export default async function TournamentDetailPage({
         ) : !session ? (
           <Link
             href={`/login?callbackUrl=${encodeURIComponent(`/tournaments/${tournament.id}`)}`}
-            className="tap inline-flex items-center justify-center px-5 rounded-lg bg-[#c8102e] hover:bg-[#a50d26] text-white font-bold"
+            className="tap inline-flex items-center justify-center px-5 rounded-lg bg-brand-red hover:bg-brand-red-hover text-white font-bold"
           >
             Entrar para se inscrever
           </Link>
@@ -1290,7 +1290,9 @@ export default async function TournamentDetailPage({
       {isParticipant && tournament.status === "REGISTRATION" && (
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
           {myApproved ? (
-            <span className="text-sm bg-green-500/20 text-green-300 border border-green-500/30 px-4 py-2 rounded-lg font-medium">✓ Você está inscrito</span>
+            <span role="status" className="text-sm bg-success-bg text-success border border-success/40 px-4 py-2 rounded-lg font-medium">
+              ✓ Inscrição confirmada. Próximo passo: confira seus combos — dá para trocar até o torneio começar.
+            </span>
           ) : (
             <span className="text-sm bg-amber-500/15 text-amber-300 border border-amber-500/30 px-4 py-2 rounded-lg font-medium">⏳ Inscrição aguardando aprovação do pagamento</span>
           )}
@@ -1311,7 +1313,7 @@ export default async function TournamentDetailPage({
         Esta página se atualiza sozinha quando um resultado é registrado.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
-        <Link href="?aba=partidas" scroll={false} className="tap inline-flex items-center px-4 rounded-lg bg-[#c8102e] hover:bg-[#a50d26] text-white text-sm font-bold">Ver partidas</Link>
+        <Link href="?aba=partidas" scroll={false} className="tap inline-flex items-center px-4 rounded-lg bg-brand-red hover:bg-brand-red-hover text-white text-sm font-bold">Ver partidas</Link>
         <Link href="?aba=classificacao" scroll={false} className="tap inline-flex items-center px-4 rounded-lg border border-gray-700 text-gray-100 text-sm font-bold hover:bg-white/5">Ver classificação</Link>
       </div>
     </section>
@@ -1348,7 +1350,7 @@ export default async function TournamentDetailPage({
   );
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       {/* Live page: new sign-ups and matches scored by other judges show up
           on their own, no manual refresh. */}
@@ -1379,7 +1381,7 @@ export default async function TournamentDetailPage({
                     <li className="text-xs font-bold px-3 py-1 rounded-full border border-gray-700 text-gray-200">
                       {community.name}{tournament.isPartnership ? " · Parceria" : ""}
                     </li>
-                    <li className={`text-xs font-bold px-3 py-1 rounded-full ${tournament.isOfficial ? "bg-[#c8102e]/20 text-red-200 border border-[#c8102e]/50" : "bg-blue-500/15 text-blue-200 border border-blue-500/40"}`}>
+                    <li className={`text-xs font-bold px-3 py-1 rounded-full ${tournament.isOfficial ? "bg-brand-red/20 text-red-200 border border-brand-red/50" : "bg-blue-500/15 text-blue-200 border border-blue-500/40"}`}>
                       {tournament.isOfficial ? "Oficial" : "BeyEncontro"}
                     </li>
                     {tournament.isTest && <li className="text-xs font-bold px-3 py-1 rounded-full bg-yellow-900/40 text-yellow-300">Teste</li>}
@@ -1417,12 +1419,12 @@ export default async function TournamentDetailPage({
                     <ResetTournamentButton tournamentId={tournament.id} />
                   )}
                   {canEditTournament && (
-                    <Link href={`/tournaments/${tournament.id}/edit`} className="tap inline-flex items-center justify-center text-sm bg-[#252525] hover:bg-[#333] text-gray-100 font-semibold px-4 rounded-lg">
+                    <Link href={`/tournaments/${tournament.id}/edit`} className="tap inline-flex items-center justify-center text-sm bg-field hover:bg-hover text-gray-100 font-semibold px-4 rounded-lg">
                       ✏️ Editar
                     </Link>
                   )}
                   {isOrganizerOfThis && tournament.status === "FINISHED" && (
-                    <Link href={`/tournaments/${tournament.id}/certificates`} className="tap inline-flex items-center justify-center text-sm bg-[#f0a500] hover:bg-amber-400 text-black font-bold px-4 rounded-lg">
+                    <Link href={`/tournaments/${tournament.id}/certificates`} className="tap inline-flex items-center justify-center text-sm bg-brand-yellow hover:bg-amber-400 text-black font-bold px-4 rounded-lg">
                       🏆 Cards de Premiação
                     </Link>
                   )}
@@ -1433,7 +1435,7 @@ export default async function TournamentDetailPage({
         )}
 
         {!judgeKiosk && (
-          <nav aria-label="Seções do torneio" className="sticky top-16 md:top-[100px] z-30 -mx-4 px-4 py-2 mb-4 bg-[#0a0a0a]/95 backdrop-blur">
+          <nav aria-label="Seções do torneio" className="sticky top-[var(--header-h)] z-20 -mx-4 px-4 py-2 mb-4 bg-app/95 backdrop-blur">
             <ul className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {TABS.map((t) => (
                 <li key={t.key}>
@@ -1443,7 +1445,7 @@ export default async function TournamentDetailPage({
                     aria-current={tab === t.key ? "page" : undefined}
                     className={`tap flex items-center justify-center rounded-lg px-2 text-sm font-bold transition-colors ${
                       tab === t.key
-                        ? "bg-[#c8102e] text-white"
+                        ? "bg-brand-red text-white"
                         : "bg-gray-900 border border-gray-800 text-gray-200 hover:bg-gray-800"
                     }`}
                   >
@@ -1471,10 +1473,10 @@ export default async function TournamentDetailPage({
     if (typeof digest === "string" && (digest.startsWith("NEXT_") || digest === "DYNAMIC_SERVER_USAGE")) throw e;
     console.error("[tournament detail]", e);
     return (
-      <div className="min-h-screen bg-[#0d0d0d]">
+      <div className="min-h-screen bg-app">
         <Navbar />
         <div className="flex items-center justify-center p-8">
-          <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 max-w-md w-full text-center mt-16">
+          <div className="bg-card border border-line rounded-2xl p-8 max-w-md w-full text-center mt-16">
             <div className="mb-4"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
             <h1 className="text-xl font-bold text-white mb-2">Não foi possível carregar o torneio</h1>
             <p className="text-gray-300 text-sm mb-6">
@@ -1484,7 +1486,7 @@ export default async function TournamentDetailPage({
               <RetryButton />
               <Link
                 href="/tournaments"
-                className="tap inline-flex items-center px-5 rounded-xl font-bold border border-[#3a3a3a] text-gray-100 hover:bg-[#252525]"
+                className="tap inline-flex items-center px-5 rounded-xl font-bold border border-line text-gray-100 hover:bg-field"
               >
                 Ver todos os torneios
               </Link>

@@ -408,7 +408,7 @@ export default function LayoutEditor({
           <button
             key={t}
             onClick={() => { setTarget(t as TargetKey); setSel(null); setEditKeys(new Set()); }}
-            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${target === t ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
+            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${target === t ? "bg-brand-yellow text-black" : "bg-card text-gray-300 border border-line hover:bg-field"}`}
           >
             {TARGETS[t].label}
           </button>
@@ -418,12 +418,12 @@ export default function LayoutEditor({
           onClick={() => bgInputRef.current?.click()}
           disabled={target === "quickmatch"}
           title={target === "quickmatch" ? "As Partidas Rápidas usam o BG do Placar" : "Trocar imagem de fundo"}
-          className={`ml-auto px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${target === "quickmatch" ? "bg-[#1a1a1a] text-gray-600 border border-[#2a2a2a] cursor-not-allowed" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
+          className={`ml-auto px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${target === "quickmatch" ? "bg-card text-gray-600 border border-line cursor-not-allowed" : "bg-card text-gray-300 border border-line hover:bg-field"}`}
         >
           {bgStatus === "uploading" ? "Enviando…" : bgStatus === "saved" ? "BG salvo ✓" : bgStatus === "error" ? "Erro no BG" : "🖼 Trocar BG"}
         </button>
         {bgByTarget[target] && target !== "quickmatch" && (
-          <button onClick={restoreBg} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#1a1a1a] text-gray-400 border border-[#2a2a2a] hover:bg-[#252525]">
+          <button onClick={restoreBg} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-card text-gray-400 border border-line hover:bg-field">
             Restaurar BG
           </button>
         )}
@@ -431,7 +431,7 @@ export default function LayoutEditor({
           <button
             onClick={replicateFromScoreboard}
             title="Copiar as posições/tamanhos do Placar para as Partidas Rápidas"
-            className="px-4 py-1.5 rounded-lg text-sm font-bold transition-colors bg-[#f0a500] text-black hover:bg-[#d9940a]"
+            className="px-4 py-1.5 rounded-lg text-sm font-bold transition-colors bg-brand-yellow text-black hover:bg-brand-yellow-hover"
           >
             ⧉ Replicar do Placar
           </button>
@@ -440,7 +440,7 @@ export default function LayoutEditor({
           <button
             onClick={addCustom}
             title="Adicionar um campo de texto ou número ao placar"
-            className="px-4 py-1.5 rounded-lg text-sm font-bold transition-colors bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"
+            className="px-4 py-1.5 rounded-lg text-sm font-bold transition-colors bg-card text-gray-300 border border-line hover:bg-field"
           >
             ➕ Inserir campo
           </button>
@@ -450,7 +450,7 @@ export default function LayoutEditor({
             onClick={mirrorSelected}
             disabled={!canMirror}
             title={canMirror ? "Copiar posição/tamanho do item selecionado para o lado oposto" : "Selecione um item com par (esq/dir)"}
-            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${canMirror ? "bg-[#f0a500] text-black hover:bg-[#d9940a]" : "bg-[#1a1a1a] text-gray-600 border border-[#2a2a2a] cursor-not-allowed"}`}
+            className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${canMirror ? "bg-brand-yellow text-black hover:bg-brand-yellow-hover" : "bg-card text-gray-600 border border-line cursor-not-allowed"}`}
           >
             ⇄ Espelhar p/ outro lado
           </button>
@@ -458,13 +458,13 @@ export default function LayoutEditor({
         <input ref={fontInputRef} type="file" accept=".ttf,.otf,.woff,.woff2,font/*" onChange={onPickFont} className="hidden" />
         <button
           onClick={() => setShowFonts((v) => !v)}
-          className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${showFonts ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
+          className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${showFonts ? "bg-brand-yellow text-black" : "bg-card text-gray-300 border border-line hover:bg-field"}`}
         >
           🔤 Fontes
         </button>
         <button
           onClick={() => { setPreview((p) => !p); setSel(null); }}
-          className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${preview ? "bg-[#22c55e] text-black" : "bg-[#1a1a1a] text-gray-300 border border-[#2a2a2a] hover:bg-[#252525]"}`}
+          className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-colors ${preview ? "bg-[#22c55e] text-black" : "bg-card text-gray-300 border border-line hover:bg-field"}`}
         >
           {preview ? "✏️ Editar" : "👁 Pré-visualizar"}
         </button>
@@ -472,18 +472,18 @@ export default function LayoutEditor({
 
       {/* Font library manager */}
       {showFonts && (
-        <div className="mb-3 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4">
+        <div className="mb-3 bg-card border border-line rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
-            <div className="text-sm font-black text-[#f0a500]">Fontes personalizadas</div>
-            <button onClick={() => fontInputRef.current?.click()} className="ml-auto text-xs font-bold bg-[#252525] border border-[#333] rounded-lg px-3 py-1.5 hover:bg-[#2a2a2a] text-gray-200">⬆ Enviar arquivo</button>
-            <button onClick={addGoogleFont} className="text-xs font-bold bg-[#252525] border border-[#333] rounded-lg px-3 py-1.5 hover:bg-[#2a2a2a] text-gray-200">+ Google Fonts</button>
+            <div className="text-sm font-black text-brand-yellow">Fontes personalizadas</div>
+            <button onClick={() => fontInputRef.current?.click()} className="ml-auto text-xs font-bold bg-field border border-line rounded-lg px-3 py-1.5 hover:bg-field text-gray-200">⬆ Enviar arquivo</button>
+            <button onClick={addGoogleFont} className="text-xs font-bold bg-field border border-line rounded-lg px-3 py-1.5 hover:bg-field text-gray-200">+ Google Fonts</button>
           </div>
           {fonts.length === 0 ? (
             <div className="text-xs text-gray-500">Nenhuma fonte adicionada. Envie um arquivo (.ttf/.otf/.woff/.woff2) ou adicione uma do Google Fonts. Depois selecione um texto e escolha a fonte no painel à direita.</div>
           ) : (
             <div className="grid sm:grid-cols-2 gap-2">
               {fonts.map((f) => (
-                <div key={f.family} className="bg-[#252525] border border-[#333] rounded-lg px-3 py-2">
+                <div key={f.family} className="bg-field border border-line rounded-lg px-3 py-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-white truncate">{f.family}</span>
                     <span className="text-[10px] text-gray-500 uppercase">{f.kind === "upload" ? "arquivo" : "google"}</span>
@@ -491,7 +491,7 @@ export default function LayoutEditor({
                   </div>
                   {/* If this line doesn't render in the custom font, it didn't load
                       (Google: name is wrong; check spelling/caps). */}
-                  <div className="text-2xl text-[#f0a500] truncate" style={{ fontFamily: fontStack(f.family) }}>Placar 3 X 0 · AaBb</div>
+                  <div className="text-2xl text-brand-yellow truncate" style={{ fontFamily: fontStack(f.family) }}>Placar 3 X 0 · AaBb</div>
                 </div>
               ))}
             </div>
@@ -662,17 +662,17 @@ export default function LayoutEditor({
         </div>
 
         {/* Sidebar */}
-        <div className="w-full lg:w-72 shrink-0 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4">
+        <div className="w-full lg:w-72 shrink-0 bg-card border border-line rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <button onClick={save} className="flex-1 bg-[#22c55e] hover:bg-[#1ea34d] text-black font-black py-2 rounded-lg transition-colors">
               {status === "saving" ? "Salvando…" : status === "saved" ? "Salvo ✓" : status === "error" ? "Erro" : "Salvar"}
             </button>
-            <button onClick={resetAll} className="text-xs text-gray-400 hover:text-white border border-[#333] rounded-lg px-3 py-2">Resetar tudo</button>
+            <button onClick={resetAll} className="text-xs text-gray-400 hover:text-white border border-line rounded-lg px-3 py-2">Resetar tudo</button>
           </div>
 
           {selDef && selField ? (
             <div className="space-y-2">
-              <div className="text-sm font-black text-[#f0a500]">{selDef.label}</div>
+              <div className="text-sm font-black text-brand-yellow">{selDef.label}</div>
               <div className="grid grid-cols-2 gap-2">
                 <NumberInput label="X %" value={selField.x} onChange={(v) => upd(sel!, { x: v })} />
                 <NumberInput label="Y %" value={selField.y} onChange={(v) => upd(sel!, { y: v })} />
@@ -699,7 +699,7 @@ export default function LayoutEditor({
                   <select
                     value={selField.ff ?? ""}
                     onChange={(e) => upd(sel!, { ff: e.target.value || undefined })}
-                    className="w-full mt-0.5 bg-[#252525] border border-[#333] rounded px-2 py-1 text-white text-sm outline-none focus:border-[#f0a500]"
+                    className="w-full mt-0.5 bg-field border border-line rounded px-2 py-1 text-white text-sm outline-none focus:border-brand-yellow"
                   >
                     <option value="">Padrão (Arial Black)</option>
                     {fonts.map((f) => <option key={f.family} value={f.family}>{f.family}</option>)}
@@ -707,14 +707,14 @@ export default function LayoutEditor({
                 </label>
               )}
               {isCustom(sel!) && (
-                <div className="space-y-2 border-t border-[#2a2a2a] pt-2 mt-1">
+                <div className="space-y-2 border-t border-line pt-2 mt-1">
                   <label className="text-[11px] text-gray-400 block">Nome do campo
                     <input value={customs.find((c) => c.key === sel)?.label ?? ""} onChange={(e) => updateCustom(sel!, { label: e.target.value })}
-                      className="w-full mt-0.5 bg-[#252525] border border-[#333] rounded px-2 py-1 text-white text-sm outline-none focus:border-[#f0a500]" />
+                      className="w-full mt-0.5 bg-field border border-line rounded px-2 py-1 text-white text-sm outline-none focus:border-brand-yellow" />
                   </label>
                   <label className="text-[11px] text-gray-400 block">Tipo
                     <select value={customs.find((c) => c.key === sel)?.type ?? "text"} onChange={(e) => updateCustom(sel!, { type: e.target.value as "text" | "int" })}
-                      className="w-full mt-0.5 bg-[#252525] border border-[#333] rounded px-2 py-1 text-white text-sm outline-none focus:border-[#f0a500]">
+                      className="w-full mt-0.5 bg-field border border-line rounded px-2 py-1 text-white text-sm outline-none focus:border-brand-yellow">
                       <option value="text">Texto</option>
                       <option value="int">Número (inteiro)</option>
                     </select>
@@ -724,7 +724,7 @@ export default function LayoutEditor({
                       value={customs.find((c) => c.key === sel)?.value ?? ""}
                       inputMode={customs.find((c) => c.key === sel)?.type === "int" ? "numeric" : "text"}
                       onChange={(e) => updateCustom(sel!, { value: e.target.value })}
-                      className="w-full mt-0.5 bg-[#252525] border border-[#333] rounded px-2 py-1 text-white text-sm outline-none focus:border-[#f0a500]" />
+                      className="w-full mt-0.5 bg-field border border-line rounded px-2 py-1 text-white text-sm outline-none focus:border-brand-yellow" />
                   </label>
                   <button onClick={() => deleteCustom(sel!)} className="text-xs text-red-400 hover:text-red-300 underline">excluir campo</button>
                 </div>
@@ -732,7 +732,7 @@ export default function LayoutEditor({
               <div className="flex items-center gap-3 pt-1">
                 <button
                   onClick={() => toggleHidden(sel!)}
-                  className={`text-xs font-bold rounded-lg px-3 py-1.5 border ${isHidden(sel!) ? "bg-[#22c55e] text-black border-transparent" : "bg-[#1a1a1a] text-red-300 border-[#3a2020] hover:bg-[#251a1a]"}`}
+                  className={`text-xs font-bold rounded-lg px-3 py-1.5 border ${isHidden(sel!) ? "bg-[#22c55e] text-black border-transparent" : "bg-card text-red-300 border-[#3a2020] hover:bg-[#251a1a]"}`}
                 >
                   {isHidden(sel!) ? "✅ Reativar no placar" : "🚫 Desativar no placar"}
                 </button>
@@ -745,12 +745,12 @@ export default function LayoutEditor({
             <div className="text-xs text-gray-500">Marque abaixo os elementos que quer editar — só eles aparecem no quadro (evita sobreposição). Arraste para mover; a alça amarela dimensiona. Selecione um item e clique ⇄ Espelhar p/ outro lado para copiar posição e tamanho para o lado oposto (simetria).</div>
           )}
 
-          <div className="mt-4 border-t border-[#2a2a2a] pt-3">
+          <div className="mt-4 border-t border-line pt-3">
             <div className="flex items-center justify-between mb-1">
               <div className="text-[11px] text-gray-500">Elementos (marque p/ editar)</div>
               <div className="flex gap-1">
-                <button onClick={showAll} className="text-[10px] text-gray-400 hover:text-white border border-[#333] rounded px-1.5 py-0.5">Todos</button>
-                <button onClick={hideAll} className="text-[10px] text-gray-400 hover:text-white border border-[#333] rounded px-1.5 py-0.5">Nenhum</button>
+                <button onClick={showAll} className="text-[10px] text-gray-400 hover:text-white border border-line rounded px-1.5 py-0.5">Todos</button>
+                <button onClick={hideAll} className="text-[10px] text-gray-400 hover:text-white border border-line rounded px-1.5 py-0.5">Nenhum</button>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-1">
@@ -760,7 +760,7 @@ export default function LayoutEditor({
                   <button
                     key={k}
                     onClick={() => toggleEdit(k)}
-                    className={`text-[11px] text-left px-2 py-1 rounded flex items-center gap-1 ${sel === k ? "bg-[#f0a500] text-black font-bold" : on ? "bg-[#2a2a2a] text-white" : "text-gray-400 hover:bg-[#252525]"}`}
+                    className={`text-[11px] text-left px-2 py-1 rounded flex items-center gap-1 ${sel === k ? "bg-brand-yellow text-black font-bold" : on ? "bg-field text-white" : "text-gray-400 hover:bg-field"}`}
                   >
                     <span className="w-3 shrink-0">{on ? "☑" : "☐"}</span>
                     <span className={`truncate ${isHidden(k) ? "line-through opacity-60" : ""}`}>{isHidden(k) ? "🚫 " : ""}{defs[k].label}</span>
@@ -784,7 +784,7 @@ function NumberInput({ label, value, onChange, step = 0.5 }: { label: string; va
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-        className="w-full mt-0.5 bg-[#252525] border border-[#333] rounded px-2 py-1 text-white text-sm outline-none focus:border-[#f0a500]"
+        className="w-full mt-0.5 bg-field border border-line rounded px-2 py-1 text-white text-sm outline-none focus:border-brand-yellow"
       />
     </label>
   );

@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 // nothing jumps when the real content arrives.
 export default function Loading() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8" aria-busy="true">
         <p role="status" className="sr-only">Carregando torneio…</p>

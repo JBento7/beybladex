@@ -65,7 +65,7 @@ export default async function CertificatesPage({ params }: { params: { id: strin
   }));
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d]">
+    <div className="min-h-screen bg-app">
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="mb-6">

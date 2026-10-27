@@ -277,7 +277,7 @@ export default function AdminMatchEditor({
   }, {});
 
   return (
-    <div className="mt-8 bg-[#1a1a1a] border border-[#c8102e]/20 rounded-xl p-6">
+    <div className="mt-8 bg-card border border-brand-red/20 rounded-xl p-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-base font-bold text-white">Editar Resultados</h2>
@@ -323,7 +323,7 @@ export default function AdminMatchEditor({
             onClick={balanceMatches}
             disabled={balancing}
             title="Verifica se todos jogaram o mesmo número de partidas e gera partidas para quem ficou em falta"
-            className="text-xs font-bold border border-[#f0a500]/40 text-[#f0a500] hover:bg-[#f0a500]/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            className="text-xs font-bold border border-brand-yellow/40 text-brand-yellow hover:bg-brand-yellow/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
           >
             {balancing ? "Verificando..." : "Verificar Partidas"}
           </button>
@@ -331,7 +331,7 @@ export default function AdminMatchEditor({
             onClick={recalcStandings}
             disabled={recalcing}
             title="Recalcula vitórias/pontos de todos os jogadores a partir das partidas encerradas"
-            className="text-xs font-bold border border-[#f0a500]/40 text-[#f0a500] hover:bg-[#f0a500]/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            className="text-xs font-bold border border-brand-yellow/40 text-brand-yellow hover:bg-brand-yellow/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
           >
             {recalcing ? "Recalculando..." : "Recalcular Classificação"}
           </button>
@@ -339,7 +339,7 @@ export default function AdminMatchEditor({
             onClick={dedupeMatches}
             disabled={deduping}
             title="Remove partidas duplicadas (mesma rodada e mesmos jogadores)"
-            className="text-xs font-bold border border-[#c8102e]/40 text-[#c8102e] hover:bg-[#c8102e]/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            className="text-xs font-bold border border-brand-red/40 text-danger hover:bg-brand-red/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
           >
             {deduping ? "Removendo..." : "Remover Duplicadas"}
           </button>
@@ -347,21 +347,21 @@ export default function AdminMatchEditor({
             onClick={advanceRound}
             disabled={advancing}
             title="Gera a próxima rodada se a atual terminou mas não avançou sozinha"
-            className="text-xs font-bold border border-[#f0a500]/40 text-[#f0a500] hover:bg-[#f0a500]/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            className="text-xs font-bold border border-brand-yellow/40 text-brand-yellow hover:bg-brand-yellow/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
           >
             {advancing ? "Avançando..." : "Avançar Rodada"}
           </button>
           <button
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            className="text-xs font-bold border border-[#c8102e]/40 text-[#c8102e] hover:bg-[#c8102e]/10 px-3 py-1.5 rounded-lg transition-colors"
+            className="text-xs font-bold border border-brand-red/40 text-danger hover:bg-brand-red/10 px-3 py-1.5 rounded-lg transition-colors"
           >
             {open ? "Fechar ▲" : "Editar Partidas ▼"}
           </button>
         </div>
       </div>
       {advanceMsg && (
-        <div className="mt-3 text-xs px-4 py-2 rounded-lg bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500]">
+        <div className="mt-3 text-xs px-4 py-2 rounded-lg bg-brand-yellow/10 border border-brand-yellow/30 text-brand-yellow">
           {advanceMsg}
         </div>
       )}
@@ -382,7 +382,7 @@ export default function AdminMatchEditor({
                 <select
                   value={podium[i]}
                   onChange={(e) => setPodium((prev) => prev.map((v, j) => (j === i ? e.target.value : v)))}
-                  className="flex-1 min-w-0 bg-[#1a1a1a] border border-[#444] rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-amber-400"
+                  className="flex-1 min-w-0 bg-card border border-line rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-amber-400"
                 >
                   <option value="">— vazio —</option>
                   {participants.map((p) => (
@@ -397,7 +397,7 @@ export default function AdminMatchEditor({
             <button
               onClick={() => setPodiumOpen(false)}
               disabled={podiumBusy}
-              className="text-xs text-gray-500 hover:text-gray-300 border border-[#333] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+              className="text-xs text-gray-500 hover:text-gray-300 border border-line px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>
@@ -417,8 +417,8 @@ export default function AdminMatchEditor({
           {health.map((i) => {
             const c =
               i.severity === "critical" ? "border-red-600 bg-red-900/20 text-red-300"
-              : i.severity === "high" ? "border-[#f0a500]/50 bg-[#f0a500]/10 text-[#f0a500]"
-              : "border-[#333] bg-[#1a1a1a] text-gray-400";
+              : i.severity === "high" ? "border-brand-yellow/50 bg-brand-yellow/10 text-brand-yellow"
+              : "border-line bg-card text-gray-400";
             return (
               <div key={i.code} className={`text-xs px-4 py-2.5 rounded-lg border ${c}`}>
                 <div className="font-bold uppercase tracking-wide">
@@ -466,7 +466,7 @@ export default function AdminMatchEditor({
                   return (
                     <div
                       key={m.id}
-                      className="flex items-center gap-3 bg-[#252525] border border-[#333] rounded-xl px-4 py-3 flex-wrap"
+                      className="flex items-center gap-3 bg-field border border-line rounded-xl px-4 py-3 flex-wrap"
                     >
                       {/* Match info */}
                       <div className="flex-1 min-w-0">
@@ -485,7 +485,7 @@ export default function AdminMatchEditor({
                           {m.status === "FINISHED" && winnerName && (
                             <>
                               <span className="text-gray-700">·</span>
-                              <span className="text-xs text-[#f0a500] font-bold">{winnerName} venceu</span>
+                              <span className="text-xs text-brand-yellow font-bold">{winnerName} venceu</span>
                               <span className="text-gray-700">·</span>
                               <span className="text-xs text-gray-400">{m.p1Sets}×{m.p2Sets} sets</span>
                               <span className="text-gray-700">·</span>
@@ -501,7 +501,7 @@ export default function AdminMatchEditor({
                           <button
                             onClick={() => startEdit(m)}
                             disabled={!!resetting || savingScore}
-                            className="text-xs text-gray-300 hover:text-[#f0a500] border border-[#333] hover:border-[#f0a500]/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-30"
+                            className="text-xs text-gray-300 hover:text-brand-yellow border border-line hover:border-brand-yellow/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-30"
                           >
                             ✎ Editar Placar
                           </button>
@@ -512,13 +512,13 @@ export default function AdminMatchEditor({
                             <button
                               onClick={() => resetMatch(m.id)}
                               disabled={isResetting}
-                              className="text-xs bg-[#c8102e] hover:bg-[#a00d24] text-white font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                              className="text-xs bg-brand-red hover:bg-brand-red-hover text-white font-bold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                             >
                               {isResetting ? "Resetando..." : "Confirmar"}
                             </button>
                             <button
                               onClick={() => setConfirmId(null)}
-                              className="text-xs text-gray-500 hover:text-gray-300 border border-[#333] px-2 py-1.5 rounded-lg transition-colors"
+                              className="text-xs text-gray-500 hover:text-gray-300 border border-line px-2 py-1.5 rounded-lg transition-colors"
                             >
                               Cancelar
                             </button>
@@ -527,7 +527,7 @@ export default function AdminMatchEditor({
                           <button
                             onClick={() => setConfirmId(m.id)}
                             disabled={m.status === "PENDING" || !!resetting}
-                            className="text-xs text-gray-400 hover:text-[#c8102e] border border-[#333] hover:border-[#c8102e]/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-30"
+                            className="text-xs text-gray-400 hover:text-danger border border-line hover:border-brand-red/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-30"
                           >
                             Resetar
                           </button>
@@ -536,15 +536,15 @@ export default function AdminMatchEditor({
 
                       {/* Inline score editor */}
                       {editId === m.id && (
-                        <div className="w-full mt-3 pt-3 border-t border-[#333]">
+                        <div className="w-full mt-3 pt-3 border-t border-line">
                           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
                             <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">
                               Pontos por set
                             </div>
                             <div className="flex items-center gap-3 text-xs">
-                              <span className="text-[#f0a500] font-bold truncate max-w-[9rem]">{m.player1Name}</span>
+                              <span className="text-brand-yellow font-bold truncate max-w-[9rem]">{m.player1Name}</span>
                               <span className="text-gray-600">×</span>
-                              <span className="text-[#c8102e] font-bold truncate max-w-[9rem]">{m.player2Name}</span>
+                              <span className="text-danger font-bold truncate max-w-[9rem]">{m.player2Name}</span>
                             </div>
                           </div>
 
@@ -557,7 +557,7 @@ export default function AdminMatchEditor({
                                   min={0}
                                   value={s.p1}
                                   onChange={(e) => updateSet(idx, "p1", parseInt(e.target.value || "0", 10))}
-                                  className="w-16 bg-[#1a1a1a] border border-[#444] rounded-lg px-2 py-1 text-sm text-white text-center focus:border-[#f0a500] outline-none"
+                                  className="w-16 bg-card border border-line rounded-lg px-2 py-1 text-sm text-white text-center focus:border-brand-yellow outline-none"
                                 />
                                 <span className="text-gray-600 text-xs">×</span>
                                 <input
@@ -565,12 +565,12 @@ export default function AdminMatchEditor({
                                   min={0}
                                   value={s.p2}
                                   onChange={(e) => updateSet(idx, "p2", parseInt(e.target.value || "0", 10))}
-                                  className="w-16 bg-[#1a1a1a] border border-[#444] rounded-lg px-2 py-1 text-sm text-white text-center focus:border-[#c8102e] outline-none"
+                                  className="w-16 bg-card border border-line rounded-lg px-2 py-1 text-sm text-white text-center focus:border-brand-red outline-none"
                                 />
                                 {editSets.length > 1 && (
                                   <button
                                     onClick={() => setEditSets((prev) => prev.filter((_, i) => i !== idx))}
-                                    className="text-xs text-gray-500 hover:text-[#c8102e] px-2 py-1"
+                                    className="text-xs text-gray-500 hover:text-danger px-2 py-1"
                                     title="Remover set"
                                   >
                                     ✕
@@ -583,7 +583,7 @@ export default function AdminMatchEditor({
                           <div className="flex items-center gap-2 mt-4 flex-wrap">
                             <button
                               onClick={() => setEditSets((prev) => [...prev, { p1: 0, p2: 0 }])}
-                              className="text-xs text-gray-300 hover:text-white border border-[#444] px-3 py-1.5 rounded-lg transition-colors"
+                              className="text-xs text-gray-300 hover:text-white border border-line px-3 py-1.5 rounded-lg transition-colors"
                             >
                               + Adicionar set
                             </button>
@@ -591,14 +591,14 @@ export default function AdminMatchEditor({
                             <button
                               onClick={() => setEditId(null)}
                               disabled={savingScore}
-                              className="text-xs text-gray-500 hover:text-gray-300 border border-[#333] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                              className="text-xs text-gray-500 hover:text-gray-300 border border-line px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                             >
                               Cancelar
                             </button>
                             <button
                               onClick={() => saveScore(m.id)}
                               disabled={savingScore}
-                              className="text-xs bg-[#f0a500] hover:bg-[#d99400] text-black font-bold px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                              className="text-xs bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                             >
                               {savingScore ? "Salvando..." : "Salvar Placar"}
                             </button>

@@ -44,7 +44,7 @@ export default function ResetTournamentButton({ tournamentId }: { tournamentId: 
             role="dialog"
             aria-modal="true"
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-6 w-full max-w-md"
+            className="bg-card border border-line rounded-2xl p-6 w-full max-w-md"
           >
             <h2 className="text-lg font-bold text-white mb-1">Reiniciar torneio de teste?</h2>
             <p className="text-sm text-gray-400 mb-4">
@@ -63,7 +63,7 @@ export default function ResetTournamentButton({ tournamentId }: { tournamentId: 
               <button
                 onClick={() => setShowModal(false)}
                 disabled={loading}
-                className="flex-1 bg-[#252525] hover:bg-[#333] disabled:opacity-50 text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
+                className="flex-1 bg-field hover:bg-hover disabled:opacity-50 text-gray-300 font-semibold py-2.5 rounded-xl transition-colors"
               >
                 Cancelar
               </button>

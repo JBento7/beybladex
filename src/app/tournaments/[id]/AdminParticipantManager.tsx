@@ -296,21 +296,21 @@ export default function AdminParticipantManager({
       ) : (
         <button
           onClick={() => (open ? closeForm() : openForm())}
-          className="mb-4 text-sm bg-[#f0a500]/20 hover:bg-[#f0a500]/30 text-[#f0a500] border border-[#f0a500]/30 font-semibold px-4 py-2 rounded-lg transition-colors"
+          className="mb-4 text-sm bg-brand-yellow/20 hover:bg-brand-yellow/30 text-brand-yellow border border-brand-yellow/30 font-semibold px-4 py-2 rounded-lg transition-colors"
         >
           {open ? "✕ Cancelar" : "+ Adicionar Participante"}
         </button>
       )}
 
       {open && (
-        <div className="mb-4 bg-[#252525] border border-[#333] rounded-xl p-4 space-y-4">
+        <div className="mb-4 bg-field border border-line rounded-xl p-4 space-y-4">
           {/* Mode toggle */}
-          <div className="flex rounded-lg overflow-hidden border border-[#444] text-sm font-semibold">
+          <div className="flex rounded-lg overflow-hidden border border-line text-sm font-semibold">
             <button
               type="button"
               onClick={() => { setMode("registered"); resetForm(); }}
               className={`flex-1 py-2 transition-colors ${
-                mode === "registered" ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-400 hover:text-white"
+                mode === "registered" ? "bg-brand-yellow text-black" : "bg-card text-gray-400 hover:text-white"
               }`}
             >
               Jogador Cadastrado
@@ -319,7 +319,7 @@ export default function AdminParticipantManager({
               type="button"
               onClick={() => { setMode("guest"); resetForm(); }}
               className={`flex-1 py-2 transition-colors ${
-                mode === "guest" ? "bg-[#f0a500] text-black" : "bg-[#1a1a1a] text-gray-400 hover:text-white"
+                mode === "guest" ? "bg-brand-yellow text-black" : "bg-card text-gray-400 hover:text-white"
               }`}
             >
               Convidado
@@ -337,7 +337,7 @@ export default function AdminParticipantManager({
                   <select
                     value={selectedUserId}
                     onChange={(e) => { setSelectedUserId(e.target.value); setSelectedBeys([]); }}
-                    className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#f0a500]"
+                    className="w-full bg-card border border-line rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-yellow"
                   >
                     <option value="">— escolha um jogador —</option>
                     {availablePlayers.map((p) => (
@@ -361,8 +361,8 @@ export default function AdminParticipantManager({
                         onClick={() => toggleBey(b.id)}
                         className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                           selectedBeys.includes(b.id)
-                            ? "bg-[#f0a500] text-black border-[#f0a500] font-bold"
-                            : "bg-[#1a1a1a] text-gray-300 border-[#333] hover:border-[#f0a500]/50"
+                            ? "bg-brand-yellow text-black border-brand-yellow font-bold"
+                            : "bg-card text-gray-300 border-line hover:border-brand-yellow/50"
                         }`}
                       >
                         <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" />{b.name}
@@ -388,7 +388,7 @@ export default function AdminParticipantManager({
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
                   placeholder="ex: Carlos (visitante)"
-                  className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#f0a500]"
+                  className="w-full bg-card border border-line rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-yellow"
                 />
               </div>
               <div>
@@ -407,7 +407,7 @@ export default function AdminParticipantManager({
                         setGuestBeyblades(updated);
                       }}
                       placeholder={`Beyblade ${i + 1} (ex: Dran Sword 3-60 Flat)`}
-                      className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#f0a500]"
+                      className="w-full bg-card border border-line rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-yellow"
                     />
                   ))}
                 </div>
@@ -418,7 +418,7 @@ export default function AdminParticipantManager({
           <button
             onClick={handleAdd}
             disabled={saving || !canAdd}
-            className="bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold text-sm px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
+            className="bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold text-sm px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
           >
             {saving ? "Adicionando..." : "Confirmar Inscrição"}
           </button>
@@ -431,7 +431,7 @@ export default function AdminParticipantManager({
           const player = allPlayers.find((pl) => pl.id === p.userId);
           const isEditing = editingUserId === p.userId;
           return (
-            <div key={p.userId} className="bg-[#252525] rounded-lg px-4 py-2.5">
+            <div key={p.userId} className="bg-field rounded-lg px-4 py-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-gray-600 w-5 text-right">{i + 1}.</span>
@@ -453,7 +453,7 @@ export default function AdminParticipantManager({
                   {tournamentStatus === "REGISTRATION" && (
                     <button
                       onClick={() => (isEditing ? closeEdit() : openEdit(p))}
-                      className="text-xs text-[#f0a500] hover:text-[#d4940a] px-2 py-1 rounded hover:bg-[#f0a500]/10 transition-colors"
+                      className="text-xs text-brand-yellow hover:text-brand-yellow-hover px-2 py-1 rounded hover:bg-brand-yellow/10 transition-colors"
                       title="Editar combos"
                     >
                       {isEditing ? "Cancelar" : "Editar combos"}
@@ -493,7 +493,7 @@ export default function AdminParticipantManager({
                       checked={p.hasPaid}
                       disabled={togglingFlag === `${p.userId}:hasPaid`}
                       onChange={(e) => toggleFlag(p, "hasPaid", e.target.checked)}
-                      className="accent-[#f0a500]"
+                      className="accent-brand-yellow"
                     />
                     Pagamento confirmado
                   </label>
@@ -503,7 +503,7 @@ export default function AdminParticipantManager({
                       checked={p.beybladeInspected}
                       disabled={togglingFlag === `${p.userId}:beybladeInspected`}
                       onChange={(e) => toggleFlag(p, "beybladeInspected", e.target.checked)}
-                      className="accent-[#f0a500]"
+                      className="accent-brand-yellow"
                     />
                     Beyblade inspecionada
                   </label>
@@ -511,7 +511,7 @@ export default function AdminParticipantManager({
               )}
 
               {isEditing && (
-                <div className="mt-3 pt-3 border-t border-[#333] space-y-3">
+                <div className="mt-3 pt-3 border-t border-line space-y-3">
                   {p.user.isGuest ? (
                     <div className="space-y-2">
                       <label className="text-xs text-gray-400 block">
@@ -528,7 +528,7 @@ export default function AdminParticipantManager({
                             setEditGuestBeyblades(updated);
                           }}
                           placeholder={`Beyblade ${idx + 1} (ex: Dran Sword 3-60 Flat)`}
-                          className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-[#f0a500]"
+                          className="w-full bg-card border border-line rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-yellow"
                         />
                       ))}
                     </div>
@@ -545,8 +545,8 @@ export default function AdminParticipantManager({
                             onClick={() => toggleEditBey(b.id)}
                             className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
                               editSelectedBeys.includes(b.id)
-                                ? "bg-[#f0a500] text-black border-[#f0a500] font-bold"
-                                : "bg-[#1a1a1a] text-gray-300 border-[#333] hover:border-[#f0a500]/50"
+                                ? "bg-brand-yellow text-black border-brand-yellow font-bold"
+                                : "bg-card text-gray-300 border-line hover:border-brand-yellow/50"
                             }`}
                           >
                             <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" />{b.name}
@@ -561,7 +561,7 @@ export default function AdminParticipantManager({
                   <button
                     onClick={() => handleEditSave(p)}
                     disabled={editSaving}
-                    className="bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold text-sm px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
+                    className="bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold text-sm px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
                   >
                     {editSaving ? "Salvando..." : "Salvar combos"}
                   </button>

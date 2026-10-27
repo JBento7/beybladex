@@ -5,6 +5,8 @@ import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import CommunityTheme from "@/components/CommunityTheme";
 import { COMMUNITY_COOKIE } from "@/lib/communities";
 import { cookies } from "next/headers";
+import { inter, barlow } from "./fonts";
+import { SIDEBAR_COOKIE } from "@/lib/shell";
 
 const baseMetadata: Metadata = {
   title: {
@@ -34,7 +36,8 @@ export function generateMetadata(): Metadata {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#0d0d0d",
+  themeColor: "#0B0D10",
+  viewportFit: "cover", // lets the bottom bar respect the iPhone home indicator
 };
 
 export default function RootLayout({
@@ -43,8 +46,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR">
-      <body className="bg-[#0d0d0d] text-gray-100 min-h-screen">
+    <html
+      lang="pt-BR"
+      className={`${inter.variable} ${barlow.variable}`}
+      // Sidebar collapsed state is remembered in a cookie so the first paint
+      // already has the right width (no jump).
+      data-sidebar={cookies().get(SIDEBAR_COOKIE)?.value === "collapsed" ? "collapsed" : "expanded"}
+    >
+      <body className="bg-app text-fg font-sans min-h-screen">
         <ServiceWorkerRegister />
         <Providers>
           <CommunityTheme initial={cookies().get(COMMUNITY_COOKIE)?.value ?? null}>{children}</CommunityTheme>
