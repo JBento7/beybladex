@@ -1,0 +1,152 @@
+// Pure standings math, shared by the tournament engine (stored totals, knockout
+// seeding, final placement) and the tournament page (tables). No imports on
+// purpose: it is unit-tested directly with Node's test runner.
+//
+// Vocabulary (also used for the on-screen labels):
+//  - Swiss points ("Pts suíço"): 1 per win in a Swiss round + 1 per bye.
+//  - Battle points ("Pts de batalha"): finish points scored inside matches
+//    (Spin 1, Over/Burst 2, Xtreme 3...). Tiebreaker #1.
+//  - Balance ("Saldo"): battle points scored − conceded. Tiebreaker #2.
+// A bye is a self-match (player1 = player2) marked isWalkover with the player
+// as winner. Knockout padding byes are self-matches WITHOUT isWalkover.
+
+export type StandingsMatch = {
+  round: number;
+  status: string; // "FINISHED" counts; anything else is ignored
+  player1Id: string;
+  player2Id: string;
+  winnerId: string | null;
+  isWalkover?: boolean;
+  isThirdPlace?: boolean;
+  points?: { userId: string; points: number }[];
+};
+
+export type SwissRow = {
+  userId: string;
+  swissPoints: number;
+  wins: number; // played Swiss matches won (W.O. counts as a win, bye does not)
+  losses: number;
+  byes: number;
+  played: number; // Swiss matches played (byes excluded)
+  battlePoints: number;
+  conceded: number;
+  balance: number;
+};
+
+/** A match belongs to the Swiss phase when its round is within the Swiss rounds. */
+export function isSwissMatch(m: Pick<StandingsMatch, "round" | "isThirdPlace">, swissRounds: number): boolean {
+  return !m.isThirdPlace && m.round >= 1 && m.round <= swissRounds;
+}
+
+export function isSwissBye(m: StandingsMatch): boolean {
+  return m.player1Id === m.player2Id && !!m.isWalkover;
+}
+
+/** Same ordering everywhere: Swiss points, then battle points, then balance. */
+export function compareSwissRows(a: SwissRow, b: SwissRow): number {
+  if (b.swissPoints !== a.swissPoints) return b.swissPoints - a.swissPoints;
+  if (b.battlePoints !== a.battlePoints) return b.battlePoints - a.battlePoints;
+  return b.balance - a.balance;
+}
+
+/**
+ * Standings of the Swiss phase ONLY. Knockout rounds (round > swissRounds) and
+ * the third-place match never count, so the table keeps showing the result of
+ * the Swiss phase after the bracket is played. Players are returned sorted;
+ * full ties keep the input order (Array.prototype.sort is stable).
+ */
+export function computeSwissStandings(userIds: string[], matches: StandingsMatch[], swissRounds: number): SwissRow[] {
+  const rows = new Map<string, SwissRow>();
+  for (const id of userIds) {
+    rows.set(id, { userId: id, swissPoints: 0, wins: 0, losses: 0, byes: 0, played: 0, battlePoints: 0, conceded: 0, balance: 0 });
+  }
+  for (const m of matches) {
+    if (m.status !== "FINISHED" || !isSwissMatch(m, swissRounds)) continue;
+    if (m.player1Id === m.player2Id) {
+      const r = rows.get(m.player1Id);
+      if (r && isSwissBye(m) && m.winnerId === m.player1Id) { r.byes++; r.swissPoints++; }
+      continue;
+    }
+    const pts = m.points ?? [];
+    const p1 = pts.filter((p) => p.userId === m.player1Id).reduce((s, p) => s + p.points, 0);
+    const p2 = pts.filter((p) => p.userId === m.player2Id).reduce((s, p) => s + p.points, 0);
+    for (const [id, own, opp] of [[m.player1Id, p1, p2], [m.player2Id, p2, p1]] as const) {
+      const r = rows.get(id);
+      if (!r) continue;
+      r.played++;
+      r.battlePoints += own;
+      r.conceded += opp;
+      r.balance += own - opp;
+      if (m.winnerId === id) { r.wins++; r.swissPoints++; }
+      else if (m.winnerId) r.losses++;
+    }
+  }
+  return [...rows.values()].sort(compareSwissRows);
+}
+
+export type PlacementInfo = {
+  userId: string;
+  place: number;
+  /** "knockout" = placed by how far they went in the bracket; "swiss" = by Swiss standings. */
+  basis: "knockout" | "swiss";
+  /** Reached the knockout bracket. */
+  qualified: boolean;
+};
+
+/**
+ * Final placement of a Swiss tournament. With a knockout: everyone who played
+ * in the bracket ranks above everyone who didn't; inside the bracket a later
+ * elimination round is better (the champion never loses), and the third-place
+ * match splits the two semifinal losers. Ties inside the bracket and everyone
+ * outside it fall back to the Swiss standings.
+ */
+export function computeSwissFinalPlacement(userIds: string[], matches: StandingsMatch[], swissRounds: number): PlacementInfo[] {
+  const swiss = computeSwissStandings(userIds, matches, swissRounds);
+  const swissIndex = new Map(swiss.map((r, i) => [r.userId, i]));
+  const playoff = matches.filter((m) => m.round > swissRounds && m.player1Id !== m.player2Id);
+  const inPlayoff = new Set<string>();
+  for (const m of playoff) { inPlayoff.add(m.player1Id); inPlayoff.add(m.player2Id); }
+
+  const elimRound = new Map<string, number>();
+  for (const m of playoff) {
+    if (m.status !== "FINISHED" || !m.winnerId || m.isThirdPlace) continue;
+    elimRound.set(m.winnerId === m.player1Id ? m.player2Id : m.player1Id, m.round);
+  }
+  const third = playoff.find((m) => m.isThirdPlace && m.status === "FINISHED" && m.winnerId);
+
+  const order = [...userIds].sort((a, b) => {
+    const aQ = inPlayoff.has(a), bQ = inPlayoff.has(b);
+    if (aQ !== bQ) return aQ ? -1 : 1;
+    if (aQ) {
+      const aE = elimRound.get(a) ?? Infinity, bE = elimRound.get(b) ?? Infinity;
+      if (aE !== bE) return bE - aE;
+      if (third?.winnerId === a && third.winnerId !== b) return -1;
+      if (third?.winnerId === b && third.winnerId !== a) return 1;
+    }
+    return (swissIndex.get(a) ?? 0) - (swissIndex.get(b) ?? 0);
+  });
+  return order.map((userId, i) => ({ userId, place: i + 1, basis: inPlayoff.has(userId) ? "knockout" : "swiss", qualified: inPlayoff.has(userId) }));
+}
+
+/**
+ * Podium that the results actually support. Returns only the positions that
+ * are decided: no champion before the final is played, no 3rd place unless the
+ * third-place match was played (or there was none and the bracket is over).
+ */
+export function decidedPodium(matches: StandingsMatch[], swissRounds: number): { first?: string; second?: string; third?: string } {
+  const playoff = matches.filter((m) => m.round > swissRounds && m.player1Id !== m.player2Id && !m.isThirdPlace);
+  if (playoff.length === 0) return {};
+  const lastRound = Math.max(...playoff.map((m) => m.round));
+  const finals = playoff.filter((m) => m.round === lastRound);
+  if (finals.length !== 1) return {};
+  const final = finals[0];
+  if (final.status !== "FINISHED" || !final.winnerId) return {};
+  const first = final.winnerId;
+  const second = first === final.player1Id ? final.player2Id : final.player1Id;
+  const thirdMatch = matches.find((m) => m.isThirdPlace);
+  let third: string | undefined;
+  if (thirdMatch) {
+    if (thirdMatch.status === "FINISHED" && thirdMatch.winnerId) third = thirdMatch.winnerId;
+  }
+  return { first, second, third };
+}

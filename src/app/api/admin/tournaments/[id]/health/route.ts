@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { computeSwissStandings } from "@/lib/standings";
 import { recalculateStandings, getSwissRounds } from "@/lib/tournament-engine";
 
 // ORGANIZER-only health check for a tournament. Detects the damage the fixed
@@ -175,10 +176,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     for (const p of participants) {
       if (!p.userId) continue;
       const real = matches.filter((m) => m.status === "FINISHED" && m.player1Id !== m.player2Id && (m.player1Id === p.userId || m.player2Id === p.userId));
-      const byeWins = matches.filter((m) => m.player1Id === m.player2Id && m.isWalkover && m.winnerId === p.userId && m.status === "FINISHED").length;
       const wins = real.filter((m) => m.winnerId === p.userId).length;
       const losses = real.filter((m) => m.winnerId && m.winnerId !== p.userId).length;
-      const expectedTotal = tournament.format === "ROUND_ROBIN" ? wins + byeWins : null;
+      // Suíço points count the Swiss rounds only (knockout wins excluded).
+      const expectedTotal = tournament.format === "ROUND_ROBIN"
+        ? computeSwissStandings([p.userId], matches, swissRounds)[0]?.swissPoints ?? 0
+        : null;
       if (p.wins !== wins || p.losses !== losses || (expectedTotal !== null && p.totalPoints !== expectedTotal)) stale++;
     }
     if (stale) {

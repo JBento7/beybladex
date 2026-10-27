@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import QuickTournamentBanner from "@/components/QuickTournamentBanner";
+import { getLeagueStats } from "@/lib/leagueStats";
 
 export default async function LandingPage() {
   const session = await getServerSession(authOptions);
@@ -11,81 +11,126 @@ export default async function LandingPage() {
     if (/^arena\d+@/i.test(session.user.email ?? "")) redirect("/arena");
     redirect("/dashboard");
   }
+  const stats = await getLeagueStats("lbl");
   return (
     <div className="min-h-screen bg-[#0d0d0d]">
-      <nav className="border-b border-[#2a2a2a] bg-[#1a1a1a]/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16 md:h-[100px]">
+      <nav aria-label="Principal" className="border-b border-[#2a2a2a] bg-[#1a1a1a]/80 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16 md:h-[90px]">
           <Link href="/">
-            <img src="/lblnovo.png" alt="Liga Beyblade Londrina" className="h-14 md:h-[100px] w-auto" />
+            <img src="/lblnovo.png" alt="LBL — página inicial" className="h-12 md:h-[80px] w-auto" />
           </Link>
           <div className="flex items-center gap-4">
             <Link href="/tournaments" className="text-gray-300 hover:text-[#f0a500] transition-colors text-sm font-medium hidden sm:block">
               Torneios
             </Link>
-            <Link href="/upcoming" className="text-gray-300 hover:text-[#f0a500] transition-colors text-sm font-medium hidden sm:block">
+            <Link href="/tournaments?status=proximos" className="text-gray-300 hover:text-[#f0a500] transition-colors text-sm font-medium hidden sm:block">
               Próximos
             </Link>
             <Link href="/quick-tournament" className="text-gray-300 hover:text-[#f0a500] transition-colors text-sm font-medium hidden sm:block">
               Torneio Rápido
             </Link>
-            <Link href="/login" className="text-gray-300 hover:text-[#f0a500] transition-colors text-sm font-medium">
+            <Link href="/login" className="tap inline-flex items-center px-2 text-gray-200 hover:text-[#f0a500] transition-colors text-sm font-medium">
               Entrar
             </Link>
-            <Link href="/register" className="bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors">
-              Começar
+            <Link href="/register" className="tap inline-flex items-center bg-[#c8102e] hover:bg-[#a00d24] text-white text-sm font-bold px-4 rounded-lg transition-colors">
+              Criar conta
             </Link>
           </div>
         </div>
       </nav>
 
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
+      <main>
+      <section className="relative overflow-hidden" aria-labelledby="titulo-principal">
+        <div aria-hidden="true" className="absolute inset-0 pointer-events-none">
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#c8102e]/10 rounded-full blur-3xl" />
           <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-[#f0a500]/8 rounded-full blur-3xl" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#c8102e]/5 rounded-full blur-3xl" />
         </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-32 text-center">
-          <div className="inline-flex items-center gap-2 bg-[#f0a500]/10 border border-[#f0a500]/30 text-[#f0a500] text-sm font-medium px-4 py-1.5 rounded-full mb-8">
-            <span>🏆</span>
-            <span>A liga oficial de Beyblade de Londrina</span>
-          </div>
-
-          <div className="flex justify-center mb-6">
-            <img
-              src="/lblnovo.png"
-              alt="Liga Beyblade Londrina"
-              className="h-40 sm:h-52 lg:h-64 w-auto drop-shadow-2xl"
-            />
-          </div>
-
-          <p className="text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Organize, gerencie e compita em campeonatos de Beyblade. Registre cada
-            Burst, Over e Extreme Finish. Suba no ranking e se torne campeão.
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-16 pb-16 text-center">
+          <img
+            src="/lblnovo.png"
+            alt="Logo da Liga Beyblade Londrina"
+            className="h-24 sm:h-32 lg:h-40 w-auto mx-auto drop-shadow-2xl mb-6"
+          />
+          <h1 id="titulo-principal" className="text-3xl sm:text-4xl lg:text-5xl font-black text-white leading-tight max-w-3xl mx-auto">
+            Campeonatos, resultados e ranking de Beyblade em Londrina
+          </h1>
+          <p className="text-lg text-gray-300 max-w-2xl mx-auto mt-5 leading-relaxed">
+            Encontre os próximos campeonatos e faça sua inscrição, acompanhe as partidas e os resultados de cada
+            evento e veja sua posição no ranking da liga.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/register" className="bg-[#c8102e] hover:bg-[#a00d24] text-white font-bold text-lg px-8 py-3.5 rounded-xl transition-all transform hover:scale-105 shadow-lg shadow-[#c8102e]/25">
-              Começar Agora
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 max-w-3xl mx-auto text-left">
+            <Link
+              href="/tournaments?status=proximos"
+              className="group block rounded-2xl p-6 bg-[#c8102e] hover:bg-[#a00d24] transition-colors shadow-lg shadow-[#c8102e]/25"
+            >
+              <span className="block text-2xl font-black text-white">Quero participar →</span>
+              <span className="block text-white/90 mt-2">
+                Veja os próximos campeonatos e as inscrições abertas.
+              </span>
             </Link>
-            <Link href="/upcoming" className="bg-[#252525] hover:bg-[#303030] text-white font-semibold text-lg px-8 py-3.5 rounded-xl transition-colors border border-[#2a2a2a]">
-              Próximos Campeonatos
+            <Link
+              href="/tournaments/create"
+              className="group block rounded-2xl p-6 bg-[#1a1a1a] hover:bg-[#232323] border border-[#3a3a3a] transition-colors"
+            >
+              <span className="block text-2xl font-black text-white">Quero organizar →</span>
+              <span className="block text-gray-300 mt-2">
+                Com uma conta gratuita você cria e conduz BeyEncontros. Torneios oficiais são publicados pela organização da liga.
+              </span>
             </Link>
           </div>
 
-          <div className="mt-20 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-3xl mx-auto">
-            {[
-              { label: "Formatos de Torneio", value: "3" },
-              { label: "Tipos de Finish", value: "4" },
-              { label: "Rankings em Tempo Real", value: "✓" },
-              { label: "Geração de Chaves", value: "Auto" },
-            ].map((stat) => (
-              <div key={stat.label} className="bg-[#1a1a1a]/50 border border-[#2a2a2a] rounded-xl p-4">
-                <div className="text-3xl font-black text-[#f0a500] mb-1">{stat.value}</div>
-                <div className="text-sm text-gray-500">{stat.label}</div>
-              </div>
-            ))}
+          <div className="mt-4 max-w-3xl mx-auto rounded-2xl border border-[#f0a500]/40 bg-[#f0a500]/5 p-5 text-left sm:flex sm:items-center sm:justify-between sm:gap-6">
+            <div>
+              <p className="font-bold text-white">Sem cadastro: torneio rápido</p>
+              <p className="text-sm text-gray-300 mt-1">
+                Monte uma chave na hora para jogar com amigos. Fica salvo só neste aparelho e não conta para o ranking.
+                Torneios criados com conta ficam no site, com inscrições, juízes, resultados e estatísticas.
+              </p>
+            </div>
+            <Link
+              href="/quick-tournament"
+              className="tap mt-4 sm:mt-0 shrink-0 inline-flex items-center justify-center px-5 rounded-xl bg-[#f0a500] hover:bg-[#d4940a] text-black font-black"
+            >
+              Criar torneio rápido
+            </Link>
           </div>
+
+          {stats && (stats.finishedEvents > 0 || stats.lastChampion) && (
+            <section aria-labelledby="atividade-titulo" className="mt-14 max-w-3xl mx-auto">
+              <h2 id="atividade-titulo" className="text-sm font-bold uppercase tracking-wider text-gray-300 mb-4">
+                Atividade da LBL
+              </h2>
+              <dl className="grid gap-4 sm:grid-cols-3 text-left">
+                {stats.finishedEvents > 0 && (
+                  <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4">
+                    <dt className="text-sm text-gray-300">Torneios concluídos</dt>
+                    <dd className="text-3xl font-black text-[#f0a500] mt-1">{stats.finishedEvents}</dd>
+                    <dd className="text-xs text-gray-400 mt-1">Eventos com sede na LBL (oficiais e BeyEncontros), sem os de teste.</dd>
+                  </div>
+                )}
+                {stats.players > 0 && (
+                  <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4">
+                    <dt className="text-sm text-gray-300">Bladers que já competiram</dt>
+                    <dd className="text-3xl font-black text-[#f0a500] mt-1">{stats.players}</dd>
+                    <dd className="text-xs text-gray-400 mt-1">Pessoas diferentes com conta que jogaram esses torneios (convidados não entram).</dd>
+                  </div>
+                )}
+                {stats.lastChampion && (
+                  <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-4">
+                    <dt className="text-sm text-gray-300">Último campeão oficial</dt>
+                    <dd className="text-xl font-black text-white mt-1 break-anywhere">{stats.lastChampion.name}</dd>
+                    <dd className="text-xs text-gray-400 mt-1 break-anywhere">
+                      <Link href={`/tournaments/${stats.lastChampion.tournamentId}`} className="underline underline-offset-2 hover:text-white">
+                        {stats.lastChampion.tournament}
+                      </Link>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </section>
+          )}
         </div>
       </section>
 
@@ -148,11 +193,11 @@ export default async function LandingPage() {
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {[
-            { icon: "🏆", title: "Rankings ao Vivo", desc: "Classificações em tempo real atualizadas instantaneamente conforme os placares são registrados." },
+            { icon: "🏆", title: "Classificação durante o evento", desc: "A página do torneio se atualiza sozinha a cada resultado registrado pelos juízes." },
             { icon: "📊", title: "Análise de Partidas", desc: "Detalhamento completo dos tipos de finish, taxa de vitórias e evolução de desempenho." },
             { icon: "🎯", title: "Chaves Automáticas", desc: "Chaves e cronogramas gerados automaticamente ao iniciar o torneio." },
-            { icon: "👑", title: "Ferramentas do Organizador", desc: "Qualquer usuário pode criar e gerenciar seus próprios torneios." },
-            { icon: "📱", title: "Design Responsivo", desc: "Acompanhe batalhas e classificações de qualquer dispositivo, em qualquer lugar." },
+            { icon: "👑", title: "Ferramentas do Organizador", desc: "Qualquer pessoa com conta cria e conduz BeyEncontros; a liga publica os torneios oficiais." },
+            { icon: "📱", title: "Feito para o celular", desc: "Inscrição, placar do juiz e resultados funcionam no celular." },
             { icon: "⚙️", title: "Registro de Beyblades", desc: "Registre suas beyblades e acompanhe as estatísticas de cada uma." },
           ].map((feat) => (
             <div key={feat.title} className="flex gap-4 p-6 bg-[#1a1a1a]/50 border border-[#2a2a2a] rounded-2xl">
@@ -166,21 +211,11 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      <QuickTournamentBanner />
-
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 text-center">
-        <div className="bg-gradient-to-br from-[#c8102e]/10 to-[#f0a500]/5 border border-[#c8102e]/20 rounded-3xl p-12">
-          <h2 className="text-4xl font-black text-white mb-4">Pronto para se Tornar Campeão?</h2>
-          <p className="text-gray-400 text-lg mb-8">Junte-se à Liga Beyblade Londrina hoje mesmo.</p>
-          <Link href="/register" className="inline-block bg-[#c8102e] hover:bg-[#a00d24] text-white font-black text-xl px-10 py-4 rounded-xl transition-all transform hover:scale-105 shadow-2xl shadow-[#c8102e]/30">
-            <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain inline-block mr-2" />LET IT RIP!
-          </Link>
-        </div>
-      </section>
+      </main>
 
       <footer className="border-t border-[#2a2a2a] py-8 text-center text-gray-500 text-sm">
         <p>© {new Date().getFullYear()} LBL — Liga Beyblade Londrina</p>
-        <p className="mt-1 text-xs text-gray-600">A liga oficial de Beyblade de Londrina</p>
+        <p className="mt-1 text-xs text-gray-400">A liga oficial de Beyblade de Londrina</p>
       </footer>
     </div>
   );

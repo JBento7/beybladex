@@ -6,10 +6,13 @@ export default function ShareButton({
   url,
   title,
   className = "",
+  showLabel = false,
 }: {
   url: string;
   title?: string;
   className?: string;
+  /** Show the word "Compartilhar" next to the icon (more discoverable). */
+  showLabel?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -38,15 +41,18 @@ export default function ShareButton({
 
   return (
     <button
+      type="button"
       onClick={handleShare}
       title="Compartilhar"
       aria-label="Compartilhar"
       className={`inline-flex items-center justify-center rounded-lg bg-[#252525] hover:bg-[#333] text-gray-300 hover:text-white transition-colors ${className}`}
     >
+      <span aria-live="polite" className="sr-only">{copied ? "Link copiado" : ""}</span>
       {copied ? (
         <span className="text-xs px-2">Copiado!</span>
       ) : (
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <>
+        <svg aria-hidden="true" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -54,6 +60,8 @@ export default function ShareButton({
             d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
           />
         </svg>
+        {showLabel && <span className="ml-2 text-sm font-bold">Compartilhar</span>}
+        </>
       )}
     </button>
   );

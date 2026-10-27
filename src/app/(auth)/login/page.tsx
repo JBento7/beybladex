@@ -5,12 +5,15 @@ import { isJudgeAccount } from "@/lib/judgeAccount";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { safeCallbackUrl } from "@/lib/safeRedirect";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered");
   const verified = searchParams.get("verified");
+  // Where the user was going (e.g. "Quero organizar" → /tournaments/create).
+  const callbackUrl = safeCallbackUrl(searchParams.get("callbackUrl"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,7 +36,7 @@ function LoginForm() {
       if (result?.error) {
         setError("E-mail ou senha inválidos.");
       } else {
-        router.push(isJudgeAccount(email) ? "/juiz" : "/dashboard");
+        router.push(isJudgeAccount(email) ? "/juiz" : callbackUrl ?? "/dashboard");
         router.refresh();
       }
     } catch {
@@ -51,7 +54,13 @@ function LoginForm() {
 
       <div className="w-full max-w-md bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 shadow-2xl">
         <h1 className="text-2xl font-bold text-white mb-2 text-center">Bem-vindo de volta</h1>
-        <p className="text-gray-400 text-center mb-6 text-sm">Entre na sua conta do campeonato</p>
+        <p className="text-gray-300 text-center mb-6 text-sm">
+          {callbackUrl?.startsWith("/tournaments/create")
+            ? "Entre para criar o seu evento. Depois do login você volta direto para a criação."
+            : callbackUrl
+              ? "Entre para continuar de onde parou."
+              : "Entre na sua conta do campeonato"}
+        </p>
 
         {registered && (
           <div aria-live="polite" className="bg-green-900/30 border border-green-700 text-green-400 text-sm px-4 py-3 rounded-lg mb-4">
@@ -90,7 +99,7 @@ function LoginForm() {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label htmlFor="password" className="block text-sm font-medium text-gray-300">Senha</label>
-              <Link href="/forgot-password" className="text-xs text-gray-500 hover:text-gray-400 transition-colors">
+              <Link href="/forgot-password" className="text-sm text-gray-300 underline-offset-2 hover:underline hover:text-white transition-colors py-2">
                 Esqueceu sua senha?
               </Link>
             </div>
@@ -109,7 +118,7 @@ function LoginForm() {
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-500 hover:text-[#f0a500] transition-colors"
+                className="absolute inset-y-0 right-0 flex items-center px-3 min-w-[44px] justify-center text-sm font-semibold text-gray-300 hover:text-[#f0a500] transition-colors"
               >
                 {showPassword ? "Ocultar" : "Mostrar"}
               </button>
@@ -127,7 +136,7 @@ function LoginForm() {
 
         <p className="text-center text-sm text-gray-400 mt-6">
           Não tem uma conta?{" "}
-          <Link href="/register" className="text-[#f0a500] hover:text-[#d4940a] font-medium">
+          <Link href={callbackUrl ? `/register?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/register"} className="text-[#f0a500] hover:text-[#d4940a] font-medium underline-offset-2 hover:underline">
             Cadastre-se aqui
           </Link>
         </p>

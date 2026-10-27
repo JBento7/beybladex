@@ -26,7 +26,7 @@ export default function Navbar() {
       isActive(href) ? "text-[var(--accent)]" : "text-gray-300 hover:text-[var(--accent)]"
     }`;
   const mobileLinkClass = (href: string) =>
-    `block px-3 py-2 transition-colors ${
+    `block px-3 py-3 transition-colors ${
       isActive(href) ? "text-[var(--accent)]" : "text-gray-300 hover:text-[var(--accent)]"
     }`;
 
@@ -62,7 +62,7 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="bg-[#1a1a1a] border-b border-[#2a2a2a] sticky top-0 z-50">
+    <nav aria-label="Principal" className="bg-[#1a1a1a] border-b border-[#2a2a2a] sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 md:h-[100px]">
           {/* Logo */}
@@ -71,7 +71,7 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop nav */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden lg:flex items-center gap-6">
             <Link href="/tournaments" className={linkClass("/tournaments")}>
               Torneios
             </Link>
@@ -105,7 +105,7 @@ export default function Navbar() {
           </div>
 
           {/* Auth buttons */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3">
             {session ? (
               <div className="flex items-center gap-3">
                 <Link href="/profile" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -154,12 +154,13 @@ export default function Navbar() {
 
           {/* Mobile menu button */}
           <button
-            className="md:hidden text-gray-300 hover:text-[var(--accent)] p-2"
+            className="tap lg:hidden inline-flex items-center justify-center text-gray-200 hover:text-[var(--accent)] p-2"
             onClick={() => setMenuOpen(!menuOpen)}
+            aria-controls="menu-movel"
             aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
             aria-expanded={menuOpen}
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden="true" className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               {menuOpen ? (
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               ) : (
@@ -171,7 +172,7 @@ export default function Navbar() {
 
         {/* Mobile menu */}
         {menuOpen && (
-          <div className="md:hidden pb-4 pt-2 border-t border-[#2a2a2a] space-y-2">
+          <div id="menu-movel" className="lg:hidden pb-4 pt-2 border-t border-[#2a2a2a] space-y-2">
             <Link href="/tournaments" className={mobileLinkClass("/tournaments")} onClick={() => setMenuOpen(false)}>Torneios</Link>
             <Link href="/quick-match" className={mobileLinkClass("/quick-match")} onClick={() => setMenuOpen(false)}>Partidas Rápidas</Link>
             <Link href="/community" className={mobileLinkClass("/community")} onClick={() => setMenuOpen(false)}>Comunidade</Link>

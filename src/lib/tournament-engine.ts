@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { scheduleByArena } from "./arena-schedule";
+import { computeSwissStandings, computeSwissFinalPlacement } from "./standings";
 
 // Returns the userIds of every registered judge for a tournament. Used by the
 // match schedulers so judges never get a parallel match while arbitrating.
@@ -162,6 +163,7 @@ export async function finalizeTournamentRanking(tournamentId: string) {
         player1Id: true,
         player2Id: true,
         isThirdPlace: true,
+        isWalkover: true,
         points: { select: { userId: true, points: true } },
       },
     }),
@@ -199,39 +201,18 @@ export async function finalizeTournamentRanking(tournamentId: string) {
   // Who actually reached the knockout bracket (empty when there is no knockout).
   const inPlayoff = new Set<string>();
   let ranked: typeof participants;
-  if (isSwissPlayoff) {
-    playoffMatches.forEach((m) => {
-      inPlayoff.add(m.player1Id);
-      inPlayoff.add(m.player2Id);
-    });
-    const elimRound = new Map<string, number>();
-    for (const m of playoffMatches) {
-      if (!m.winnerId || m.isThirdPlace) continue;
-      const loserId = m.winnerId === m.player1Id ? m.player2Id : m.player1Id;
-      elimRound.set(loserId, m.round);
-    }
-    const thirdPlace = playoffMatches.find((m) => m.isThirdPlace && m.winnerId);
-    const byStandings = (a: (typeof participants)[number], b: (typeof participants)[number]) => {
-      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-      const bp = (scored.get(b.userId!) ?? 0) - (scored.get(a.userId!) ?? 0);
-      if (bp !== 0) return bp;
-      return (diff.get(b.userId!) ?? 0) - (diff.get(a.userId!) ?? 0);
-    };
-    ranked = [...participants].sort((a, b) => {
-      const aQ = inPlayoff.has(a.userId!);
-      const bQ = inPlayoff.has(b.userId!);
-      if (aQ !== bQ) return aQ ? -1 : 1; // qualifiers always rank above non-qualifiers
-      if (aQ) {
-        const aE = elimRound.get(a.userId!) ?? Infinity; // champion never lost → best
-        const bE = elimRound.get(b.userId!) ?? Infinity;
-        if (bE !== aE) return bE - aE;
-        if (thirdPlace) {
-          if (thirdPlace.winnerId === a.userId && thirdPlace.winnerId !== b.userId) return -1;
-          if (thirdPlace.winnerId === b.userId && thirdPlace.winnerId !== a.userId) return 1;
-        }
-      }
-      return byStandings(a, b);
-    });
+  if (tournament?.format === "ROUND_ROBIN") {
+    // Suíço (with or without a knockout): shared with the page (lib/standings).
+    // Qualifiers rank by how far they went in the bracket; ties inside the
+    // bracket and everyone outside it fall back to the Swiss standings, which
+    // count ONLY the Swiss rounds (knockout points no longer leak into them).
+    playoffMatches.forEach((m) => { inPlayoff.add(m.player1Id); inPlayoff.add(m.player2Id); });
+    const byUser = new Map(participants.map((p) => [p.userId, p]));
+    ranked = computeSwissFinalPlacement(
+      participants.map((p) => p.userId!).filter(Boolean),
+      allMatchRows,
+      swissRounds
+    ).map((x) => byUser.get(x.userId)!).filter(Boolean);
   } else if (tournament?.format === "SINGLE_ELIMINATION") {
     // The round each player LOST in; the champion never loses (treated as ∞).
     // A later elimination round means a better placement.
@@ -317,27 +298,18 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
   // standings table and the final ranking — totalPoints alone leaves ties to
   // whatever order Postgres happens to return, so the wrong player could take
   // the last spot and seeds could be scrambled among equal records.
+  // Shared with the page table (lib/standings), counted over the Swiss rounds.
   const decided = await prisma.match.findMany({
     where: { tournamentId, status: "FINISHED" },
-    select: { player1Id: true, player2Id: true, points: { select: { userId: true, points: true } } },
+    select: { round: true, status: true, isThirdPlace: true, isWalkover: true, winnerId: true, player1Id: true, player2Id: true, points: { select: { userId: true, points: true } } },
   });
-  const scored = new Map<string, number>();
-  const diff = new Map<string, number>();
-  for (const m of decided) {
-    if (m.player1Id === m.player2Id) continue; // byes score nothing
-    const p1 = m.points.filter((p) => p.userId === m.player1Id).reduce((s, p) => s + p.points, 0);
-    const p2 = m.points.filter((p) => p.userId === m.player2Id).reduce((s, p) => s + p.points, 0);
-    scored.set(m.player1Id, (scored.get(m.player1Id) ?? 0) + p1);
-    scored.set(m.player2Id, (scored.get(m.player2Id) ?? 0) + p2);
-    diff.set(m.player1Id, (diff.get(m.player1Id) ?? 0) + (p1 - p2));
-    diff.set(m.player2Id, (diff.get(m.player2Id) ?? 0) + (p2 - p1));
-  }
-  const seeded = [...participants].sort((a, b) => {
-    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-    const bp = (scored.get(b.userId!) ?? 0) - (scored.get(a.userId!) ?? 0);
-    if (bp !== 0) return bp;
-    return (diff.get(b.userId!) ?? 0) - (diff.get(a.userId!) ?? 0);
-  });
+  const swissRows = computeSwissStandings(
+    participants.map((p) => p.userId!).filter(Boolean),
+    decided,
+    startRound - 1
+  );
+  const byUser = new Map(participants.map((p) => [p.userId, p]));
+  const seeded = swissRows.map((r) => byUser.get(r.userId)!).filter(Boolean);
   const top = seeded.slice(0, qualifiers);
   if (top.length < 2) return;
 
@@ -1020,7 +992,7 @@ export async function recalculateStandings(
         status: "FINISHED",
         OR: [{ player1Id: userId }, { player2Id: userId }],
       },
-      select: { winnerId: true, player1Id: true, player2Id: true, isWalkover: true },
+      select: { round: true, status: true, isThirdPlace: true, winnerId: true, player1Id: true, player2Id: true, isWalkover: true },
     }),
   ]);
 
@@ -1033,12 +1005,18 @@ export async function recalculateStandings(
   // feed tiers, win-rate and the global ranking, so a bye must NOT inflate them.
   const wins = realMatches.filter((m) => m.winnerId === userId).length;
   const losses = realMatches.filter((m) => m.winnerId && m.winnerId !== userId).length;
-  // Round Robin (Suíço) score: 1 point per win PLUS the bye, so a player who sat
-  // out an odd round isn't penalized in the standings (standard Swiss).
-  // Other formats keep points based on finish-type scoring.
-  const totalPoints = tournament?.format === "ROUND_ROBIN"
-    ? wins + byeWins
-    : points.reduce((sum, p) => sum + p.points, 0);
+  void byeWins;
+  // Suíço score: 1 point per win PLUS the bye, so a player who sat out an odd
+  // round isn't penalized (standard Swiss). Counted over the SWISS rounds only:
+  // knockout wins (semis, final, 3rd place) used to be added on top, so a 4-round
+  // Swiss could show a player with 5 "wins". Other formats keep finish points.
+  let totalPoints: number;
+  if (tournament?.format === "ROUND_ROBIN") {
+    const swissRounds = await getSwissRounds(tournamentId);
+    totalPoints = computeSwissStandings([userId], allMatches, swissRounds)[0]?.swissPoints ?? 0;
+  } else {
+    totalPoints = points.reduce((sum, p) => sum + p.points, 0);
+  }
 
   await prisma.tournamentParticipant.update({
     where: { id: participant.id },

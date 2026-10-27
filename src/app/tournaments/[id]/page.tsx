@@ -21,6 +21,11 @@ import AdminMatchEditor from "./AdminMatchEditor";
 import ShareButton from "@/components/ShareButton";
 import AutoRefresh from "@/components/AutoRefresh";
 import { isJudgeAccount } from "@/lib/judgeAccount";
+import { communityOf } from "@/lib/communities";
+import { computeSwissStandings, computeSwissFinalPlacement, compareSwissRows, decidedPodium, type StandingsMatch } from "@/lib/standings";
+import RichText, { isLongText } from "@/components/RichText";
+import ExpandableText from "@/components/ExpandableText";
+import RetryButton from "@/components/RetryButton";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 import type { Metadata } from "next";
 
@@ -46,11 +51,12 @@ const STATUS_LABELS: Record<TournamentStatus, string> = {
   FINISHED: "Finalizado",
 };
 
+// Status chips: text + icon carry the meaning; color is only a reinforcement.
 const STATUS_STYLES: Record<TournamentStatus, string> = {
-  DRAFT: "bg-gray-700 text-gray-400",
-  REGISTRATION: "bg-amber-500/20 text-amber-400",
-  IN_PROGRESS: "bg-green-500/20 text-green-400",
-  FINISHED: "bg-gray-700 text-gray-500",
+  DRAFT: "bg-gray-700 text-gray-100",
+  REGISTRATION: "bg-amber-500/20 text-amber-200 border border-amber-500/40",
+  IN_PROGRESS: "bg-green-500/20 text-green-200 border border-green-500/40",
+  FINISHED: "bg-gray-700 text-gray-100",
 };
 
 type MatchWithRelations = {
@@ -94,6 +100,25 @@ function playerLabel(p: { name: string; bladerName?: string | null }, admin = fa
     : blader;
 }
 
+type MatchCardProps = {
+  match: MatchWithRelations;
+  isOrganizer: boolean;
+  isAdmin?: boolean;
+  deckType?: string;
+  openJudging?: boolean;
+  tournamentId: string;
+  participantBeyblades: ParticipantBeyblades[];
+  arenaCount?: number;
+  currentUserId?: string;
+  /** Round name shown on the card (e.g. "Suíço · Rodada 2", "Semifinal"). */
+  roundLabel?: string;
+  /** What a bye means in this format (Swiss point vs. advancing). */
+  byeText?: string;
+};
+
+// One match. Works in a single phone-width column: names wrap instead of being
+// cut, the score never moves, and the winner is marked with an icon + text
+// (not only color). Shows round, arena and status on every card.
 function MatchCard({
   match,
   isOrganizer,
@@ -104,234 +129,178 @@ function MatchCard({
   currentUserId,
   deckType = "SOLO",
   openJudging = false,
-}: {
-  match: MatchWithRelations;
-  isOrganizer: boolean;
-  isAdmin?: boolean;
-  deckType?: string;
-  openJudging?: boolean;
-  tournamentId: string;
-  participantBeyblades: ParticipantBeyblades[];
-  arenaCount?: number;
-  currentUserId?: string;
-}) {
+  roundLabel,
+  byeText = "Avança sem jogar (bye).",
+}: MatchCardProps) {
   // When no judges are assigned (openJudging), any logged-in user can score.
   // Otherwise: organizers/admins or the match's assigned judge.
   const canScore = openJudging
     ? !!currentUserId
     : isOrganizer || (!!currentUserId && match.judge?.id === currentUserId);
   const isFinished = match.status === "FINISHED";
-  const p1Points = match.points
-    .filter((p) => p.userId === match.player1.id)
-    .reduce((s, p) => s + p.points, 0);
-  const p2Points = match.points
-    .filter((p) => p.userId === match.player2.id)
-    .reduce((s, p) => s + p.points, 0);
+  const p1Points = match.points.filter((p) => p.userId === match.player1.id).reduce((s, p) => s + p.points, 0);
+  const p2Points = match.points.filter((p) => p.userId === match.player2.id).reduce((s, p) => s + p.points, 0);
 
-  // Bye: a self-match (player1 === player2) where the player advances without
-  // playing because the bracket field wasn't a power of two.
+  const meta = (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-400">
+      {roundLabel && <span className="font-semibold text-gray-300">{roundLabel}</span>}
+      {match.arena != null && arenaCount > 1 && (
+        <span className="px-2 py-0.5 rounded-full font-bold bg-[#f0a500]/10 text-amber-200 border border-[#f0a500]/30">Arena {match.arena}</span>
+      )}
+    </div>
+  );
+
+  // Bye: a self-match (player1 === player2) — the player has no opponent this round.
   if (match.player1.id === match.player2.id) {
     return (
-      <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-dashed border-gray-700 bg-gray-800/40">
-        <span className="text-sm font-semibold text-amber-400 truncate">
-          {playerLabel(match.player1, isAdmin)}
-        </span>
-        <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-700 text-gray-400 flex-shrink-0">
-          Passou (bye)
-        </span>
+      <div className="p-3 rounded-lg border border-dashed border-gray-600 bg-gray-800/40">
+        {meta}
+        <div className="flex items-start justify-between gap-3 mt-2">
+          <span className="text-sm font-semibold text-white break-anywhere min-w-0">{playerLabel(match.player1, isAdmin)}</span>
+          <span className="shrink-0 text-xs px-2 py-1 rounded-full font-bold bg-gray-700 text-gray-100">Bye</span>
+        </div>
+        <p className="text-xs text-gray-400 mt-1">{byeText}</p>
       </div>
     );
   }
 
-  return (
-    <div
-      className={`flex flex-col gap-3 p-4 rounded-lg border ${
-        isFinished
-          ? "bg-gray-800 border-gray-700"
-          : "bg-gray-800/50 border-gray-700/50"
-      }`}
-    >
-      <div className="min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <span
-            className={`text-sm font-semibold truncate ${
-              match.winner?.id === match.player1.id
-                ? "text-amber-400"
-                : isFinished
-                ? "text-gray-500"
-                : "text-white"
-            }`}
-          >
-            {playerLabel(match.player1, isAdmin)}
-          </span>
-          {isFinished && (
-            <span className="text-sm font-bold text-amber-400 flex-shrink-0">
-              {match.isWalkover ? (match.winner?.id === match.player1.id ? "" : "W.O.") : p1Points}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center justify-between gap-2 mt-1">
-          <span
-            className={`text-sm font-semibold truncate ${
-              match.winner?.id === match.player2.id
-                ? "text-amber-400"
-                : isFinished
-                ? "text-gray-500"
-                : "text-white"
-            }`}
-          >
-            {playerLabel(match.player2, isAdmin)}
-          </span>
-          {isFinished && (
-            <span className="text-sm font-bold text-amber-400 flex-shrink-0">
-              {match.isWalkover ? (match.winner?.id === match.player2.id ? "" : "W.O.") : p2Points}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap">
-        {match.arena != null && arenaCount > 1 && (
-          <span className="text-xs px-2 py-1 rounded-full font-semibold bg-[#f0a500]/10 text-[#f0a500] border border-[#f0a500]/20">
-            Arena {match.arena}
-          </span>
-        )}
-        {match.judge && (
-          <span className="text-xs px-2 py-1 rounded-full font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20">
-            ⚖️ {playerLabel(match.judge, isAdmin)}
-          </span>
-        )}
-        {match.isWalkover && (
-          <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-500/20 text-red-400">
-            W.O.
-          </span>
-        )}
-        <span
-          className={`text-xs px-2 py-1 rounded-full font-medium ${
-            match.status === "FINISHED"
-              ? "bg-gray-700 text-gray-400"
-              : match.status === "IN_PROGRESS"
-              ? "bg-green-500/20 text-green-400"
-              : "bg-gray-700/50 text-gray-500"
-          }`}
-        >
-          {match.status === "FINISHED"
-            ? "Encerrada"
-            : match.status === "IN_PROGRESS"
-            ? "Ao Vivo"
-            : "Pendente"}
+  const row = (player: MatchWithRelations["player1"], pts: number) => {
+    const won = isFinished && match.winner?.id === player.id;
+    const lostByWo = isFinished && match.isWalkover && !won;
+    return (
+      <div className="flex items-start justify-between gap-3">
+        <span className={`text-sm font-semibold break-anywhere min-w-0 ${won ? "text-amber-300" : isFinished ? "text-gray-400" : "text-white"}`}>
+          {won && <span aria-hidden="true">🏆 </span>}
+          {playerLabel(player, isAdmin)}
+          {won && <span className="sr-only"> — vencedor</span>}
         </span>
-        {canScore && !isFinished && (
-          <>
-            <ScoreModal
-              matchId={match.id}
-              player1={match.player1}
-              player2={match.player2}
-              tournamentId={tournamentId}
-              player1Beyblades={participantBeyblades.find(p => p.userId === match.player1.id)?.beyblades ?? []}
-              player2Beyblades={participantBeyblades.find(p => p.userId === match.player2.id)?.beyblades ?? []}
-              deckType={deckType}
-            />
-            <WOButton matchId={match.id} player1={match.player1} player2={match.player2} />
-          </>
+        {isFinished && (
+          <span className={`shrink-0 text-sm font-black tabular-nums ${won ? "text-amber-300" : "text-gray-400"}`}>
+            {match.isWalkover ? (lostByWo ? "W.O." : "Venceu") : pts}
+          </span>
         )}
-        {/* Player picks their own deck order on their phone (3-on-3 only) */}
-        {deckType === "THREE_ON_THREE" && !isFinished && currentUserId &&
-          (currentUserId === match.player1.id || currentUserId === match.player2.id) && (
-            <PlayerDeckOrder
-              matchId={match.id}
-              userId={currentUserId}
-              beyblades={participantBeyblades.find((p) => p.userId === currentUserId)?.beyblades ?? []}
-              color={currentUserId === match.player1.id ? "#f0a500" : "#c8102e"}
-            />
-          )}
       </div>
+    );
+  };
+
+  const status = match.status === "FINISHED"
+    ? { text: "Encerrada", cls: "bg-gray-700 text-gray-100" }
+    : match.status === "IN_PROGRESS"
+      ? { text: "● Ao vivo", cls: "bg-green-500/20 text-green-200 border border-green-500/40" }
+      : { text: "Pendente", cls: "bg-gray-800 text-gray-200 border border-gray-600" };
+
+  return (
+    <div className={`flex flex-col gap-2 p-3 sm:p-4 rounded-lg border ${isFinished ? "bg-gray-800 border-gray-700" : "bg-gray-800/50 border-gray-700/70"}`}>
+      <div className="flex items-start justify-between gap-2">
+        {meta}
+        <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-bold ${status.cls}`}>{status.text}</span>
+      </div>
+      <div className="space-y-1">
+        {row(match.player1, p1Points)}
+        {row(match.player2, p2Points)}
+      </div>
+      {(match.judge || match.isWalkover || (canScore && !isFinished) ||
+        (deckType === "THREE_ON_THREE" && !isFinished && currentUserId && (currentUserId === match.player1.id || currentUserId === match.player2.id))) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {match.judge && (
+            <span className="text-xs px-2 py-1 rounded-full font-semibold bg-purple-500/10 text-purple-200 border border-purple-500/30">
+              ⚖️ Juiz: {playerLabel(match.judge, isAdmin)}
+            </span>
+          )}
+          {match.isWalkover && (
+            <span className="text-xs px-2 py-1 rounded-full font-bold bg-red-500/20 text-red-200">Vitória por W.O.</span>
+          )}
+          {canScore && !isFinished && (
+            <>
+              <ScoreModal
+                matchId={match.id}
+                player1={match.player1}
+                player2={match.player2}
+                tournamentId={tournamentId}
+                player1Beyblades={participantBeyblades.find(p => p.userId === match.player1.id)?.beyblades ?? []}
+                player2Beyblades={participantBeyblades.find(p => p.userId === match.player2.id)?.beyblades ?? []}
+                deckType={deckType}
+              />
+              <WOButton matchId={match.id} player1={match.player1} player2={match.player2} />
+            </>
+          )}
+          {/* Player picks their own deck order on their phone (3-on-3 only) */}
+          {deckType === "THREE_ON_THREE" && !isFinished && currentUserId &&
+            (currentUserId === match.player1.id || currentUserId === match.player2.id) && (
+              <PlayerDeckOrder
+                matchId={match.id}
+                userId={currentUserId}
+                beyblades={participantBeyblades.find((p) => p.userId === currentUserId)?.beyblades ?? []}
+                color={currentUserId === match.player1.id ? "#f0a500" : "#c8102e"}
+              />
+            )}
+        </div>
+      )}
     </div>
   );
 }
 
+// Graphic bracket — an alternative view; the caller puts it in its own
+// horizontally-scrollable box so it never widens the page.
 function BracketView({
   rounds,
-  isAdmin = false,
   totalRounds,
-  isOrganizer,
-  tournamentId,
-  participantBeyblades,
-  arenaCount,
-  currentUserId,
-  deckType = "SOLO",
-  openJudging = false,
-}: {
+  labelOf,
+  ...cardProps
+}: Omit<MatchCardProps, "match" | "roundLabel"> & {
   rounds: [number, MatchWithRelations[]][];
   totalRounds: number;
-  isOrganizer: boolean;
-  isAdmin?: boolean;
-  tournamentId: string;
-  participantBeyblades: ParticipantBeyblades[];
-  deckType?: string;
-  openJudging?: boolean;
-  arenaCount: number;
-  currentUserId?: string;
+  labelOf?: (round: number) => string;
 }) {
   const CARD_WIDTH = 240;
   const GAP = 32;
-  const BASE_SLOT = 176;
+  const BASE_SLOT = 190;
+  const label = (round: number) => labelOf ? labelOf(round) : getRoundName(round, totalRounds, "SINGLE_ELIMINATION");
 
   return (
-    <div className="overflow-x-auto pb-2">
-      <div className="flex" style={{ width: rounds.length * (CARD_WIDTH + GAP) }}>
-        {rounds.map(([round, matches], r) => {
-          // Cap the slot-height growth so deep brackets don't create huge empty
-          // vertical gaps (e.g. a 16-player final reserving 1400px of space).
-          const slotHeight = BASE_SLOT * Math.pow(2, Math.min(r, 2));
-          return (
-            <div key={round} className="flex-shrink-0" style={{ width: CARD_WIDTH + GAP }}>
-              <h3 className="text-center text-sm font-bold text-gray-400 mb-3">
-                {getRoundName(round, totalRounds, "SINGLE_ELIMINATION")}
-              </h3>
-              {matches.map((match, i) => (
-                <div key={match.id} className="relative flex items-center" style={{ height: slotHeight }}>
-                  <div style={{ width: CARD_WIDTH }}>
-                    <MatchCard
-                      match={match}
-                      isOrganizer={isOrganizer}
-                      isAdmin={isAdmin}
-                      tournamentId={tournamentId}
-                      participantBeyblades={participantBeyblades}
-                      arenaCount={arenaCount}
-                      currentUserId={currentUserId}
-                      deckType={deckType}
-                      openJudging={openJudging}
-                    />
-                  </div>
-                  {r < rounds.length - 1 && (
-                    <div
-                      className="absolute border-gray-700"
-                      style={{
-                        left: CARD_WIDTH,
-                        width: GAP,
-                        height: slotHeight / 2,
-                        top: i % 2 === 0 ? "50%" : 0,
-                        borderRightWidth: 2,
-                        borderTopWidth: i % 2 === 1 ? 2 : 0,
-                        borderBottomWidth: i % 2 === 0 ? 2 : 0,
-                      }}
-                    />
-                  )}
+    <div className="flex" style={{ width: rounds.length * (CARD_WIDTH + GAP) }}>
+      {rounds.map(([round, matches], r) => {
+        // Cap the slot-height growth so deep brackets don't create huge empty
+        // vertical gaps (e.g. a 16-player final reserving 1400px of space).
+        const slotHeight = BASE_SLOT * Math.pow(2, Math.min(r, 2));
+        return (
+          <div key={round} className="flex-shrink-0" style={{ width: CARD_WIDTH + GAP }}>
+            <h4 className="text-center text-sm font-bold text-gray-300 mb-3">{label(round)}</h4>
+            {matches.map((match, i) => (
+              <div key={match.id} className="relative flex items-center" style={{ height: slotHeight }}>
+                <div style={{ width: CARD_WIDTH }}>
+                  <MatchCard match={match} roundLabel={label(round)} {...cardProps} />
                 </div>
-              ))}
-            </div>
-          );
-        })}
-      </div>
+                {r < rounds.length - 1 && (
+                  <div
+                    aria-hidden="true"
+                    className="absolute border-gray-600"
+                    style={{
+                      left: CARD_WIDTH,
+                      width: GAP,
+                      height: slotHeight / 2,
+                      top: i % 2 === 0 ? "50%" : 0,
+                      borderRightWidth: 2,
+                      borderTopWidth: i % 2 === 1 ? 2 : 0,
+                      borderBottomWidth: i % 2 === 0 ? 2 : 0,
+                    }}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 export default async function TournamentDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { aba?: string };
 }) {
   try {
   const session = await getServerSession(authOptions);
@@ -522,67 +491,42 @@ export default async function TournamentDetailPage({
       ) as string[])
     : [];
 
-  // Standings tiebreakers, computed from finished matches (byes excluded).
-  // battlePointsMap = total battle points scored; diff = points scored − conceded.
-  const battlePointsMap = new Map<string, number>();
-  const diff = new Map<string, number>();
-  for (const m of tournament.matches) {
-    if (m.status !== "FINISHED" || m.player1.id === m.player2.id) continue;
-    const p1Pts = m.points.filter((p) => p.userId === m.player1.id).reduce((s, p) => s + p.points, 0);
-    const p2Pts = m.points.filter((p) => p.userId === m.player2.id).reduce((s, p) => s + p.points, 0);
-    battlePointsMap.set(m.player1.id, (battlePointsMap.get(m.player1.id) ?? 0) + p1Pts);
-    battlePointsMap.set(m.player2.id, (battlePointsMap.get(m.player2.id) ?? 0) + p2Pts);
-    diff.set(m.player1.id, (diff.get(m.player1.id) ?? 0) + (p1Pts - p2Pts));
-    diff.set(m.player2.id, (diff.get(m.player2.id) ?? 0) + (p2Pts - p1Pts));
-  }
+  // ── Phases ────────────────────────────────────────────────────────────────
+  const isSwiss = tournament.format === "ROUND_ROBIN";
+  const approvedParticipants = tournament.participants.filter(
+    (p) => (p as { approved?: boolean }).approved !== false
+  );
+  // Suíço: rounds 1..swissRounds are the Swiss phase, later rounds the knockout.
+  // Use the count frozen on the tournament (set when round 1 was generated).
+  // Recomputing it from today's approved count moved the boundary whenever a
+  // player was approved/removed later, which could file knockout rounds under
+  // the Swiss phase (and their wins into the Swiss table).
+  const swissRounds = isSwiss
+    ? tournament.swissRounds ?? Math.max(1, Math.ceil(Math.log2(Math.max(2, approvedParticipants.length))))
+    : 0;
 
-  // Shared comparator: wins/points → battle points scored → point differential.
-  const pointsCompare = (a: typeof tournament.participants[number], b: typeof tournament.participants[number]) => {
-    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-    const bp = (battlePointsMap.get(b.userId) ?? 0) - (battlePointsMap.get(a.userId) ?? 0);
-    if (bp !== 0) return bp;
-    return (diff.get(b.userId) ?? 0) - (diff.get(a.userId) ?? 0);
+  // Plain match rows for the shared standings math (lib/standings).
+  const standingsMatches: StandingsMatch[] = tournament.matches.map((m) => ({
+    round: m.round,
+    status: m.status,
+    player1Id: m.player1.id,
+    player2Id: m.player2.id,
+    winnerId: m.winner?.id ?? null,
+    isWalkover: m.isWalkover,
+    isThirdPlace: m.isThirdPlace,
+    points: m.points,
+  }));
+  const userById = new Map(tournament.participants.map((p) => [p.userId, p]));
+  const nameOf = (userId: string) => {
+    const p = userById.get(userId);
+    if (p) return playerLabel(p.user, isAdminUser);
+    const m = tournament.matches.find((x) => x.player1.id === userId || x.player2.id === userId);
+    const u = m ? (m.player1.id === userId ? m.player1 : m.player2) : null;
+    return u ? playerLabel(u, isAdminUser) : "—";
   };
 
-  let standingsParticipants = tournament.participants;
-  if (tournament.format === "SINGLE_ELIMINATION") {
-    // Ranking follows bracket placement: the round a player lost in (later =
-    // better), with the champion never losing (treated as infinite). The
-    // third-place match settles the tie between the two semifinal losers.
-    const elimRound = new Map<string, number>();
-    for (const m of tournament.matches) {
-      if (m.player1.id === m.player2.id || !m.winner || m.status !== "FINISHED" || m.isThirdPlace) continue;
-      const loserId = m.winner.id === m.player1.id ? m.player2.id : m.player1.id;
-      elimRound.set(loserId, m.round);
-    }
-    const finishedThirdPlace = tournament.matches.find((m) => m.isThirdPlace && m.winner);
-    standingsParticipants = [...tournament.participants].sort((a, b) => {
-      const aE = elimRound.get(a.userId) ?? Infinity;
-      const bE = elimRound.get(b.userId) ?? Infinity;
-      if (bE !== aE) return bE - aE;
-      if (finishedThirdPlace) {
-        if (finishedThirdPlace.winner!.id === a.userId && finishedThirdPlace.winner!.id !== b.userId) return -1;
-        if (finishedThirdPlace.winner!.id === b.userId && finishedThirdPlace.winner!.id !== a.userId) return 1;
-      }
-      return pointsCompare(a, b);
-    });
-  } else {
-    // ROUND_ROBIN, GROUPS, SWISS — all ranked by the same points tiebreaker.
-    standingsParticipants = [...tournament.participants].sort(pointsCompare);
-  }
-
-  const canJoin =
-    session &&
-    tournament.status === "REGISTRATION" &&
-    !isParticipant &&
-    (!tournament.maxParticipants ||
-      tournament.participants.length < tournament.maxParticipants);
-
-  // The third-place match shares its round with the final but sits outside
-  // the winners' bracket — render it separately from the bracket tree.
+  // Group matches by round (the third-place match is shown on its own).
   const thirdPlaceMatch = tournament.matches.find((m) => m.isThirdPlace) ?? null;
-
-  // Group matches by round
   const rounds = new Map<number, typeof tournament.matches>();
   for (const match of tournament.matches) {
     if (match.isThirdPlace) continue;
@@ -596,43 +540,170 @@ export default async function TournamentDetailPage({
       [...roundMatches].sort((a, b) => (a.bracketPos ?? 0) - (b.bracketPos ?? 0)),
     ] as [number, typeof tournament.matches]);
 
-  // Suíço: how many of the first rounds are the Swiss phase (rest is knockout).
-  const approvedCount = tournament.participants.filter(
-    (p) => (p as { approved?: boolean }).approved !== false
-  ).length;
-  const swissRounds =
-    tournament.format === "ROUND_ROBIN" ? Math.max(1, Math.ceil(Math.log2(Math.max(2, approvedCount)))) : 0;
+  const swissRoundsList = isSwiss ? sortedRounds.filter(([r]) => r <= swissRounds) : [];
+  const knockoutRoundsList = isSwiss ? sortedRounds.filter(([r]) => r > swissRounds) : [];
+  const hasKnockout = knockoutRoundsList.length > 0;
+  // Last knockout round, from the size of the first knockout round — so the
+  // semifinal isn't called "Final" before the final exists.
+  const firstKo = knockoutRoundsList[0]?.[1] ?? [];
+  const koPlayers = new Set(firstKo.flatMap((m) => [m.player1.id, m.player2.id])).size;
+  const knockoutLastRound = hasKnockout ? swissRounds + Math.max(1, Math.ceil(Math.log2(Math.max(2, koPlayers)))) : 0;
 
-  // Total rounds in a single-elimination bracket, based on the participant
-  // count (next power of two) rather than how many rounds exist in the DB so
-  // far — keeps round names ("Final", "Semifinal"...) stable as the bracket
-  // advances.
+  // Single elimination: total rounds from the field size (stable names).
   let bracketSize = 1;
   while (bracketSize < tournament.participants.length) bracketSize *= 2;
   const totalBracketRounds = Math.max(1, Math.log2(bracketSize));
 
-  // Suíço: split rounds into the Swiss phase (list) and the knockout (bracket
-  // tree). Once the knockout exists, show the final Swiss standings + the tree.
-  const isSwiss = tournament.format === "ROUND_ROBIN";
-  const swissRoundsList = isSwiss ? sortedRounds.filter(([r]) => r <= swissRounds) : [];
-  const knockoutRoundsList = isSwiss ? sortedRounds.filter(([r]) => r > swissRounds) : [];
-  const knockoutTotalRounds = knockoutRoundsList.length ? knockoutRoundsList[knockoutRoundsList.length - 1][0] : 0;
-  // Which rounds render as the per-round list: Suíço → only its Swiss rounds.
-  const listRounds = isSwiss ? swissRoundsList : sortedRounds;
+  const roundLabel = (round: number) =>
+    isSwiss
+      ? round <= swissRounds
+        ? `Suíço · Rodada ${round}`
+        : getRoundName(round, knockoutLastRound, "SINGLE_ELIMINATION")
+      : tournament.format === "SINGLE_ELIMINATION"
+        ? getRoundName(round, totalBracketRounds, "SINGLE_ELIMINATION")
+        : `Rodada ${round}`;
+  const byeText = isSwiss
+    ? "Folga nesta rodada (bye): conta 1 ponto no suíço, sem pontos de batalha."
+    : "Avança direto para a próxima fase (bye), sem jogar.";
+
+  // ── Standings ─────────────────────────────────────────────────────────────
+  // a) Swiss phase table: Swiss rounds ONLY (knockout never counts here).
+  const knockoutPlayers = new Set(
+    isSwiss
+      ? tournament.matches.filter((m) => m.round > swissRounds && m.player1.id !== m.player2.id).flatMap((m) => [m.player1.id, m.player2.id])
+      : []
+  );
+  // On a complete tie the bracket already settled who went through, so list
+  // those players first (the table then matches who actually qualified).
+  const swissRows = isSwiss
+    ? computeSwissStandings(approvedParticipants.map((p) => p.userId), standingsMatches, swissRounds)
+        .sort((a, b) => compareSwissRows(a, b) || Number(knockoutPlayers.has(b.userId)) - Number(knockoutPlayers.has(a.userId)))
+    : [];
   const qualifiersCount = tournament.qualifiers ?? 0;
 
+  // Whole-event tallies for the other formats and the "all matches" stats.
+  const battlePointsMap = new Map<string, number>();
+  const conceded = new Map<string, number>();
+  for (const m of tournament.matches) {
+    if (m.status !== "FINISHED" || m.player1.id === m.player2.id) continue;
+    const p1Pts = m.points.filter((p) => p.userId === m.player1.id).reduce((s, p) => s + p.points, 0);
+    const p2Pts = m.points.filter((p) => p.userId === m.player2.id).reduce((s, p) => s + p.points, 0);
+    battlePointsMap.set(m.player1.id, (battlePointsMap.get(m.player1.id) ?? 0) + p1Pts);
+    battlePointsMap.set(m.player2.id, (battlePointsMap.get(m.player2.id) ?? 0) + p2Pts);
+    conceded.set(m.player1.id, (conceded.get(m.player1.id) ?? 0) + p2Pts);
+    conceded.set(m.player2.id, (conceded.get(m.player2.id) ?? 0) + p1Pts);
+  }
+  const diffOf = (id: string) => (battlePointsMap.get(id) ?? 0) - (conceded.get(id) ?? 0);
+  const pointsCompare = (a: typeof tournament.participants[number], b: typeof tournament.participants[number]) => {
+    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+    const bp = (battlePointsMap.get(b.userId) ?? 0) - (battlePointsMap.get(a.userId) ?? 0);
+    if (bp !== 0) return bp;
+    return diffOf(b.userId) - diffOf(a.userId);
+  };
+
+  // b) Final placement.
+  type PlaceRow = { userId: string; place: number; note: string };
+  let finalPlacement: PlaceRow[] = [];
+  let finalIsOfficial = false; // true = the stored result written when the event closed
+  const allPlaced = approvedParticipants.length > 0 && approvedParticipants.every((p) => p.placement != null);
+  if (tournament.status === "FINISHED" && allPlaced) {
+    finalIsOfficial = true;
+    finalPlacement = [...approvedParticipants]
+      .sort((a, b) => (a.placement ?? 0) - (b.placement ?? 0))
+      .map((p) => ({ userId: p.userId, place: p.placement!, note: "" }));
+  } else if (isSwiss && hasKnockout) {
+    finalPlacement = computeSwissFinalPlacement(approvedParticipants.map((p) => p.userId), standingsMatches, swissRounds)
+      .map((x) => ({ userId: x.userId, place: x.place, note: "" }));
+  } else if (tournament.format === "SINGLE_ELIMINATION" && sortedRounds.length > 0) {
+    const elimRound = new Map<string, number>();
+    for (const m of tournament.matches) {
+      if (m.player1.id === m.player2.id || !m.winner || m.status !== "FINISHED" || m.isThirdPlace) continue;
+      elimRound.set(m.winner.id === m.player1.id ? m.player2.id : m.player1.id, m.round);
+    }
+    const third = tournament.matches.find((m) => m.isThirdPlace && m.winner);
+    finalPlacement = [...approvedParticipants].sort((a, b) => {
+      const aE = elimRound.get(a.userId) ?? Infinity, bE = elimRound.get(b.userId) ?? Infinity;
+      if (bE !== aE) return bE - aE;
+      if (third?.winner?.id === a.userId && third.winner.id !== b.userId) return -1;
+      if (third?.winner?.id === b.userId && third.winner.id !== a.userId) return 1;
+      return pointsCompare(a, b);
+    }).map((p, i) => ({ userId: p.userId, place: i + 1, note: "" }));
+  }
+  // How each player's final place was decided (deepest knockout round reached).
+  const koDeepest = new Map<string, number>();
+  for (const m of tournament.matches) {
+    if (m.player1.id === m.player2.id || m.isThirdPlace) continue;
+    const isKo = isSwiss ? m.round > swissRounds : tournament.format === "SINGLE_ELIMINATION";
+    if (!isKo) continue;
+    for (const id of [m.player1.id, m.player2.id]) koDeepest.set(id, Math.max(koDeepest.get(id) ?? 0, m.round));
+  }
+  const championId = isSwiss && hasKnockout ? decidedPodium(standingsMatches, swissRounds).first
+    : tournament.format === "SINGLE_ELIMINATION" ? decidedPodium(standingsMatches, 0).first : undefined;
+  for (const row of finalPlacement) {
+    const deepest = koDeepest.get(row.userId);
+    if (deepest != null) {
+      const stage = roundLabel(deepest);
+      const thirdWinner = thirdPlaceMatch?.status === "FINISHED" ? thirdPlaceMatch.winner?.id : undefined;
+      row.note = row.userId === championId ? "Campeão"
+        : stage === "Final" ? "Vice-campeão"
+        : row.userId === thirdWinner ? "3º lugar (venceu a disputa de 3º)"
+        : `Parou em: ${stage}`;
+    } else if (isSwiss && hasKnockout) row.note = "Não avançou da fase suíça";
+  }
+
+  // Podium: only positions the results actually decide.
+  let podium: { first?: string; second?: string; third?: string } = {};
+  if (isSwiss && hasKnockout) podium = decidedPodium(standingsMatches, swissRounds);
+  else if (tournament.format === "SINGLE_ELIMINATION") podium = decidedPodium(standingsMatches, 0);
+  else if (tournament.status === "FINISHED" && finalPlacement.length > 0) {
+    podium = { first: finalPlacement[0]?.userId, second: finalPlacement[1]?.userId, third: finalPlacement[2]?.userId };
+  } else if (tournament.status === "FINISHED" && isSwiss && swissRows.length > 0) {
+    podium = { first: swissRows[0]?.userId, second: swissRows[1]?.userId, third: swissRows[2]?.userId };
+  }
+  // Single elimination / GROUPS order for the classification tab.
+  const otherStandings = [...approvedParticipants].sort(pointsCompare);
+
+  // Current round (in progress): the earliest round with an undecided match.
+  const openRounds = tournament.matches
+    .filter((m) => m.player1.id !== m.player2.id && m.status !== "FINISHED")
+    .map((m) => m.round);
+  const currentRound = openRounds.length ? Math.min(...openRounds) : null;
+
+  const canJoin =
+    !!session &&
+    tournament.status === "REGISTRATION" &&
+    !isParticipant &&
+    (!tournament.maxParticipants || tournament.participants.length < tournament.maxParticipants);
+
+  // Registration state for upcoming events (display mirrors the join rules).
+  const spotsFull = !!tournament.maxParticipants && tournament.participants.length >= tournament.maxParticipants;
+  const deadlinePassed = !!tournament.registrationDeadline && new Date(tournament.registrationDeadline).getTime() < Date.now();
+  const registrationOpen = tournament.status === "REGISTRATION" && !spotsFull && !deadlinePassed;
+
   // Suíço finals: a qualified player (in the knockout) may swap 1 deck combo once.
-  const inKnockout = !!session?.user.id && knockoutRoundsList.length > 0 &&
+  const inKnockout = !!session?.user.id && hasKnockout &&
     tournament.matches.some((m) => m.round > swissRounds && (m.player1.id === session.user.id || m.player2.id === session.user.id));
   const canSwapFinals = isSwiss && tournament.deckType === "THREE_ON_THREE" &&
     tournament.status !== "FINISHED" && inKnockout &&
     !!currentParticipant && !(currentParticipant as { finalsSwapUsed?: boolean }).finalsSwapUsed &&
     currentBeybladeIds.length === 3;
 
-  // Always show the sidebar so players can track standings in real-time.
   // Judge kiosk accounts only need the tournament name and the matches.
   const judgeKiosk = isJudgeAccount(session?.user?.email);
-  const showSidebar = !judgeKiosk;
+
+  // ── Tabs (kept in the URL: ?aba=...) ──────────────────────────────────────
+  type TabKey = "resumo" | "classificacao" | "partidas" | "regras";
+  const TABS: { key: TabKey; label: string }[] = [
+    { key: "resumo", label: "Resumo" },
+    { key: "classificacao", label: "Classificação" },
+    { key: "partidas", label: "Partidas" },
+    { key: "regras", label: "Regras" },
+  ];
+  const defaultTab: TabKey = tournament.status === "IN_PROGRESS" ? "partidas" : "resumo";
+  const requested = searchParams?.aba;
+  const tab: TabKey = judgeKiosk
+    ? "partidas"
+    : TABS.some((t) => t.key === requested) ? (requested as TabKey) : defaultTab;
 
   // Admin match editor data: all non-bye matches
   const adminMatchRows = tournament.matches
@@ -660,23 +731,621 @@ export default async function TournamentDetailPage({
     });
 
   // Group participants by group (for GROUPS format)
-  const groupMap = new Map<
-    string,
-    {
-      group: { id: string; name: string };
-      participants: typeof tournament.participants;
-    }
-  >();
+  const groupMap = new Map<string, { group: { id: string; name: string }; participants: typeof tournament.participants }>();
   if (tournament.format === "GROUPS") {
     for (const p of tournament.participants) {
       if (p.group) {
-        if (!groupMap.has(p.group.id)) {
-          groupMap.set(p.group.id, { group: p.group, participants: [] });
-        }
+        if (!groupMap.has(p.group.id)) groupMap.set(p.group.id, { group: p.group, participants: [] });
         groupMap.get(p.group.id)!.participants.push(p);
       }
     }
   }
+
+  const community = communityOf(tournament.communitySlug);
+  const matchCardProps = {
+    isOrganizer: canJudge,
+    isAdmin: isAdminUser,
+    tournamentId: tournament.id,
+    participantBeyblades,
+    arenaCount: tournament.arenas ?? 1,
+    currentUserId: session?.user.id,
+    deckType: tournament.deckType,
+    openJudging,
+    byeText,
+  };
+  const card = "bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-6";
+
+  // One round of matches. Phones: a single column ordered by slot/arena, each
+  // card naming its round and arena. Large screens with several arenas: the
+  // arena grid (in its own horizontally-scrollable box, never the page).
+  const RoundBlock = ({ round, roundMatches }: { round: number; roundMatches: typeof tournament.matches }) => {
+    const arenaCount = tournament.arenas ?? 1;
+    const useStoredArenas = arenaCount > 1 && roundMatches.some((m) => m.arena != null);
+    const byeMatches = roundMatches.filter((m) => m.player1.id === m.player2.id);
+    const arenaMatches = roundMatches.filter((m) => m.player1.id !== m.player2.id);
+    const ordered = [...arenaMatches].sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.arena ?? 0) - (b.arena ?? 0));
+    const slots = useStoredArenas ? [...new Set(arenaMatches.map((m) => m.slot ?? 0))].sort((a, b) => a - b) : [];
+    const label = roundLabel(round);
+    const isCurrent = tournament.status === "IN_PROGRESS" && currentRound === round;
+    return (
+      <section id={`rodada-${round}`} aria-labelledby={`rodada-${round}-titulo`} className={`${card} scroll-mt-24`}>
+        <h3 id={`rodada-${round}-titulo`} className="text-lg font-bold text-white mb-4 flex items-center gap-2 flex-wrap">
+          {label}
+          {isCurrent && <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 border border-green-500/40">● Rodada atual</span>}
+        </h3>
+        <div className={`grid gap-3 sm:grid-cols-2 ${useStoredArenas ? "lg:hidden" : ""}`}>
+          {ordered.map((match) => (
+            <MatchCard key={match.id} match={match} roundLabel={label} {...matchCardProps} />
+          ))}
+          {byeMatches.map((match) => (
+            <MatchCard key={match.id} match={match} roundLabel={label} {...matchCardProps} />
+          ))}
+        </div>
+        {useStoredArenas && (
+          <div className="hidden lg:block overflow-x-auto">
+            <div className="grid gap-3 mb-3" style={{ gridTemplateColumns: `repeat(${arenaCount}, minmax(180px, 1fr))` }}>
+              {Array.from({ length: arenaCount }, (_, i) => (
+                <div key={i} className="text-center text-xs font-bold text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/20 rounded-lg py-1.5">
+                  Arena {i + 1}
+                </div>
+              ))}
+            </div>
+            {slots.map((slot) => (
+              <div key={slot} className="grid gap-3 mb-3" style={{ gridTemplateColumns: `repeat(${arenaCount}, minmax(180px, 1fr))` }}>
+                {Array.from({ length: arenaCount }, (_, i) => {
+                  const match = arenaMatches.find((m) => (m.slot ?? 0) === slot && (m.arena ?? 1) === i + 1);
+                  if (!match) {
+                    return (
+                      <div key={i} className="border border-dashed border-gray-800 rounded-lg flex items-center justify-center py-6">
+                        <span className="text-gray-500 text-xs">Arena livre</span>
+                      </div>
+                    );
+                  }
+                  return <MatchCard key={match.id} match={match} roundLabel={label} {...matchCardProps} />;
+                })}
+              </div>
+            ))}
+            <div className="space-y-3">
+              {byeMatches.map((match) => (
+                <MatchCard key={match.id} match={match} roundLabel={label} {...matchCardProps} />
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  };
+
+  // Knockout: a list (default everywhere, the only view on phones) plus the
+  // graphic bracket as an alternative on larger screens / on demand, scrolling
+  // inside its own box.
+  const KnockoutBlock = ({ koRounds, totalRounds, title }: { koRounds: [number, typeof tournament.matches][]; totalRounds: number; title: string }) => (
+    <section aria-labelledby="mata-mata-titulo" className={card}>
+      <h3 id="mata-mata-titulo" className="text-lg font-bold text-white mb-4">{title}</h3>
+      <div className="space-y-5">
+        {koRounds.map(([round, ms]) => (
+          <div key={round} id={`rodada-${round}`} className="scroll-mt-24">
+            <h4 className="text-sm font-bold text-gray-300 mb-2 flex items-center gap-2 flex-wrap">
+              {roundLabel(round)}
+              {tournament.status === "IN_PROGRESS" && currentRound === round && (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-500/20 text-green-300 border border-green-500/40">● Rodada atual</span>
+              )}
+            </h4>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {ms.map((match) => <MatchCard key={match.id} match={match} roundLabel={roundLabel(round)} {...matchCardProps} />)}
+            </div>
+          </div>
+        ))}
+        {thirdPlaceMatch && (
+          <div>
+            <h4 className="text-sm font-bold text-gray-300 mb-2">Disputa de 3º lugar</h4>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <MatchCard match={thirdPlaceMatch} roundLabel="Disputa de 3º lugar" {...matchCardProps} />
+            </div>
+          </div>
+        )}
+      </div>
+      {koRounds.length > 1 && (
+        <details className="mt-5 group">
+          <summary className="tap inline-flex items-center gap-2 px-3 rounded-lg text-sm font-bold text-[var(--accent)] cursor-pointer hover:bg-white/5 list-none">
+            <span aria-hidden="true" className="group-open:rotate-90 transition-transform">▶</span>
+            Ver chave gráfica
+          </summary>
+          <div className="mt-3 max-w-full overflow-x-auto rounded-lg border border-gray-800 p-3" tabIndex={0} aria-label="Chave do mata-mata (role para os lados)">
+            <BracketView
+              rounds={koRounds}
+              totalRounds={totalRounds}
+              labelOf={roundLabel}
+              {...matchCardProps}
+            />
+          </div>
+        </details>
+      )}
+    </section>
+  );
+
+  const fmtDate = (d: Date | string | null | undefined, withTime = false) =>
+    d
+      ? new Date(d).toLocaleString("pt-BR", {
+          // Dates are typed in local wall time and stored as-is (UTC), so show them in UTC.
+          timeZone: "UTC",
+          day: "2-digit", month: "2-digit", year: "numeric",
+          ...(withTime ? { hour: "2-digit", minute: "2-digit" } : {}),
+        })
+      : null;
+  const hasTime = (d: Date | string | null | undefined) => !!d && (new Date(d).getUTCHours() !== 0 || new Date(d).getUTCMinutes() !== 0);
+  const dateText = tournament.isMultiDay
+    ? `Dia 1 (suíço): ${fmtDate(tournament.startDate, hasTime(tournament.startDate)) ?? "a definir"} · Dia 2 (mata-mata): ${fmtDate(tournament.day2Date) ?? "a definir"}`
+    : fmtDate(tournament.startDate, hasTime(tournament.startDate)) ?? (tournament.status === "DRAFT" || tournament.status === "REGISTRATION" ? "Data a definir" : null);
+  const formatText = `${FORMAT_LABELS[tournament.format] ?? tournament.format}${isSwiss && qualifiersCount ? ` + mata-mata (top ${qualifiersCount})` : ""} · ${tournament.deckType === "THREE_ON_THREE" ? "Deck 3on3" : "Solo"}`;
+  const statusIcon = { DRAFT: "✎", REGISTRATION: "📝", IN_PROGRESS: "●", FINISHED: "✓" }[tournament.status];
+
+  // Player list (read-only) for visitors; admins get the manager.
+  const participantsSection = (
+    <section aria-labelledby="participantes-titulo" className={card}>
+      <h3 id="participantes-titulo" className="text-lg font-bold text-white mb-4">
+        Participantes ({tournament.participants.length}{tournament.maxParticipants ? ` de ${tournament.maxParticipants}` : ""})
+      </h3>
+      {isAdminUser && tournament.status !== "FINISHED" ? (
+        <AdminParticipantManager
+          tournamentId={tournament.id}
+          deckType={tournament.deckType}
+          tournamentStatus={tournament.status}
+          isOfficial={tournament.isOfficial}
+          participants={tournament.participants.map((p) => ({
+            userId: p.userId,
+            user: p.user,
+            beyblade1: p.beyblade1,
+            beyblade2: p.beyblade2,
+            beyblade3: p.beyblade3,
+            currentBeyblades: currentSelectionMap.get(p.userId) ?? [],
+            hasPaid: p.hasPaid,
+            beybladeInspected: p.beybladeInspected,
+            approved: (p as { approved?: boolean }).approved ?? true,
+          }))}
+          allPlayers={allPlayers}
+        />
+      ) : tournament.participants.length === 0 ? (
+        <p className="text-gray-400 text-sm">Nenhum participante inscrito ainda.</p>
+      ) : (
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {tournament.participants.map((p) => (
+            <li key={p.id} className="flex items-center gap-3 py-1.5 min-w-0">
+              <span aria-hidden="true" className="w-8 h-8 shrink-0 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-300">
+                {(p.user.bladerName || p.user.name)[0]?.toUpperCase()}
+              </span>
+              <span className="text-sm font-medium text-white break-anywhere min-w-0">
+                {playerLabel(p.user, isAdminUser)}
+                {p.user.isGuest && <span className="ml-1.5 text-xs text-gray-400">(convidado)</span>}
+                {(p as { approved?: boolean }).approved === false && <span className="ml-1.5 text-xs text-amber-300">(aguardando aprovação)</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+
+  const podiumSection = (podium.first || tournament.status === "FINISHED") && (
+    <section aria-labelledby="podio-titulo" className={card}>
+      <h3 id="podio-titulo" className="text-lg font-bold text-white mb-4">
+        {tournament.status === "FINISHED" ? "Resultado" : "Pódio até agora"}
+      </h3>
+      {podium.first ? (
+        <ol className="grid gap-3 sm:grid-cols-3">
+          {([
+            ["first", "🥇", "Campeão", "border-amber-400/60 bg-amber-400/10"],
+            ["second", "🥈", "Vice-campeão", "border-gray-400/50 bg-gray-400/10"],
+            ["third", "🥉", "3º lugar", "border-orange-400/50 bg-orange-400/10"],
+          ] as const).map(([k, medal, label, cls]) => {
+            const id = podium[k];
+            if (!id) return null;
+            return (
+              <li key={k} className={`rounded-xl border p-4 ${cls}`}>
+                <div className="text-sm font-bold text-gray-200"><span aria-hidden="true">{medal} </span>{label}</div>
+                <div className="text-lg font-black text-white mt-1 break-anywhere">{nameOf(id)}</div>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className="text-sm text-gray-300">
+          O torneio foi encerrado sem que as partidas decisivas fossem concluídas, então não há pódio definido.
+          Veja a classificação para os resultados registrados.
+        </p>
+      )}
+      {podium.first && !podium.third && tournament.format !== "GROUPS" && (hasKnockout || tournament.format === "SINGLE_ELIMINATION") && (
+        <p className="text-xs text-gray-400 mt-3">3º lugar ainda não definido.</p>
+      )}
+    </section>
+  );
+
+  const swissLegend = (
+    <dl className="mt-4 grid gap-x-4 gap-y-1 text-xs text-gray-400 sm:grid-cols-2">
+      <div><dt className="inline font-bold text-gray-300">Pts suíço</dt> <dd className="inline">— 1 por vitória + 1 por bye, só nas rodadas suíças.</dd></div>
+      <div><dt className="inline font-bold text-gray-300">V / D</dt> <dd className="inline">— vitórias e derrotas em partidas jogadas do suíço (W.O. conta).</dd></div>
+      <div><dt className="inline font-bold text-gray-300">Bye</dt> <dd className="inline">— rodadas de folga (sem adversário).</dd></div>
+      <div><dt className="inline font-bold text-gray-300">Pts batalha</dt> <dd className="inline">— pontos de finish feitos (Spin 1, Over/Burst 2, Xtreme 3). 1º desempate.</dd></div>
+      <div><dt className="inline font-bold text-gray-300">Saldo</dt> <dd className="inline">— pontos de batalha feitos − sofridos. 2º desempate.</dd></div>
+    </dl>
+  );
+
+  const swissTable = isSwiss && swissRows.length > 0 && (
+    <section aria-labelledby="suico-titulo" className={card}>
+      <h3 id="suico-titulo" className="text-lg font-bold text-white mb-1">Classificação da fase suíça</h3>
+      <p className="text-sm text-gray-400 mb-4">
+        Somente as {swissRounds} rodada{swissRounds > 1 ? "s" : ""} suíça{swissRounds > 1 ? "s" : ""}. Partidas do mata-mata não entram nesta tabela.
+        {qualifiersCount > 0 && ` Os ${qualifiersCount} primeiros avançam para o mata-mata.`}
+      </p>
+      <div className="overflow-x-auto -mx-1 px-1" tabIndex={0} aria-label="Tabela da fase suíça">
+        <table className="w-full text-sm">
+          <caption className="sr-only">Classificação da fase suíça</caption>
+          <thead>
+            <tr className="text-left text-xs text-gray-400 border-b border-gray-800">
+              <th scope="col" className="py-2 pr-2 w-8">#</th>
+              <th scope="col" className="py-2 pr-2">Jogador</th>
+              <th scope="col" className="py-2 px-1 text-right" title="Pontos suíços">Pts suíço</th>
+              <th scope="col" className="py-2 px-1 text-right">V–D</th>
+              <th scope="col" className="py-2 px-1 text-right hidden sm:table-cell">Bye</th>
+              <th scope="col" className="py-2 px-1 text-right hidden sm:table-cell">Pts batalha</th>
+              <th scope="col" className="py-2 pl-1 text-right hidden sm:table-cell">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {swissRows.map((r, i) => {
+              const classified = knockoutPlayers.has(r.userId);
+              return (
+                <tr key={r.userId} className={`border-b border-gray-800/60 ${classified ? "bg-[#f0a500]/5" : ""}`}>
+                  <td className="py-2 pr-2 font-bold text-gray-300 tabular-nums">{i + 1}</td>
+                  <td className="py-2 pr-2">
+                    <span className="font-semibold text-white break-anywhere">{nameOf(r.userId)}</span>
+                    {classified && <span className="ml-2 text-[11px] font-bold text-amber-300 whitespace-nowrap">✓ Classificado</span>}
+                    <span className="sm:hidden block text-xs text-gray-400">
+                      {r.byes > 0 && `${r.byes} bye · `}{r.battlePoints} pts batalha · saldo {r.balance > 0 ? "+" : ""}{r.balance}
+                    </span>
+                  </td>
+                  <td className="py-2 px-1 text-right font-black text-amber-300 tabular-nums">{r.swissPoints}</td>
+                  <td className="py-2 px-1 text-right tabular-nums text-gray-200 whitespace-nowrap">{r.wins}–{r.losses}</td>
+                  <td className="py-2 px-1 text-right tabular-nums text-gray-300 hidden sm:table-cell">{r.byes}</td>
+                  <td className="py-2 px-1 text-right tabular-nums text-gray-300 hidden sm:table-cell">{r.battlePoints}</td>
+                  <td className="py-2 pl-1 text-right tabular-nums text-gray-300 hidden sm:table-cell">{r.balance > 0 ? "+" : ""}{r.balance}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {swissLegend}
+    </section>
+  );
+
+  const finalTable = finalPlacement.length > 0 && (
+    <section aria-labelledby="final-titulo" className={card}>
+      <h3 id="final-titulo" className="text-lg font-bold text-white mb-1">
+        {tournament.status === "FINISHED" ? "Colocação final" : "Colocação (parcial)"}
+      </h3>
+      <p className="text-sm text-gray-400 mb-4">
+        {isSwiss && hasKnockout
+          ? "Quem chegou ao mata-mata fica à frente, ordenado pela fase em que parou; os demais seguem a fase suíça."
+          : tournament.format === "SINGLE_ELIMINATION"
+            ? "Ordenada pela fase do chaveamento em que cada jogador parou."
+            : "Ordenada pela classificação do torneio."}
+        {tournament.status !== "FINISHED" && " Pode mudar até o fim do torneio."}
+        {finalIsOfficial && " Resultado registrado no encerramento."}
+      </p>
+      <ol className="space-y-1.5">
+        {finalPlacement.map((row) => {
+          const p = userById.get(row.userId);
+          const medal = row.place === 1 ? "🥇" : row.place === 2 ? "🥈" : row.place === 3 ? "🥉" : null;
+          return (
+            <li key={row.userId} className={`flex items-center gap-3 rounded-lg px-3 py-2 border ${row.place <= 3 && podium.first ? "border-amber-400/30 bg-amber-400/5" : "border-gray-800 bg-gray-950"}`}>
+              <span className="w-8 shrink-0 text-center font-black text-gray-200 tabular-nums">
+                {medal ? <><span aria-hidden="true">{medal}</span><span className="sr-only">{row.place}º</span></> : `${row.place}º`}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-bold text-white break-anywhere">{nameOf(row.userId)}</span>
+                {row.note && <span className="block text-xs text-gray-400">{row.note}</span>}
+              </span>
+              {tournament.status === "FINISHED" && tournament.isOfficial && (p?.rankingPoints ?? 0) > 0 && (
+                <span className="shrink-0 text-xs font-bold text-amber-300 tabular-nums">+{p!.rankingPoints} ranking</span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+
+  const generalStats = isSwiss && hasKnockout && (
+    <section aria-labelledby="gerais-titulo" className={card}>
+      <h3 id="gerais-titulo" className="text-lg font-bold text-white mb-1">Estatísticas gerais</h3>
+      <p className="text-sm text-gray-400 mb-4">Todas as partidas jogadas no evento, incluindo o mata-mata (byes não contam).</p>
+      <div className="overflow-x-auto" tabIndex={0} aria-label="Estatísticas gerais">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-gray-400 border-b border-gray-800">
+              <th scope="col" className="py-2 pr-2">Jogador</th>
+              <th scope="col" className="py-2 px-1 text-right">Vitórias</th>
+              <th scope="col" className="py-2 px-1 text-right">Derrotas</th>
+              <th scope="col" className="py-2 pl-1 text-right">Pts batalha</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(finalPlacement.length ? finalPlacement.map((r) => r.userId) : swissRows.map((r) => r.userId)).map((id) => {
+              const real = tournament.matches.filter((m) => m.status === "FINISHED" && m.player1.id !== m.player2.id && (m.player1.id === id || m.player2.id === id));
+              const w = real.filter((m) => m.winner?.id === id).length;
+              const l = real.filter((m) => m.winner && m.winner.id !== id).length;
+              return (
+                <tr key={id} className="border-b border-gray-800/60">
+                  <td className="py-2 pr-2 text-white break-anywhere">{nameOf(id)}</td>
+                  <td className="py-2 px-1 text-right tabular-nums text-gray-200">{w}</td>
+                  <td className="py-2 px-1 text-right tabular-nums text-gray-200">{l}</td>
+                  <td className="py-2 pl-1 text-right tabular-nums text-gray-200">{battlePointsMap.get(id) ?? 0}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+
+  const otherFormatTable = !isSwiss && tournament.format !== "SINGLE_ELIMINATION" && otherStandings.length > 0 && (
+    <section aria-labelledby="class-titulo" className={card}>
+      <h3 id="class-titulo" className="text-lg font-bold text-white mb-4">Classificação</h3>
+      <ol className="space-y-1.5">
+        {otherStandings.map((p, i) => (
+          <li key={p.id} className="flex items-center gap-3 rounded-lg px-3 py-2 border border-gray-800 bg-gray-950">
+            <span className="w-8 shrink-0 text-center font-black text-gray-200 tabular-nums">{i + 1}º</span>
+            <span className="flex-1 min-w-0 text-sm font-bold text-white break-anywhere">{playerLabel(p.user, isAdminUser)}</span>
+            <span className="shrink-0 text-right">
+              <span className="block text-sm font-bold text-amber-300 tabular-nums">{p.totalPoints} pts</span>
+              <span className="block text-xs text-gray-400 tabular-nums">{p.wins} V · {p.losses} D</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-3 text-xs text-gray-400">Pts = pontos de finish somados nas partidas. V/D = vitórias e derrotas.</p>
+    </section>
+  );
+
+  const groupsSection = tournament.format === "GROUPS" && groupMap.size > 0 && (
+    <section aria-labelledby="grupos-titulo" className={card}>
+      <h3 id="grupos-titulo" className="text-lg font-bold text-white mb-4">Grupos</h3>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {Array.from(groupMap.values()).map(({ group, participants }) => (
+          <div key={group.id}>
+            <div className="text-sm font-bold text-amber-300 mb-2">{group.name}</div>
+            <ol className="space-y-1">
+              {[...participants].sort(pointsCompare).map((p, idx) => (
+                <li key={p.id} className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-400 w-5">{idx + 1}.</span>
+                  <span className="text-gray-200 flex-1 break-anywhere">{playerLabel(p.user, isAdminUser)}</span>
+                  <span className="text-amber-300 font-medium text-xs">{p.totalPoints} pts · {p.wins} V</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+
+  // ── Content of each tab ───────────────────────────────────────────────────
+  const matchesContent = sortedRounds.length > 0 ? (
+    <div className="space-y-6">
+      {tournament.status === "IN_PROGRESS" && currentRound != null && !judgeKiosk && (
+        <a href={`#rodada-${currentRound}`} className="tap inline-flex items-center gap-2 px-4 rounded-lg bg-green-500/15 border border-green-500/40 text-green-200 text-sm font-bold">
+          Ir para a rodada atual: {roundLabel(currentRound)}
+        </a>
+      )}
+      {canSwapFinals && (
+        <div className="bg-[#1a1a1a] border border-[#f0a500]/40 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="font-bold text-[#f0a500]">Você se classificou! 🎉</div>
+            <div className="text-xs text-gray-300 mt-0.5">Pode trocar <b className="text-white">1 combo</b> do seu deck para o mata-mata.</div>
+          </div>
+          <FinalsDeckButton tournamentId={tournament.id} currentDeckIds={currentBeybladeIds} />
+        </div>
+      )}
+      {tournament.format === "SINGLE_ELIMINATION" ? (
+        <KnockoutBlock koRounds={sortedRounds} totalRounds={totalBracketRounds} title="Chaveamento" />
+      ) : (
+        <>
+          {(isSwiss ? swissRoundsList : sortedRounds).map(([round, roundMatches]) => (
+            <RoundBlock key={round} round={round} roundMatches={roundMatches} />
+          ))}
+          {isSwiss && hasKnockout && (
+            <KnockoutBlock koRounds={knockoutRoundsList} totalRounds={knockoutLastRound} title="Mata-mata" />
+          )}
+        </>
+      )}
+      {isAdminUser && adminMatchRows.length > 0 && !judgeKiosk && (
+        <AdminMatchEditor
+          matches={adminMatchRows}
+          tournamentId={tournament.id}
+          participants={approvedParticipants.map((p) => ({ userId: p.userId, name: playerLabel(p.user, isAdminUser) }))}
+        />
+      )}
+    </div>
+  ) : tournament.status === "REGISTRATION" || tournament.status === "DRAFT" ? (
+    <div className={`${card} text-center`}>
+      <h3 className="text-lg font-bold text-white mb-2">As partidas ainda não foram geradas</h3>
+      <p className="text-gray-300 text-sm">Elas aparecem aqui quando o organizador iniciar o torneio.</p>
+      {isOrganizerOfThis && tournament.participants.length < 2 && (
+        <p className="text-amber-300 text-sm mt-2">São necessários pelo menos 2 participantes para iniciar.</p>
+      )}
+    </div>
+  ) : (
+    <div className={`${card} text-center`}>
+      <p className="text-gray-300">Nenhuma partida registrada neste torneio.</p>
+    </div>
+  );
+
+  const classificationContent = (
+    <div className="space-y-6">
+      {finalTable}
+      {swissTable}
+      {generalStats}
+      {otherFormatTable}
+      {groupsSection}
+      {!finalTable && !swissTable && !otherFormatTable && !groupsSection && (
+        <div className={`${card} text-center`}>
+          <p className="text-gray-300">A classificação aparece quando as primeiras partidas forem concluídas.</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const rulesContent = (
+    <div className="space-y-6">
+      <section aria-labelledby="formato-titulo" className={card}>
+        <h3 id="formato-titulo" className="text-lg font-bold text-white mb-3">Formato e pontuação</h3>
+        <ul className="space-y-2 text-sm text-gray-200 list-disc pl-5">
+          <li>Formato: {formatText}.</li>
+          {isSwiss && (
+            <li>
+              Fase suíça{tournament.swissRounds ? ` de ${swissRounds} rodadas` : ""}: cada vitória vale 1 ponto suíço; quem fica de folga (bye) também recebe 1 ponto.
+              Desempate por pontos de batalha e depois saldo.
+              {qualifiersCount > 0 && ` Os ${qualifiersCount} primeiros disputam o mata-mata.`}
+            </li>
+          )}
+          <li>
+            Partidas: {tournament.setsToWin > 1 ? `melhor de ${tournament.setsToWin * 2 - 1} sets` : "set único"}, {tournament.pointsToWinSet} pontos para vencer o set.
+            {tournament.isMultiDay && tournament.day2SetsToWin && ` No mata-mata (dia 2): ${tournament.day2SetsToWin > 1 ? `melhor de ${tournament.day2SetsToWin * 2 - 1}` : "set único"}, ${tournament.day2PointsToWinSet ?? tournament.pointsToWinSet} pontos.`}
+          </li>
+          <li>Pontos de finish: Spin 1 · Over 2 · Burst 2 · Xtreme 3 · Misslaunch do adversário 1.</li>
+          {!tournament.isOfficial && <li>BeyEncontro: estatísticas de beyblade são registradas, mas os pontos não contam no ranking da comunidade.</li>}
+          {tournament.isPartnership && <li>Evento de parceria: conta somente no ranking compartilhado.</li>}
+        </ul>
+      </section>
+      {tournament.regulation ? (
+        <section aria-labelledby="regulamento-titulo" className={card}>
+          <h3 id="regulamento-titulo" className="text-lg font-bold text-white mb-3">Regulamento</h3>
+          <ExpandableText
+            collapsible={isLongText(tournament.regulation, 900, 16)}
+            moreLabel="Ver regulamento completo"
+            lessLabel="Recolher regulamento"
+            collapsedClass="max-h-72"
+          >
+            <RichText text={tournament.regulation} className="text-sm text-gray-200 leading-relaxed" />
+          </ExpandableText>
+        </section>
+      ) : (
+        <p className="text-sm text-gray-400">O organizador não publicou um regulamento próprio para este evento.</p>
+      )}
+    </div>
+  );
+
+  const infoList = (
+    <dl className="grid gap-3 sm:grid-cols-2 text-sm">
+      {dateText && (
+        <div><dt className="text-xs font-bold uppercase tracking-wide text-gray-400">Data{hasTime(tournament.startDate) ? " e horário" : ""}</dt><dd className="text-white font-semibold mt-0.5">{dateText}</dd></div>
+      )}
+      {(tournament.venueName || tournament.address || tournament.location) && (
+        <div>
+          <dt className="text-xs font-bold uppercase tracking-wide text-gray-400">Local</dt>
+          <dd className="text-white font-semibold mt-0.5 break-anywhere">
+            {tournament.venueName ?? tournament.location}
+            {tournament.address && <span className="block text-gray-300 font-normal">{tournament.address}</span>}
+            {tournament.venueName && tournament.location && <span className="block text-gray-300 font-normal">{tournament.location}</span>}
+          </dd>
+        </div>
+      )}
+      <div><dt className="text-xs font-bold uppercase tracking-wide text-gray-400">Formato</dt><dd className="text-white font-semibold mt-0.5">{formatText}</dd></div>
+      {tournament.entryFee != null && (
+        <div><dt className="text-xs font-bold uppercase tracking-wide text-gray-400">Taxa de inscrição</dt><dd className="text-white font-semibold mt-0.5">{tournament.entryFee > 0 ? `R$ ${tournament.entryFee.toFixed(2).replace(".", ",")}` : "Gratuita"}</dd></div>
+      )}
+      {tournament.prize && (
+        <div><dt className="text-xs font-bold uppercase tracking-wide text-gray-400">Premiação</dt><dd className="text-white font-semibold mt-0.5 break-anywhere">{tournament.prize}</dd></div>
+      )}
+      <div><dt className="text-xs font-bold uppercase tracking-wide text-gray-400">Organização</dt><dd className="text-white font-semibold mt-0.5 break-anywhere">{tournament.organizer.name} · {community.name}</dd></div>
+    </dl>
+  );
+
+  const registrationCard = (tournament.status === "REGISTRATION" || tournament.status === "DRAFT") && (
+    <section aria-labelledby="inscricao-titulo" className={`${card} ${registrationOpen ? "border-amber-400/40" : ""}`}>
+      <h3 id="inscricao-titulo" className="text-lg font-bold text-white mb-1">
+        {tournament.status === "DRAFT" ? "Inscrições ainda não abertas" : registrationOpen ? "Inscrições abertas" : "Inscrições encerradas"}
+      </h3>
+      <p className="text-sm text-gray-300 mb-4">
+        {tournament.status === "DRAFT"
+          ? "O organizador ainda está preparando o evento."
+          : registrationOpen
+            ? `${tournament.registrationDeadline ? `Até ${fmtDate(tournament.registrationDeadline, true)}. ` : ""}${tournament.maxParticipants ? `${Math.max(0, tournament.maxParticipants - tournament.participants.length)} vaga(s) restante(s).` : "Sem limite de vagas."}`
+            : spotsFull ? "Todas as vagas foram preenchidas." : "O prazo de inscrição terminou."}
+      </p>
+      {registrationOpen && (
+        canJoin ? (
+          <ClientJoinButton tournamentId={tournament.id} deckType={tournament.deckType} isOfficial={tournament.isOfficial} />
+        ) : !session ? (
+          <Link
+            href={`/login?callbackUrl=${encodeURIComponent(`/tournaments/${tournament.id}`)}`}
+            className="tap inline-flex items-center justify-center px-5 rounded-lg bg-[#c8102e] hover:bg-[#a50d26] text-white font-bold"
+          >
+            Entrar para se inscrever
+          </Link>
+        ) : null
+      )}
+      {isParticipant && tournament.status === "REGISTRATION" && (
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+          {myApproved ? (
+            <span className="text-sm bg-green-500/20 text-green-300 border border-green-500/30 px-4 py-2 rounded-lg font-medium">✓ Você está inscrito</span>
+          ) : (
+            <span className="text-sm bg-amber-500/15 text-amber-300 border border-amber-500/30 px-4 py-2 rounded-lg font-medium">⏳ Inscrição aguardando aprovação do pagamento</span>
+          )}
+          <EditBeybladesButton tournamentId={tournament.id} deckType={tournament.deckType} currentBeybladeIds={currentBeybladeIds} />
+        </div>
+      )}
+    </section>
+  );
+
+  const progressCard = tournament.status === "IN_PROGRESS" && (
+    <section aria-labelledby="andamento-titulo" className={card}>
+      <h3 id="andamento-titulo" className="text-lg font-bold text-white mb-1">
+        {currentRound != null ? `Rodada atual: ${roundLabel(currentRound)}` : "Aguardando a próxima rodada"}
+      </h3>
+      <p className="text-sm text-gray-300">
+        {tournament.matches.filter((m) => m.player1.id !== m.player2.id && m.status === "FINISHED").length} de{" "}
+        {tournament.matches.filter((m) => m.player1.id !== m.player2.id).length} partidas concluídas.
+        Esta página se atualiza sozinha quando um resultado é registrado.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link href="?aba=partidas" scroll={false} className="tap inline-flex items-center px-4 rounded-lg bg-[#c8102e] hover:bg-[#a50d26] text-white text-sm font-bold">Ver partidas</Link>
+        <Link href="?aba=classificacao" scroll={false} className="tap inline-flex items-center px-4 rounded-lg border border-gray-700 text-gray-100 text-sm font-bold hover:bg-white/5">Ver classificação</Link>
+      </div>
+    </section>
+  );
+
+  const summaryContent = (
+    <div className="space-y-6">
+      {podiumSection}
+      {registrationCard}
+      {progressCard}
+      <section aria-labelledby="info-titulo" className={card}>
+        <h3 id="info-titulo" className="sr-only">Informações do evento</h3>
+        {infoList}
+        {tournament.description && (
+          <div className="mt-5 pt-5 border-t border-gray-800">
+            <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-2">Sobre o evento</h4>
+            <ExpandableText
+              collapsible={isLongText(tournament.description, 420, 8)}
+              moreLabel="Ver descrição completa"
+              lessLabel="Recolher descrição"
+            >
+              <RichText text={tournament.description} className="text-sm text-gray-200 leading-relaxed" />
+            </ExpandableText>
+          </div>
+        )}
+        {tournament.regulation && (
+          <Link href="?aba=regras" scroll={false} className="tap mt-3 inline-flex items-center px-3 rounded-lg text-sm font-bold text-[var(--accent)] hover:bg-white/5">
+            Ver regulamento →
+          </Link>
+        )}
+      </section>
+      {participantsSection}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -689,608 +1358,108 @@ export default async function TournamentDetailPage({
           intervalMs={tournament.status === "IN_PROGRESS" ? 4000 : 8000}
         />
       )}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {judgeKiosk ? (
-          <h1 className="text-2xl font-black text-white mb-5 flex items-center gap-2 flex-wrap">
+          <h1 className="text-2xl font-black text-white mb-5 flex items-center gap-2 flex-wrap break-anywhere">
             {tournament.name}
-            {tournament.isTest && !/teste/i.test(tournament.name) && <span className="text-xs font-bold px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-400">TESTE</span>}
+            {tournament.isTest && !/teste/i.test(tournament.name) && <span className="text-xs font-bold px-2 py-0.5 rounded bg-yellow-900/40 text-yellow-300">TESTE</span>}
           </h1>
         ) : (
-        /* Header */
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden mb-6">
-          {tournament.bannerUrl && (
-            <img
-              src={tournament.bannerUrl}
-              alt=""
-              className="w-full h-40 sm:h-56 object-cover"
-            />
-          )}
-          <div className="p-8">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                <span
-                  className={`text-xs font-semibold px-3 py-1 rounded-full ${STATUS_STYLES[tournament.status]}`}
-                >
-                  {STATUS_LABELS[tournament.status]}
-                </span>
-                <span className="text-xs bg-gray-800 text-gray-400 px-3 py-1 rounded-full font-medium">
-                  {FORMAT_LABELS[tournament.format]}
-                </span>
-                {!tournament.isOfficial && (
-                  <span className="text-xs bg-blue-500/20 text-blue-400 border border-blue-500/40 px-3 py-1 rounded-full font-semibold">
-                    🎮 BeyEncontro
-                  </span>
-                )}
-                <ShareButton url={`/tournaments/${tournament.id}`} title={tournament.name} className="ml-auto px-2 py-1" />
-              </div>
-              {!tournament.isOfficial && (
-                <div className="bg-blue-900/20 border border-blue-600/30 text-blue-300 text-sm px-4 py-2.5 rounded-lg mb-3">
-                  🎮 BeyEncontro — Estatísticas de beyblade são registradas, mas os pontos não contam no ranking da comunidade.
-                </div>
-              )}
-              <h1 className="text-3xl font-black text-white mb-2">
-                {tournament.name}
-              </h1>
-              {tournament.description && (
-                <p className="text-gray-400">{tournament.description}</p>
-              )}
-              <div className="flex flex-wrap gap-4 mt-4 text-sm text-gray-500">
-                <span>👑 Organizado por {tournament.organizer.name}</span>
-                {tournament.location && <span>📍 {tournament.location}</span>}
-                {tournament.entryFee !== null && tournament.entryFee !== undefined && (
-                  <span className="text-green-400">
-                    💵 R$ {tournament.entryFee.toFixed(2).replace(".", ",")}
-                  </span>
-                )}
-                {tournament.isMultiDay ? (
-                  <span>
-                    📅 Dia 1 (Suíço){tournament.startDate ? ` ${new Date(tournament.startDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}` : ""}
-                    {" · "}Dia 2 (Mata-mata){tournament.day2Date ? ` ${new Date(tournament.day2Date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}` : ""}
-                  </span>
-                ) : tournament.startDate ? (
-                  <span>
-                    📅 {new Date(tournament.startDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                  </span>
-                ) : (tournament.status === "DRAFT" || tournament.status === "REGISTRATION") && (
-                  <span>📅 Data a definir</span>
-                )}
-                {tournament.registrationDeadline && (
-                  <span>⏳ Inscrições até {new Date(tournament.registrationDeadline).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}</span>
-                )}
-              </div>
-
-              {/* Participants progress */}
-              <div className="mt-4">
-                <div className="flex items-center justify-between text-xs text-gray-500 mb-1.5">
-                  <span>
-                    👥 {tournament.participants.length}
-                    {tournament.maxParticipants ? ` / ${tournament.maxParticipants}` : ""} participantes
-                  </span>
-                  {tournament.maxParticipants && (
-                    <span>
-                      {Math.min(100, Math.round((tournament.participants.length / tournament.maxParticipants) * 100))}% preenchido
-                    </span>
+          <header className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden mb-4">
+            {tournament.bannerUrl && (
+              <img src={tournament.bannerUrl} alt="" className="w-full h-32 sm:h-52 object-cover" />
+            )}
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 flex-1">
+                  <ul className="flex flex-wrap items-center gap-2 mb-3" aria-label="Situação do torneio">
+                    <li className={`text-xs font-bold px-3 py-1 rounded-full ${STATUS_STYLES[tournament.status]}`}>
+                      <span aria-hidden="true">{statusIcon} </span>{STATUS_LABELS[tournament.status]}
+                    </li>
+                    <li className="text-xs font-bold px-3 py-1 rounded-full border border-gray-700 text-gray-200">
+                      {community.name}{tournament.isPartnership ? " · Parceria" : ""}
+                    </li>
+                    <li className={`text-xs font-bold px-3 py-1 rounded-full ${tournament.isOfficial ? "bg-[#c8102e]/20 text-red-200 border border-[#c8102e]/50" : "bg-blue-500/15 text-blue-200 border border-blue-500/40"}`}>
+                      {tournament.isOfficial ? "Oficial" : "BeyEncontro"}
+                    </li>
+                    {tournament.isTest && <li className="text-xs font-bold px-3 py-1 rounded-full bg-yellow-900/40 text-yellow-300">Teste</li>}
+                  </ul>
+                  <h1 className="text-2xl sm:text-3xl font-black text-white break-anywhere">{tournament.name}</h1>
+                  <p className="mt-2 text-sm text-gray-300 flex flex-wrap gap-x-4 gap-y-1">
+                    {dateText && <span><span aria-hidden="true">📅 </span>{dateText}</span>}
+                    <span><span aria-hidden="true">👥 </span>{tournament.participants.length} participante{tournament.participants.length === 1 ? "" : "s"}</span>
+                    <span>{formatText}</span>
+                  </p>
+                  {tournament.status === "FINISHED" && podium.first && (
+                    <p className="mt-3 text-base font-bold text-amber-300 break-anywhere">
+                      <span aria-hidden="true">🏆 </span>Campeão: {nameOf(podium.first)}
+                    </p>
                   )}
                 </div>
-                {tournament.maxParticipants && (
-                  <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#f0a500] rounded-full transition-all"
-                      style={{
-                        width: `${Math.min(100, Math.round((tournament.participants.length / tournament.maxParticipants) * 100))}%`,
-                      }}
+                <div className="flex flex-wrap gap-2 lg:flex-col lg:items-stretch lg:w-56 shrink-0">
+                  <ShareButton url={`/tournaments/${tournament.id}`} title={tournament.name} className="tap justify-center px-4" showLabel />
+                  {showStartButton && (
+                    <StartTournamentButton
+                      tournamentId={tournament.id}
+                      defaultArenas={tournament.arenas ?? 1}
+                      candidates={judgeCandidates}
+                      allowJudges={tournament.isOfficial}
                     />
-                  </div>
-                )}
-              </div>
-
-              {/* Venue */}
-              {(tournament.venueName || tournament.address) && (
-                <div className="mt-4 bg-[#141414] border border-gray-800 rounded-xl px-4 py-3">
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Local</div>
-                  {tournament.venueName && <div className="text-sm text-white font-semibold">{tournament.venueName}</div>}
-                  {tournament.address && <div className="text-xs text-gray-400 mt-0.5">{tournament.address}</div>}
-                </div>
-              )}
-
-              {/* Regulation */}
-              {tournament.regulation && (
-                <div className="mt-4 bg-[#141414] border border-gray-800 rounded-xl px-4 py-3">
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Regulamento</div>
-                  <p className="text-sm text-gray-300 whitespace-pre-line">{tournament.regulation}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-col gap-3">
-              {canJoin && (
-                <ClientJoinButton tournamentId={tournament.id} deckType={tournament.deckType} isOfficial={tournament.isOfficial} />
-              )}
-              {isParticipant && tournament.status === "REGISTRATION" && (
-                <>
-                  {myApproved ? (
-                    <span className="text-sm bg-green-500/20 text-green-400 border border-green-500/30 px-4 py-2 rounded-lg font-medium text-center">
-                      ✓ Você está inscrito
-                    </span>
-                  ) : (
-                    <span className="text-sm bg-amber-500/15 text-amber-400 border border-amber-500/30 px-4 py-2 rounded-lg font-medium text-center">
-                      ⏳ Inscrição aguardando aprovação do pagamento
-                    </span>
                   )}
-                  <EditBeybladesButton
-                    tournamentId={tournament.id}
-                    deckType={tournament.deckType}
-                    currentBeybladeIds={currentBeybladeIds}
-                  />
-                </>
-              )}
-              {showStartButton && (
-                <StartTournamentButton
-                  tournamentId={tournament.id}
-                  defaultArenas={tournament.arenas ?? 1}
-                  candidates={judgeCandidates}
-                  allowJudges={tournament.isOfficial}
-                />
-              )}
-              {canJudge && tournament.status === "IN_PROGRESS" && (
-                <FinishTournamentButton tournamentId={tournament.id} isOfficial={tournament.isOfficial} />
-              )}
-              {isAdminUser && (
-                <LaunchVideoButton arenas={tournament.arenas ?? 1} community={tournament.communitySlug} />
-              )}
-              {isAdminUser && tournament.isTest && tournament.format === "ROUND_ROBIN" && tournament.status !== "FINISHED" && (
-                <AutoplaySwissButton tournamentId={tournament.id} />
-              )}
-              {isAdminUser && tournament.isTest && tournament.status !== "REGISTRATION" && (
-                <ResetTournamentButton tournamentId={tournament.id} />
-              )}
-              {canEditTournament && (
-                <Link
-                  href={`/tournaments/${tournament.id}/edit`}
-                  className="text-sm bg-[#252525] hover:bg-[#333] text-gray-300 font-semibold px-4 py-2 rounded-lg transition-colors text-center"
-                >
-                  ✏️ Editar
-                </Link>
-              )}
-              {isOrganizerOfThis && tournament.status === "FINISHED" && (
-                <Link
-                  href={`/tournaments/${tournament.id}/certificates`}
-                  className="text-sm bg-[#f0a500] hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-lg transition-colors text-center"
-                >
-                  🏆 Cards de Premiação
-                </Link>
-              )}
-              {isOrganizerOfThis && (
-                <Link
-                  href="/dashboard"
-                  className="text-sm text-center text-gray-400 hover:text-white transition-colors"
-                >
-                  ← Voltar ao Painel
-                </Link>
-              )}
+                  {canJudge && tournament.status === "IN_PROGRESS" && (
+                    <FinishTournamentButton tournamentId={tournament.id} isOfficial={tournament.isOfficial} />
+                  )}
+                  {isAdminUser && <LaunchVideoButton arenas={tournament.arenas ?? 1} community={tournament.communitySlug} />}
+                  {isAdminUser && tournament.isTest && tournament.format === "ROUND_ROBIN" && tournament.status !== "FINISHED" && (
+                    <AutoplaySwissButton tournamentId={tournament.id} />
+                  )}
+                  {isAdminUser && tournament.isTest && tournament.status !== "REGISTRATION" && (
+                    <ResetTournamentButton tournamentId={tournament.id} />
+                  )}
+                  {canEditTournament && (
+                    <Link href={`/tournaments/${tournament.id}/edit`} className="tap inline-flex items-center justify-center text-sm bg-[#252525] hover:bg-[#333] text-gray-100 font-semibold px-4 rounded-lg">
+                      ✏️ Editar
+                    </Link>
+                  )}
+                  {isOrganizerOfThis && tournament.status === "FINISHED" && (
+                    <Link href={`/tournaments/${tournament.id}/certificates`} className="tap inline-flex items-center justify-center text-sm bg-[#f0a500] hover:bg-amber-400 text-black font-bold px-4 rounded-lg">
+                      🏆 Cards de Premiação
+                    </Link>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-          </div>
-        </div>
+          </header>
         )}
 
-        <div className={showSidebar ? "grid lg:grid-cols-3 gap-6" : ""}>
-          {/* Main content */}
-          <div className={showSidebar ? "lg:col-span-2 space-y-6" : "space-y-6"}>
-            {tournament.format === "SINGLE_ELIMINATION" && sortedRounds.length > 0 ? (
-              <>
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                  <BracketView
-                    rounds={sortedRounds}
-                    totalRounds={totalBracketRounds}
-                    isOrganizer={canJudge}
-                    isAdmin={isAdminUser}
-                    tournamentId={tournament.id}
-                    participantBeyblades={participantBeyblades}
-                    arenaCount={tournament.arenas ?? 1}
-                    currentUserId={session?.user.id}
-                    deckType={tournament.deckType}
-                    openJudging={openJudging}
-                  />
-                </div>
-                {thirdPlaceMatch && (
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                    <h2 className="text-lg font-bold text-white mb-4">Disputa de 3º Lugar</h2>
-                    <div className="max-w-sm">
-                      <MatchCard
-                        match={thirdPlaceMatch}
-                        isOrganizer={canJudge}
-                        isAdmin={isAdminUser}
-                        arenaCount={tournament.arenas ?? 1}
-                        tournamentId={tournament.id}
-                        participantBeyblades={participantBeyblades}
-                        currentUserId={session?.user.id}
-                        deckType={tournament.deckType}
-                        openJudging={openJudging}
-                      />
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : sortedRounds.length > 0 ? (
-              <>
-              {listRounds.map(([round, roundMatches]: [number, typeof tournament.matches]) => {
-                const arenaCount = tournament.arenas ?? 1;
-                // Use stored arena/slot from DB — these are fixed at match creation time
-                const useStoredArenas = arenaCount > 1 && roundMatches.some((m) => m.arena != null);
-                  // Byes aren't played in an arena (no slot/arena), so they must
-                  // not occupy a grid cell — otherwise they collide with the
-                  // match scheduled in slot 0 / arena 1 and one of them is
-                  // silently hidden. They're listed under the grid instead.
-                  const byeMatches = roundMatches.filter((m) => m.player1.id === m.player2.id);
-                  const arenaMatches = roundMatches.filter((m) => m.player1.id !== m.player2.id);
-                  const slots = useStoredArenas
-                    ? [...new Set(arenaMatches.map((m) => m.slot ?? 0))].sort((a, b) => a - b)
-                    : [];
+        {!judgeKiosk && (
+          <nav aria-label="Seções do torneio" className="sticky top-16 md:top-[100px] z-30 -mx-4 px-4 py-2 mb-4 bg-[#0a0a0a]/95 backdrop-blur">
+            <ul className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {TABS.map((t) => (
+                <li key={t.key}>
+                  <Link
+                    href={`?aba=${t.key}`}
+                    scroll={false}
+                    aria-current={tab === t.key ? "page" : undefined}
+                    className={`tap flex items-center justify-center rounded-lg px-2 text-sm font-bold transition-colors ${
+                      tab === t.key
+                        ? "bg-[#c8102e] text-white"
+                        : "bg-gray-900 border border-gray-800 text-gray-200 hover:bg-gray-800"
+                    }`}
+                  >
+                    {t.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
 
-                return (
-                  <div key={round} className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                    <h2 className="text-lg font-bold text-white mb-4">
-                      {(tournament.format === "SINGLE_ELIMINATION" || tournament.format === "ROUND_ROBIN")
-                        ? getRoundName(round, sortedRounds.length, tournament.format, swissRounds)
-                        : `Rodada ${round}`}
-                    </h2>
-
-                    {useStoredArenas ? (
-                      <div className="overflow-x-auto">
-                        {/* Arena column headers */}
-                        <div
-                          className="grid gap-3 mb-3 min-w-0"
-                          style={{ gridTemplateColumns: `repeat(${arenaCount}, minmax(180px, 1fr))` }}
-                        >
-                          {Array.from({ length: arenaCount }, (_, i) => (
-                            <div key={i} className="text-center text-xs font-bold text-[#f0a500] bg-[#f0a500]/10 border border-[#f0a500]/20 rounded-lg py-1.5">
-                              Arena {i + 1}
-                            </div>
-                          ))}
-                        </div>
-                        {/* One fixed row per slot */}
-                        {slots.map((slot) => (
-                          <div
-                            key={slot}
-                            className="grid gap-3 mb-3"
-                            style={{ gridTemplateColumns: `repeat(${arenaCount}, minmax(180px, 1fr))` }}
-                          >
-                            {Array.from({ length: arenaCount }, (_, i) => {
-                              const match = arenaMatches.find(
-                                (m) => (m.slot ?? 0) === slot && (m.arena ?? 1) === i + 1
-                              );
-                              if (!match) {
-                                return (
-                                  <div key={i} className="border border-dashed border-gray-800 rounded-lg flex items-center justify-center py-6">
-                                    <span className="text-gray-700 text-xs">livre</span>
-                                  </div>
-                                );
-                              }
-                              return (
-                                <MatchCard
-                                  key={match.id}
-                                  match={match}
-                                  isOrganizer={canJudge}
-                                  isAdmin={isAdminUser}
-                                  tournamentId={tournament.id}
-                                  participantBeyblades={participantBeyblades}
-                                  currentUserId={session?.user.id}
-                                  deckType={tournament.deckType}
-                                  openJudging={openJudging}
-                                />
-                              );
-                            })}
-                          </div>
-                        ))}
-                        {byeMatches.map((m) => (
-                          <div
-                            key={m.id}
-                            className="flex items-center justify-between gap-4 p-3 rounded-lg border border-dashed border-gray-700 bg-gray-800/40"
-                          >
-                            <span className="text-sm font-semibold text-amber-400 truncate">
-                              {playerLabel(m.player1, isAdminUser)}
-                            </span>
-                            <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-700 text-gray-400 flex-shrink-0">
-                              Passou (bye)
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {roundMatches.map((match) => (
-                          <MatchCard
-                            key={match.id}
-                            match={match}
-                            isOrganizer={canJudge}
-                            isAdmin={isAdminUser}
-                            tournamentId={tournament.id}
-                            participantBeyblades={participantBeyblades}
-                            currentUserId={session?.user.id}
-                            deckType={tournament.deckType}
-                            openJudging={openJudging}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Suíço knockout: final Swiss standings + bracket tree */}
-              {isSwiss && knockoutRoundsList.length > 0 && (
-                <>
-                  {canSwapFinals && (
-                    <div className="bg-[#1a1a1a] border border-[#f0a500]/40 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
-                      <div>
-                        <div className="font-bold text-[#f0a500]">Você se classificou! 🎉</div>
-                        <div className="text-xs text-gray-400 mt-0.5">Pode trocar <b className="text-white">1 combo</b> do seu deck para o mata-mata.</div>
-                      </div>
-                      <FinalsDeckButton tournamentId={tournament.id} currentDeckIds={currentBeybladeIds} />
-                    </div>
-                  )}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                    <h2 className="text-lg font-bold text-white mb-1">Classificação Final da Fase Suíça</h2>
-                    <p className="text-xs text-gray-500 mb-4">
-                      {qualifiersCount > 0 ? `Os ${qualifiersCount} primeiros avançaram para o mata-mata.` : "Classificação após a fase suíça."}
-                    </p>
-                    <div className="space-y-1.5">
-                      {standingsParticipants.map((p, idx) => {
-                        const classified = qualifiersCount > 0 && idx < qualifiersCount;
-                        return (
-                          <div
-                            key={p.id}
-                            className={`flex items-center gap-3 rounded-lg px-3 py-2 border ${classified ? "border-[#f0a500]/40 bg-[#f0a500]/10" : "border-gray-800 bg-gray-950"}`}
-                          >
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${classified ? "bg-[#f0a500] text-black" : "bg-gray-800 text-gray-400"}`}>
-                              {idx + 1}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-bold text-white truncate">{playerLabel(p.user, isAdminUser)}</div>
-                            </div>
-                            {classified && <span className="text-[10px] font-black text-[#f0a500] tracking-wide">CLASSIFICADO</span>}
-                            <div className="text-sm font-bold text-amber-400 tabular-nums">{p.totalPoints}V</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                    <h2 className="text-lg font-bold text-white mb-4">Mata-mata</h2>
-                    <BracketView
-                      rounds={knockoutRoundsList}
-                      totalRounds={knockoutTotalRounds}
-                      isOrganizer={canJudge}
-                      isAdmin={isAdminUser}
-                      tournamentId={tournament.id}
-                      participantBeyblades={participantBeyblades}
-                      arenaCount={tournament.arenas ?? 1}
-                      currentUserId={session?.user.id}
-                      deckType={tournament.deckType}
-                      openJudging={openJudging}
-                    />
-                  </div>
-
-                  {thirdPlaceMatch && (
-                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                      <h2 className="text-lg font-bold text-white mb-4">Disputa de 3º Lugar</h2>
-                      <div className="max-w-sm">
-                        <MatchCard
-                          match={thirdPlaceMatch}
-                          isOrganizer={canJudge}
-                          isAdmin={isAdminUser}
-                          arenaCount={tournament.arenas ?? 1}
-                          tournamentId={tournament.id}
-                          participantBeyblades={participantBeyblades}
-                          currentUserId={session?.user.id}
-                          deckType={tournament.deckType}
-                          openJudging={openJudging}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-              </>
-            ) : tournament.status === "REGISTRATION" ? (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-                <div className="text-4xl mb-3">⏳</div>
-                <h3 className="text-lg font-bold text-white mb-2">
-                  Aguardando Jogadores
-                </h3>
-                <p className="text-gray-400 text-sm">
-                  As partidas serão geradas quando o organizador iniciar o torneio.
-                </p>
-                {isOrganizerOfThis && (
-                  <p className="text-amber-400 text-sm mt-2">
-                    Você precisa de pelo menos 2 participantes para iniciar.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-                <div className="mb-3"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
-                <p className="text-gray-400">Nenhuma partida ainda.</p>
-              </div>
-            )}
-          </div>
-
-          {/* Admin match editor — ORGANIZER only, shown at any tournament status.
-              Spans the full grid width so it isn't squeezed into one column. */}
-          {isAdminUser && adminMatchRows.length > 0 && (
-            <div className={showSidebar ? "lg:col-span-3" : ""}>
-              <AdminMatchEditor
-                matches={adminMatchRows}
-                tournamentId={tournament.id}
-                participants={standingsParticipants.map((p) => ({
-                  userId: p.userId,
-                  name: playerLabel(p.user, isAdminUser),
-                }))}
-              />
-            </div>
-          )}
-
-          {/* Sidebar: Standings */}
-          {showSidebar && (
-          <div className="space-y-6">
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <h2 className="text-lg font-bold text-white mb-4">Classificação</h2>
-              {tournament.participants.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center py-4">
-                  Nenhum participante ainda
-                </p>
-              ) : (
-                <div className="space-y-2 max-h-[32rem] overflow-y-auto">
-                  {standingsParticipants.map((p, idx) => (
-                    <div
-                      key={p.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg ${
-                        idx === 0
-                          ? "bg-amber-500/10 border border-amber-500/20"
-                          : "bg-gray-800"
-                      }`}
-                    >
-                      <span
-                        className={`text-sm font-black w-6 text-center ${
-                          idx === 0
-                            ? "text-amber-400"
-                            : idx === 1
-                            ? "text-gray-300"
-                            : idx === 2
-                            ? "text-amber-700"
-                            : "text-gray-600"
-                        }`}
-                      >
-                        {idx + 1}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-semibold text-white truncate">
-                          {playerLabel(p.user, isAdminUser)}
-                          {p.user.isGuest && <span className="ml-1.5 text-[10px] text-gray-500 font-normal">convidado</span>}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        {tournament.format === "ROUND_ROBIN" ? (
-                          <>
-                            <div className="text-sm font-bold text-amber-400">{p.totalPoints}V</div>
-                            <div className="text-xs text-[#f0a500]/80 font-medium">{battlePointsMap.get(p.userId) ?? 0}pts</div>
-                            <div className="text-xs text-gray-500">{p.losses}D</div>
-                          </>
-                        ) : tournament.format === "SINGLE_ELIMINATION" ? (
-                          <>
-                            <div className="text-sm font-bold text-amber-400">{p.wins}V</div>
-                            <div className="text-xs text-gray-500">{p.losses}D</div>
-                          </>
-                        ) : (
-                          /* GROUPS / SWISS: primary rank = battle points */
-                          <>
-                            <div className="text-sm font-bold text-amber-400">{p.totalPoints}pts</div>
-                            <div className="text-xs text-[#f0a500]/80 font-medium">{p.wins}V-{p.losses}D</div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Groups (if applicable) */}
-            {tournament.format === "GROUPS" && groupMap.size > 0 && (
-              <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-                <h2 className="text-lg font-bold text-white mb-4">Grupos</h2>
-                <div className="space-y-4">
-                  {Array.from(groupMap.values()).map(({ group, participants }) => (
-                    <div key={group.id}>
-                      <div className="text-sm font-bold text-amber-400 mb-2">
-                        {group.name}
-                      </div>
-                      <div className="space-y-1">
-                        {[...participants]
-                          .sort(pointsCompare)
-                          .map((p, idx) => (
-                            <div
-                              key={p.id}
-                              className="flex items-center gap-2 text-sm"
-                            >
-                              <span className="text-gray-500 w-4">
-                                {idx + 1}.
-                              </span>
-                              <span className="text-gray-300 flex-1">
-                                {playerLabel(p.user, isAdminUser)}
-                              </span>
-                              <span className="text-amber-400 font-medium text-xs">
-                                {p.totalPoints}pts
-                              </span>
-                              <span className="text-[#f0a500]/70 text-xs">
-                                {p.wins}V
-                              </span>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Participants list */}
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <h2 className="text-lg font-bold text-white mb-4">
-                Participantes ({tournament.participants.length})
-              </h2>
-              {isAdminUser && tournament.status !== "FINISHED" ? (
-                <AdminParticipantManager
-                  tournamentId={tournament.id}
-                  deckType={tournament.deckType}
-                  tournamentStatus={tournament.status}
-                  isOfficial={tournament.isOfficial}
-                  participants={tournament.participants.map((p) => ({
-                    userId: p.userId,
-                    user: p.user,
-                    beyblade1: p.beyblade1,
-                    beyblade2: p.beyblade2,
-                    beyblade3: p.beyblade3,
-                    currentBeyblades: currentSelectionMap.get(p.userId) ?? [],
-                    hasPaid: p.hasPaid,
-                    beybladeInspected: p.beybladeInspected,
-                    approved: (p as { approved?: boolean }).approved ?? true,
-                  }))}
-                  allPlayers={allPlayers}
-                />
-              ) : (
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {tournament.participants.length === 0 ? (
-                    <p className="text-gray-500 text-sm text-center py-2">
-                      Nenhum participante ainda
-                    </p>
-                  ) : (
-                    tournament.participants.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex items-center gap-3 py-2 border-b border-gray-800 last:border-0"
-                      >
-                        <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-400">
-                          {(p.user.bladerName || p.user.name)[0].toUpperCase()}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-white">
-                            {playerLabel(p.user, isAdminUser)}
-                            {p.user.isGuest && <span className="ml-1.5 text-[10px] text-gray-500">convidado</span>}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-          )}
+        <div className="min-w-0">
+          {tab === "resumo" && summaryContent}
+          {tab === "classificacao" && classificationContent}
+          {tab === "partidas" && matchesContent}
+          {tab === "regras" && rulesContent}
         </div>
       </main>
     </div>
@@ -1307,16 +1476,19 @@ export default async function TournamentDetailPage({
         <div className="flex items-center justify-center p-8">
           <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 max-w-md w-full text-center mt-16">
             <div className="mb-4"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
-            <h2 className="text-xl font-bold text-white mb-2">Erro ao carregar torneio</h2>
-            <p className="text-gray-400 text-sm mb-6">
-              Não foi possível carregar este torneio. Tente novamente em instantes.
+            <h1 className="text-xl font-bold text-white mb-2">Não foi possível carregar o torneio</h1>
+            <p className="text-gray-300 text-sm mb-6">
+              Parece uma falha temporária de conexão — o torneio continua salvo. Tente novamente em instantes.
             </p>
-            <Link
-              href="/tournaments"
-              className="inline-block bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold text-sm px-5 py-2.5 rounded-lg transition-colors"
-            >
-              Ver todos os torneios
-            </Link>
+            <div className="flex flex-wrap justify-center gap-3">
+              <RetryButton />
+              <Link
+                href="/tournaments"
+                className="tap inline-flex items-center px-5 rounded-xl font-bold border border-[#3a3a3a] text-gray-100 hover:bg-[#252525]"
+              >
+                Ver todos os torneios
+              </Link>
+            </div>
           </div>
         </div>
       </div>

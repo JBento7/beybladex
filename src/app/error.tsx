@@ -20,25 +20,25 @@ export default function Error({
       <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 max-w-md w-full text-center">
         <div className="mb-4 flex justify-center"><img src="/bey-removebg-preview.png" alt="" className="w-12 h-12 object-contain" /></div>
         <h2 className="text-xl font-bold text-white mb-2">Algo deu errado</h2>
-        <p className="text-gray-400 text-sm mb-6">
-          Não foi possível carregar esta página. Tente novamente em instantes.
+        <p className="text-gray-300 text-sm mb-6">
+          Não foi possível carregar esta página. Pode ser uma falha temporária de conexão — tente novamente.
         </p>
         <div className="flex items-center justify-center gap-3">
           <button
             onClick={() => reset()}
-            className="bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold text-sm px-5 py-2.5 rounded-lg transition-colors"
+            className="tap bg-[#f0a500] hover:bg-[#d4940a] text-black font-bold text-sm px-5 rounded-lg transition-colors"
           >
             Tentar novamente
           </button>
           <Link
-            href="/dashboard"
-            className="text-sm text-gray-400 hover:text-white px-5 py-2.5 transition-colors"
+            href="/"
+            className="tap inline-flex items-center text-sm text-gray-200 hover:text-white px-5 transition-colors"
           >
-            Ir ao painel
+            Ir para o início
           </Link>
         </div>
         {error.digest && (
-          <p className="text-gray-600 text-[10px] mt-5">Ref: {error.digest}</p>
+          <p className="text-gray-400 text-xs mt-5">Código para suporte: {error.digest}</p>
         )}
       </div>
     </div>

@@ -10,6 +10,15 @@
 :root {
   --background: #0a0a0a;
   --foreground: #f5f5f5;
+  /* Text tokens, measured against every dark surface the app uses
+     (#0a0a0a, #111827, #1a1a1a, #1f2937, #252525). WCAG AA = 4.5:1.
+       --text-secondary #a1a8b3 → 6.1–8.3:1  (dates, captions, labels)
+       --text-tertiary  #8f96a3 → 4.9–6.7:1  (hints, footnotes)
+     Tailwind's gray-500 (#6b7280, 3.0–4.1:1) and gray-600 (#4b5563,
+     1.9–2.6:1) failed AA as text, so those text utilities map here. */
+  --text-secondary: #a1a8b3;
+  --text-tertiary: #8f96a3;
+  --focus-ring: var(--accent);
 }
 
 body {
@@ -22,12 +31,30 @@ body {
   box-sizing: border-box;
 }
 
-/* Visible keyboard-focus ring for accessibility (mouse clicks unaffected) */
+/* Visible keyboard-focus ring for accessibility (mouse clicks unaffected).
+   Two rings (accent + dark halo) so it stays visible on accent buttons too. */
 :focus-visible {
-  outline: 2px solid #f0a500;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
+  box-shadow: 0 0 0 5px #000;
   border-radius: 4px;
 }
+
+/* Secondary text that used Tailwind's low-contrast grays (see tokens above). */
+.text-gray-500 { color: var(--text-secondary); }
+.text-gray-600, .text-gray-700 { color: var(--text-tertiary); }
+::placeholder,
+.placeholder-gray-500::placeholder,
+.placeholder-gray-600::placeholder { color: var(--text-tertiary); opacity: 1; }
+
+/* Disabled controls: dimmed AND not-allowed cursor, so the state isn't color-only. */
+button:disabled, [aria-disabled="true"] { cursor: not-allowed; }
+
+/* 44×44 px minimum touch target for small controls. */
+.tap { min-height: 44px; min-width: 44px; }
+
+/* Long user text (URLs, names without spaces) must wrap instead of widening the page. */
+.break-anywhere { overflow-wrap: anywhere; word-break: break-word; }
 
 ::-webkit-scrollbar {
   width: 6px;

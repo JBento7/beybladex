@@ -282,10 +282,10 @@ export default function AdminMatchEditor({
         <div>
           <h2 className="text-base font-bold text-white">Editar Resultados</h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Edite os pontos de qualquer partida diretamente, sem resetar e sem transmitir para as arenas. Use "Resetar" apenas para zerar e reinserir pelo placar.
+            Edite os pontos de qualquer partida diretamente, sem resetar e sem transmitir para as arenas. Use &quot;Resetar&quot; apenas para zerar e reinserir pelo placar.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <button
             onClick={cloneAsTest}
             disabled={cloneBusy}
