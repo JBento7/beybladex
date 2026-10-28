@@ -99,3 +99,20 @@ test("official ranking: same position everywhere, league scopes, excluded events
   assert.ok(shared.some((r) => r.id === players[6].id && r.points === 999));
   assert.ok(!lbm.some((r) => r.id === players[6].id));
 });
+
+test("stateVersion: bumped by points/sign-ups/results, not by telão heartbeats", async () => {
+  const t = await mkEvent({ status: "IN_PROGRESS", maxParticipants: null });
+  const [a, b] = [await mkUser("va"), await mkUser("vb")];
+  const v = async () => (await prisma.tournament.findUnique({ where: { id: t.id }, select: { stateVersion: true } }))!.stateVersion;
+  const v0 = await v();
+  await prisma.tournamentParticipant.create({ data: { tournamentId: t.id, userId: a.id } });
+  const v1 = await v(); assert.ok(v1 > v0);
+  const m = await prisma.match.create({ data: { tournamentId: t.id, round: 1, player1Id: a.id, player2Id: b.id } });
+  const v2 = await v(); assert.ok(v2 > v1);
+  await prisma.match.update({ where: { id: m.id }, data: { onAirAt: new Date(), countdownAt: new Date() } });
+  assert.equal(await v(), v2); // heartbeat: no bump
+  await prisma.matchPoint.create({ data: { matchId: m.id, userId: a.id, finishType: "SPIN_FINISH", points: 1 } });
+  const v3 = await v(); assert.ok(v3 > v2);
+  await prisma.match.update({ where: { id: m.id }, data: { status: "FINISHED", winnerId: a.id } });
+  assert.ok((await v()) > v3);
+});

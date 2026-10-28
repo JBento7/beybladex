@@ -19,3 +19,10 @@ test("user outside the top 5 gets a separate row with the real position", () => 
   assert.equal(rankingPreview(list, "nobody").me, null);
   assert.equal(rankingPreview([], "p1").top.length, 0); // empty ranking
 });
+
+test("equal points AND equal nicknames still have one stable order", () => {
+  const a = { id: "b2", name: "Igual", points: 10, wins: 0, losses: 0 };
+  const b = { id: "a1", name: "Igual", points: 10, wins: 0, losses: 0 };
+  assert.deepEqual(sortRanking([a, b]).map((x) => x.id), ["a1", "b2"]);
+  assert.deepEqual(sortRanking([b, a]).map((x) => x.id), ["a1", "b2"]);
+});

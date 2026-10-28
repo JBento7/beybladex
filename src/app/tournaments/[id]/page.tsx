@@ -5,7 +5,6 @@ import { auditSwiss, isSwissFormat } from "@/lib/swiss";
 import { decideMatchOp, effectiveJudgingMode } from "@/lib/matchPolicy";
 import { actorOf } from "@/lib/matchAccess";
 import { registrationState } from "@/lib/registration";
-import { ensureSwissProgress } from "@/lib/tournament-engine";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
@@ -21,6 +20,7 @@ import EditBeybladesButton from "./EditBeybladesButton";
 import FinalsDeckButton from "./FinalsDeckButton";
 import WOButton from "./WOButton";
 import JudgingModeToggle from "./JudgingModeToggle";
+import RetryAdvanceButton from "./RetryAdvanceButton";
 import AdminParticipantManager from "./AdminParticipantManager";
 import AdminMatchEditor from "./AdminMatchEditor";
 import ShareButton from "@/components/ShareButton";
@@ -322,52 +322,78 @@ export default async function TournamentDetailPage({
   try {
   const session = await getServerSession(authOptions);
 
-  // Self-heal Swiss progression before rendering: if the latest round finished
-  // but the next round was never generated (e.g. the final match closed via a
-  // path that didn't advance), generate it now so opening the page is enough.
-  try {
-    const meta = await prisma.tournament.findUnique({
+  // Viewing a page never changes the tournament (no round generation here):
+  // rounds advance when a result closes the round (point / W.O. / correction),
+  // and an organizer can retry from the admin tools. See docs/OPERACAO.md.
+  //
+  // Data is loaded per tab: "Regras" reads no matches/points at all, "Resumo"
+  // reads matches without points, "Classificação"/"Partidas" read per-player
+  // point SUMS (one aggregate) instead of every point row, and sets only for
+  // admins on "Partidas".
+  const meta = await prisma.tournament.findUnique({ where: { id: params.id }, select: { status: true } });
+  if (!meta) notFound();
+  const TAB_KEYS = ["resumo", "classificacao", "partidas", "regras"] as const;
+  type TabKey = (typeof TAB_KEYS)[number];
+  const kioskViewer = isJudgeAccount(session?.user?.email);
+  const tab: TabKey = kioskViewer
+    ? "partidas"
+    : (TAB_KEYS as readonly string[]).includes(searchParams?.aba ?? "")
+      ? (searchParams!.aba as TabKey)
+      : meta.status === "IN_PROGRESS" ? "partidas" : "resumo";
+  const needParticipants = tab !== "regras";
+  const needMatches = tab !== "regras";
+  const needPoints = tab === "classificacao" || tab === "partidas";
+  const needSets = tab === "partidas" && session?.user.role === "ORGANIZER";
+  const NONE = { id: "__none__" }; // keeps the relation (and its types) but returns nothing
+
+  const [loaded, pointSums] = await Promise.all([
+    prisma.tournament.findUnique({
       where: { id: params.id },
-      select: { format: true, status: true },
-    });
-    if (isSwissFormat(meta?.format) && meta?.status === "IN_PROGRESS") {
-      await ensureSwissProgress(params.id);
-    }
-  } catch (e) {
-    console.error("[tournament page] ensureSwissProgress", e);
+      include: {
+        organizer: { select: { id: true, name: true } },
+        _count: { select: { participants: true } },
+        participants: {
+          where: needParticipants ? {} : NONE,
+          include: {
+            user: { select: { id: true, name: true, bladerName: true, isGuest: true } },
+            group: true,
+          },
+          orderBy: [{ totalPoints: "desc" }, { id: "asc" }],
+        },
+        groups: tab === "classificacao" ? true : { where: NONE },
+        judges: {
+          include: { user: { select: { id: true, name: true, bladerName: true } } },
+        },
+        matches: {
+          where: needMatches ? {} : NONE,
+          include: {
+            player1: { select: { id: true, name: true, bladerName: true } },
+            player2: { select: { id: true, name: true, bladerName: true } },
+            winner: { select: { id: true, name: true, bladerName: true } },
+            judge: { select: { id: true, name: true, bladerName: true } },
+            sets: { where: needSets ? {} : NONE, select: { winnerId: true, setNumber: true, player1Points: true, player2Points: true } },
+            group: true,
+          },
+          orderBy: [{ round: "asc" }, { slot: "asc" }, { arena: "asc" }, { id: "asc" }],
+        },
+      },
+    }),
+    // Battle points per match and player, summed in the database (the same
+    // numbers the standings add up), instead of transporting every point.
+    needPoints
+      ? prisma.matchPoint.groupBy({ by: ["matchId", "userId"], where: { match: { tournamentId: params.id } }, _sum: { points: true } })
+      : Promise.resolve([] as { matchId: string; userId: string; _sum: { points: number | null } }[]),
+  ]);
+  if (!loaded) notFound();
+  // Attach the aggregated points to each match in the shape the page uses.
+  const byMatch = new Map<string, { userId: string; points: number }[]>();
+  for (const g of pointSums) {
+    const list = byMatch.get(g.matchId) ?? [];
+    list.push({ userId: g.userId, points: g._sum.points ?? 0 });
+    byMatch.set(g.matchId, list);
   }
-
-  const tournament = await prisma.tournament.findUnique({
-    where: { id: params.id },
-    include: {
-      organizer: { select: { id: true, name: true } },
-      participants: {
-        include: {
-          user: { select: { id: true, name: true, bladerName: true, isGuest: true } },
-          group: true,
-        },
-        orderBy: { totalPoints: "desc" },
-      },
-      groups: true,
-      judges: {
-        include: { user: { select: { id: true, name: true, bladerName: true } } },
-      },
-      matches: {
-        include: {
-          player1: { select: { id: true, name: true, bladerName: true } },
-          player2: { select: { id: true, name: true, bladerName: true } },
-          winner: { select: { id: true, name: true, bladerName: true } },
-          judge: { select: { id: true, name: true, bladerName: true } },
-          points: { select: { userId: true, points: true } },
-          sets: { select: { winnerId: true, setNumber: true, player1Points: true, player2Points: true } },
-          group: true,
-        },
-        orderBy: [{ round: "asc" }, { slot: "asc" }, { arena: "asc" }],
-      },
-    },
-  });
-
-  if (!tournament) notFound();
+  const tournament = { ...loaded, matches: loaded.matches.map((m) => ({ ...m, points: byMatch.get(m.id) ?? [] })) };
+  const participantCount = tournament._count.participants;
 
   const isOrganizerOfThis = !!session && session.user.id === tournament.organizerId;
   // Any ORGANIZER-role user can manage participants (not just the creator)
@@ -420,7 +446,8 @@ export default async function TournamentDetailPage({
         })
       : Promise.resolve([]),
     // Any organizer-role user gets the full player list for the admin panel
-    isAdminUser
+    // (only on "Resumo", where the participant manager lives).
+    isAdminUser && tab === "resumo" && tournament.status !== "FINISHED"
       ? prisma.user.findMany({
           where: { deleted: false, isGuest: false, NOT: [{ email: { endsWith: ".arena" } }, { email: { endsWith: ".juiz" } }] },
           select: {
@@ -437,7 +464,7 @@ export default async function TournamentDetailPage({
 
   type BeybladeWithUser = BeybladeInfo & { userId: string };
   const allParticipantBeyblades: Map<string, BeybladeInfo[]> = new Map();
-  if (!tournament.isOfficial) {
+  if (!tournament.isOfficial && tournament.participants.length > 0 && (tab === "partidas" || tab === "resumo")) {
     const participantUserIds = tournament.participants.map((p) => p.userId);
     const allBeys = await prisma.beyblade.findMany({
       where: { userId: { in: participantUserIds } },
@@ -465,7 +492,7 @@ export default async function TournamentDetailPage({
   const showStartButton =
     isAdminUser &&
     tournament.status === "REGISTRATION" &&
-    tournament.participants.length >= 2;
+    participantCount >= 2;
 
   type JudgeCandidate = { id: string; name: string; isAdmin: boolean; isParticipant: boolean };
   let judgeCandidates: JudgeCandidate[] = [];
@@ -720,7 +747,7 @@ export default async function TournamentDetailPage({
     status: tournament.status,
     registrationDeadline: tournament.registrationDeadline,
     maxParticipants: tournament.maxParticipants,
-    participantCount: tournament.participants.length,
+    participantCount,
   });
   const canJoin = !!session && !isParticipant && reg.open;
 
@@ -736,21 +763,15 @@ export default async function TournamentDetailPage({
     currentBeybladeIds.length === 3;
 
   // Judge kiosk accounts only need the tournament name and the matches.
-  const judgeKiosk = isJudgeAccount(session?.user?.email);
+  const judgeKiosk = kioskViewer;
 
   // ── Tabs (kept in the URL: ?aba=...) ──────────────────────────────────────
-  type TabKey = "resumo" | "classificacao" | "partidas" | "regras";
   const TABS: { key: TabKey; label: string }[] = [
     { key: "resumo", label: "Resumo" },
     { key: "classificacao", label: "Classificação" },
     { key: "partidas", label: "Partidas" },
     { key: "regras", label: "Regras" },
   ];
-  const defaultTab: TabKey = tournament.status === "IN_PROGRESS" ? "partidas" : "resumo";
-  const requested = searchParams?.aba;
-  const tab: TabKey = judgeKiosk
-    ? "partidas"
-    : TABS.some((t) => t.key === requested) ? (requested as TabKey) : defaultTab;
 
   // Admin match editor data: all non-bye matches
   const adminMatchRows = tournament.matches
@@ -988,7 +1009,7 @@ export default async function TournamentDetailPage({
   const participantsSection = (
     <section aria-labelledby="participantes-titulo" className={card}>
       <h3 id="participantes-titulo" className="text-lg font-bold text-white mb-4">
-        Participantes ({tournament.participants.length}{tournament.maxParticipants ? ` de ${tournament.maxParticipants}` : ""})
+        Participantes ({participantCount}{tournament.maxParticipants ? ` de ${tournament.maxParticipants}` : ""})
       </h3>
       {isAdminUser && tournament.status !== "FINISHED" ? (
         <AdminParticipantManager
@@ -1278,9 +1299,27 @@ export default async function TournamentDetailPage({
   );
 
   // ── Content of each tab ───────────────────────────────────────────────────
+  // A finished round whose next step wasn't generated (advance failed or was
+  // blocked): visible to organizers, with an idempotent retry.
+  const lastRoundNo = sortedRounds.length ? sortedRounds[sortedRounds.length - 1][0] : 0;
+  const lastRoundDone = sortedRounds.length > 0 && sortedRounds[sortedRounds.length - 1][1].every((m) => m.status === "FINISHED") && (!thirdPlaceMatch || thirdPlaceMatch.round !== lastRoundNo || thirdPlaceMatch.status === "FINISHED");
+  const stalled = tournament.status === "IN_PROGRESS" && lastRoundDone && (isAdminUser || canJudge);
+  const stalledBanner = stalled && (
+    <section role="alert" className="rounded-xl border border-warn/50 bg-warn-bg p-4">
+      <h3 className="font-bold text-warn">A rodada {lastRoundNo} terminou, mas a fase seguinte não foi gerada</h3>
+      <p className="mt-1 text-sm text-gray-100">
+        {blockingIssues.length
+          ? "O avanço está bloqueado por registros inconsistentes (veja o aviso acima)."
+          : "O avanço automático falhou ou ainda não rodou. Você pode tentar novamente sem risco de duplicar partidas."}
+      </p>
+      {isAdminUser && !blockingIssues.length && <RetryAdvanceButton tournamentId={tournament.id} />}
+    </section>
+  );
+
   const matchesContent = sortedRounds.length > 0 ? (
     <div className="space-y-6">
       {integrityBanner}
+      {stalledBanner}
       {tournament.status === "IN_PROGRESS" && currentRound != null && !judgeKiosk && (
         <a href={`#rodada-${currentRound}`} className="tap inline-flex items-center gap-2 px-4 rounded-lg bg-green-500/15 border border-green-500/40 text-green-200 text-sm font-bold">
           Ir para a rodada atual: {roundLabel(currentRound)}
@@ -1319,7 +1358,7 @@ export default async function TournamentDetailPage({
     <div className={`${card} text-center`}>
       <h3 className="text-lg font-bold text-white mb-2">As partidas ainda não foram geradas</h3>
       <p className="text-gray-300 text-sm">Elas aparecem aqui quando o organizador iniciar o torneio.</p>
-      {isOrganizerOfThis && tournament.participants.length < 2 && (
+      {isOrganizerOfThis && participantCount < 2 && (
         <p className="text-amber-300 text-sm mt-2">São necessários pelo menos 2 participantes para iniciar.</p>
       )}
     </div>
@@ -1537,7 +1576,7 @@ export default async function TournamentDetailPage({
                   <h1 className="text-2xl sm:text-3xl font-black text-white break-anywhere">{tournament.name}</h1>
                   <p className="mt-2 text-sm text-gray-300 flex flex-wrap gap-x-4 gap-y-1">
                     {dateText && <span><span aria-hidden="true">📅 </span>{dateText}</span>}
-                    <span><span aria-hidden="true">👥 </span>{tournament.participants.length} participante{tournament.participants.length === 1 ? "" : "s"}</span>
+                    <span><span aria-hidden="true">👥 </span>{participantCount} participante{participantCount === 1 ? "" : "s"}</span>
                     <span>{formatText}</span>
                   </p>
                   {tournament.status === "FINISHED" && podium.first && (

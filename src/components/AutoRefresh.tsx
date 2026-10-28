@@ -3,59 +3,76 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
-// Keeps a server-rendered page live: polls a tiny "version" endpoint and calls
-// router.refresh() (re-renders the server data, keeps client state) only when
-// the fingerprint changes. Paused while the tab is hidden, and while a modal
-// (scoreboard, W.O.) is open so a judge's screen never shifts under their
-// finger — the pending update lands as soon as it closes.
+// Keeps a server-rendered page live by polling a tiny version endpoint
+// (one integer, ETag/304) and re-rendering the server data only when it
+// changed. Behaviour:
+//  - never two requests at once; paused while the tab is hidden;
+//  - exponential backoff after errors (up to 60 s) and slower after a long
+//    quiet period; immediate check when the tab returns or the network is back;
+//  - changes that arrive close together are coalesced into one refresh;
+//  - never refreshes under an open modal (scoreboard, W.O.) — the pending
+//    update lands when it closes, so a judge's screen doesn't move.
 export default function AutoRefresh({ url, intervalMs = 5000 }: { url: string; intervalMs?: number }) {
   const router = useRouter();
+  const etagRef = useRef<string | null>(null);
   const lastRef = useRef<string | null>(null);
   const pendingRef = useRef(false);
 
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let inflight = false;
+    let errors = 0;
     let quietSince = Date.now();
+    let lastRefresh = 0;
 
     const modalOpen = () => !!document.querySelector('[role="dialog"][aria-modal="true"]');
+    const schedule = (ms: number) => { if (active) { clearTimeout(timer); timer = setTimeout(tick, ms); } };
 
     const tick = async () => {
-      if (!active) return;
-      if (document.visibilityState === "visible") {
-        try {
-          const res = await fetch(url, { cache: "no-store" });
-          if (res.ok) {
-            const { v } = (await res.json()) as { v?: string | null };
-            if (v != null) {
-              if (lastRef.current !== null && v !== lastRef.current) {
-                pendingRef.current = true;
-                quietSince = Date.now();
-              }
-              lastRef.current = v;
-            }
+      if (!active || inflight) return;
+      if (document.visibilityState !== "visible" || !navigator.onLine) return schedule(intervalMs * 2);
+      inflight = true;
+      try {
+        const res = await fetch(url, { cache: "no-store", headers: etagRef.current ? { "If-None-Match": etagRef.current } : {} });
+        if (res.status === 304) {
+          errors = 0;
+        } else if (res.ok) {
+          errors = 0;
+          etagRef.current = res.headers.get("ETag");
+          const { v } = (await res.json()) as { v?: string | null };
+          if (v != null) {
+            if (lastRef.current !== null && v !== lastRef.current) { pendingRef.current = true; quietSince = Date.now(); }
+            lastRef.current = v;
           }
-        } catch { /* offline — try again next tick */ }
-        if (pendingRef.current && !modalOpen()) {
-          pendingRef.current = false;
-          router.refresh();
+        } else {
+          errors++;
         }
+      } catch {
+        errors++;
+      } finally {
+        inflight = false;
       }
-      // Back off on a page that hasn't changed for a while (left open).
+      // Coalesce: at most one refresh every 1.5 s, and never under a modal.
+      if (pendingRef.current && !modalOpen() && Date.now() - lastRefresh > 1500) {
+        pendingRef.current = false;
+        lastRefresh = Date.now();
+        router.refresh();
+      }
       const idle = Date.now() - quietSince > 20 * 60_000;
-      if (active) timer = setTimeout(tick, idle ? intervalMs * 4 : intervalMs);
+      const backoff = errors ? Math.min(60_000, intervalMs * 2 ** Math.min(errors, 4)) : 0;
+      schedule(backoff || (idle ? intervalMs * 4 : pendingRef.current ? 1500 : intervalMs));
     };
 
-    // Coming back to the tab: check right away.
-    const onVis = () => {
-      if (document.visibilityState === "visible") { if (timer) clearTimeout(timer); tick(); }
-    };
-    document.addEventListener("visibilitychange", onVis);
-    timer = setTimeout(tick, 500);
+    const wake = () => { if (document.visibilityState === "visible") { errors = 0; schedule(0); } };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("online", wake);
+    schedule(500);
     return () => {
       active = false;
-      if (timer) clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVis);
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("online", wake);
     };
   }, [url, intervalMs, router]);
 

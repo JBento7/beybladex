@@ -13,4 +13,6 @@ if (/vercel|supabase|neon|amazonaws|pooler/i.test(url)) { console.error("TEST_DA
 
 const env = { ...process.env, DATABASE_URL: url, DIRECT_URL: url };
 execSync("npx prisma db push --skip-generate --accept-data-loss", { stdio: "inherit", env });
+// Raw-SQL parts of the schema that Prisma doesn't model (event version triggers).
+execSync("npx prisma db execute --file prisma/sql/state_version_triggers.sql --schema prisma/schema.prisma", { stdio: "inherit", env });
 execSync('node --import tsx --test --test-concurrency=1 "tests/integration/*.int.test.ts"', { stdio: "inherit", env });

@@ -223,6 +223,20 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
   const liveRef = useRef(false);
   const visibleRef = useRef(true);
   const p2pFreshRef = useRef(0);
+  // How often the server fallback is actually used (sent to /api/metrics).
+  const statsRef = useRef({ p2pMessages: 0, tickPolls: 0, fullPolls: 0, signalsViaServer: 0, since: Date.now() });
+  useEffect(() => {
+    const send = () => {
+      const st = statsRef.current;
+      const body = JSON.stringify({ kind: "arena", arena, ...st, windowMs: Date.now() - st.since });
+      try { navigator.sendBeacon?.("/api/metrics", body); } catch { /* ignore */ }
+      statsRef.current = { p2pMessages: 0, tickPolls: 0, fullPolls: 0, signalsViaServer: 0, since: Date.now() };
+    };
+    const id = setInterval(send, 5 * 60_000);
+    (window as unknown as { __arenaStats?: () => unknown }).__arenaStats = () => statsRef.current;
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // A telão left open between events kept polling around the clock, which is
   // pure waste (and the bulk of the hosting data transfer). After a long stretch
@@ -383,7 +397,9 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
       if (visibleRef.current && !asleepRef.current) await load();
       if (!active) return;
       const p2pFresh = Date.now() - p2pFreshRef.current < 10000;
-      const delay = asleepRef.current ? 5000 : !visibleRef.current ? 8000 : !liveRef.current ? 4000 : p2pFresh ? 3000 : 1500;
+      // Full scoreboard data: the P2P link carries live points when healthy.
+      statsRef.current.fullPolls++;
+      const delay = asleepRef.current ? 5000 : !visibleRef.current ? 8000 : p2pFresh ? 6000 : !liveRef.current ? 8000 : 1500;
       timer = setTimeout(run, delay);
     };
     run();
@@ -414,10 +430,12 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
           } = await res.json();
           if (active && d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
             playedKeyRef.current = d.countdown.key;
+            statsRef.current.signalsViaServer++;
             playCountdown();
           }
           if (active && d.finish && d.finish.key !== playedFinishKeyRef.current && d.finish.elapsedMs < 5000) {
             playedFinishKeyRef.current = d.finish.key;
+            statsRef.current.signalsViaServer++;
             // Already played from the P2P link moments ago — don't replay it.
             const pf = lastP2pFinishRef.current;
             if (!(pf && pf.type === d.finish.type && Date.now() - pf.at < 15000)) playFinish(d.finish.type);
@@ -438,7 +456,10 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
       // when the P2P link is delivering signals directly (server tick is just a
       // fallback then). This is the single biggest Vercel invocation source.
       const p2pFresh = Date.now() - p2pFreshRef.current < 10000;
-      const delay = !liveRef.current ? 1500 : p2pFresh ? 1500 : 600;
+      // Quick signals (PRONTOS / countdown / finish): only the fallback when
+      // the P2P link is healthy; relaxed when this arena has no match.
+      statsRef.current.tickPolls++;
+      const delay = p2pFresh ? 4000 : !liveRef.current ? 3000 : 600;
       if (active) timer = setTimeout(tick, delay);
     };
     tick();
@@ -453,6 +474,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
     const link = startAnswerer(arenaChannel(community, arena), {
       onMessage: (m: { type?: string; finishType?: string; winnerId?: string; byId?: Record<string, number>; setsById?: Record<string, number>; at?: number }) => {
         p2pFreshRef.current = Date.now();
+        statsRef.current.p2pMessages++;
         if (asleepRef.current && m?.type !== "state") wake();
         if (m?.type === "finish" && m.finishType) lastP2pFinishRef.current = { type: m.finishType, at: Date.now() };
         if (m?.type === "matchEnd" && m.winnerId) { setP2pWinner({ winnerId: m.winnerId, at: Date.now(), matchKey: matchKeyRef.current }); burstRefresh(); }

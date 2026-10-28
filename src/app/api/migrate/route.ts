@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { STATE_VERSION_TRIGGER_SQL } from "@/lib/sql/stateVersionTriggers";
 
 // One-time migration endpoint to apply missing schema columns.
 // Restricted to signed-in organizers — it runs destructive DDL.
@@ -765,6 +766,9 @@ export async function GET() {
     // it first lists every historical conflict instead of failing or dropping rows.
     { name: "idx TournamentParticipant user", sql: `CREATE INDEX IF NOT EXISTS "TournamentParticipant_userId_idx" ON "TournamentParticipant" ("userId")` },
   ];
+
+  // Database-side event version (triggers). Statements from lib/sql.
+  STATE_VERSION_TRIGGER_SQL.forEach((sql, i) => migrations.push({ name: `stateVersion trigger ${i + 1}`, sql }));
 
   for (const migration of migrations) {
     try {
