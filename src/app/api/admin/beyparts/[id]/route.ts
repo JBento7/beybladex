@@ -32,10 +32,8 @@ async function renameInCombos(category: string, oldName: string, newName: string
   }
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ORGANIZER") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
@@ -90,10 +88,8 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ORGANIZER") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });

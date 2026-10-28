@@ -13,7 +13,8 @@ import { randomBytes } from "crypto";
 // Guests are stored as "shadow users" (isGuest=true) so that matches,
 // scoring and standings — which all reference real user IDs — work
 // unchanged. Their beyblades are created as real Beyblade records.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
@@ -141,7 +142,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 //          — only while the tournament is in REGISTRATION (combos lock once it starts).
 // Status flags: { userId, hasPaid?: boolean, beybladeInspected?: boolean }
 //          — payment/inspection checkboxes, editable any time before FINISHED.
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
@@ -286,7 +288,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 // DELETE — admin removes a player from a tournament (only if no matches played).
 // For guests (shadow users) the user record and their beyblades are cleaned up.
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }

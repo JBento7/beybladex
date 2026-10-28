@@ -13,11 +13,12 @@ import { ButtonLink } from "@/components/ui/Button";
 
 export const metadata: Metadata = { title: "Torneios" };
 
-export default async function TournamentsPage({
-  searchParams,
-}: {
-  searchParams?: { status?: string; liga?: string; q?: string };
-}) {
+export default async function TournamentsPage(
+  props: {
+    searchParams?: Promise<{ status?: string; liga?: string; q?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(authOptions);
   const status = parseStatus(searchParams?.status);
   const liga = parseLiga(searchParams?.liga);

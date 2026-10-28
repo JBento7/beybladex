@@ -27,7 +27,7 @@ export async function POST(_req: NextRequest) {
       },
     });
 
-    const headersList = headers();
+    const headersList = await headers();
     const host = headersList.get("host") || "localhost:3000";
     const protocol = host.includes("localhost") ? "http" : "https";
     const url = `${protocol}://${host}/register?invite=${invite.token}`;

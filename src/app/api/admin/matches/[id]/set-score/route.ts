@@ -21,10 +21,8 @@ import {
 // MatchPoint records so aggregate points and standings stay consistent, then
 // recompute the match winner from sets won. This is a correction tool: it does
 // not touch arena signals and does not touch per-beyblade win/loss records.
-export async function POST(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {

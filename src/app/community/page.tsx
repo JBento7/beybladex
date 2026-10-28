@@ -16,7 +16,8 @@ import { getOfficialBattlePoints } from "@/lib/leagueRanking";
 // Tabs: everyone ("geral") or only the members of one league.
 const PAGE_SIZE = 30;
 
-export default async function CommunityPage({ searchParams }: { searchParams: { c?: string; pagina?: string } }) {
+export default async function CommunityPage(props: { searchParams: Promise<{ c?: string; pagina?: string }> }) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(authOptions);
   if (!session) redirect(authUrl(`/community${searchParams.c ? `?c=${encodeURIComponent(searchParams.c)}` : ""}`));
   const tab = COMMUNITY_LIST.some((c) => c.slug === searchParams.c) ? (searchParams.c as string) : "geral";

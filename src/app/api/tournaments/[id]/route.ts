@@ -6,10 +6,8 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const tournament = await prisma.tournament.findUnique({
       where: { id: params.id },
@@ -53,10 +51,8 @@ export async function GET(
 // PATCH — edit a tournament/BeyEncontro that hasn't started yet.
 // Official tournaments: only ORGANIZER-role users (admins) can edit.
 // BeyEncontros: the creator or any admin can edit.
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }

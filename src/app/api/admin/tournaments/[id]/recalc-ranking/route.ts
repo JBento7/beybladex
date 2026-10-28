@@ -15,7 +15,8 @@ import { hasBlocking } from "@/lib/swiss";
 // were finalized with the old, buggy playoff-boundary logic (which ranked a
 // Suíço by "last round lost" instead of by wins). It first recomputes every
 // participant's wins/points from the recorded matches, then re-runs the ranking.
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {

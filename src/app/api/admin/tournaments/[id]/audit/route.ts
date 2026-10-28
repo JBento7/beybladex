@@ -11,7 +11,8 @@ import { computeSwissStandings, computeSwissFinalPlacement, comparePlacements } 
 // ORGANIZER-only, READ-ONLY integrity report of a tournament. Nothing is
 // written (it doesn't even freeze swissRounds). Use ?format=md for a
 // Markdown report to attach to a reconciliation decision.
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {

@@ -12,10 +12,8 @@ import { hasBlocking, isSwissFormat } from "@/lib/swiss";
 // POST — manually finish a tournament/BeyEncontro even if not all matches
 // have been played. Any pending matches are left as-is; ranking is computed
 // from the matches that did finish.
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }

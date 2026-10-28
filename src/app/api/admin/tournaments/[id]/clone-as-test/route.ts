@@ -12,7 +12,8 @@ import { prisma } from "@/lib/prisma";
 //
 // Deliberately NOT copied: matches, sets, points, placements and ranking points.
 // The clone starts clean in REGISTRATION so it can be started for real.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {

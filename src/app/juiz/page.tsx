@@ -21,7 +21,8 @@ export const metadata: Metadata = { title: "Juiz" };
 // "not started yet" from "missing".
 type Tab = "oficial" | "beyencontro" | "teste";
 
-export default async function JudgeHome({ searchParams }: { searchParams: { aba?: string } }) {
+export default async function JudgeHome(props: { searchParams: Promise<{ aba?: string }> }) {
+  const searchParams = await props.searchParams;
   const tab: Tab = searchParams.aba === "teste" ? "teste" : searchParams.aba === "beyencontro" ? "beyencontro" : "oficial";
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login?callbackUrl=/juiz");

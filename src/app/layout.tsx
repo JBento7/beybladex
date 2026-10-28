@@ -31,8 +31,8 @@ const baseMetadata: Metadata = {
 };
 
 // The browser-tab icon follows the viewer's community (LBM logo for LBM).
-export function generateMetadata(): Metadata {
-  const lbm = cookies().get(COMMUNITY_COOKIE)?.value === "lbm";
+export async function generateMetadata(): Promise<Metadata> {
+  const lbm = (await cookies()).get(COMMUNITY_COOKIE)?.value === "lbm";
   return { ...baseMetadata, icons: { icon: lbm ? "/lbm-logo.webp" : "/lbl-logo.png", apple: "/apple-touch-icon.png" } };
 }
 
@@ -41,24 +41,26 @@ export const viewport: Viewport = {
   viewportFit: "cover", // lets the bottom bar respect the iPhone home indicator
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function RootLayout(
+  {
+    children,
+  }: {
+    children: React.ReactNode;
+  }
+) {
   return (
     <html
       lang="pt-BR"
       className={`${inter.variable} ${barlow.variable}`}
       // Sidebar collapsed state is remembered in a cookie so the first paint
       // already has the right width (no jump).
-      data-sidebar={cookies().get(SIDEBAR_COOKIE)?.value === "collapsed" ? "collapsed" : "expanded"}
+      data-sidebar={(await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed" ? "collapsed" : "expanded"}
     >
       <body className="bg-app text-fg font-sans min-h-screen">
         <ServiceWorkerRegister />
         <ConnectionBanner />
         <Providers>
-          <CommunityTheme initial={cookies().get(COMMUNITY_COOKIE)?.value ?? null}>{children}</CommunityTheme>
+          <CommunityTheme initial={(await cookies()).get(COMMUNITY_COOKIE)?.value ?? null}>{children}</CommunityTheme>
         </Providers>
       </body>
     </html>

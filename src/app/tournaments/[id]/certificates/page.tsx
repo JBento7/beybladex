@@ -6,7 +6,8 @@ import { redirect, notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import CertificatesClient from "./CertificatesClient";
 
-export default async function CertificatesPage({ params }: { params: { id: string } }) {
+export default async function CertificatesPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ORGANIZER") redirect("/dashboard");
 

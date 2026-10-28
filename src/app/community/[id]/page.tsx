@@ -11,7 +11,8 @@ import MyDeckSection from "@/app/profile/MyDeckSection";
 import type { FinishType } from "@prisma/client";
 import type { Metadata } from "next";
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const p = await prisma.user.findUnique({
     where: { id: params.id },
     select: { name: true, bladerName: true },
@@ -34,11 +35,12 @@ const finishBarColors: Record<string, string> = {
 };
 const finishOrder: FinishType[] = ["EXTREME_FINISH", "BURST_FINISH", "OVER_FINISH", "SPIN_FINISH"];
 
-export default async function PlayerProfilePage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function PlayerProfilePage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session) redirect(`/login?callbackUrl=${encodeURIComponent(`/community/${params.id}`)}`);
 

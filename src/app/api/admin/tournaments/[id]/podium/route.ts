@@ -18,7 +18,8 @@ import { RANKING_POINTS_BY_PLACE } from "@/lib/tournament-engine";
 // and 0 ranking points.
 //
 // Body: { order: string[] }  — userIds from 1st place onward.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {

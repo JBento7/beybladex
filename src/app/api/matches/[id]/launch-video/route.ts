@@ -9,7 +9,8 @@ import { arenaSignalKey } from "@/lib/arenaIdentity";
 
 // The judge plays the launch/countdown video on THIS match's arena telão (e.g.
 // to show players the countdown before the match). Same permission as scoring.
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

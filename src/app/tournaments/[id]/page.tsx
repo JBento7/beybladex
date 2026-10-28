@@ -36,7 +36,8 @@ import type { Metadata } from "next";
 import { canSeeDraft } from "@/lib/tournamentList";
 import { authUrl } from "@/lib/safeRedirect";
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const t = await prisma.tournament.findUnique({
     where: { id: params.id },
     select: { name: true, status: true },
@@ -314,13 +315,14 @@ function BracketView({
   );
 }
 
-export default async function TournamentDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: { aba?: string };
-}) {
+export default async function TournamentDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ aba?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   try {
   const session = await getServerSession(authOptions);
 

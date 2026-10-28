@@ -7,7 +7,8 @@ import { isSwissFormat } from "@/lib/swiss";
 
 // Suíço finals: a player who advanced to the knockout may change EXACTLY ONE
 // combo of their 3-bey deck, once. POST { beybladeIds: [id, id, id] }.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const userId = session.user.id;

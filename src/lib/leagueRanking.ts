@@ -59,7 +59,10 @@ export function scopeOfHome(home: string | null | undefined): RankingScope {
 }
 
 export function revalidateRankings() {
-  try { revalidateTag("ranking"); } catch { /* outside a Next request */ }
+  // { expire: 0 } = the pre-16 single-argument behaviour (next request
+  // recomputes; stale data is never served). Called from Route Handlers, so
+  // updateTag is not available.
+  try { revalidateTag("ranking", { expire: 0 }); } catch { /* outside a Next request */ }
 }
 
 // Battle points scored in official events, per player (the "pts" metric used

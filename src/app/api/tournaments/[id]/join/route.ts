@@ -40,10 +40,8 @@ function findDuplicateParts(beys: OwnedBey[]): string[] {
   return [...dupes];
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
@@ -157,10 +155,8 @@ export async function POST(
 
 // PATCH — let a participant change their selected beyblades while the
 // tournament is still in REGISTRATION. Once it starts, combos are locked.
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     if (!session) {

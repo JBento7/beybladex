@@ -11,10 +11,8 @@ import { recalculateStandings, revertBeybladeStats } from "@/lib/tournament-engi
 // ORGANIZER-only: reset a match back to PENDING for re-scoring.
 // Clears all MatchPoints and MatchSets for this match, then
 // recalculates standings for both players so stats reflect the removal.
-export async function POST(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {

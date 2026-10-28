@@ -13,7 +13,8 @@ export const metadata: Metadata = { title: "Rankings" };
 const SCOPES = RANKING_SCOPES;
 type ScopeKey = RankingScope;
 
-export default async function RankingsPage({ searchParams }: { searchParams: { r?: string } }) {
+export default async function RankingsPage(props: { searchParams: Promise<{ r?: string }> }) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(authOptions);
   const scope: ScopeKey = searchParams.r && searchParams.r in SCOPES ? (searchParams.r as ScopeKey) : "lbl";
 

@@ -13,8 +13,9 @@ import type { FinishType } from "@prisma/client";
 // DELETE — remove a single point entry and update set/match counters
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string; pointId: string } }
+  props: { params: Promise<{ id: string; pointId: string }> }
 ) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {
@@ -57,8 +58,9 @@ export async function DELETE(
 // POST — add a point to a specific match
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string; pointId: string } }
+  props: { params: Promise<{ id: string; pointId: string }> }
 ) {
+  const params = await props.params;
   // pointId here is the matchId (reusing the route slot)
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }

@@ -24,11 +24,12 @@ export const viewport = {
   themeColor: "#000000",
 };
 
-export default async function ArenaPage({
-  searchParams,
-}: {
-  searchParams: { n?: string; c?: string };
-}) {
+export default async function ArenaPage(
+  props: {
+    searchParams: Promise<{ n?: string; c?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const session = await getServerSession(authOptions);
   if (!session) redirect(authUrl("/arena"));
 

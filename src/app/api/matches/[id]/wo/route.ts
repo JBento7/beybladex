@@ -13,10 +13,8 @@ import { recalculateStandings, advanceSingleElimination, generateSwissRound, adv
 
 // POST — declare a walkover (W.O.): the opponent of `winnerId` didn't show up,
 // so the match is finished without playing any sets.
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }

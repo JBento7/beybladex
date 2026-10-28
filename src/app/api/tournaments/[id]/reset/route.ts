@@ -8,10 +8,8 @@ import { prisma } from "@/lib/prisma";
 // POST — wipe all matches/results from a test tournament and reopen
 // registration, so admins can reuse it to test the site's flows again.
 // Restricted to test tournaments (isTest: true) and ORGANIZER users.
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }

@@ -10,7 +10,8 @@ import { assignFreeJudge } from "@/lib/tournament-engine";
 // The judge presses "Iniciar" → stamp the match so the arena display starts the
 // 3-2-1-GO-SHOOT countdown video. Authorized for the judge/organizer, or anyone
 // logged in when the tournament has no judges (open judging).
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

@@ -11,7 +11,8 @@ import { arenaSignalKey } from "@/lib/arenaIdentity";
 // PRONTOS clip and then HOLDS on its last frame until the countdown starts, so
 // the players stay on the ready screen for as long as the judge needs.
 // Same permission model as scoring.
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

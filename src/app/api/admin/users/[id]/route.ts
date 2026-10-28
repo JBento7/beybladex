@@ -19,10 +19,8 @@ function outOfReach(actorScope: string | null | undefined, target: { role: strin
 }
 
 // PATCH /api/admin/users/[id] — edit user
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
 
@@ -71,10 +69,8 @@ export async function PATCH(
 }
 
 // DELETE /api/admin/users/[id] — soft-delete (anonymize), keep match history
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await requireAdmin();
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
 

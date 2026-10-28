@@ -12,7 +12,8 @@ import { generateSwissRound, advanceSwissTournament, getSwissRounds, recalculate
 // Admin/test-only: simulate the whole Swiss phase of a TEST tournament (random
 // winners), advancing to the knockout. Only pending matches are finished, so it
 // is safe to run mid-Swiss. POST /api/admin/tournaments/<id>/autoplay-swiss
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {

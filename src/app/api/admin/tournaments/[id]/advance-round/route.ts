@@ -22,7 +22,8 @@ import { hasBlocking, isSwissFormat } from "@/lib/swiss";
 // does nothing if the next round already exists or the round isn't complete.
 // Body (optional): { allowRematches: true, reason: "..." } — explicit, logged
 // exception when no Swiss round without rematches exists.
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {

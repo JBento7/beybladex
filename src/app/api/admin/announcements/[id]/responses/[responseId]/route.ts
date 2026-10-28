@@ -6,8 +6,9 @@ import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string; responseId: string } }
+  props: { params: Promise<{ id: string; responseId: string }> }
 ) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ORGANIZER") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

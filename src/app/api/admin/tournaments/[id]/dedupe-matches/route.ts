@@ -14,7 +14,8 @@ import { recalculateStandings } from "@/lib/tournament-engine";
 // copy of the same pairing exists. Groups where two copies have results are
 // reported for an organizer decision — the tool never picks which result counts.
 // A copy of every removed row is stored in TournamentAdminAction.
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {

@@ -6,10 +6,8 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
     { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }

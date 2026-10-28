@@ -8,12 +8,14 @@ import type { Metadata } from "next";
 import BeybladeStatsClient, { type RecordRow } from "./BeybladeStatsClient";
 import { LineBadge } from "@/components/LineBadge";
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const b = await prisma.beyblade.findUnique({ where: { id: params.id }, select: { name: true } });
   return { title: b ? `${b.name} — Estatísticas` : "Beyblade" };
 }
 
-export default async function BeybladeStatsPage({ params }: { params: { id: string } }) {
+export default async function BeybladeStatsPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
 
   const beyblade = await prisma.beyblade.findUnique({

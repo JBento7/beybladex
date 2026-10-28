@@ -21,7 +21,8 @@ import { recalculateStandings, getSwissRounds } from "@/lib/tournament-engine";
 //   - stale standings (recomputed from the recorded results)
 // Everything else is reported with the exact button to press, because it either
 // destroys data or needs a judgement call.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {

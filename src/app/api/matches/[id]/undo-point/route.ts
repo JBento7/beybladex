@@ -11,10 +11,8 @@ import { prisma } from "@/lib/prisma";
 // Remove the most recent point from the current active set.
 // Works only while the match is IN_PROGRESS.
 // Authorized: ORGANIZER, match judge, or tournament organizer.
-export async function DELETE(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

@@ -13,7 +13,8 @@ import { getSwissRounds, repairSwissRound } from "@/lib/tournament-engine";
 //   { round, apply: true, reason }      → apply the plan of that round
 // Only players MISSING from the round are paired among themselves; leftovers,
 // duplicates and knockout impact are reported for a decision.
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {

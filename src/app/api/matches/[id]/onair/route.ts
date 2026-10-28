@@ -10,7 +10,8 @@ import { prisma } from "@/lib/prisma";
 // periodically to stamp Match.onAirAt = now. The arena display only shows a
 // match whose onAirAt is fresh — so a match appears on the tablet ONLY while a
 // judge is actively scoring it. POST {clear:true} (on close) blanks it early.
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

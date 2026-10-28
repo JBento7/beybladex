@@ -12,7 +12,8 @@ import { recalculateStandings } from "@/lib/tournament-engine";
 // current finished matches. Use it to verify/repair the standings after manual
 // edits, resets, or duplicate cleanup. Pure recomputation — it never changes
 // matches, only the derived standings.
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {
