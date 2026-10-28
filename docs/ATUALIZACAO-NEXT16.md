@@ -24,7 +24,8 @@ A instalação foi feita sem `--force` e sem `--legacy-peer-deps`. A árvore fin
 **Node:**
 - O Next 16 exige Node ≥ 20.9.0.
 - Localmente foi usado Node 22.22.0.
-- O repositório não define versão de Node: não há `engines`, `.nvmrc` nem `vercel.json`. Por isso, confira o painel da Vercel (Settings → Build & Deployment → Node.js Version) antes de publicar.
+- O repositório não define versão de Node: não há `engines`, `.nvmrc` nem `vercel.json`. A versão vem do painel da Vercel (Settings → Build and Deployment → Node.js Version).
+- **Vercel:** alterado pelo responsável de 24.x para **22.x**, a mesma linha usada nos testes. A mudança vale a partir do próximo deploy.
 - **Não** foi adicionado `engines` ao `package.json`. Na Vercel, uma faixa `>=` pode trocar a versão principal do Node sem aviso.
 
 ## 2. Escolha da versão
@@ -174,7 +175,7 @@ Os scripts desses testes de navegador e HTTP dependem dos IDs da base sintética
 ## 8. Implantação e recuperação
 
 ### Antes de publicar
-1. Confirme no painel da Vercel que a versão de Node é 20.x ou superior.
+1. ~~Confirme no painel da Vercel que a versão de Node é 20.x ou superior.~~ Feito: o painel está em 22.x.
 2. Se possível, habilite o *Skew Protection*.
 3. Não há variáveis de ambiente novas.
 4. Não há migração de banco.
