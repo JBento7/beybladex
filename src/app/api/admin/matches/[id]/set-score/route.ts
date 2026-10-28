@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { isSwissFormat } from "@/lib/swiss";
 import {
   recalculateStandings,
   advanceSwissTournament,
@@ -30,7 +31,7 @@ export async function POST(
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  let body: { sets?: { p1Points?: number; p2Points?: number }[] };
+  let body: { sets?: { p1Points?: number; p2Points?: number }[]; confirmAfterAdvance?: boolean; reason?: string };
   try {
     body = await req.json();
   } catch {
@@ -53,6 +54,8 @@ export async function POST(
       player2Id: true,
       round: true,
       setsToWin: true,
+      winnerId: true,
+      status: true,
       tournament: { select: { setsToWin: true, format: true } },
     },
   });
@@ -83,7 +86,28 @@ export async function POST(
         ? match.player2Id
         : null;
 
+  // Correcting a result AFTER the next round (or the knockout) was generated
+  // changes standings that pairings/seeding already used. Allowed only as an
+  // explicit, logged decision; the already-generated rounds are not rebuilt.
+  const laterRounds = await prisma.match.count({ where: { tournamentId: match.tournamentId, round: { gt: match.round } } });
+  if (laterRounds > 0 && matchWinnerId !== match.winnerId) {
+    if (!body.confirmAfterAdvance || !body.reason?.trim()) {
+      return NextResponse.json({
+        error: "Esta correção muda o vencedor de uma partida de rodada já encerrada: a classificação usada nos pareamentos seguintes (ou no corte do mata-mata) muda, mas as rodadas já geradas não são refeitas. Confirme informando o motivo.",
+        requiresConfirmation: true,
+      }, { status: 409 });
+    }
+    await prisma.tournamentAdminAction.create({
+      data: {
+        tournamentId: match.tournamentId, kind: "RESULT_CHANGED_AFTER_ADVANCE", reason: body.reason.slice(0, 500), actorId: session.user.id,
+        before: { matchId: match.id, winnerId: match.winnerId, status: match.status },
+        after: { matchId: match.id, winnerId: matchWinnerId, sets },
+      },
+    });
+  }
+
   await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Match" WHERE id = ${params.id} FOR UPDATE`;
     await tx.matchPoint.deleteMany({ where: { matchId: params.id } });
     await tx.matchSet.deleteMany({ where: { matchId: params.id } });
 
@@ -131,18 +155,10 @@ export async function POST(
     try {
       const nextExists = await prisma.match.count({ where: { tournamentId: match.tournamentId, round: { gt: match.round } } });
       if (nextExists === 0) {
-        if (fmt === "ROUND_ROBIN") {
+        if (isSwissFormat(fmt)) {
           await advanceSwissTournament(match.tournamentId, match.round);
         } else if (fmt === "SINGLE_ELIMINATION") {
           await advanceSingleElimination(match.tournamentId, match.round);
-        } else if (fmt === "SWISS") {
-          const roundMatches = await prisma.match.findMany({ where: { tournamentId: match.tournamentId, round: match.round } });
-          if (roundMatches.every((m) => m.status === "FINISHED")) {
-            const participants = await prisma.tournamentParticipant.count({ where: { tournamentId: match.tournamentId } });
-            const maxRounds = Math.ceil(Math.log2(Math.max(2, participants)));
-            if (match.round < maxRounds) await generateSwissRound(match.tournamentId, match.round + 1);
-            else await finalizeTournamentRanking(match.tournamentId);
-          }
         } else {
           const allMatches = await prisma.match.findMany({ where: { tournamentId: match.tournamentId } });
           if (allMatches.every((m) => m.status === "FINISHED")) await finalizeTournamentRanking(match.tournamentId);

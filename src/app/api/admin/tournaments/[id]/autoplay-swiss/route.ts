@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { isSwissFormat } from "@/lib/swiss";
 import { generateSwissRound, advanceSwissTournament, getSwissRounds, recalculateStandings } from "@/lib/tournament-engine";
 
 // Admin/test-only: simulate the whole Swiss phase of a TEST tournament (random
@@ -25,7 +26,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     });
     if (!tournament) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
     if (!tournament.isTest) return NextResponse.json({ error: "Autoplay disponível apenas em torneios de teste." }, { status: 400 });
-    if (tournament.format !== "ROUND_ROBIN") return NextResponse.json({ error: "Autoplay disponível apenas no formato Suíço." }, { status: 400 });
+    if (!isSwissFormat(tournament.format)) return NextResponse.json({ error: "Autoplay disponível apenas no formato Suíço." }, { status: 400 });
 
     const participantIds = (await prisma.tournamentParticipant.findMany({
       where: { tournamentId: tournament.id, approved: { not: false } },

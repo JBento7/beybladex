@@ -6,6 +6,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { isSwissFormat } from "@/lib/swiss";
+import { recordWalkover } from "@/lib/match-scoring";
 import { recalculateStandings, advanceSingleElimination, generateSwissRound, advanceSwissTournament, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
 
 // POST — declare a walkover (W.O.): the opponent of `winnerId` didn't show up,
@@ -52,11 +54,11 @@ export async function POST(
 
     // Conditional write: two concurrent W.O.s (or a W.O. racing the last point)
     // must not both close the match.
-    const closed = await prisma.match.updateMany({
-      where: { id: params.id, status: { not: "FINISHED" } },
-      data: { status: "FINISHED", winnerId, isWalkover: true },
-    });
-    if (closed.count === 0) {
+    // Same row lock as point scoring: a W.O. and a final point can't both
+    // close the match. Points already recorded are kept as history; under the
+    // published rules they are not battle points (the match wasn't completed).
+    const closedNow = await recordWalkover(params.id, winnerId);
+    if (!closedNow) {
       return NextResponse.json({ error: "Partida já finalizada" }, { status: 409 });
     }
 
@@ -75,26 +77,10 @@ export async function POST(
     // Format-specific post-match logic (same as the regular point/finish flow)
     const tournament = match.tournament;
 
-    if (tournament.format === "SINGLE_ELIMINATION") {
-      await advanceSingleElimination(match.tournamentId, match.round);
-    } else if (tournament.format === "SWISS") {
-      const roundMatches = await prisma.match.findMany({
-        where: { tournamentId: match.tournamentId, round: match.round },
-      });
-      const allDone = roundMatches.every((m) => m.status === "FINISHED");
-      if (allDone) {
-        const participants = await prisma.tournamentParticipant.count({
-          where: { tournamentId: match.tournamentId },
-        });
-        const maxRounds = Math.ceil(Math.log2(participants));
-        if (match.round < maxRounds) {
-          await generateSwissRound(match.tournamentId, match.round + 1);
-        } else {
-          await finalizeTournamentRanking(match.tournamentId);
-        }
-      }
-    } else if (tournament.format === "ROUND_ROBIN") {
+    if (isSwissFormat(tournament.format)) {
       await advanceSwissTournament(match.tournamentId, match.round);
+    } else if (tournament.format === "SINGLE_ELIMINATION") {
+      await advanceSingleElimination(match.tournamentId, match.round);
     } else if (tournament.format === "GROUPS") {
       const allMatches = await prisma.match.findMany({
         where: { tournamentId: match.tournamentId },

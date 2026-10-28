@@ -1,6 +1,11 @@
 import { prisma } from "./prisma";
 import { scheduleByArena } from "./arena-schedule";
 import { computeSwissStandings, computeSwissFinalPlacement } from "./standings";
+import {
+  SWISS_RULES_VERSION, auditSwiss, hasBlocking, isSwissFormat, nextBracketRound, pairSwissRound,
+  planRoundRepair, seededFirstRound, swissRoundCount, validateCut,
+} from "./swiss";
+import { Prisma } from "@prisma/client";
 
 // Returns the userIds of every registered judge for a tournament. Used by the
 // match schedulers so judges never get a parallel match while arbitrating.
@@ -207,12 +212,12 @@ export async function finalizeTournamentRanking(tournamentId: string) {
   // to the wrong players. Use the same boundary the rest of the engine uses.
   const swissRounds = await getSwissRounds(tournamentId, participants.length);
   const playoffMatches = allMatchRows.filter((m) => m.round > swissRounds && m.player1Id !== m.player2Id);
-  const isSwissPlayoff = tournament?.format === "ROUND_ROBIN" && playoffMatches.length > 0;
+  const isSwissPlayoff = isSwissFormat(tournament?.format) && playoffMatches.length > 0;
 
   // Who actually reached the knockout bracket (empty when there is no knockout).
   const inPlayoff = new Set<string>();
   let ranked: typeof participants;
-  if (tournament?.format === "ROUND_ROBIN") {
+  if (isSwissFormat(tournament?.format)) {
     // Suíço (with or without a knockout): shared with the page (lib/standings).
     // Qualifiers rank by how far they went in the bracket; ties inside the
     // bracket and everyone outside it fall back to the Swiss standings, which
@@ -280,25 +285,12 @@ export async function finalizeTournamentRanking(tournamentId: string) {
   });
 }
 
-// Standard single-elimination seeding order for a power-of-two bracket, so the
-// top seeds only meet in later rounds (1 vs N, 2 vs N-1, arranged by halves).
-function seedOrder(n: number): number[] {
-  let seeds = [1, 2];
-  while (seeds.length < n) {
-    const sum = seeds.length * 2 + 1;
-    const next: number[] = [];
-    for (const s of seeds) {
-      next.push(s);
-      next.push(sum - s);
-    }
-    seeds = next;
-  }
-  return seeds;
-}
-
-// Suíço (Swiss / round-robin phase): build the top-N knockout bracket from the
-// standings once the group phase (round 1) is over. `qualifiers` is 4/8/16.
-export async function generatePlayoffBracket(tournamentId: string, qualifiers: number, startRound = 2) {
+// Suíço → top-N knockout. Seeding = the same Swiss standings the page shows
+// (lib/standings, deterministic), bracket = lib/swiss.seededFirstRound
+// (top 4: 1×4, 2×3 · top 8: 1×8, 4×5, 2×7, 3×6). Written in one transaction
+// with a participation row per player (phase KNOCKOUT), so it can't be created
+// twice. Returns why it didn't generate, if it didn't.
+export async function generatePlayoffBracket(tournamentId: string, qualifiers: number, startRound = 2): Promise<{ status: "created" | "exists" | "invalid"; message?: string }> {
   const [tournament, judges, participants] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true, isMultiDay: true, day2SetsToWin: true, day2PointsToWinSet: true } }),
     getTournamentJudgeIds(tournamentId),
@@ -308,13 +300,12 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
       orderBy: { id: "asc" },
     }),
   ]);
-  const arenaCount = tournament?.arenas ?? 1;
+  const already = await prisma.match.count({ where: { tournamentId, round: { gte: startRound } } });
+  if (already > 0) return { status: "exists" };
+  const cutCheck = validateCut(qualifiers, participants.length);
+  if (cutCheck.mode === "error") return { status: "invalid", message: cutCheck.message };
+  if (cutCheck.mode === "none") return { status: "invalid", message: "Sem corte configurado." };
 
-  // Who qualifies (and their seeding) must use the SAME tiebreakers as the
-  // standings table and the final ranking — totalPoints alone leaves ties to
-  // whatever order Postgres happens to return, so the wrong player could take
-  // the last spot and seeds could be scrambled among equal records.
-  // Shared with the page table (lib/standings), counted over the Swiss rounds.
   const decided = await prisma.match.findMany({
     where: { tournamentId, status: "FINISHED" },
     select: { round: true, status: true, isThirdPlace: true, isWalkover: true, winnerId: true, player1Id: true, player2Id: true, points: { select: { userId: true, points: true } } },
@@ -325,38 +316,59 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
     startRound - 1,
     nicknames(participants)
   );
-  const byUser = new Map(participants.map((p) => [p.userId, p]));
-  const seeded = swissRows.map((r) => byUser.get(r.userId)!).filter(Boolean);
-  const top = seeded.slice(0, qualifiers);
-  if (top.length < 2) return;
+  const top = swissRows.slice(0, qualifiers).map((r) => r.userId);
+  if (top.length < 2) return { status: "invalid", message: "Jogadores insuficientes para o mata-mata." };
 
   // 2-day tournaments can use different match rules on the knockout day.
   const knockoutSets = tournament?.isMultiDay ? tournament.day2SetsToWin ?? null : null;
   const knockoutPoints = tournament?.isMultiDay ? tournament.day2PointsToWinSet ?? null : null;
+  const pairs = seededFirstRound(top);
+  const scheduled = scheduleByArena(pairs, tournament?.arenas ?? 1, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
+  await insertRoundMatches(tournamentId, "KNOCKOUT", startRound, scheduled.map(({ match, slot, arena, judgeId }) => ({
+    tournamentId,
+    player1Id: match.player1Id,
+    player2Id: match.player2Id,
+    round: startRound, // knockout starts right after the last Swiss round
+    bracketPos: match.bracketPos, // bracket position, NOT the scheduling order
+    arena,
+    slot,
+    judgeId,
+    setsToWin: knockoutSets,
+    pointsToWinSet: knockoutPoints,
+  })));
+  return { status: "created" };
+}
 
-  const order = seedOrder(top.length);
-  const pairs: { player1Id: string; player2Id: string }[] = [];
-  for (let i = 0; i < order.length; i += 2) {
-    const a = top[order[i] - 1];
-    const b = top[order[i + 1] - 1];
-    if (a?.userId && b?.userId) pairs.push({ player1Id: a.userId, player2Id: b.userId });
-  }
+type NewMatch = Prisma.MatchCreateManyInput;
 
-  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
-  await prisma.match.createMany({
-    data: scheduled.map(({ match, slot, arena, judgeId }, i) => ({
-      tournamentId,
-      player1Id: match.player1Id,
-      player2Id: match.player2Id,
-      round: startRound, // knockout starts right after the last Swiss round
-      bracketPos: i + 1,
-      arena,
-      slot,
-      judgeId,
-      setsToWin: knockoutSets,
-      pointsToWinSet: knockoutPoints,
-    })),
-  });
+/**
+ * Writes the matches of one round together with one RoundParticipation per
+ * player (the unique key tournamentId+phase+round+userId). If any player
+ * already has a participation in that round — another request got there
+ * first, or a repair would double-book someone — the whole write fails and
+ * nothing is stored.
+ */
+export async function insertRoundMatches(
+  tournamentId: string,
+  phase: "SWISS" | "KNOCKOUT",
+  round: number,
+  rows: NewMatch[],
+  extra?: (tx: Prisma.TransactionClient) => Promise<void>
+) {
+  return prisma.$transaction(async (tx) => {
+    if (extra) await extra(tx);
+    const created = await tx.match.createManyAndReturn({ data: rows, select: { id: true, player1Id: true, player2Id: true } });
+    const parts = created.flatMap((m) =>
+      m.player1Id === m.player2Id
+        ? [{ tournamentId, phase, round, userId: m.player1Id, matchId: m.id, kind: "BYE" }]
+        : [
+            { tournamentId, phase, round, userId: m.player1Id, matchId: m.id, kind: "MATCH" },
+            { tournamentId, phase, round, userId: m.player2Id, matchId: m.id, kind: "MATCH" },
+          ]
+    );
+    await tx.roundParticipation.createMany({ data: parts });
+    return created;
+  }, { maxWait: 20000, timeout: 30000 });
 }
 
 // Number of Swiss rounds for a field (standard: ceil(log2(N))).
@@ -376,7 +388,13 @@ export async function getSwissRounds(tournamentId: string, liveCount?: number): 
     const n = liveCount ?? (await prisma.tournamentParticipant.count({ where: { tournamentId, approved: { not: false } } }));
     return swissRoundCount(n);
   }
-  const n = liveCount ?? (await prisma.tournamentParticipant.count({ where: { tournamentId, approved: { not: false } } }));
+  // Not frozen yet. If the event already started, the field is whoever played
+  // round 1 (matches + bye) — NOT today's participant count, which late
+  // approvals or removals would change.
+  const r1 = await prisma.match.findMany({ where: { tournamentId, round: 1 }, select: { player1Id: true, player2Id: true } });
+  const n = r1.length
+    ? new Set(r1.flatMap((m) => [m.player1Id, m.player2Id])).size
+    : liveCount ?? (await prisma.tournamentParticipant.count({ where: { tournamentId, approved: { not: false } } }));
   const rounds = swissRoundCount(n);
   try {
     await prisma.tournament.updateMany({ where: { id: tournamentId, swissRounds: null }, data: { swissRounds: rounds } });
@@ -384,9 +402,7 @@ export async function getSwissRounds(tournamentId: string, liveCount?: number): 
   return rounds;
 }
 
-export function swissRoundCount(participantCount: number): number {
-  return Math.max(1, Math.ceil(Math.log2(Math.max(2, participantCount))));
-}
+export { swissRoundCount };
 
 // Drives a Suíço tournament after each match finishes: play the Swiss rounds
 // (pairing by standings), then cut the top `qualifiers` into a seeded knockout,
@@ -435,19 +451,45 @@ async function advanceSwissTournamentUnlocked(tournamentId: string, completedRou
     await advanceSingleEliminationUnlocked(tournamentId, completedRound);
     return;
   }
+  // Never build on inconsistent data: a player with two participations in a
+  // round (or a broken bye) stops the event until an organizer resolves it.
+  const issues = await auditTournament(tournamentId);
+  if (hasBlocking(issues)) {
+    console.warn("[swiss] avanço bloqueado por inconsistência", tournamentId, issues.filter((x) => x.severity === "bloqueante").map((x) => x.message));
+    return;
+  }
   // More Swiss rounds to play.
   if (completedRound < swissRounds) {
-    await generateSwissRound(tournamentId, completedRound + 1);
+    await generateSwissRoundUnlocked(tournamentId, completedRound + 1);
     return;
   }
   // Last Swiss round finished → cut to the knockout, or finalize the standings.
-  const q = tournament?.qualifiers ?? null;
-  if (q && q >= 2 && q < participantCount) {
-    const already = await prisma.match.count({ where: { tournamentId, round: { gt: swissRounds } } });
-    if (already === 0) await generatePlayoffBracket(tournamentId, q, swissRounds + 1);
+  const cutCheck = validateCut(tournament?.qualifiers ?? null, participantCount);
+  if (cutCheck.mode === "error") {
+    console.warn("[swiss] corte inválido", tournamentId, cutCheck.message);
+    return; // stays IN_PROGRESS; the page/diagnostics show the configuration problem
+  }
+  if (cutCheck.mode === "none") {
+    await finalizeTournamentRanking(tournamentId);
     return;
   }
-  await finalizeTournamentRanking(tournamentId);
+  // partial (top N of a bigger field) or all (cut == field: everyone advances).
+  await generatePlayoffBracket(tournamentId, tournament!.qualifiers!, swissRounds + 1);
+}
+
+/** Read-only integrity audit of a Swiss tournament (see lib/swiss.auditSwiss). */
+export async function auditTournament(tournamentId: string) {
+  const [t, participants, matches] = await Promise.all([
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { status: true, qualifiers: true, format: true } }),
+    prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, select: { userId: true } }),
+    prisma.match.findMany({
+      where: { tournamentId },
+      select: { id: true, round: true, status: true, player1Id: true, player2Id: true, winnerId: true, isWalkover: true, isThirdPlace: true, arena: true, slot: true, createdAt: true },
+    }),
+  ]);
+  if (!t || !isSwissFormat(t.format)) return [];
+  const swissRounds = await getSwissRounds(tournamentId, participants.length);
+  return auditSwiss({ matches, swissRounds, participants: participants.map((p) => p.userId), tournamentStatus: t.status, qualifiers: t.qualifiers });
 }
 
 // Self-healing advancement for Swiss (ROUND_ROBIN) tournaments: if the latest
@@ -624,280 +666,186 @@ export async function generateSingleElimination(tournamentId: string) {
   await prisma.match.createMany({ data: matches });
 }
 
-export async function generateSwissRound(
+export type SwissRoundResult =
+  | { status: "created"; round: number; byeId: string | null; crossings: number; optimal: boolean; notes: string[] }
+  | { status: "exists" | "blocked" | "impossible" | "limit"; round: number; notes: string[] };
+
+/** Generate a Swiss round (locked per tournament). Safe to call repeatedly. */
+export function generateSwissRound(
   tournamentId: string,
-  round: number
+  round: number,
+  opts: { allowRematches?: boolean; reason?: string; actorId?: string } = {}
 ) {
-  // Idempotent: never generate a round that already has matches. This protects
-  // against duplicate rounds when advancement is triggered from more than one
-  // place (concurrent match completions, the self-healing page check, etc.).
-  const existing = await prisma.match.count({ where: { tournamentId, round } });
-  if (existing > 0) return;
-
-  const [tournament, judges, allPrev] = await Promise.all([
-    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
-    getTournamentJudgeIds(tournamentId),
-    prisma.match.findMany({ where: { tournamentId }, select: { player1Id: true, player2Id: true, isWalkover: true } }),
-  ]);
-  const arenaCount = tournament?.arenas ?? 1;
-
-  // Rematch-avoidance + bye tracking from earlier rounds. Only SWISS byes
-  // (self-match marked isWalkover) count as "already had a bye" — knockout
-  // padding byes are a different thing and must not block a Swiss bye.
-  const pairedSet = new Set<string>();
-  const hadBye = new Set<string>();
-  for (const m of allPrev) {
-    if (m.player1Id === m.player2Id) {
-      if (m.isWalkover) hadBye.add(m.player1Id);
-      continue;
-    }
-    pairedSet.add(`${m.player1Id}-${m.player2Id}`);
-    pairedSet.add(`${m.player2Id}-${m.player1Id}`);
-  }
-
-  // Ordered player pool: random in round 1, by standing afterwards.
-  const participants =
-    round === 1
-      ? shuffle(await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } }))
-      : await prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" } });
-  const pool = participants.map((p) => p.userId!).filter(Boolean);
-  // Freeze the Swiss round count at the field that actually starts round 1.
-  if (round === 1) await getSwissRounds(tournamentId, pool.length);
-
-  // Odd field → exactly one player gets a BYE this round (an automatic win).
-  // Give it to the lowest-ranked player who hasn't had a bye yet (standard
-  // Swiss), so nobody sits out twice before everyone has sat out once — and
-  // nobody is silently dropped and left with fewer matches.
-  let byePlayerId: string | null = null;
-  if (pool.length % 2 === 1) {
-    for (let i = pool.length - 1; i >= 0; i--) {
-      if (!hadBye.has(pool[i])) { byePlayerId = pool[i]; break; }
-    }
-    if (!byePlayerId) byePlayerId = pool[pool.length - 1]; // everyone already byed once
-    const idx = pool.indexOf(byePlayerId);
-    if (idx >= 0) pool.splice(idx, 1);
-  }
-
-  // Build this round's pairings from the (even) pool, avoiding rematches.
-  //
-  // A plain greedy pass can strand the last two players against each other even
-  // when a rematch-free pairing exists for the whole round — which unfairly
-  // forces a repeat opponent on them. So try an exhaustive pairing with
-  // backtracking first (bounded, so it can never hang), and only fall back to
-  // greedy if no rematch-free pairing exists at all.
-  type Pair = { player1Id: string; player2Id: string };
-  let steps = 0;
-  const STEP_BUDGET = 50_000;
-  const solve = (list: string[]): Pair[] | null => {
-    if (list.length < 2) return [];
-    if (++steps > STEP_BUDGET) return null;
-    const p1 = list[0];
-    const rest = list.slice(1);
-    for (let i = 0; i < rest.length; i++) {
-      const p2 = rest[i];
-      if (pairedSet.has(`${p1}-${p2}`)) continue;
-      const sub = solve([...rest.slice(0, i), ...rest.slice(i + 1)]);
-      if (sub) return [{ player1Id: p1, player2Id: p2 }, ...sub];
-    }
-    return null;
-  };
-
-  let pairs = solve(pool);
-  if (!pairs) {
-    // Unavoidable rematches (or budget exhausted): pair by closest standing.
-    pairs = [];
-    const unmatched = [...pool];
-    while (unmatched.length >= 2) {
-      const p1 = unmatched.shift()!;
-      let idx = unmatched.findIndex((p2) => !pairedSet.has(`${p1}-${p2}`));
-      if (idx === -1) idx = 0; // closest in points among those already faced
-      const p2 = unmatched.splice(idx, 1)[0];
-      pairs.push({ player1Id: p1, player2Id: p2 });
-    }
-  }
-
-  // Distribute the matches across arenas (and assign judges), like the other
-  // formats — otherwise the placar can't tell which battle is in each arena.
-  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
-
-  // Create the whole round in ONE statement (bye included). Doing the bye in a
-  // separate write risked leaving a round with only the bye if the second write
-  // failed — and the idempotency guard above would then skip every retry,
-  // permanently stranding the other players with no match that round.
-  const roundMatches: {
-    tournamentId: string; player1Id: string; player2Id: string; round: number;
-    bracketPos: number; arena?: number; slot?: number; judgeId?: string | null;
-    winnerId?: string; status?: "FINISHED"; isWalkover?: boolean;
-  }[] = scheduled.map(({ match, slot, arena, judgeId }, i) => ({
-    tournamentId,
-    player1Id: match.player1Id,
-    player2Id: match.player2Id,
-    round,
-    bracketPos: i + 1,
-    arena,
-    slot,
-    judgeId,
-  }));
-  if (byePlayerId) {
-    // The bye is an auto-finished self-match win (isWalkover marks it as a SWISS
-    // bye, which the standings count in the Suíço score — see recalculateStandings).
-    roundMatches.push({
-      tournamentId,
-      player1Id: byePlayerId,
-      player2Id: byePlayerId,
-      round,
-      bracketPos: roundMatches.length + 1,
-      winnerId: byePlayerId,
-      status: "FINISHED",
-      isWalkover: true,
-    });
-  }
-  await prisma.match.createMany({ data: roundMatches });
-  if (byePlayerId) await recalculateStandings(tournamentId, byePlayerId);
+  return withTournamentLock(tournamentId, () => generateSwissRoundUnlocked(tournamentId, round, opts));
 }
 
-// Fairness check + repair for a Swiss (ROUND_ROBIN) tournament: some players may
-// have played fewer matches than others (e.g. odd headcounts that dropped a
-// player from a round). This measures each participant's real (non-bye) match
-// count and, for those below the maximum, generates makeup matches pairing them
-// with each other — appended to the current last round so the round-completion
-// / advancement logic keeps waiting until everyone is even. Returns a summary.
-export async function generateMakeupRound(tournamentId: string): Promise<{
-  ok: boolean;
-  reason?: string;
-  target?: number;
-  counts?: { userId: string; count: number }[];
-  added?: number;
-  byeUserId?: string | null;
-  knockoutReset?: boolean;
-}> {
-  const [tournament, participants, allMatches] = await Promise.all([
-    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true, format: true, qualifiers: true } }),
-    prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" }, select: { userId: true, totalPoints: true } }),
-    prisma.match.findMany({ where: { tournamentId }, select: { id: true, round: true, player1Id: true, player2Id: true } }),
+/**
+ * Pairs and writes one Swiss round. Eligible = approved participants at this
+ * moment (no automatic bye/points for absent or late players). Standings and
+ * history come only from earlier Swiss rounds. Nothing is written unless the
+ * whole round is valid; rematches need an explicit, logged exception.
+ */
+async function generateSwissRoundUnlocked(
+  tournamentId: string,
+  round: number,
+  opts: { allowRematches?: boolean; reason?: string; actorId?: string } = {}
+): Promise<SwissRoundResult> {
+  const existing = await prisma.match.count({ where: { tournamentId, round } });
+  if (existing > 0) return { status: "exists", round, notes: [] };
+
+  const [tournament, judges, participants, prev] = await Promise.all([
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
+    getTournamentJudgeIds(tournamentId),
+    prisma.tournamentParticipant.findMany({
+      where: { tournamentId, approved: { not: false } },
+      include: { user: { select: { name: true, bladerName: true } } },
+      orderBy: { id: "asc" },
+    }),
+    prisma.match.findMany({
+      where: { tournamentId, round: { lt: round } },
+      select: { id: true, round: true, status: true, player1Id: true, player2Id: true, winnerId: true, isWalkover: true, isThirdPlace: true, points: { select: { userId: true, points: true } } },
+    }),
   ]);
-  if (tournament?.format !== "ROUND_ROBIN") return { ok: false, reason: "Disponível apenas no formato Suíço." };
+  const ids = participants.map((p) => p.userId).filter(Boolean) as string[];
+  if (ids.length < 2) return { status: "impossible", round, notes: ["Menos de 2 participantes aprovados."] };
 
-  const participantCount = participants.length;
-  const swissRounds = await getSwissRounds(tournamentId, participantCount);
+  // Freeze the Swiss round count at the field that actually starts round 1.
+  const swissRounds = round === 1 ? await getSwissRounds(tournamentId, ids.length) : await getSwissRounds(tournamentId);
+  if (round > swissRounds) return { status: "blocked", round, notes: [`A fase suíça tem ${swissRounds} rodadas.`] };
 
-  const maxRound = allMatches.reduce((mx, m) => Math.max(mx, m.round), 0);
-  if (maxRound === 0) return { ok: false, reason: "O torneio ainda não começou." };
+  if (round > 1) {
+    const issues = auditSwiss({ matches: prev, swissRounds, participants: ids, tournamentStatus: "IN_PROGRESS" });
+    const blocking = issues.filter((x) => x.severity === "bloqueante");
+    if (blocking.length) return { status: "blocked", round, notes: blocking.map((x) => x.message) };
+    if (prev.some((m) => m.round === round - 1 && m.status !== "FINISHED")) {
+      return { status: "blocked", round, notes: [`A rodada ${round - 1} ainda tem partidas sem resultado.`] };
+    }
+  }
 
-  // Fairness is measured over the SWISS phase only (rounds <= swissRounds); the
-  // knockout is a consequence of those standings.
-  const swissMatches = allMatches.filter((m) => m.round <= swissRounds);
-
-  // Count SWISS "participations" per player — a real match OR a bye both count
-  // as playing that round, so a byed player is NOT flagged as under-played.
-  // Rematch avoidance still considers every real match (knockout included).
-  const ids = new Set(participants.map((p) => p.userId!));
-  const count = new Map<string, number>();
-  for (const id of ids) count.set(id, 0);
-  const faced = new Set<string>();
-  for (const m of swissMatches) {
+  // Standings before this round (Swiss rounds only), history and byes.
+  const swissPrev = prev.filter((m) => m.round <= swissRounds);
+  const rows = computeSwissStandings(ids, swissPrev, swissRounds, nicknames(participants));
+  const opponents = new Map<string, Set<string>>();
+  const byeCounts = new Map<string, number>();
+  for (const m of swissPrev) {
     if (m.player1Id === m.player2Id) {
-      // Bye: counts as one participation for that player.
-      if (ids.has(m.player1Id)) count.set(m.player1Id, (count.get(m.player1Id) ?? 0) + 1);
+      if (m.isWalkover) byeCounts.set(m.player1Id, (byeCounts.get(m.player1Id) ?? 0) + 1);
       continue;
     }
-    if (ids.has(m.player1Id)) count.set(m.player1Id, (count.get(m.player1Id) ?? 0) + 1);
-    if (ids.has(m.player2Id)) count.set(m.player2Id, (count.get(m.player2Id) ?? 0) + 1);
+    if (!opponents.has(m.player1Id)) opponents.set(m.player1Id, new Set());
+    if (!opponents.has(m.player2Id)) opponents.set(m.player2Id, new Set());
+    opponents.get(m.player1Id)!.add(m.player2Id);
+    opponents.get(m.player2Id)!.add(m.player1Id);
   }
-  for (const m of allMatches) {
-    if (m.player1Id === m.player2Id) continue;
-    faced.add(`${m.player1Id}|${m.player2Id}`);
-    faced.add(`${m.player2Id}|${m.player1Id}`);
-  }
-
-  const target = Math.max(...count.values());
-  const countsSummary = [...count.entries()].map(([userId, c]) => ({ userId, count: c }));
-
-  // Under-played players, neediest first (fewest games, then by standing).
-  const order = new Map(participants.map((p, i) => [p.userId!, i]));
-  const under = [...ids].filter((id) => (count.get(id) ?? 0) < target)
-    .sort((a, b) => {
-      const d = (count.get(a) ?? 0) - (count.get(b) ?? 0);
-      if (d !== 0) return d;
-      return (order.get(a) ?? 0) - (order.get(b) ?? 0);
-    });
-
-  if (under.length === 0) return { ok: true, target, counts: countsSummary, added: 0, byeUserId: null };
-
-  // Pair under-played players together, preferring opponents they haven't faced.
-  const pairs: { player1Id: string; player2Id: string }[] = [];
-  const remaining = [...under];
-  while (remaining.length >= 2) {
-    const p1 = remaining.shift()!;
-    let idx = remaining.findIndex((p2) => !faced.has(`${p1}|${p2}`));
-    if (idx === -1) idx = 0; // everyone left already faced p1 → allow a rematch
-    const p2 = remaining.splice(idx, 1)[0];
-    pairs.push({ player1Id: p1, player2Id: p2 });
-    faced.add(`${p1}|${p2}`); faced.add(`${p2}|${p1}`);
-  }
-
-  // One left over (odd number of under-played): pair with the least-played field
-  // player they haven't faced, to even them up with minimal new imbalance.
-  let byeUserId: string | null = null;
-  if (remaining.length === 1) {
-    const solo = remaining[0];
-    const candidate = [...ids]
-      .filter((id) => id !== solo && !faced.has(`${solo}|${id}`))
-      .sort((a, b) => (count.get(a) ?? 0) - (count.get(b) ?? 0))[0];
-    if (candidate) {
-      pairs.push({ player1Id: solo, player2Id: candidate });
-      faced.add(`${solo}|${candidate}`); faced.add(`${candidate}|${solo}`);
-    } else {
-      byeUserId = solo; // faced everyone already → unavoidable bye
-    }
-  }
-
-  if (pairs.length === 0) return { ok: true, target, counts: countsSummary, added: 0, byeUserId };
-
-  // If the knockout already started, tear it down: the makeup matches will
-  // change the final Swiss standings, so the bracket must be rebuilt from the
-  // corrected standings once these matches finish (advancement does that
-  // automatically). Remove knockout matches + their child rows and reopen the
-  // tournament, then recompute standings so removed knockout wins stop counting.
-  const knockoutMatches = allMatches.filter((m) => m.round > swissRounds);
-  let knockoutReset = false;
-  if (knockoutMatches.length > 0) {
-    const koIds = knockoutMatches.map((m) => m.id);
-    await prisma.$transaction(
-      async (tx) => {
-        await tx.matchPoint.deleteMany({ where: { matchId: { in: koIds } } });
-        await tx.matchSet.deleteMany({ where: { matchId: { in: koIds } } });
-        try { await tx.matchDeckOrder.deleteMany({ where: { matchId: { in: koIds } } }); } catch { /* pre-migration */ }
-        await tx.match.deleteMany({ where: { id: { in: koIds } } });
-        await tx.tournament.update({ where: { id: tournamentId }, data: { status: "IN_PROGRESS" } });
-      },
-      { maxWait: 15000, timeout: 30000 }
-    );
-    knockoutReset = true;
-    for (const id of ids) await recalculateStandings(tournamentId, id);
-  }
-
-  // Append the makeup matches to the LAST SWISS round so the Swiss phase is only
-  // "complete" (and advancement fires, rebuilding the bracket) once everyone has
-  // played the same number of matches.
-  const targetRound = Math.min(maxRound, swissRounds);
-  const judges = await getTournamentJudgeIds(tournamentId);
-  const arenaCount = tournament?.arenas ?? 1;
-  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
-  await prisma.match.createMany({
-    data: scheduled.map(({ match, slot, arena, judgeId }, i) => ({
-      tournamentId,
-      player1Id: match.player1Id,
-      player2Id: match.player2Id,
-      round: targetRound,
-      bracketPos: 1000 + i,
-      arena,
-      slot,
-      judgeId,
-    })),
+  const seed = round === 1 ? (Math.floor(Math.random() * 2 ** 31) | 0) : undefined;
+  const result = pairSwissRound({
+    players: rows.map((r) => ({ id: r.userId, points: r.swissPoints })),
+    opponents,
+    byeCounts,
+    round,
+    seed,
+    allowRematches: !!opts.allowRematches,
   });
+  if (result.status !== "ok") return { status: result.status, round, notes: result.notes };
+  if (result.rematches.length && !opts.reason) {
+    return { status: "blocked", round, notes: ["Reencontros só com exceção administrativa registrada (motivo obrigatório)."] };
+  }
 
-  return { ok: true, target, counts: countsSummary, added: pairs.length, byeUserId, knockoutReset };
+  const scheduled = scheduleByArena(result.pairs, tournament?.arenas ?? 1, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
+  const data: NewMatch[] = scheduled.map(({ match, slot, arena, judgeId }, i) => ({
+    tournamentId, player1Id: match.player1Id, player2Id: match.player2Id, round, bracketPos: i + 1, arena, slot, judgeId,
+  }));
+  if (result.byeId) {
+    // The bye: an automatic Swiss point, not a played match — no arena, judge or battle points.
+    data.push({ tournamentId, player1Id: result.byeId, player2Id: result.byeId, round, bracketPos: data.length + 1, winnerId: result.byeId, status: "FINISHED", isWalkover: true });
+  }
+  try {
+    await insertRoundMatches(tournamentId, "SWISS", round, data, async (tx) => {
+      // Unique (tournamentId, round): a second generator fails here and writes nothing.
+      await tx.swissRoundLog.create({
+        data: {
+          tournamentId, round, rulesVersion: SWISS_RULES_VERSION, seed: result.seed, byeUserId: result.byeId,
+          crossings: result.crossings.length, optimal: result.optimal, notes: result.notes.join("\n"),
+          exceptionReason: result.rematches.length ? opts.reason ?? null : null, createdById: opts.actorId ?? null,
+        },
+      });
+      if (result.rematches.length) {
+        await tx.tournamentAdminAction.create({
+          data: { tournamentId, kind: "RULE_EXCEPTION_REMATCH", reason: opts.reason!, actorId: opts.actorId ?? null, after: { round, rematches: result.rematches } as Prisma.InputJsonValue },
+        });
+      }
+    });
+  } catch (e) {
+    if ((e as { code?: string }).code === "P2002") return { status: "exists", round, notes: ["Rodada já gerada por outra requisição."] };
+    throw e;
+  }
+  if (result.byeId) await recalculateStandings(tournamentId, result.byeId);
+  return { status: "created", round, byeId: result.byeId, crossings: result.crossings.length, optimal: result.optimal, notes: result.notes };
+}
+
+/**
+ * Controlled repair of ONE Swiss round (replaces the old "balancear"). Default
+ * is a simulation; `apply` writes only the proposed matches between players
+ * missing from that round, inside a transaction guarded by the participation
+ * key, and records a copy of the round before/after. It never pairs someone
+ * who already played the round, never touches the knockout and never deletes.
+ */
+export async function repairSwissRound(
+  tournamentId: string,
+  round: number,
+  opts: { apply?: boolean; reason?: string; actorId?: string } = {}
+) {
+  return withTournamentLock(tournamentId, async () => {
+    const [participants, matches] = await Promise.all([
+      prisma.tournamentParticipant.findMany({
+        where: { tournamentId, approved: { not: false } },
+        include: { user: { select: { name: true, bladerName: true } } },
+        orderBy: { id: "asc" },
+      }),
+      prisma.match.findMany({
+        where: { tournamentId },
+        select: { id: true, round: true, status: true, player1Id: true, player2Id: true, winnerId: true, isWalkover: true, isThirdPlace: true, arena: true, slot: true, points: { select: { userId: true, points: true } } },
+      }),
+    ]);
+    const swissRounds = await getSwissRounds(tournamentId, participants.length);
+    if (round < 1 || round > swissRounds) return { ok: false as const, message: `Rodada fora da fase suíça (1–${swissRounds}).` };
+    const ids = participants.map((p) => p.userId);
+    const before = matches.filter((m) => m.round < round && m.round <= swissRounds);
+    const rows = computeSwissStandings(ids, before, swissRounds, nicknames(participants));
+    const opponents = new Map<string, Set<string>>();
+    for (const m of matches.filter((x) => x.round <= swissRounds && x.player1Id !== x.player2Id)) {
+      if (!opponents.has(m.player1Id)) opponents.set(m.player1Id, new Set());
+      if (!opponents.has(m.player2Id)) opponents.set(m.player2Id, new Set());
+      opponents.get(m.player1Id)!.add(m.player2Id);
+      opponents.get(m.player2Id)!.add(m.player1Id);
+    }
+    const plan = planRoundRepair({ round, eligible: rows.map((r) => ({ id: r.userId, points: r.swissPoints })), roundMatches: matches.filter((m) => m.round === round), opponents });
+    const knockoutStarted = matches.some((m) => m.round > swissRounds);
+    const impact = knockoutStarted
+      ? "O mata-mata já foi gerado. Novas partidas suíças mudariam a classificação e o seeding: o reparo não é aplicado automaticamente; a organização precisa decidir como tratar o mata-mata existente."
+      : null;
+    if (!opts.apply || plan.noop || plan.proposals.length === 0) return { ok: true as const, applied: false, plan, impact };
+    if (knockoutStarted) return { ok: false as const, message: impact!, plan };
+    if (!opts.reason?.trim()) return { ok: false as const, message: "Informe o motivo do reparo.", plan };
+
+    const judges = await getTournamentJudgeIds(tournamentId);
+    const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } });
+    const scheduled = scheduleByArena(plan.proposals, t?.arenas ?? 1, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
+    const roundBefore = matches.filter((m) => m.round === round).map((m) => ({ id: m.id, player1Id: m.player1Id, player2Id: m.player2Id, status: m.status, winnerId: m.winnerId }));
+    await insertRoundMatches(tournamentId, "SWISS", round, scheduled.map(({ match, slot, arena, judgeId }, i) => ({
+      tournamentId, player1Id: match.player1Id, player2Id: match.player2Id, round, bracketPos: 500 + i, arena, slot, judgeId,
+    })), async (tx) => {
+      await tx.tournamentAdminAction.create({
+        data: {
+          tournamentId, kind: "SWISS_ROUND_REPAIR", reason: opts.reason!, actorId: opts.actorId ?? null,
+          idempotencyKey: `repair:${tournamentId}:${round}:${plan.proposals.map((p) => [p.player1Id, p.player2Id].sort().join("-")).sort().join(",")}`,
+          before: { round, matches: roundBefore } as Prisma.InputJsonValue,
+          after: { round, added: plan.proposals, unresolved: plan.unresolved } as Prisma.InputJsonValue,
+        },
+      });
+    });
+    return { ok: true as const, applied: true, plan, impact: null };
+  });
 }
 
 async function advanceSingleEliminationUnlocked(
@@ -906,10 +854,7 @@ async function advanceSingleEliminationUnlocked(
 ) {
   const roundMatches = await prisma.match.findMany({
     where: { tournamentId, round: completedRound },
-    // Bracket order matters: the next round pairs winners[0] vs winners[1],
-    // winners[2] vs winners[3]... Without an explicit order Postgres returns
-    // rows arbitrarily, which scrambles the seeding generatePlayoffBracket built.
-    orderBy: [{ bracketPos: "asc" }, { slot: "asc" }, { arena: "asc" }, { createdAt: "asc" }],
+    orderBy: [{ bracketPos: "asc" }, { id: "asc" }],
   });
 
   // The third-place match shares its round number with the final, but isn't
@@ -919,46 +864,38 @@ async function advanceSingleEliminationUnlocked(
   const allFinished = roundMatches.every((m) => m.status === "FINISHED");
   if (!allFinished) return;
 
-  const winners = bracketMatches
-    .filter((m) => m.winnerId)
-    .map((m) => m.winnerId!);
-
+  const winners = bracketMatches.filter((m) => m.winnerId);
   if (winners.length < 2) {
-    // Tournament complete
+    // Tournament complete — but never certify inconsistent records.
+    const issues = await auditTournament(tournamentId);
+    if (hasBlocking(issues)) { console.warn("[knockout] finalização bloqueada por inconsistência", tournamentId); return; }
     await finalizeTournamentRanking(tournamentId);
     return;
   }
 
   const nextRound = completedRound + 1;
-  // Idempotent, like generateSwissRound: two matches of the same round finishing
-  // at nearly the same time would otherwise each build the next round, producing
-  // a duplicated bracket.
+  // Idempotent: two matches of the same round finishing together would
+  // otherwise each build the next round.
   const nextExisting = await prisma.match.count({ where: { tournamentId, round: nextRound } });
   if (nextExisting > 0) return;
   const [tournament, judges] = await Promise.all([
-    prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      select: { arenas: true },
-    }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true } }),
     getTournamentJudgeIds(tournamentId),
   ]);
-  const arenaCount = tournament?.arenas ?? 1;
 
-  const pairs: { player1Id: string; player2Id: string; isThirdPlace?: boolean }[] = [];
-  for (let i = 0; i < Math.floor(winners.length / 2); i++) {
-    pairs.push({ player1Id: winners[i * 2], player2Id: winners[i * 2 + 1] });
-  }
+  // Winner of bracket positions (1,2) → position 1, (3,4) → 2 … — by the stored
+  // bracket position, never by query or scheduling order.
+  const next = nextBracketRound(bracketMatches.map((m, idx) => ({ bracketPos: m.bracketPos ?? idx + 1, winnerId: m.winnerId })));
+  if (!next) return;
+  const pairs: { player1Id: string; player2Id: string; bracketPos: number; isThirdPlace?: boolean }[] = [...next];
 
-  // This round is the semifinal (it produces exactly one final match) — also
-  // schedule a third-place match between this round's two losers, if both
-  // come from real (non-bye) matches.
-  if (winners.length === 2) {
+  // Semifinal round (produces exactly one final): also schedule the third-place
+  // match between this round's two losers, if both come from real matches.
+  if (next.length === 1) {
     const losers = bracketMatches
       .filter((m) => m.player1Id !== m.player2Id && m.winnerId)
       .map((m) => (m.winnerId === m.player1Id ? m.player2Id : m.player1Id));
-    if (losers.length === 2) {
-      pairs.push({ player1Id: losers[0], player2Id: losers[1], isThirdPlace: true });
-    }
+    if (losers.length === 2) pairs.push({ player1Id: losers[0], player2Id: losers[1], bracketPos: 2, isThirdPlace: true });
   }
 
   // Carry the knockout match rules forward (2-day tournaments may use different
@@ -966,22 +903,24 @@ async function advanceSingleEliminationUnlocked(
   const inheritSets = bracketMatches[0]?.setsToWin ?? null;
   const inheritPoints = bracketMatches[0]?.pointsToWinSet ?? null;
 
-  const scheduled = scheduleByArena(pairs, arenaCount, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
-  const matches = scheduled.map(({ match, slot, arena, judgeId }, i) => ({
-    tournamentId,
-    player1Id: match.player1Id,
-    player2Id: match.player2Id,
-    round: nextRound,
-    bracketPos: i + 1,
-    isThirdPlace: !!match.isThirdPlace,
-    arena,
-    slot,
-    judgeId,
-    setsToWin: inheritSets,
-    pointsToWinSet: inheritPoints,
-  }));
-
-  await prisma.match.createMany({ data: matches });
+  const scheduled = scheduleByArena(pairs, tournament?.arenas ?? 1, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
+  try {
+    await insertRoundMatches(tournamentId, "KNOCKOUT", nextRound, scheduled.map(({ match, slot, arena, judgeId }) => ({
+      tournamentId,
+      player1Id: match.player1Id,
+      player2Id: match.player2Id,
+      round: nextRound,
+      bracketPos: match.bracketPos,
+      isThirdPlace: !!match.isThirdPlace,
+      arena,
+      slot,
+      judgeId,
+      setsToWin: inheritSets,
+      pointsToWinSet: inheritPoints,
+    })));
+  } catch (e) {
+    if ((e as { code?: string }).code !== "P2002") throw e; // another request created it
+  }
 }
 
 export async function recalculateStandings(
@@ -1028,7 +967,7 @@ export async function recalculateStandings(
   // knockout wins (semis, final, 3rd place) used to be added on top, so a 4-round
   // Swiss could show a player with 5 "wins". Other formats keep finish points.
   let totalPoints: number;
-  if (tournament?.format === "ROUND_ROBIN") {
+  if (isSwissFormat(tournament?.format)) {
     const swissRounds = await getSwissRounds(tournamentId);
     totalPoints = computeSwissStandings([userId], allMatches, swissRounds)[0]?.swissPoints ?? 0;
   } else {

@@ -7,7 +7,9 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
-import { recalculateStandings, advanceSingleElimination, generateSwissRound, advanceSwissTournament, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
+import { recalculateStandings, advanceSingleElimination, advanceSwissTournament, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
+import { isSwissFormat } from "@/lib/swiss";
+import { recordPoint } from "@/lib/match-scoring";
 import type { FinishType } from "@prisma/client";
 
 export async function POST(
@@ -19,17 +21,15 @@ export async function POST(
     { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }
     if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-    const { scorerId, finishType, beybladeId } = await req.json();
+    const { scorerId, finishType, beybladeId, actionId: rawActionId } = await req.json();
     if (!scorerId || !finishType) {
       return NextResponse.json({ error: "scorerId e finishType são obrigatórios" }, { status: 400 });
     }
+    const actionId = typeof rawActionId === "string" && rawActionId.length <= 100 ? rawActionId : null;
 
     const match = await prisma.match.findUnique({
       where: { id: params.id },
-      include: {
-        tournament: { include: { _count: { select: { judges: true } } } },
-        sets: { orderBy: { setNumber: "asc" } },
-      },
+      include: { tournament: { include: { _count: { select: { judges: true } } } } },
     });
 
     if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
@@ -43,11 +43,8 @@ export async function POST(
     ) {
       return NextResponse.json({ error: "Apenas organizadores podem registrar pontos" }, { status: 403 });
     }
-    if (match.status === "FINISHED") {
-      return NextResponse.json({ error: "Partida já finalizada" }, { status: 400 });
-    }
-    if (scorerId !== match.player1Id && scorerId !== match.player2Id) {
-      return NextResponse.json({ error: "Jogador inválido" }, { status: 400 });
+    if (match.player1Id === match.player2Id) {
+      return NextResponse.json({ error: "Bye não recebe pontos" }, { status: 400 });
     }
 
     const points = FINISH_TYPE_POINTS[finishType as FinishType];
@@ -55,67 +52,18 @@ export async function POST(
 
     const setsToWin = match.setsToWin ?? match.tournament.setsToWin;
     const pointsToWinSet = match.pointsToWinSet ?? match.tournament.pointsToWinSet;
-    const maxSets = setsToWin * 2 - 1;
 
-    if (!match.sets.find((s) => s.status === "IN_PROGRESS") && match.sets.length + 1 > maxSets) {
-      return NextResponse.json({ error: "Número máximo de sets atingido" }, { status: 400 });
+    const outcome = await recordPoint(params.id, { scorerId, finishType: finishType as FinishType, points, beybladeId: beybladeId || null, actionId, setsToWin, pointsToWinSet });
+
+    if (outcome.kind === "error") return NextResponse.json({ error: outcome.error }, { status: outcome.status });
+    if (outcome.kind === "replay") {
+      // Same action already stored: nothing is added again.
+      return NextResponse.json({ success: true, replay: true, matchFinished: outcome.matchFinished, winnerId: outcome.winnerId });
     }
 
-    let matchFinished = false;
-    let matchWinnerId: string | null = null;
-
-    // Get or create current set, register the point and update set/match state atomically.
-    const updatedSet = await prisma.$transaction(async (tx) => {
-      let currentSet = match.sets.find((s) => s.status === "IN_PROGRESS");
-      if (!currentSet) {
-        const setNumber = match.sets.length + 1;
-        currentSet = await tx.matchSet.create({
-          data: {
-            matchId: params.id,
-            setNumber,
-            status: "IN_PROGRESS",
-          },
-        });
-        // Update match to IN_PROGRESS
-        await tx.match.update({
-          where: { id: params.id },
-          data: { status: "IN_PROGRESS" },
-        });
-      }
-
-      // Add point to the set
-      await tx.matchPoint.create({
-        data: {
-          matchId: params.id,
-          userId: scorerId,
-          finishType: finishType as FinishType,
-          points,
-          setId: currentSet.id,
-          beybladeId: beybladeId || null,
-        },
-      });
-
-      // Update set point counters
-      const isPlayer1 = scorerId === match.player1Id;
-      return tx.matchSet.update({
-        where: { id: currentSet.id },
-        data: isPlayer1
-          ? { player1Points: { increment: points } }
-          : { player2Points: { increment: points } },
-      });
-      // Wait longer for a free connection so a busy pool (many arena polls /
-      // heartbeats) doesn't fail with "Unable to start a transaction in time".
-    }, { maxWait: 20000, timeout: 20000 });
-
     // Signal the telão to play this finish's video (SPIN/OVER/BURST/EXTREME).
-    // This MUST be stamped here, right after the point is recorded — not at the
-    // end of the request. On the point that ends a match, everything below runs
-    // first (closing the set and match, crediting stats, generating the next
-    // round or finalizing the ranking), which can take seconds. A stamp made
-    // after that carries a timestamp far later than the actual finish, so the
-    // telão — which already played the video instantly over the P2P link — saw a
-    // "fresh" signal once its dedup window had expired and replayed the video
-    // right before the winner screen.
+    // Stamped right after the point is committed — not after the post-match
+    // pipeline below, which can take seconds and would make the telão replay it.
     if (["SPIN_FINISH", "OVER_FINISH", "BURST_FINISH", "EXTREME_FINISH"].includes(finishType)) {
       try {
         await prisma.match.update({
@@ -125,85 +73,26 @@ export async function POST(
       } catch { /* columns may be missing pre-migration — ignore */ }
     }
 
-    // Check if set is won
-    const p1Pts = updatedSet.player1Points;
-    const p2Pts = updatedSet.player2Points;
-    if (p1Pts >= pointsToWinSet || p2Pts >= pointsToWinSet) {
-      const setWinnerId = p1Pts >= pointsToWinSet ? match.player1Id : match.player2Id;
-
-      const { p1Sets, p2Sets } = await prisma.$transaction(async (tx) => {
-        await tx.matchSet.update({
-          where: { id: updatedSet.id },
-          data: { status: "FINISHED", winnerId: setWinnerId },
-        });
-
-        // Count sets won
-        const allSets = await tx.matchSet.findMany({ where: { matchId: params.id } });
-        return {
-          p1Sets: allSets.filter((s) => s.winnerId === match.player1Id).length,
-          p2Sets: allSets.filter((s) => s.winnerId === match.player2Id).length,
-        };
-      }, { maxWait: 20000, timeout: 20000 });
-
-      if (p1Sets >= setsToWin || p2Sets >= setsToWin) {
-        // Match is over
-        matchWinnerId = p1Sets >= setsToWin ? match.player1Id : match.player2Id;
-
-        // Only the request that actually flips the match to FINISHED runs the
-        // post-match side effects. If two judges (or a double-click) finish the
-        // match concurrently, the loser of this race gets count === 0 and bails,
-        // preventing double bracket-advance / double beyblade increments.
-        const finishRes = await prisma.match.updateMany({
-          where: { id: params.id, status: { not: "FINISHED" } },
-          data: { status: "FINISHED", winnerId: matchWinnerId },
-        });
-        if (finishRes.count === 0) {
-          return NextResponse.json({ success: true, matchFinished: true, winnerId: matchWinnerId });
-        }
-        matchFinished = true;
-
-        await Promise.all([
-          recalculateStandings(match.tournamentId, match.player1Id),
-          recalculateStandings(match.tournamentId, match.player2Id),
-        ]);
-
-        // Update beyblade win/loss stats (skip for test tournaments — those shouldn't affect global combo stats)
-        if (!match.tournament.isTest) {
-          const matchLoserId = matchWinnerId === match.player1Id ? match.player2Id : match.player1Id;
-          await updateBeybladeStats(params.id, matchWinnerId, matchLoserId);
-        }
-
-        // Format-specific post-match
-        if (match.tournament.format === "ROUND_ROBIN") {
-          // "Suíço": Swiss rounds, then top-N knockout — all handled by the coordinator.
-          await advanceSwissTournament(match.tournamentId, match.round);
-        } else if (match.tournament.format === "SINGLE_ELIMINATION") {
-          await advanceSingleElimination(match.tournamentId, match.round);
-        } else if (match.tournament.format === "SWISS") {
-          const roundMatches = await prisma.match.findMany({
-            where: { tournamentId: match.tournamentId, round: match.round },
-          });
-          const allDone = roundMatches.every((m) => m.status === "FINISHED");
-          if (allDone) {
-            const participantCount = await prisma.tournamentParticipant.count({
-              where: { tournamentId: match.tournamentId },
-            });
-            const maxRounds = Math.ceil(Math.log2(participantCount));
-            if (match.round < maxRounds) {
-              await generateSwissRound(match.tournamentId, match.round + 1);
-            } else {
-              await finalizeTournamentRanking(match.tournamentId);
-            }
-          }
-        } else {
-          const allMatches = await prisma.match.findMany({
-            where: { tournamentId: match.tournamentId },
-          });
-          const allDone = allMatches.every((m) => m.status === "FINISHED");
-          if (allDone) {
-            await finalizeTournamentRanking(match.tournamentId);
-          }
-        }
+    const matchFinished = outcome.finishedNow;
+    const matchWinnerId = outcome.winnerId;
+    // Only the request whose transaction closed the match runs the side effects
+    // (standings, stats, advance) — exactly once.
+    if (matchFinished && matchWinnerId) {
+      await Promise.all([
+        recalculateStandings(match.tournamentId, match.player1Id),
+        recalculateStandings(match.tournamentId, match.player2Id),
+      ]);
+      if (!match.tournament.isTest) {
+        const matchLoserId = matchWinnerId === match.player1Id ? match.player2Id : match.player1Id;
+        await updateBeybladeStats(params.id, matchWinnerId, matchLoserId);
+      }
+      if (isSwissFormat(match.tournament.format)) {
+        await advanceSwissTournament(match.tournamentId, match.round);
+      } else if (match.tournament.format === "SINGLE_ELIMINATION") {
+        await advanceSingleElimination(match.tournamentId, match.round);
+      } else {
+        const allMatches = await prisma.match.findMany({ where: { tournamentId: match.tournamentId } });
+        if (allMatches.every((m) => m.status === "FINISHED")) await finalizeTournamentRanking(match.tournamentId);
       }
     }
 

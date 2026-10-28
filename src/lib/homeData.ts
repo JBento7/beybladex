@@ -5,6 +5,7 @@ import { unstable_cache } from "next/cache";
 import { prisma } from "./prisma";
 import { eventPodium, type StandingsMatch } from "./standings";
 import { swissRoundCount } from "./tournament-engine";
+import { isSwissFormat } from "./swiss";
 import { getLeagueRanking } from "./leagueRanking";
 import { formatLabel } from "./format";
 import type { RankingEntry } from "./rankingMath";
@@ -96,7 +97,7 @@ async function loadLastEvent(): Promise<LastEvent | null> {
     },
   });
   if (!t) return null;
-  const swissRounds = t.format === "ROUND_ROBIN" ? t.swissRounds ?? swissRoundCount(t.participants.length) : 0;
+  const swissRounds = isSwissFormat(t.format) ? t.swissRounds ?? swissRoundCount(t.participants.length) : 0;
   const podium = eventPodium({
     format: t.format,
     status: t.status,

@@ -11,13 +11,18 @@ import {
   advanceSingleElimination,
   generateSwissRound,
   finalizeTournamentRanking,
+  auditTournament,
+  getSwissRounds,
 } from "@/lib/tournament-engine";
+import { hasBlocking, isSwissFormat } from "@/lib/swiss";
 
 // ORGANIZER-only: force round advancement for a tournament whose latest round
 // is fully finished but whose next round/knockout was never generated (e.g. the
 // last match was closed via a path that didn't trigger advancement). Idempotent:
 // does nothing if the next round already exists or the round isn't complete.
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+// Body (optional): { allowRematches: true, reason: "..." } — explicit, logged
+// exception when no Swiss round without rematches exists.
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {
@@ -50,15 +55,39 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   }
 
   try {
-    if (tournament.format === "ROUND_ROBIN") {
+    if (isSwissFormat(tournament.format)) {
+      // One engine for both stored Swiss formats.
+      const issues = await auditTournament(tournament.id);
+      if (hasBlocking(issues)) {
+        return NextResponse.json({
+          error: "Avanço bloqueado: há registros inconsistentes. Resolva-os antes de continuar (nada foi alterado).",
+          issues: issues.filter((i) => i.severity === "bloqueante"),
+        }, { status: 409 });
+      }
+      const swissRounds = await getSwissRounds(tournament.id);
+      if (round < swissRounds) {
+        const body = await req.json().catch(() => ({} as { allowRematches?: boolean; reason?: string }));
+        const res = await generateSwissRound(tournament.id, round + 1, {
+          allowRematches: !!body.allowRematches,
+          reason: typeof body.reason === "string" ? body.reason.slice(0, 500) : undefined,
+          actorId: session.user.id,
+        });
+        if (res.status !== "created" && res.status !== "exists") {
+          return NextResponse.json({
+            error: res.status === "limit"
+              ? "O limite de busca foi atingido antes de encontrar uma rodada válida (isso não prova que ela não exista). Nada foi gravado."
+              : res.status === "impossible"
+                ? "Não existe rodada sem reencontro. Para continuar, autorize a exceção informando o motivo. Nada foi gravado."
+                : "Não foi possível gerar a rodada. Nada foi gravado.",
+            status: res.status,
+            notes: res.notes,
+          }, { status: 409 });
+        }
+        return NextResponse.json({ ok: true, round, result: res });
+      }
       await advanceSwissTournament(tournament.id, round);
     } else if (tournament.format === "SINGLE_ELIMINATION") {
       await advanceSingleElimination(tournament.id, round);
-    } else if (tournament.format === "SWISS") {
-      const participants = await prisma.tournamentParticipant.count({ where: { tournamentId: tournament.id } });
-      const maxRounds = Math.ceil(Math.log2(Math.max(2, participants)));
-      if (round < maxRounds) await generateSwissRound(tournament.id, round + 1);
-      else await finalizeTournamentRanking(tournament.id);
     } else {
       await finalizeTournamentRanking(tournament.id);
     }

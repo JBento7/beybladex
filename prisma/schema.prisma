@@ -183,6 +183,9 @@ model Tournament {
   // Suíço: number of Swiss rounds, frozen when first needed so approving or
   // removing a player mid-event can't move the Swiss/knockout boundary.
   swissRounds     Int?
+  // Swiss rules version used by this event (set when it starts). A later rule
+  // change never silently reorders a finished event.
+  rulesVersion    String?
   setsToWin       Int     @default(2)
   pointsToWinSet  Int     @default(4)
   qualifiers      Int?    // Suíço: how many top players advance to the knockout (16/8/4)
@@ -205,6 +208,8 @@ model Tournament {
   matches         Match[]
   judges          TournamentJudge[]
   beybladeRecords BeybladeMatchRecord[]
+  roundLogs       SwissRoundLog[]
+  adminActions    TournamentAdminAction[]
 }
 
 model TournamentJudge {
@@ -291,6 +296,7 @@ model Match {
   sets           MatchSet[]
   beybladeRecords BeybladeMatchRecord[]
   deckOrders     MatchDeckOrder[]
+  participations RoundParticipation[]
 
   @@index([tournamentId, round])
   @@index([tournamentId, status, arena])
@@ -325,6 +331,9 @@ model MatchPoint {
   beybladeUsed String?
   beybladeId   String?
   setId        String?
+  // Idempotency key sent by the scoring screen: the same action (retry,
+  // double tap, second device replaying it) is stored only once.
+  actionId     String?
   createdAt    DateTime   @default(now())
 
   match     Match     @relation(fields: [matchId], references: [id])
@@ -332,6 +341,7 @@ model MatchPoint {
   beyblade  Beyblade? @relation(fields: [beybladeId], references: [id])
   set       MatchSet? @relation(fields: [setId], references: [id])
 
+  @@unique([matchId, actionId])
   @@index([matchId])
   @@index([setId])
   @@index([userId])
@@ -491,4 +501,62 @@ model BeyPart {
   createdAt   DateTime         @default(now())
 
   @@unique([line, category, name])
+}
+
+// One row per player per round per phase: the persistent guarantee that a
+// player never has two participations (two matches, or a bye and a match) in
+// the same round — enforced by the unique key even under concurrent requests.
+model RoundParticipation {
+  id           String   @id @default(cuid())
+  tournamentId String
+  phase        String   // "SWISS" | "KNOCKOUT"
+  round        Int
+  userId       String
+  matchId      String
+  kind         String   // "MATCH" | "BYE"
+  createdAt    DateTime @default(now())
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, phase, round, userId])
+  @@index([matchId])
+}
+
+// One row per generated Swiss round: seed, rules version, bye choice and the
+// pairing diagnostics. The unique key also stops a round being generated twice.
+model SwissRoundLog {
+  id             String   @id @default(cuid())
+  tournamentId   String
+  round          Int
+  rulesVersion   String
+  seed           Int?
+  byeUserId      String?
+  crossings      Int      @default(0)
+  optimal        Boolean  @default(true)
+  notes          String   @default("")
+  exceptionReason String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+
+  @@unique([tournamentId, round])
+}
+
+// Audit trail of administrative interventions (repairs, rule exceptions,
+// de-duplication): who, why, and a copy of the data before/after.
+model TournamentAdminAction {
+  id           String   @id @default(cuid())
+  tournamentId String
+  kind         String
+  reason       String
+  actorId      String?
+  idempotencyKey String? @unique
+  before       Json?
+  after        Json?
+  createdAt    DateTime @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+
+  @@index([tournamentId])
 }

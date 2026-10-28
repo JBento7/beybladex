@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isSwissFormat } from "@/lib/swiss";
 
 export async function GET() {
   try {
@@ -73,12 +74,12 @@ export async function POST(req: NextRequest) {
         setsToWin: setsToWin ? Math.min(2, Math.max(1, parseInt(setsToWin))) : 2,
         pointsToWinSet: pointsToWinSet ? Math.min(7, Math.max(4, parseInt(pointsToWinSet))) : 4,
         // Suíço only: how many top players advance to the knockout (4/8/16).
-        qualifiers: format === "ROUND_ROBIN" && [4, 8, 16].includes(Number(qualifiers)) ? Number(qualifiers) : null,
+        qualifiers: isSwissFormat(format) && [4, 8, 16].includes(Number(qualifiers)) ? Number(qualifiers) : null,
         // 2-day tournament (Suíço only): day 1 Suíço, day 2 knockout.
-        isMultiDay: format === "ROUND_ROBIN" && !!isMultiDay,
-        day2Date: format === "ROUND_ROBIN" && isMultiDay && day2Date ? new Date(day2Date) : null,
-        day2SetsToWin: format === "ROUND_ROBIN" && isMultiDay && day2SetsToWin ? Math.min(2, Math.max(1, parseInt(day2SetsToWin))) : null,
-        day2PointsToWinSet: format === "ROUND_ROBIN" && isMultiDay && day2PointsToWinSet ? Math.min(7, Math.max(4, parseInt(day2PointsToWinSet))) : null,
+        isMultiDay: isSwissFormat(format) && !!isMultiDay,
+        day2Date: isSwissFormat(format) && isMultiDay && day2Date ? new Date(day2Date) : null,
+        day2SetsToWin: isSwissFormat(format) && isMultiDay && day2SetsToWin ? Math.min(2, Math.max(1, parseInt(day2SetsToWin))) : null,
+        day2PointsToWinSet: isSwissFormat(format) && isMultiDay && day2PointsToWinSet ? Math.min(7, Math.max(4, parseInt(day2PointsToWinSet))) : null,
         bannerUrl: bannerUrl || null,
         location: location || null,
         venueName: venueName || null,

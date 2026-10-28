@@ -6,7 +6,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { isSwissFormat } from "@/lib/swiss";
 import { computeSwissStandings } from "@/lib/standings";
+import { auditTournament } from "@/lib/tournament-engine";
 import { recalculateStandings, getSwissRounds } from "@/lib/tournament-engine";
 
 // ORGANIZER-only health check for a tournament. Detects the damage the fixed
@@ -130,7 +132,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const counts = [...played.values()];
     const target = counts.length ? Math.max(...counts) : 0;
     const behind = counts.filter((c) => c < target).length;
-    if (behind && tournament.format === "ROUND_ROBIN") {
+    if (behind && isSwissFormat(tournament.format)) {
       issues.push({
         code: "unequal_matches",
         severity: "high",
@@ -171,6 +173,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
     }
 
+    // 6b) Swiss integrity (one participation per player per round, valid byes,
+    // winners, schedule collisions, knockout structure). Report only.
+    for (const it of await auditTournament(params.id)) {
+      issues.push({
+        code: `integrity_${it.code.toLowerCase()}`,
+        severity: it.severity === "bloqueante" ? "critical" : "medium",
+        count: it.matchIds.length || 1,
+        detail: `${it.message}${it.matchIds.length ? ` Partidas: ${it.matchIds.join(", ")}.` : ""}`,
+        action: it.severity === "bloqueante"
+          ? "Avanço, mata-mata, encerramento e ranking ficam bloqueados. Veja o relatório em /api/admin/tournaments/<id>/audit e decida a correção."
+          : "Verifique.",
+      });
+    }
+
     // 7) Stored standings that disagree with the recorded results.
     let stale = 0;
     for (const p of participants) {
@@ -179,7 +195,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       const wins = real.filter((m) => m.winnerId === p.userId).length;
       const losses = real.filter((m) => m.winnerId && m.winnerId !== p.userId).length;
       // Suíço points count the Swiss rounds only (knockout wins excluded).
-      const expectedTotal = tournament.format === "ROUND_ROBIN"
+      const expectedTotal = isSwissFormat(tournament.format)
         ? computeSwissStandings([p.userId], matches, swissRounds)[0]?.swissPoints ?? 0
         : null;
       if (p.wins !== wins || p.losses !== losses || (expectedTotal !== null && p.totalPoints !== expectedTotal)) stale++;

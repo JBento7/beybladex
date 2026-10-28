@@ -48,7 +48,12 @@ export async function DELETE(
 
   const pointsToWinSet = match.pointsToWinSet ?? match.tournament.pointsToWinSet;
 
+  try {
   await prisma.$transaction(async (tx) => {
+    // Serialize with point/W.O. on the same match.
+    await tx.$queryRaw`SELECT id FROM "Match" WHERE id = ${params.id} FOR UPDATE`;
+    const now = await tx.match.findUnique({ where: { id: params.id }, select: { status: true } });
+    if (now?.status === "FINISHED") throw new Error("MATCH_FINISHED");
     await tx.matchPoint.delete({ where: { id: lastPoint.id } });
 
     if (lastPoint.setId) {
@@ -88,6 +93,12 @@ export async function DELETE(
       await tx.match.update({ where: { id: params.id }, data: { status: "PENDING", winnerId: null } });
     }
   });
+  } catch (e) {
+    if (String(e).includes("MATCH_FINISHED")) {
+      return NextResponse.json({ error: "Partida já finalizada — use o painel admin para editar" }, { status: 409 });
+    }
+    throw e;
+  }
 
   return NextResponse.json({ ok: true });
 }

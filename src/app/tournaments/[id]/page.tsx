@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { auditSwiss, isSwissFormat } from "@/lib/swiss";
 import { ensureSwissProgress } from "@/lib/tournament-engine";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
@@ -78,7 +79,7 @@ type MatchWithRelations = {
 
 function getRoundName(round: number, totalRounds: number, format?: string, swissRounds = 0): string {
   // Suíço: rounds 1..swissRounds are the Swiss phase; later rounds are the knockout.
-  if (format === "ROUND_ROBIN" && swissRounds > 0 && round <= swissRounds) {
+  if (isSwissFormat(format) && swissRounds > 0 && round <= swissRounds) {
     return swissRounds === 1 ? "Fase Suíça" : `Suíço · Rodada ${round}`;
   }
   const roundsFromEnd = totalRounds - round;
@@ -114,6 +115,8 @@ type MatchCardProps = {
   roundLabel?: string;
   /** What a bye means in this format (Swiss point vs. advancing). */
   byeText?: string;
+  /** Integrity problem involving this match (shown with its id to admins). */
+  flagged?: Map<string, string>;
 };
 
 // One match. Works in a single phone-width column: names wrap instead of being
@@ -131,7 +134,14 @@ function MatchCard({
   openJudging = false,
   roundLabel,
   byeText = "Avança sem jogar (bye).",
+  flagged,
 }: MatchCardProps) {
+  const problem = flagged?.get(match.id);
+  const flagBox = problem ? (
+    <p role="note" className="mt-2 rounded-md border border-warn/40 bg-warn-bg px-2 py-1 text-xs text-gray-100">
+      ⚠ {problem}{isAdmin && <span className="block text-gray-300">ID: {match.id}</span>}
+    </p>
+  ) : null;
   // When no judges are assigned (openJudging), any logged-in user can score.
   // Otherwise: organizers/admins or the match's assigned judge.
   const canScore = openJudging
@@ -160,6 +170,7 @@ function MatchCard({
           <span className="shrink-0 text-xs px-2 py-1 rounded-full font-bold bg-gray-700 text-gray-100">Bye</span>
         </div>
         <p className="text-xs text-gray-400 mt-1">{byeText}</p>
+        {flagBox}
       </div>
     );
   }
@@ -199,6 +210,7 @@ function MatchCard({
         {row(match.player1, p1Points)}
         {row(match.player2, p2Points)}
       </div>
+      {flagBox}
       {(match.judge || match.isWalkover || (canScore && !isFinished) ||
         (deckType === "THREE_ON_THREE" && !isFinished && currentUserId && (currentUserId === match.player1.id || currentUserId === match.player2.id))) && (
         <div className="flex items-center gap-2 flex-wrap">
@@ -313,7 +325,7 @@ export default async function TournamentDetailPage({
       where: { id: params.id },
       select: { format: true, status: true },
     });
-    if (meta?.format === "ROUND_ROBIN" && meta.status === "IN_PROGRESS") {
+    if (isSwissFormat(meta?.format) && meta?.status === "IN_PROGRESS") {
       await ensureSwissProgress(params.id);
     }
   } catch (e) {
@@ -492,7 +504,7 @@ export default async function TournamentDetailPage({
     : [];
 
   // ── Phases ────────────────────────────────────────────────────────────────
-  const isSwiss = tournament.format === "ROUND_ROBIN";
+  const isSwiss = isSwissFormat(tournament.format);
   const approvedParticipants = tournament.participants.filter(
     (p) => (p as { approved?: boolean }).approved !== false
   );
@@ -761,6 +773,46 @@ export default async function TournamentDetailPage({
   }
 
   const community = communityOf(tournament.communitySlug);
+  // Integrity of the Swiss records (pure, read-only): conflicts are shown,
+  // never hidden, and the recalculated table is not presented as certified.
+  const integrity = isSwiss
+    ? auditSwiss({
+        matches: tournament.matches.map((m) => ({ id: m.id, round: m.round, status: m.status, player1Id: m.player1.id, player2Id: m.player2.id, winnerId: m.winner?.id ?? null, isWalkover: m.isWalkover, isThirdPlace: m.isThirdPlace, arena: m.arena, slot: m.slot })),
+        swissRounds,
+        participants: approvedParticipants.map((p) => p.userId),
+        tournamentStatus: tournament.status,
+        qualifiers: tournament.qualifiers,
+      })
+    : [];
+  const blockingIssues = integrity.filter((i) => i.severity === "bloqueante");
+  const flagged = new Map<string, string>();
+  for (const it of integrity) {
+    if (it.severity !== "bloqueante" && it.code !== "SCHEDULE_COLLISION") continue;
+    for (const id of it.matchIds) if (!flagged.has(id)) flagged.set(id, it.code === "SCHEDULE_COLLISION" ? "Conflito de agenda" : `${it.message}${it.userId ? ` (${nameOf(it.userId)})` : ""}`);
+  }
+  const integrityBanner = integrity.length > 0 && (blockingIssues.length > 0 || isAdminUser) && (
+    <section role="alert" aria-labelledby="integridade-titulo" className="rounded-xl border border-warn/50 bg-warn-bg p-4">
+      <h3 id="integridade-titulo" className="font-bold text-warn">
+        {blockingIssues.length ? "Registros inconsistentes nesta fase" : "Avisos de integridade"}
+      </h3>
+      <p className="mt-1 text-sm text-gray-100">
+        {blockingIssues.length
+          ? "Há partidas que contam duas vezes para o mesmo jogador ou registros inválidos. A classificação recalculada abaixo NÃO é certificada; avanço, mata-mata e encerramento ficam bloqueados até a organização resolver."
+          : "Itens para conferência da organização (não bloqueiam o torneio)."}
+        {tournament.status === "FINISHED" && " A colocação oficial registrada no encerramento é mantida."}
+      </p>
+      {isAdminUser && (
+        <ul className="mt-2 space-y-1 text-sm text-gray-200 list-disc pl-5">
+          {integrity.slice(0, 30).map((it, i) => (
+            <li key={i}>
+              [{it.severity}] {it.message}{it.userId ? ` Jogador: ${nameOf(it.userId)}.` : ""}{it.matchIds.length ? ` IDs: ${it.matchIds.join(", ")}` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+
   const matchCardProps = {
     isOrganizer: canJudge,
     isAdmin: isAdminUser,
@@ -771,6 +823,7 @@ export default async function TournamentDetailPage({
     deckType: tournament.deckType,
     openJudging,
     byeText,
+    flagged,
   };
   const card = "bg-gray-900 border border-gray-800 rounded-xl p-4 sm:p-6";
 
@@ -812,19 +865,34 @@ export default async function TournamentDetailPage({
             {slots.map((slot) => (
               <div key={slot} className="grid gap-3 mb-3" style={{ gridTemplateColumns: `repeat(${arenaCount}, minmax(180px, 1fr))` }}>
                 {Array.from({ length: arenaCount }, (_, i) => {
-                  const match = arenaMatches.find((m) => (m.slot ?? 0) === slot && (m.arena ?? 1) === i + 1);
-                  if (!match) {
+                  // EVERY match of this arena + time slot is rendered: a second
+                  // record here is a scheduling conflict, never hidden.
+                  const cell = arenaMatches.filter((m) => (m.slot ?? 0) === slot && (m.arena ?? 1) === i + 1);
+                  if (cell.length === 0) {
                     return (
                       <div key={i} className="border border-dashed border-gray-800 rounded-lg flex items-center justify-center py-6">
                         <span className="text-gray-500 text-xs">Arena livre</span>
                       </div>
                     );
                   }
-                  return <MatchCard key={match.id} match={match} roundLabel={label} {...matchCardProps} />;
+                  return (
+                    <div key={i} className="space-y-2">
+                      {cell.length > 1 && (
+                        <p role="note" className="rounded-md border border-warn/40 bg-warn-bg px-2 py-1 text-xs font-semibold text-warn">
+                          Conflito de agenda: mais de uma partida neste horário e arena
+                        </p>
+                      )}
+                      {cell.map((match) => <MatchCard key={match.id} match={match} roundLabel={label} {...matchCardProps} />)}
+                    </div>
+                  );
                 })}
               </div>
             ))}
+            {/* Matches whose arena isn't part of the grid are still listed. */}
             <div className="space-y-3">
+              {arenaMatches.filter((m) => m.arena == null || m.arena < 1 || m.arena > arenaCount).map((match) => (
+                <MatchCard key={match.id} match={match} roundLabel={label} {...matchCardProps} />
+              ))}
               {byeMatches.map((match) => (
                 <MatchCard key={match.id} match={match} roundLabel={label} {...matchCardProps} />
               ))}
@@ -992,7 +1060,9 @@ export default async function TournamentDetailPage({
 
   const swissTable = isSwiss && swissRows.length > 0 && (
     <section aria-labelledby="suico-titulo" className={card}>
-      <h3 id="suico-titulo" className="text-lg font-bold text-white mb-1">Classificação da fase suíça</h3>
+      <h3 id="suico-titulo" className="text-lg font-bold text-white mb-1">
+        Classificação da fase suíça{blockingIssues.length ? " — não certificada" : ""}
+      </h3>
       <p className="text-sm text-gray-400 mb-4">
         Somente as {swissRounds} rodada{swissRounds > 1 ? "s" : ""} suíça{swissRounds > 1 ? "s" : ""}. Partidas do mata-mata não entram nesta tabela.
         {qualifiersCount > 0 && ` Os ${qualifiersCount} primeiros avançam para o mata-mata.`}
@@ -1068,7 +1138,7 @@ export default async function TournamentDetailPage({
               : "Critério: classificação do torneio."}
         {tournament.status !== "FINISHED" && " Pode mudar até o fim do torneio."}
       </p>
-      {divergences.length > 0 && (
+      {divergences.length > 0 && blockingIssues.length === 0 && (
         <div role="note" className="mb-4 rounded-lg border border-warn/40 bg-warn-bg p-3 text-sm text-gray-100">
           <p className="font-bold text-warn">Diferença em relação à tabela da fase suíça</p>
           <p className="mt-1 text-gray-200">
@@ -1193,6 +1263,7 @@ export default async function TournamentDetailPage({
   // ── Content of each tab ───────────────────────────────────────────────────
   const matchesContent = sortedRounds.length > 0 ? (
     <div className="space-y-6">
+      {integrityBanner}
       {tournament.status === "IN_PROGRESS" && currentRound != null && !judgeKiosk && (
         <a href={`#rodada-${currentRound}`} className="tap inline-flex items-center gap-2 px-4 rounded-lg bg-green-500/15 border border-green-500/40 text-green-200 text-sm font-bold">
           Ir para a rodada atual: {roundLabel(currentRound)}
@@ -1243,6 +1314,7 @@ export default async function TournamentDetailPage({
 
   const classificationContent = (
     <div className="space-y-6">
+      {integrityBanner}
       {finalTable}
       {swissTable}
       {generalStats}
@@ -1471,7 +1543,7 @@ export default async function TournamentDetailPage({
                     <FinishTournamentButton tournamentId={tournament.id} isOfficial={tournament.isOfficial} />
                   )}
                   {isAdminUser && <LaunchVideoButton arenas={tournament.arenas ?? 1} community={tournament.communitySlug} />}
-                  {isAdminUser && tournament.isTest && tournament.format === "ROUND_ROBIN" && tournament.status !== "FINISHED" && (
+                  {isAdminUser && tournament.isTest && isSwissFormat(tournament.format) && tournament.status !== "FINISHED" && (
                     <AutoplaySwissButton tournamentId={tournament.id} />
                   )}
                   {isAdminUser && tournament.isTest && tournament.status !== "REGISTRATION" && (

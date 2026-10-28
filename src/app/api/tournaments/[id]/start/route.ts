@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { SWISS_RULES_VERSION, isSwissFormat, validateCut } from "@/lib/swiss";
 import {
   generateGroups,
   generateSingleElimination,
@@ -73,7 +74,17 @@ export async function POST(
     }
 
     // Validate the confirmed arena count, if provided.
-    const data: { status: "IN_PROGRESS"; arenas?: number } = { status: "IN_PROGRESS" };
+    // Suíço: the knockout cut must fit the field BEFORE starting (top 4/8/16,
+    // equal to the field = everyone advances; larger = rejected).
+    if (isSwissFormat(tournament.format)) {
+      const cut = validateCut(tournament.qualifiers ?? null, approvedCount);
+      if (cut.mode === "error") return NextResponse.json({ error: cut.message }, { status: 400 });
+    }
+    const data: { status: "IN_PROGRESS"; arenas?: number; rulesVersion?: string } = {
+      status: "IN_PROGRESS",
+      // Record the rule set this event is played under.
+      ...(isSwissFormat(tournament.format) ? { rulesVersion: SWISS_RULES_VERSION } : {}),
+    };
     if (body.arenas !== undefined) {
       const arenas = Number(body.arenas);
       if (!Number.isInteger(arenas) || arenas < 1 || arenas > 20) {
@@ -125,17 +136,17 @@ export async function POST(
     try {
       switch (tournament.format) {
         case "ROUND_ROBIN":
-          // "Suíço": Swiss pairing for the initial phase, then a top-N knockout.
-          await generateSwissRound(params.id, 1);
+        case "SWISS": {
+          // "Suíço" (both stored values): Swiss rounds, then the top-N knockout.
+          const res = await generateSwissRound(params.id, 1);
+          if (res.status !== "created" && res.status !== "exists") throw new Error(`Rodada 1 não gerada: ${res.notes.join(" ")}`);
           break;
+        }
         case "GROUPS":
           await generateGroups(params.id);
           break;
         case "SINGLE_ELIMINATION":
           await generateSingleElimination(params.id);
-          break;
-        case "SWISS":
-          await generateSwissRound(params.id, 1);
           break;
       }
     } catch (genErr) {

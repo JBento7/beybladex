@@ -340,7 +340,12 @@ export default function ScoreModal({
     }
 
     setLoading(true);
-    const body = JSON.stringify({ scorerId, finishType, beybladeId: beybladeId || undefined });
+    // One id per tap, reused by every retry below: the server stores the point
+    // once even if a retry arrives after the first attempt already succeeded.
+    const actionId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const body = JSON.stringify({ scorerId, finishType, beybladeId: beybladeId || undefined, actionId });
     // Auto-retry on connection drops so a weak signal doesn't lose the point.
     let res: Response | null = null;
     for (let attempt = 0; attempt < 6; attempt++) {

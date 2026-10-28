@@ -13,6 +13,8 @@
 //    placement each fell back to a different query order).
 // A bye is a self-match (player1 = player2) marked isWalkover with the player
 // as winner. Knockout padding byes are self-matches WITHOUT isWalkover.
+// A W.O. between two players counts as a played win/loss; points recorded
+// before the walkover are kept but are not battle points.
 
 export type StandingsMatch = {
   round: number;
@@ -92,7 +94,9 @@ export function computeSwissStandings(userIds: string[], matches: StandingsMatch
       if (r && isSwissBye(m) && m.winnerId === m.player1Id) { r.byes++; r.swissPoints++; }
       continue;
     }
-    const pts = m.points ?? [];
+    // W.O.: a win/loss, but the match wasn't completed — points recorded
+    // before the walkover stay stored, they just don't count as battle points.
+    const pts = m.isWalkover ? [] : m.points ?? [];
     const p1 = pts.filter((p) => p.userId === m.player1Id).reduce((s, p) => s + p.points, 0);
     const p2 = pts.filter((p) => p.userId === m.player2Id).reduce((s, p) => s + p.points, 0);
     for (const [id, own, opp] of [[m.player1Id, p1, p2], [m.player2Id, p2, p1]] as const) {
@@ -197,7 +201,7 @@ export function eventPodium(input: {
 }): { first?: string; second?: string; third?: string } {
   const { format, status, swissRounds, matches, placements } = input;
   if (format === "SINGLE_ELIMINATION") return decidedPodium(matches, 0);
-  const hasKnockout = format === "ROUND_ROBIN" && matches.some((m) => m.round > swissRounds && m.player1Id !== m.player2Id);
+  const hasKnockout = (format === "ROUND_ROBIN" || format === "SWISS") && matches.some((m) => m.round > swissRounds && m.player1Id !== m.player2Id);
   if (hasKnockout) return decidedPodium(matches, swissRounds);
   if (status !== "FINISHED") return {};
   const at = (n: number) => placements.find((p) => p.placement === n)?.userId;

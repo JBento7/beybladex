@@ -148,27 +148,42 @@ export default function AdminMatchEditor({
     }
   }
 
+  // Controlled repair: simulate first, then apply one round with a reason.
   async function balanceMatches() {
     setBalancing(true);
     setErr(null);
     setAdvanceMsg(null);
-    const res = await fetch(`/api/admin/tournaments/${tournamentId}/balance-matches`, { method: "POST" });
+    const sim = await fetch(`/api/admin/tournaments/${tournamentId}/balance-matches`, { method: "POST" });
+    const data = await sim.json().catch(() => ({}));
     setBalancing(false);
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) {
-      if (data.added > 0) {
-        setAdvanceMsg(
-          `Todos devem jogar ${data.target} partida(s). Geradas ${data.added} partida(s) para os jogadores em falta.` +
-          (data.byeUserId ? " (1 jogador ficou sem par e passou de bye.)" : "") +
-          (data.knockoutReset ? " O mata-mata foi desfeito e será refeito quando estas partidas terminarem." : "")
-        );
-        router.refresh();
-      } else {
-        setAdvanceMsg(`Tudo certo: todos jogaram o mesmo número de partidas (${data.target}).`);
-      }
-    } else {
-      setAdvanceMsg(data.error || "Erro ao balancear partidas");
+    if (!sim.ok) { setAdvanceMsg(data.error || "Erro na simulação do reparo"); return; }
+    type Plan = { round: number; missing: string[]; duplicates: { userId: string; matchIds: string[] }[]; proposals: { player1Id: string; player2Id: string }[]; unresolved: { userId: string; reason: string }[]; noop: boolean };
+    const plans = ((data.plans ?? []) as { plan?: Plan; impact?: string | null }[]).filter((p) => p.plan);
+    const name = (id: string) => participants.find((p) => p.userId === id)?.name ?? id;
+    const lines: string[] = [];
+    let target: Plan | null = null;
+    let impact: string | null = null;
+    for (const { plan, impact: imp } of plans) {
+      const p = plan!;
+      if (p.duplicates.length) lines.push(`Rodada ${p.round}: ${p.duplicates.map((d) => `${name(d.userId)} com ${d.matchIds.length} participações`).join(", ")} (exige decisão manual).`);
+      if (p.missing.length) lines.push(`Rodada ${p.round}: sem partida → ${p.missing.map(name).join(", ")}.`);
+      if (p.proposals.length) lines.push(`  Proposta: ${p.proposals.map((x) => `${name(x.player1Id)} × ${name(x.player2Id)}`).join(", ")}.`);
+      for (const u of p.unresolved) lines.push(`  ${name(u.userId)}: ${u.reason}`);
+      if (!target && p.proposals.length) { target = p; impact = imp ?? null; }
     }
+    if (!lines.length) { setAdvanceMsg("Tudo certo: cada jogador tem exatamente uma participação por rodada."); return; }
+    if (!target || impact) { setAdvanceMsg(`Simulação (nada foi alterado): ${lines.join(" ")}${impact ? ` ${impact}` : ""}`); return; }
+    const reason = window.prompt(`Simulação do reparo:\n${lines.join("\n")}\n\nAplicar a proposta da rodada ${target.round}? Informe o motivo:`);
+    if (!reason?.trim()) { setAdvanceMsg(`Simulação (nada foi alterado): ${lines.join(" ")}`); return; }
+    setBalancing(true);
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/balance-matches`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ round: target.round, apply: true, reason }),
+    });
+    setBalancing(false);
+    const out = await res.json().catch(() => ({}));
+    if (res.ok && out.applied) { setAdvanceMsg(`Rodada ${target.round} reparada: ${target.proposals.length} partida(s) criada(s). Registro de auditoria salvo.`); router.refresh(); }
+    else setAdvanceMsg(out.error || "Reparo não aplicado.");
   }
 
   async function recalcStandings() {
@@ -186,31 +201,46 @@ export default function AdminMatchEditor({
     setDeduping(true);
     setErr(null);
     setAdvanceMsg(null);
-    const res = await fetch(`/api/admin/tournaments/${tournamentId}/dedupe-matches`, { method: "POST" });
+    const sim = await fetch(`/api/admin/tournaments/${tournamentId}/dedupe-matches`, { method: "POST" });
+    const data = await sim.json().catch(() => ({}));
     setDeduping(false);
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) {
-      if (data.removed > 0) { setAdvanceMsg(`${data.removed} partida(s) duplicada(s) removida(s).`); router.refresh(); }
-      else setAdvanceMsg("Nenhuma partida duplicada encontrada.");
-    } else {
-      setAdvanceMsg(data.error || "Erro ao remover duplicadas");
-    }
+    if (!sim.ok) { setAdvanceMsg(data.error || "Erro ao verificar duplicadas"); return; }
+    const decide = (data.needsDecision ?? []) as { round: number; matchIds: string[] }[];
+    const note = decide.length ? ` ${decide.length} grupo(s) com mais de uma cópia jogada exigem decisão manual (nada removido): ${decide.map((d) => `rodada ${d.round}`).join(", ")}.` : "";
+    if (!(data.removable ?? []).length) { setAdvanceMsg(`Nenhuma cópia não jogada para remover.${note}`); return; }
+    const reason = window.prompt(`${data.removable.length} cópia(s) NÃO jogada(s) de partidas repetidas podem ser removidas (com cópia de segurança).${note}\nMotivo:`);
+    if (!reason?.trim()) { setAdvanceMsg(`Simulação: ${data.removable.length} cópia(s) removível(is).${note}`); return; }
+    setDeduping(true);
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/dedupe-matches`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apply: true, reason }) });
+    setDeduping(false);
+    const out = await res.json().catch(() => ({}));
+    if (res.ok) { setAdvanceMsg(`${out.removed} cópia(s) removida(s).${note}`); router.refresh(); }
+    else setAdvanceMsg(out.error || "Erro ao remover duplicadas");
   }
 
-  async function advanceRound() {
+  async function advanceRound(exception?: { reason: string }) {
     setAdvancing(true);
     setErr(null);
     setAdvanceMsg(null);
-    const res = await fetch(`/api/admin/tournaments/${tournamentId}/advance-round`, { method: "POST" });
+    const res = await fetch(`/api/admin/tournaments/${tournamentId}/advance-round`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(exception ? { allowRematches: true, reason: exception.reason } : {}),
+    });
     setAdvancing(false);
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
-      if (data.alreadyGenerated) setAdvanceMsg("A próxima rodada já existe.");
-      else if (data.nextRoundMatches > 0) { setAdvanceMsg(`Rodada ${data.round + 1} gerada.`); router.refresh(); }
+      if (data.alreadyGenerated || data.result?.status === "exists") setAdvanceMsg("A próxima rodada já existe.");
+      else if (data.result?.status === "created") { setAdvanceMsg(`Rodada ${data.result.round} gerada.${data.result.notes?.length ? " " + data.result.notes.join(" ") : ""}`); router.refresh(); }
       else { setAdvanceMsg("Fase avançada."); router.refresh(); }
-    } else {
-      setAdvanceMsg(data.error || "Erro ao avançar rodada");
+      return;
     }
+    const detail = [...(data.notes ?? []), ...((data.issues ?? []) as { message: string }[]).map((i) => i.message)].join(" ");
+    if (data.status === "impossible" && !exception) {
+      const reason = window.prompt(`${data.error}\n${detail}\n\nPara gerar a rodada permitindo reencontros, informe o motivo (fica registrado):`);
+      if (reason?.trim()) return advanceRound({ reason });
+    }
+    setAdvanceMsg(`${data.error || "Erro ao avançar rodada"} ${detail}`);
   }
 
   function startEdit(m: MatchRow) {
@@ -227,14 +257,27 @@ export default function AdminMatchEditor({
     setEditSets((prev) => prev.map((s, i) => (i === idx ? { ...s, [side]: Math.max(0, value) } : s)));
   }
 
-  async function saveScore(matchId: string) {
+  async function saveScore(matchId: string, confirm?: { reason: string }) {
     setSavingScore(true);
     setErr(null);
     const res = await fetch(`/api/admin/matches/${matchId}/set-score`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sets: editSets.map((s) => ({ p1Points: s.p1, p2Points: s.p2 })) }),
+      body: JSON.stringify({
+        sets: editSets.map((s) => ({ p1Points: s.p1, p2Points: s.p2 })),
+        ...(confirm ? { confirmAfterAdvance: true, reason: confirm.reason } : {}),
+      }),
     });
+    if (res.status === 409 && !confirm) {
+      const data = await res.clone().json().catch(() => ({}));
+      if (data.requiresConfirmation) {
+        setSavingScore(false);
+        const reason = window.prompt(`${data.error}\n\nMotivo da correção:`);
+        if (reason?.trim()) return saveScore(matchId, { reason });
+        setErr("Correção não salva.");
+        return;
+      }
+    }
     setSavingScore(false);
     if (res.ok) {
       setEditId(null);
@@ -344,7 +387,7 @@ export default function AdminMatchEditor({
             {deduping ? "Removendo..." : "Remover Duplicadas"}
           </button>
           <button
-            onClick={advanceRound}
+            onClick={() => advanceRound()}
             disabled={advancing}
             title="Gera a próxima rodada se a atual terminou mas não avançou sozinha"
             className="text-xs font-bold border border-brand-yellow/40 text-brand-yellow hover:bg-brand-yellow/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"

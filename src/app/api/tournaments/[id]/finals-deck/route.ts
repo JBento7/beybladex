@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isSwissFormat } from "@/lib/swiss";
 
 // Suíço finals: a player who advanced to the knockout may change EXACTLY ONE
 // combo of their 3-bey deck, once. POST { beybladeIds: [id, id, id] }.
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     select: { format: true, deckType: true, isOfficial: true },
   });
   if (!tournament) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
-  if (tournament.format !== "ROUND_ROBIN") return NextResponse.json({ error: "Disponível apenas no formato Suíço." }, { status: 400 });
+  if (!isSwissFormat(tournament.format)) return NextResponse.json({ error: "Disponível apenas no formato Suíço." }, { status: 400 });
   if (tournament.deckType !== "THREE_ON_THREE") return NextResponse.json({ error: "Disponível apenas em torneios 3on3." }, { status: 400 });
 
   const participant = await prisma.tournamentParticipant.findUnique({

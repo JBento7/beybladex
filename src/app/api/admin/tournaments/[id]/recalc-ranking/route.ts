@@ -6,7 +6,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
-import { recalculateStandings, finalizeTournamentRanking, getSwissRounds } from "@/lib/tournament-engine";
+import { isSwissFormat } from "@/lib/swiss";
+import { recalculateStandings, finalizeTournamentRanking, getSwissRounds, auditTournament } from "@/lib/tournament-engine";
+import { hasBlocking } from "@/lib/swiss";
 
 // ORGANIZER-only: recompute the FINAL ranking (placement + rankingPoints) of a
 // tournament, even one already marked FINISHED. Use it to repair events that
@@ -34,6 +36,16 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
         { error: `O torneio está ${tournament.status === "IN_PROGRESS" ? "em andamento" : "não encerrado"}. Encerre-o primeiro — esta ferramenta recalcula o ranking de torneios já finalizados.` },
         { status: 400 }
       );
+    }
+
+    // Rewriting placements/ranking points from inconsistent records would
+    // certify an invalid table — refuse until the conflicts are resolved.
+    const integrity = await auditTournament(params.id);
+    if (hasBlocking(integrity)) {
+      return NextResponse.json({
+        error: "Recálculo bloqueado: há registros inconsistentes. A colocação oficial registrada foi mantida.",
+        issues: integrity.filter((i) => i.severity === "bloqueante"),
+      }, { status: 409 });
     }
 
     const participants = await prisma.tournamentParticipant.findMany({
@@ -78,7 +90,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     const warnings: string[] = [];
     if (!tournament.isOfficial) warnings.push("O torneio NÃO está marcado como oficial — nenhum jogador dele entra no ranking global.");
     if (tournament.isTest) warnings.push("O torneio está marcado como TESTE — é ignorado no ranking global.");
-    if (tournament.format === "ROUND_ROBIN" && knockoutMatches === 0) {
+    if (isSwissFormat(tournament.format) && knockoutMatches === 0) {
       warnings.push("Não há partidas de mata-mata; os pontos foram dados pela classificação do suíço.");
     }
     if (notApproved > 0) warnings.push(`${notApproved} inscrito(s) não aprovado(s) ficam fora da classificação.`);

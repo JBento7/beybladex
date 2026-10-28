@@ -8,86 +8,69 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { recalculateStandings } from "@/lib/tournament-engine";
 
-// ORGANIZER-only: remove duplicate matches created before round generation was
-// made idempotent. A duplicate = same round + same unordered player pair. We
-// keep the most-progressed copy (FINISHED > IN_PROGRESS > PENDING, then the one
-// with the most recorded sets/points, then the oldest) and delete the rest along
-// with their child rows. Standings are recalculated afterwards.
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+// ORGANIZER-only: duplicate matches (same round + same unordered pair).
+// Default = simulation (no writes). With { apply: true, reason } it removes
+// ONLY copies that were never played (PENDING, no sets/points) while another
+// copy of the same pairing exists. Groups where two copies have results are
+// reported for an organizer decision — the tool never picks which result counts.
+// A copy of every removed row is stored in TournamentAdminAction.
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
+  const body = (await req.json().catch(() => ({}))) as { apply?: boolean; reason?: string };
 
   try {
     const matches = await prisma.match.findMany({
       where: { tournamentId: params.id },
       select: {
-        id: true,
-        round: true,
-        player1Id: true,
-        player2Id: true,
-        status: true,
-        createdAt: true,
+        id: true, round: true, player1Id: true, player2Id: true, status: true, winnerId: true, createdAt: true,
         _count: { select: { sets: true, points: true } },
       },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
 
-    // Group by round + unordered player pair.
     const groups = new Map<string, typeof matches>();
     for (const m of matches) {
-      const pair = [m.player1Id, m.player2Id].sort().join("|");
-      const key = `${m.round}::${pair}`;
+      const key = `${m.round}::${[m.player1Id, m.player2Id].sort().join("|")}`;
       (groups.get(key) ?? groups.set(key, []).get(key)!).push(m);
     }
+    const unplayed = (m: (typeof matches)[number]) => m.status === "PENDING" && m._count.sets === 0 && m._count.points === 0;
 
-    const statusRank: Record<string, number> = { FINISHED: 3, IN_PROGRESS: 2, PENDING: 1 };
-    const progress = (m: (typeof matches)[number]) =>
-      (statusRank[m.status] ?? 0) * 1000 + (m._count.sets + m._count.points);
-
-    const toDelete: string[] = [];
-    const affectedUsers = new Set<string>();
+    const removable: string[] = [];
+    const needsDecision: { round: number; matchIds: string[] }[] = [];
     for (const group of groups.values()) {
       if (group.length < 2) continue;
-      // Best copy first: more progress, then older.
-      const sorted = [...group].sort((a, b) => {
-        const d = progress(b) - progress(a);
-        if (d !== 0) return d;
-        return a.createdAt.getTime() - b.createdAt.getTime();
+      const played = group.filter((m) => !unplayed(m));
+      if (played.length > 1) { needsDecision.push({ round: group[0].round, matchIds: group.map((m) => m.id) }); continue; }
+      // Keep the played copy (or the oldest if none was played); drop unplayed extras.
+      const keep = played[0] ?? group[0];
+      for (const m of group) if (m.id !== keep.id && unplayed(m)) removable.push(m.id);
+    }
+
+    if (!body.apply) {
+      return NextResponse.json({ simulation: true, removable, needsDecision });
+    }
+    if (!body.reason?.trim()) return NextResponse.json({ error: "Informe o motivo." }, { status: 400 });
+    if (removable.length === 0) return NextResponse.json({ ok: true, removed: 0, needsDecision });
+
+    const backup = await prisma.match.findMany({ where: { id: { in: removable } } });
+    await prisma.$transaction(async (tx) => {
+      await tx.tournamentAdminAction.create({
+        data: {
+          tournamentId: params.id, kind: "DEDUPE_UNPLAYED", reason: body.reason!.slice(0, 500), actorId: session.user.id,
+          before: JSON.parse(JSON.stringify(backup)), after: { removed: removable },
+        },
       });
-      for (const dup of sorted.slice(1)) {
-        toDelete.push(dup.id);
-        affectedUsers.add(dup.player1Id);
-        affectedUsers.add(dup.player2Id);
-      }
-    }
+      try { await tx.matchDeckOrder.deleteMany({ where: { matchId: { in: removable } } }); } catch { /* pre-migration */ }
+      await tx.match.deleteMany({ where: { id: { in: removable }, status: "PENDING" } });
+    }, { maxWait: 15000, timeout: 30000 });
 
-    if (toDelete.length === 0) {
-      return NextResponse.json({ ok: true, removed: 0 });
-    }
-
-    await prisma.$transaction(
-      async (tx) => {
-        // Delete child rows first (only BeybladeMatchRecord cascades on match).
-        await tx.matchPoint.deleteMany({ where: { matchId: { in: toDelete } } });
-        await tx.matchSet.deleteMany({ where: { matchId: { in: toDelete } } });
-        try {
-          await tx.matchDeckOrder.deleteMany({ where: { matchId: { in: toDelete } } });
-        } catch {
-          // table may not exist pre-migration — ignore
-        }
-        await tx.match.deleteMany({ where: { id: { in: toDelete } } });
-      },
-      { maxWait: 15000, timeout: 30000 }
-    );
-
-    // Recalculate standings for everyone whose duplicate matches were removed.
-    for (const uid of affectedUsers) {
-      await recalculateStandings(params.id, uid);
-    }
-
-    return NextResponse.json({ ok: true, removed: toDelete.length });
+    const affected = new Set(backup.flatMap((m) => [m.player1Id, m.player2Id]));
+    for (const uid of affected) await recalculateStandings(params.id, uid);
+    return NextResponse.json({ ok: true, removed: removable.length, needsDecision });
   } catch (err) {
     console.error("[dedupe-matches]", err);
     return NextResponse.json({ error: `Erro ao remover duplicadas: ${String(err)}` }, { status: 500 });

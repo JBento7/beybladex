@@ -15,19 +15,31 @@ export default function FinishTournamentButton({
   const [err, setErr] = useState<string | null>(null);
   const router = useRouter();
 
-  async function handleConfirm() {
+  async function handleConfirm(force?: { reason: string }) {
     setErr(null);
     setLoading(true);
-    const res = await fetch(`/api/tournaments/${tournamentId}/finish`, {
-      method: "POST",
-    });
-    setLoading(false);
-    if (res.ok) {
-      setShowModal(false);
-      router.refresh();
-    } else {
+    try {
+      const res = await fetch(`/api/tournaments/${tournamentId}/finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(force ? { force: true, reason: force.reason } : {}),
+      });
       const data = await res.json().catch(() => ({}));
-      setErr(data.error || "Erro ao encerrar");
+      if (res.ok) {
+        setShowModal(false);
+        router.refresh();
+        return;
+      }
+      if (res.status === 409 && data.requiresConfirmation && !force) {
+        const reason = window.prompt(`${data.error}\n\nMotivo do encerramento antecipado:`);
+        if (reason?.trim()) { setLoading(false); return handleConfirm({ reason }); }
+      }
+      const detail = ((data.issues ?? []) as { message: string }[]).map((i) => i.message).join(" ");
+      setErr(`${data.error || "Erro ao encerrar"}${detail ? ` ${detail}` : ""}`);
+    } catch {
+      setErr("Sem conexão. Tente novamente.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -81,7 +93,7 @@ export default function FinishTournamentButton({
                 Cancelar
               </button>
               <button
-                onClick={handleConfirm}
+                onClick={() => handleConfirm()}
                 disabled={loading}
                 className="flex-1 bg-brand-red hover:bg-[#a30d25] disabled:opacity-60 text-white font-bold py-2.5 rounded-xl transition-colors"
               >

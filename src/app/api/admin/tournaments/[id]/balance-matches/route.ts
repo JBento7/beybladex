@@ -3,25 +3,41 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
-import { generateMakeupRound } from "@/lib/tournament-engine";
+import { prisma } from "@/lib/prisma";
+import { getSwissRounds, repairSwissRound } from "@/lib/tournament-engine";
 
-// ORGANIZER-only: check whether every participant played the same number of
-// matches and, if not, generate makeup matches for the under-played players so
-// nobody is disadvantaged.
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+// ORGANIZER-only controlled repair of Swiss rounds (replaces the old automatic
+// "balancear", which could give a player a second match in a round and tore
+// down the knockout). Body:
+//   {}                                  → simulate every Swiss round (no writes)
+//   { round, apply: true, reason }      → apply the plan of that round
+// Only players MISSING from the round are paired among themselves; leftovers,
+// duplicates and knockout impact are reported for a decision.
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
   if (!session || session.user.role !== "ORGANIZER") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
+  const body = (await req.json().catch(() => ({}))) as { round?: number; apply?: boolean; reason?: string };
   try {
-    const result = await generateMakeupRound(params.id);
-    if (!result.ok) {
-      return NextResponse.json({ error: result.reason || "Não foi possível balancear." }, { status: 400 });
+    if (body.apply) {
+      const round = Number(body.round);
+      const res = await repairSwissRound(params.id, round, { apply: true, reason: body.reason, actorId: session.user.id });
+      if (!res.ok) return NextResponse.json({ error: res.message, plan: "plan" in res ? res.plan : undefined }, { status: 409 });
+      return NextResponse.json(res);
     }
-    return NextResponse.json(result);
+    const count = await prisma.tournamentParticipant.count({ where: { tournamentId: params.id, approved: { not: false } } });
+    const swissRounds = await getSwissRounds(params.id, count);
+    const plans = [];
+    for (let r = 1; r <= swissRounds; r++) {
+      const exists = await prisma.match.count({ where: { tournamentId: params.id, round: r } });
+      if (!exists) break;
+      plans.push(await repairSwissRound(params.id, r));
+    }
+    return NextResponse.json({ simulation: true, plans });
   } catch (err) {
     console.error("[balance-matches]", err);
-    return NextResponse.json({ error: `Erro ao balancear: ${String(err)}` }, { status: 500 });
+    return NextResponse.json({ error: `Erro no reparo: ${String(err)}` }, { status: 500 });
   }
 }

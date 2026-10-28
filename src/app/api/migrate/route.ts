@@ -717,6 +717,40 @@ export async function GET() {
     // Player-created BeyEncontros were all saved as LBL; move each one to its
     // creator's league (players have no community picker). Idempotent.
     { name: "BeyEncontro community fix", sql: `UPDATE "Tournament" t SET "communitySlug" = u."homeCommunity" FROM "User" u WHERE u.id = t."organizerId" AND t."isOfficial" = false AND u.role <> 'ORGANIZER' AND u."homeCommunity" IS NOT NULL AND t."communitySlug" IS DISTINCT FROM u."homeCommunity"` },
+    // ── Swiss integrity (suico-v2). Additive only: new tables/columns, no data rewritten. ──
+    { name: "Tournament.rulesVersion", sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "rulesVersion" TEXT` },
+    { name: "MatchPoint.actionId", sql: `ALTER TABLE "MatchPoint" ADD COLUMN IF NOT EXISTS "actionId" TEXT` },
+    { name: "uniq MatchPoint action", sql: `CREATE UNIQUE INDEX IF NOT EXISTS "MatchPoint_matchId_actionId_key" ON "MatchPoint" ("matchId", "actionId")` },
+    {
+      name: "RoundParticipation",
+      sql: `CREATE TABLE IF NOT EXISTS "RoundParticipation" (
+        "id" TEXT PRIMARY KEY, "tournamentId" TEXT NOT NULL, "phase" TEXT NOT NULL, "round" INTEGER NOT NULL,
+        "userId" TEXT NOT NULL, "matchId" TEXT NOT NULL REFERENCES "Match"("id") ON DELETE CASCADE,
+        "kind" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    },
+    { name: "uniq RoundParticipation", sql: `CREATE UNIQUE INDEX IF NOT EXISTS "RoundParticipation_tournamentId_phase_round_userId_key" ON "RoundParticipation" ("tournamentId", "phase", "round", "userId")` },
+    { name: "idx RoundParticipation match", sql: `CREATE INDEX IF NOT EXISTS "RoundParticipation_matchId_idx" ON "RoundParticipation" ("matchId")` },
+    {
+      name: "SwissRoundLog",
+      sql: `CREATE TABLE IF NOT EXISTS "SwissRoundLog" (
+        "id" TEXT PRIMARY KEY, "tournamentId" TEXT NOT NULL REFERENCES "Tournament"("id"), "round" INTEGER NOT NULL,
+        "rulesVersion" TEXT NOT NULL, "seed" INTEGER, "byeUserId" TEXT, "crossings" INTEGER NOT NULL DEFAULT 0,
+        "optimal" BOOLEAN NOT NULL DEFAULT true, "notes" TEXT NOT NULL DEFAULT '', "exceptionReason" TEXT,
+        "createdById" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    },
+    { name: "uniq SwissRoundLog", sql: `CREATE UNIQUE INDEX IF NOT EXISTS "SwissRoundLog_tournamentId_round_key" ON "SwissRoundLog" ("tournamentId", "round")` },
+    {
+      name: "TournamentAdminAction",
+      sql: `CREATE TABLE IF NOT EXISTS "TournamentAdminAction" (
+        "id" TEXT PRIMARY KEY, "tournamentId" TEXT NOT NULL REFERENCES "Tournament"("id"), "kind" TEXT NOT NULL,
+        "reason" TEXT NOT NULL, "actorId" TEXT, "idempotencyKey" TEXT, "before" JSONB, "after" JSONB,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    },
+    { name: "uniq TournamentAdminAction key", sql: `CREATE UNIQUE INDEX IF NOT EXISTS "TournamentAdminAction_idempotencyKey_key" ON "TournamentAdminAction" ("idempotencyKey")` },
+    { name: "idx TournamentAdminAction tournament", sql: `CREATE INDEX IF NOT EXISTS "TournamentAdminAction_tournamentId_idx" ON "TournamentAdminAction" ("tournamentId")` },
+    // NOTE: RoundParticipation starts EMPTY for existing events. Backfilling it
+    // is a separate, reviewable step (/api/admin/round-participation/backfill):
+    // it first lists every historical conflict instead of failing or dropping rows.
     { name: "idx TournamentParticipant user", sql: `CREATE INDEX IF NOT EXISTS "TournamentParticipant_userId_idx" ON "TournamentParticipant" ("userId")` },
   ];
 
