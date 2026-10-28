@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { MY_REGISTRATION_MESSAGES, myRegistrationState, registrationState } from "@/lib/registration";
+import { claimRegistrationSpot } from "@/lib/registration-service";
 
 type OwnedBey = {
   blade: string | null;
@@ -57,38 +59,18 @@ export async function POST(
       return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
     }
 
-    if (tournament.status !== "REGISTRATION") {
-      return NextResponse.json(
-        { error: "Torneio não está aceitando inscrições" },
-        { status: 400 }
-      );
-    }
-
-    if (
-      tournament.maxParticipants &&
-      tournament._count.participants >= tournament.maxParticipants
-    ) {
-      return NextResponse.json(
-        { error: "Torneio está cheio" },
-        { status: 400 }
-      );
-    }
-
+    // Shared rule (lib/registration): status, deadline (league time zone) and
+    // spots. Re-checked below under a row lock for the last spot.
     const existing = await prisma.tournamentParticipant.findUnique({
-      where: {
-        tournamentId_userId: {
-          tournamentId: params.id,
-          userId: session.user.id,
-        },
-      },
+      where: { tournamentId_userId: { tournamentId: params.id, userId: session.user.id } },
+      select: { approved: true },
     });
-
     if (existing) {
-      return NextResponse.json(
-        { error: "Você já está inscrito neste torneio" },
-        { status: 409 }
-      );
+      const mine = myRegistrationState(existing);
+      return NextResponse.json({ error: MY_REGISTRATION_MESSAGES[mine === "PENDING" ? "PENDING" : "APPROVED"], code: mine, alreadyRegistered: true }, { status: 409 });
     }
+    const pre = registrationState({ status: tournament.status, registrationDeadline: tournament.registrationDeadline, maxParticipants: tournament.maxParticipants, participantCount: tournament._count.participants });
+    if (!pre.open) return NextResponse.json({ error: pre.message, code: pre.code }, { status: 409 });
 
     let body: { beybladeIds?: string[] } = {};
     try {
@@ -153,16 +135,18 @@ export async function POST(
     // payment is confirmed, so it starts as pending (approved = false).
     const needsApproval = !!(tournament.entryFee && tournament.entryFee > 0);
 
-    const participant = await prisma.tournamentParticipant.create({
-      data: {
-        tournamentId: params.id,
-        userId: session.user.id,
-        beyblade1: beybladeIds[0] || null,
-        beyblade2: beybladeIds[1] || null,
-        beyblade3: beybladeIds[2] || null,
-        approved: !needsApproval,
-      },
+    // Last-spot protection: lock the tournament row, recount, then insert — in
+    // one transaction (lib/registration-service).
+    const result = await claimRegistrationSpot(params.id, session.user.id, {
+      beyblade1: beybladeIds[0] || null,
+      beyblade2: beybladeIds[1] || null,
+      beyblade3: beybladeIds[2] || null,
+      approved: !needsApproval,
     });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error, code: result.code, alreadyRegistered: result.alreadyRegistered }, { status: result.status });
+    }
+    const participant = { id: result.participantId };
 
     return NextResponse.json({ ...participant, needsApproval }, { status: 201 });
   } catch (err) {

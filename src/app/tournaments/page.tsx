@@ -7,6 +7,7 @@ import AutoRefresh from "@/components/AutoRefresh";
 import Link from "next/link";
 import TournamentList from "./TournamentList";
 import { parseStatus, parseLiga } from "@/lib/tournamentFilters";
+import { registrationState } from "@/lib/registration";
 import RetryButton from "@/components/RetryButton";
 import PageHeader from "@/components/ui/PageHeader";
 import { ButtonLink } from "@/components/ui/Button";
@@ -74,12 +75,8 @@ export default async function TournamentsPage({
     organizer: { name: t.organizer.name },
     participantCount: t._count.participants,
     isJoined: joinedIds.has(t.id),
-    canJoin: !!(
-      session &&
-      t.status === "REGISTRATION" &&
-      !joinedIds.has(t.id) &&
-      (!t.maxParticipants || t._count.participants < t.maxParticipants)
-    ),
+    // Same rule as the join API (lib/registration).
+    canJoin: !!session && !joinedIds.has(t.id) && registrationState({ status: t.status, registrationDeadline: t.registrationDeadline, maxParticipants: t.maxParticipants, participantCount: t._count.participants }).open,
   }));
 
   return (

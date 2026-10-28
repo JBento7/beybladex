@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
+import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
 import { recordWalkover } from "@/lib/match-scoring";
@@ -32,16 +33,10 @@ export async function POST(
     });
 
     if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
-    const openJudging = match.tournament._count.judges === 0;
-    if (
-      !openJudging &&
-      match.tournament.organizerId !== session.user.id &&
-      session.user.role !== "ORGANIZER" &&
-      !session.user.canJudge &&
-      match.judgeId !== session.user.id
-    ) {
-      return NextResponse.json({ error: "Apenas organizadores podem registrar W.O." }, { status: 403 });
-    }
+    // Shared server-side rule (lib/matchPolicy): no assigned judge no longer
+    // means "anyone logged in"; open judging is an explicit event setting.
+    const access = await authorizeMatchOp(session, params.id, "walkover");
+    if (!access.ok) return access.response;
     if (match.status === "FINISHED") {
       return NextResponse.json({ error: "Partida já finalizada" }, { status: 400 });
     }
@@ -57,7 +52,7 @@ export async function POST(
     // Same row lock as point scoring: a W.O. and a final point can't both
     // close the match. Points already recorded are kept as history; under the
     // published rules they are not battle points (the match wasn't completed).
-    const closedNow = await recordWalkover(params.id, winnerId);
+    const closedNow = await recordWalkover(params.id, winnerId, { actorId: access.actor.id, actorRole: access.as });
     if (!closedNow) {
       return NextResponse.json({ error: "Partida já finalizada" }, { status: 409 });
     }

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
+import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
 import { recalculateStandings, advanceSingleElimination, advanceSwissTournament, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
@@ -33,16 +34,10 @@ export async function POST(
     });
 
     if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
-    const openJudging = match.tournament._count.judges === 0;
-    if (
-      !openJudging &&
-      match.tournament.organizerId !== session.user.id &&
-      session.user.role !== "ORGANIZER" &&
-      !session.user.canJudge &&
-      match.judgeId !== session.user.id
-    ) {
-      return NextResponse.json({ error: "Apenas organizadores podem registrar pontos" }, { status: 403 });
-    }
+    // Shared server-side rule (lib/matchPolicy): no assigned judge no longer
+    // means "anyone logged in"; open judging is an explicit event setting.
+    const access = await authorizeMatchOp(session, params.id, "score");
+    if (!access.ok) return access.response;
     if (match.player1Id === match.player2Id) {
       return NextResponse.json({ error: "Bye não recebe pontos" }, { status: 400 });
     }
@@ -53,7 +48,7 @@ export async function POST(
     const setsToWin = match.setsToWin ?? match.tournament.setsToWin;
     const pointsToWinSet = match.pointsToWinSet ?? match.tournament.pointsToWinSet;
 
-    const outcome = await recordPoint(params.id, { scorerId, finishType: finishType as FinishType, points, beybladeId: beybladeId || null, actionId, setsToWin, pointsToWinSet });
+    const outcome = await recordPoint(params.id, { scorerId, finishType: finishType as FinishType, points, beybladeId: beybladeId || null, actionId, setsToWin, pointsToWinSet }, { actorId: access.actor.id, actorRole: access.as });
 
     if (outcome.kind === "error") return NextResponse.json({ error: outcome.error }, { status: outcome.status });
     if (outcome.kind === "replay") {

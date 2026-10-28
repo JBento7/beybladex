@@ -108,6 +108,14 @@ export async function POST(
 
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Match" WHERE id = ${params.id} FOR UPDATE`;
+    const prevSets = await tx.matchSet.findMany({ where: { matchId: params.id }, orderBy: { setNumber: "asc" }, select: { player1Points: true, player2Points: true, winnerId: true } });
+    await tx.matchAuditLog.create({
+      data: {
+        tournamentId: match.tournamentId, matchId: params.id, actorId: session.user.id, actorRole: "admin", op: "admin_set_score",
+        before: { winnerId: match.winnerId, status: match.status, sets: prevSets },
+        after: { winnerId: matchWinnerId, sets },
+      },
+    });
     await tx.matchPoint.deleteMany({ where: { matchId: params.id } });
     await tx.matchSet.deleteMany({ where: { matchId: params.id } });
 

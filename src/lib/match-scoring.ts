@@ -18,7 +18,8 @@ export type PointOutcome =
  */
 export async function recordPoint(
   matchId: string,
-  p: { scorerId: string; finishType: FinishType; points: number; beybladeId?: string | null; actionId?: string | null; setsToWin: number; pointsToWinSet: number }
+  p: { scorerId: string; finishType: FinishType; points: number; beybladeId?: string | null; actionId?: string | null; setsToWin: number; pointsToWinSet: number },
+  audit?: { actorId: string; actorRole: string }
 ): Promise<PointOutcome> {
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Match" WHERE id = ${matchId} FOR UPDATE`;
@@ -57,6 +58,16 @@ export async function recordPoint(
     await tx.matchPoint.create({
       data: { matchId, userId: p.scorerId, finishType: p.finishType, points: p.points, setId, beybladeId: p.beybladeId ?? null, actionId: p.actionId ?? null },
     });
+    if (audit) {
+      const t = await tx.match.findUnique({ where: { id: matchId }, select: { tournamentId: true } });
+      await tx.matchAuditLog.create({
+        data: {
+          tournamentId: t!.tournamentId, matchId, actorId: audit.actorId, actorRole: audit.actorRole, op: "point",
+          before: { setNumber: decision.setNumber },
+          after: { scorerId: p.scorerId, finishType: p.finishType, points: p.points, setNumber: decision.setNumber, player1Points: decision.player1Points, player2Points: decision.player2Points, setWinnerId: decision.setWinnerId, matchWinnerId: decision.matchWinnerId },
+        },
+      });
+    }
     await tx.matchSet.update({
       where: { id: setId },
       data: {
@@ -77,10 +88,17 @@ export async function recordPoint(
 }
 
 /** W.O. with the same row lock: it can't race a final point. */
-export async function recordWalkover(matchId: string, winnerId: string): Promise<boolean> {
+export async function recordWalkover(matchId: string, winnerId: string, audit?: { actorId: string; actorRole: string }): Promise<boolean> {
   const res = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Match" WHERE id = ${matchId} FOR UPDATE`;
-    return tx.match.updateMany({ where: { id: matchId, status: { not: "FINISHED" } }, data: { status: "FINISHED", winnerId, isWalkover: true } });
+    const before = await tx.match.findUnique({ where: { id: matchId }, select: { tournamentId: true, status: true, winnerId: true } });
+    const r = await tx.match.updateMany({ where: { id: matchId, status: { not: "FINISHED" } }, data: { status: "FINISHED", winnerId, isWalkover: true } });
+    if (r.count === 1 && audit && before) {
+      await tx.matchAuditLog.create({
+        data: { tournamentId: before.tournamentId, matchId, actorId: audit.actorId, actorRole: audit.actorRole, op: "walkover", before: { status: before.status, winnerId: before.winnerId }, after: { status: "FINISHED", winnerId, isWalkover: true } },
+      });
+    }
+    return r;
   });
   return res.count === 1;
 }

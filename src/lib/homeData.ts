@@ -8,6 +8,7 @@ import { swissRoundCount } from "./tournament-engine";
 import { isSwissFormat } from "./swiss";
 import { getLeagueRanking } from "./leagueRanking";
 import { formatLabel } from "./format";
+import { registrationState } from "./registration";
 import type { RankingEntry } from "./rankingMath";
 
 const LEAGUE = "lbl";
@@ -68,8 +69,7 @@ async function loadFeatured(): Promise<FeaturedEvent | null> {
   }));
   if (!t) return null;
   const d = t.startDate ? new Date(t.startDate) : null;
-  const full = !!t.maxParticipants && t._count.participants >= t.maxParticipants;
-  const deadlinePassed = !!t.registrationDeadline && t.registrationDeadline.getTime() < Date.now();
+  const reg = registrationState({ status: t.status, registrationDeadline: t.registrationDeadline, maxParticipants: t.maxParticipants, participantCount: t._count.participants });
   return {
     id: t.id, name: t.name, status: t.status, isOfficial: t.isOfficial, isPartnership: t.isPartnership, communitySlug: t.communitySlug,
     bannerUrl: t.bannerUrl, startDate: d ? d.toISOString() : null,
@@ -77,7 +77,7 @@ async function loadFeatured(): Promise<FeaturedEvent | null> {
     venue: t.venueName ?? t.location, address: t.address, format: t.format, deckType: t.deckType,
     qualifiers: t.qualifiers, entryFee: t.entryFee, maxParticipants: t.maxParticipants,
     participantCount: t._count.participants,
-    registrationOpen: t.status === "REGISTRATION" && !full && !deadlinePassed,
+    registrationOpen: reg.open,
   };
 }
 

@@ -186,6 +186,14 @@ model Tournament {
   // Swiss rules version used by this event (set when it starts). A later rule
   // change never silently reorders a finished event.
   rulesVersion    String?
+  // Who may score matches when no judge is assigned. "RESTRICTED" (default):
+  // admins, the BeyEncontro organizer, judges. "OPEN_PARTICIPANTS": also the
+  // event's approved participants — explicit opt-in, never for official events.
+  judgingMode     String  @default("RESTRICTED")
+  // Monotonic version of everything a live page shows (sign-ups, matches,
+  // points, status…). Bumped in the same transaction as each change, so the
+  // polling endpoint reads one integer instead of hashing the history.
+  stateVersion    Int     @default(0)
   setsToWin       Int     @default(2)
   pointsToWinSet  Int     @default(4)
   qualifiers      Int?    // Suíço: how many top players advance to the knockout (16/8/4)
@@ -559,4 +567,21 @@ model TournamentAdminAction {
   tournament Tournament @relation(fields: [tournamentId], references: [id])
 
   @@index([tournamentId])
+}
+
+// Audit trail of match operations (points, W.O., undo, sides, deck order,
+// administrative corrections): author, time, event, match, before/after.
+model MatchAuditLog {
+  id           String   @id @default(cuid())
+  tournamentId String
+  matchId      String
+  actorId      String
+  actorRole    String
+  op           String
+  before       Json?
+  after        Json?
+  createdAt    DateTime @default(now())
+
+  @@index([tournamentId, createdAt])
+  @@index([matchId])
 }

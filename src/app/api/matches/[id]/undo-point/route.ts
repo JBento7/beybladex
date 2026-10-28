@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
+import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 
 // Remove the most recent point from the current active set.
@@ -24,27 +25,13 @@ export async function DELETE(
   });
 
   if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
-  const openJudging = match.tournament._count.judges === 0;
-  if (
-    !openJudging &&
-    match.tournament.organizerId !== session.user.id &&
-    session.user.role !== "ORGANIZER" &&
-    !session.user.canJudge &&
-    match.judgeId !== session.user.id
-  ) {
-    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
-  }
+  // Shared server-side rule (lib/matchPolicy): no assigned judge no longer
+  // means "anyone logged in"; open judging is an explicit event setting.
+  const access = await authorizeMatchOp(session, params.id, "undo");
+  if (!access.ok) return access.response;
   if (match.status === "FINISHED") {
     return NextResponse.json({ error: "Partida já finalizada — use o painel admin para editar" }, { status: 400 });
   }
-
-  // Find the most recent MatchPoint for this match
-  const lastPoint = await prisma.matchPoint.findFirst({
-    where: { matchId: params.id },
-    orderBy: { createdAt: "desc" },
-  });
-
-  if (!lastPoint) return NextResponse.json({ error: "Nenhum ponto para desfazer" }, { status: 400 });
 
   const pointsToWinSet = match.pointsToWinSet ?? match.tournament.pointsToWinSet;
 
@@ -54,7 +41,17 @@ export async function DELETE(
     await tx.$queryRaw`SELECT id FROM "Match" WHERE id = ${params.id} FOR UPDATE`;
     const now = await tx.match.findUnique({ where: { id: params.id }, select: { status: true } });
     if (now?.status === "FINISHED") throw new Error("MATCH_FINISHED");
+    // Read the last point UNDER the lock: two undos (or an undo racing a new
+    // point) can't remove the wrong one or the same one twice.
+    const lastPoint = await tx.matchPoint.findFirst({ where: { matchId: params.id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+    if (!lastPoint) throw new Error("NO_POINT");
     await tx.matchPoint.delete({ where: { id: lastPoint.id } });
+    await tx.matchAuditLog.create({
+      data: {
+        tournamentId: match.tournamentId, matchId: params.id, actorId: access.actor.id, actorRole: access.as, op: "undo_point",
+        before: { pointId: lastPoint.id, userId: lastPoint.userId, finishType: lastPoint.finishType, points: lastPoint.points, setId: lastPoint.setId },
+      },
+    });
 
     if (lastPoint.setId) {
       // Recalculate set points from remaining MatchPoints
@@ -94,6 +91,7 @@ export async function DELETE(
     }
   });
   } catch (e) {
+    if (String(e).includes("NO_POINT")) return NextResponse.json({ error: "Nenhum ponto para desfazer" }, { status: 400 });
     if (String(e).includes("MATCH_FINISHED")) {
       return NextResponse.json({ error: "Partida já finalizada — use o painel admin para editar" }, { status: 409 });
     }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getLeagueRanking, scopeOfHome } from "@/lib/leagueRanking";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = { title: "Painel" };
@@ -127,47 +128,37 @@ export default async function DashboardPage() {
 
   const currentUser = await prisma.user.findUnique({
     where: { id: userId },
-    select: { bladerName: true, avatarUrl: true },
+    select: { bladerName: true, avatarUrl: true, homeCommunity: true },
   });
+  // "Ranking oficial" = the same service as /rankings and the home page.
+  const rankScope = scopeOfHome(currentUser?.homeCommunity);
+  const official = await getLeagueRanking(rankScope);
 
   // Official career wins (ranking metric) and my position in the full ranking.
   const myRankingRow = ranking.find((r: { userId: string }) => r.userId === userId);
   const myOfficialWins = myRankingRow?._sum.wins ?? 0;
   const myOfficialLosses = myRankingRow?._sum.losses ?? 0;
   const myBattlePoints = battlePointsByUser.get(userId) ?? 0;
-  // Rank = position when sorting everyone by official wins → battle points.
-  const fullSorted = ranking
-    .map((r: { userId: string; _sum: { wins: number | null } }) => ({ userId: r.userId, wins: r._sum.wins ?? 0, bp: battlePointsByUser.get(r.userId) ?? 0 }))
-    .sort((a, b) => b.wins - a.wins || b.bp - a.bp);
-  const myRankIdx = fullSorted.findIndex((r) => r.userId === userId);
+  // Official position: ranking points of the player's league (lib/leagueRanking).
+  const myRankIdx = official.findIndex((r) => r.id === userId);
   const myRank = myRankIdx >= 0 ? myRankIdx + 1 : null;
-  const rankedTotal = fullSorted.length;
+  const rankedTotal = official.length;
   const officialGames = myOfficialWins + myOfficialLosses;
   const winRate = officialGames > 0 ? Math.round((myOfficialWins / officialGames) * 100) : 0;
   const { tier, next, progress, toNext } = tierFor(myOfficialWins);
 
-  const rankingUserIds = ranking.map((r: { userId: string }) => r.userId);
-  const rankingUsers = await prisma.user.findMany({
-    where: { id: { in: rankingUserIds }, NOT: [{ email: { endsWith: ".arena" } }, { email: { endsWith: ".juiz" } }] },
-    select: { id: true, name: true, bladerName: true, avatarUrl: true },
-  });
-  const userMap = Object.fromEntries(rankingUsers.map((u: { id: string; name: string; bladerName: string | null; avatarUrl: string | null }) => [u.id, u]));
-  const rankingList = ranking.map((r: { userId: string; _sum: { rankingPoints: number | null; wins: number | null; losses: number | null } }) => ({
-    ...userMap[r.userId],
-    leaguePoints: r._sum.rankingPoints ?? 0,
-    wins: r._sum.wins ?? 0,
-    losses: r._sum.losses ?? 0,
-    battlePoints: battlePointsByUser.get(r.userId) ?? 0,
-    isMe: r.userId === userId,
-  })).filter((r: { id?: string }) => r.id)
-    // Same order as the tournament classification: official wins → battle
-    // points scored. (Placement points are a separate metric, shown as "Liga".)
-    .sort((a: { wins: number; battlePoints: number; name?: string }, b: { wins: number; battlePoints: number; name?: string }) =>
-      b.wins - a.wins ||
-      b.battlePoints - a.battlePoints ||
-      (a.name ?? "").localeCompare(b.name ?? "")
-    )
-    .slice(0, 10);
+  // Top 10 of the official ranking (same order as /rankings).
+  const rankingList = official.slice(0, 10).map((r) => ({
+    id: r.id,
+    name: r.name,
+    bladerName: r.name,
+    avatarUrl: r.avatarUrl ?? null,
+    leaguePoints: r.points,
+    wins: r.wins,
+    losses: r.losses,
+    battlePoints: battlePointsByUser.get(r.id) ?? 0,
+    isMe: r.id === userId,
+  }));
 
   const totalPoints = participations.reduce((sum: number, p: { totalPoints: number }) => sum + p.totalPoints, 0);
   const totalWins = participations.reduce((sum: number, p: { wins: number }) => sum + p.wins, 0);
@@ -210,7 +201,7 @@ export default async function DashboardPage() {
             <div className="flex-1 min-w-[240px] grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
                 <div className="text-2xl font-black text-brand-yellow leading-none">{myRank ? `#${myRank}` : "—"}</div>
-                <div className="text-[11px] text-gray-500 mt-1">Ranking oficial{rankedTotal ? ` / ${rankedTotal}` : ""}</div>
+                <div className="text-xs text-gray-500 mt-1">Ranking oficial {rankScope.toUpperCase()}{rankedTotal ? ` · de ${rankedTotal}` : ""}</div>
               </div>
               <div>
                 <div className="text-2xl font-black text-green-400 leading-none">{winRate}%</div>
@@ -368,10 +359,10 @@ export default async function DashboardPage() {
           </div>{/* end left column */}
 
           {/* Right column — Ranking */}
-          <div className="bg-card border border-line rounded-xl p-5 lg:self-start lg:sticky lg:top-[116px]">
+          <div className="bg-card border border-line rounded-xl p-5 lg:self-start lg:sticky lg:top-[88px]">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-white">Ranking Oficial</h2>
-              <Link href="/community" className="text-xs text-brand-yellow hover:underline">Ver tudo →</Link>
+              <h2 className="text-base font-bold text-white">Ranking oficial {rankScope.toUpperCase()}</h2>
+              <Link href={`/rankings?r=${rankScope}`} className="text-xs text-brand-yellow hover:underline">Ver ranking completo →</Link>
             </div>
             {rankingList.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-6">Nenhum dado ainda</p>

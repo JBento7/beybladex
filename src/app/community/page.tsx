@@ -116,6 +116,10 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
             </span>
           </h1>
           <p className="text-gray-400 mt-1">Conheça os jogadores e suas Beyblades.</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Ordem desta lista: vitórias em torneios oficiais e depois pontos de batalha — não é o ranking oficial.{" "}
+            <Link href="/rankings" className="underline underline-offset-2 text-gray-200 hover:text-brand-yellow">Ver ranking oficial</Link>
+          </p>
           <div className="flex flex-wrap gap-2 mt-4">
             {[{ slug: "geral", name: "Geral", logo: null as string | null, color: "#f0a500" }, ...COMMUNITY_LIST].map((c) => {
               const active = tab === c.slug;

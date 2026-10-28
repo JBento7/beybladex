@@ -6,6 +6,7 @@ import {
   planRoundRepair, seededFirstRound, swissRoundCount, validateCut,
 } from "./swiss";
 import { Prisma } from "@prisma/client";
+import { revalidateRankings } from "./leagueRanking";
 
 // Returns the userIds of every registered judge for a tournament. Used by the
 // match schedulers so judges never get a parallel match while arbitrating.
@@ -281,8 +282,9 @@ export async function finalizeTournamentRanking(tournamentId: string) {
 
   await prisma.tournament.update({
     where: { id: tournamentId },
-    data: { status: "FINISHED" },
+    data: { status: "FINISHED", stateVersion: { increment: 1 } },
   });
+  revalidateRankings(); // official ranking changed
 }
 
 // Suíço → top-N knockout. Seeding = the same Swiss standings the page shows

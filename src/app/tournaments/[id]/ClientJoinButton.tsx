@@ -127,7 +127,14 @@ export default function ClientJoinButton({
         router.refresh();
       } else {
         const data = await res.json().catch(() => ({}));
+        if (data.alreadyRegistered) {
+          // A retry/double tap: the first attempt already registered — show the page state.
+          setShowModal(false);
+          router.refresh();
+          return;
+        }
         setErr(data.error || "Não foi possível concluir a inscrição. Tente novamente.");
+        if (data.code === "FULL" || data.code === "DEADLINE" || data.code === "CLOSED") router.refresh();
       }
     } catch {
       setErr("Sem conexão. Verifique a internet e tente novamente — sua seleção foi mantida.");

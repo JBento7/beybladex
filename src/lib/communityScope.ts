@@ -39,8 +39,10 @@ export async function denyOutsideCommunity(
       community = t.communitySlug;
       partnership = t.isPartnership;
     }
-  } catch {
-    return null; // pre-migration: columns missing — behave as before
+  } catch (e) {
+    // A failed permission lookup must never widen access for a scoped admin.
+    console.error("[communityScope] lookup failed", String(e).slice(0, 200));
+    return NextResponse.json({ error: "Não foi possível verificar sua permissão agora. Tente novamente." }, { status: 503 });
   }
 
   if (community === null || community === scope || partnership || judgeId === session.user.id) return null;

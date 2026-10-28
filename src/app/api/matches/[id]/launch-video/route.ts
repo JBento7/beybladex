@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
+import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 import { arenaSignalKey } from "@/lib/arenaIdentity";
 
@@ -19,14 +20,10 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   });
   if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
 
-  const openJudging = match.tournament._count.judges === 0;
-  const allowed =
-    openJudging ||
-    match.tournament.organizerId === session.user.id ||
-    session.user.role === "ORGANIZER" ||
-    session.user.canJudge ||
-    match.judgeId === session.user.id;
-  if (!allowed) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+  // Shared server-side rule (lib/matchPolicy): no assigned judge no longer
+  // means "anyone logged in"; open judging is an explicit event setting.
+  const access = await authorizeMatchOp(session, params.id, "launch");
+  if (!access.ok) return access.response;
 
   const arena = match.arena ?? 1;
   const key = arenaSignalKey("launch", match.tournament.communitySlug, arena);

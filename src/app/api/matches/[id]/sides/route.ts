@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
+import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 
 // The judge assigns the stadium sides before the first round: which player is on
@@ -31,14 +32,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
   if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
 
-  const openJudging = match.tournament._count.judges === 0;
-  const allowed =
-    openJudging ||
-    match.tournament.organizerId === session.user.id ||
-    session.user.role === "ORGANIZER" ||
-    session.user.canJudge ||
-    match.judgeId === session.user.id;
-  if (!allowed) return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+  // Shared server-side rule (lib/matchPolicy): no assigned judge no longer
+  // means "anyone logged in"; open judging is an explicit event setting.
+  const access = await authorizeMatchOp(session, params.id, "sides");
+  if (!access.ok) return access.response;
 
   let xSidePlayerId: string | null = null;
   try {
@@ -51,7 +48,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   try {
-    await prisma.match.update({ where: { id: params.id }, data: { xSidePlayerId } });
+    const before = await prisma.match.findUnique({ where: { id: params.id }, select: { xSidePlayerId: true, tournamentId: true } });
+    await prisma.$transaction([
+      prisma.match.update({ where: { id: params.id }, data: { xSidePlayerId } }),
+      prisma.matchAuditLog.create({ data: { tournamentId: before!.tournamentId, matchId: params.id, actorId: access.actor.id, actorRole: access.as, op: "sides", before: { xSidePlayerId: before!.xSidePlayerId }, after: { xSidePlayerId } } }),
+    ]);
   } catch {
     return NextResponse.json({ error: "Coluna xSidePlayerId ausente — rode /api/migrate" }, { status: 500 });
   }

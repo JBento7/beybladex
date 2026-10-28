@@ -2,6 +2,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { auditSwiss, isSwissFormat } from "@/lib/swiss";
+import { decideMatchOp, effectiveJudgingMode } from "@/lib/matchPolicy";
+import { actorOf } from "@/lib/matchAccess";
+import { registrationState } from "@/lib/registration";
 import { ensureSwissProgress } from "@/lib/tournament-engine";
 import { notFound } from "next/navigation";
 import Navbar from "@/components/Navbar";
@@ -17,6 +20,7 @@ import ClientJoinButton from "./ClientJoinButton";
 import EditBeybladesButton from "./EditBeybladesButton";
 import FinalsDeckButton from "./FinalsDeckButton";
 import WOButton from "./WOButton";
+import JudgingModeToggle from "./JudgingModeToggle";
 import AdminParticipantManager from "./AdminParticipantManager";
 import AdminMatchEditor from "./AdminMatchEditor";
 import ShareButton from "@/components/ShareButton";
@@ -107,6 +111,8 @@ type MatchCardProps = {
   isAdmin?: boolean;
   deckType?: string;
   openJudging?: boolean;
+  /** Same rule as the API (lib/matchPolicy) — decides whether to show "Placar"/W.O. */
+  canOperate?: (m: MatchWithRelations) => boolean;
   tournamentId: string;
   participantBeyblades: ParticipantBeyblades[];
   arenaCount?: number;
@@ -132,6 +138,7 @@ function MatchCard({
   currentUserId,
   deckType = "SOLO",
   openJudging = false,
+  canOperate,
   roundLabel,
   byeText = "Avança sem jogar (bye).",
   flagged,
@@ -142,11 +149,9 @@ function MatchCard({
       ⚠ {problem}{isAdmin && <span className="block text-gray-300">ID: {match.id}</span>}
     </p>
   ) : null;
-  // When no judges are assigned (openJudging), any logged-in user can score.
-  // Otherwise: organizers/admins or the match's assigned judge.
-  const canScore = openJudging
-    ? !!currentUserId
-    : isOrganizer || (!!currentUserId && match.judge?.id === currentUserId);
+  // The page only mirrors the server rule (lib/matchPolicy); the API enforces it.
+  const canScore = canOperate ? canOperate(match) : false;
+  void isOrganizer; void openJudging;
   const isFinished = match.status === "FINISHED";
   const p1Points = match.points.filter((p) => p.userId === match.player1.id).reduce((s, p) => s + p.points, 0);
   const p2Points = match.points.filter((p) => p.userId === match.player2.id).reduce((s, p) => s + p.points, 0);
@@ -380,9 +385,18 @@ export default async function TournamentDetailPage({
     ? isAdminUser || hasJudgePermission
     : isOrganizerOfThis || isAdminUser || hasJudgePermission;
 
-  // When no judges are assigned to the tournament, open judging mode:
-  // any logged-in participant or admin can score any match.
-  const openJudging = tournament.judges.length === 0;
+  // Open judging is an explicit event setting now (never "no judges assigned").
+  const openJudging = effectiveJudgingMode(tournament) === "OPEN_PARTICIPANTS";
+  const policyActor = actorOf(session);
+  const actorIsParticipant = !!tournament.participants.find((p) => p.userId === session?.user.id && (p as { approved?: boolean }).approved !== false);
+  const canOperate = (m: { player1: { id: string }; player2: { id: string }; judge: { id: string } | null }) =>
+    decideMatchOp(policyActor, {
+      judgeId: m.judge?.id ?? null,
+      player1Id: m.player1.id,
+      player2Id: m.player2.id,
+      tournament: { organizerId: tournament.organizerId, isOfficial: tournament.isOfficial, isTest: tournament.isTest, communitySlug: tournament.communitySlug, isPartnership: tournament.isPartnership, judgingMode: tournament.judgingMode },
+      actorIsParticipant,
+    }, "score").allowed;
 
   // Editing (name, format, deck type, arenas, etc.) is only allowed before
   // the event starts. Official tournaments: admins only. BeyEncontros: the
@@ -700,16 +714,18 @@ export default async function TournamentDetailPage({
     .map((m) => m.round);
   const currentRound = openRounds.length ? Math.min(...openRounds) : null;
 
-  const canJoin =
-    !!session &&
-    tournament.status === "REGISTRATION" &&
-    !isParticipant &&
-    (!tournament.maxParticipants || tournament.participants.length < tournament.maxParticipants);
+  // Same rule as the join API (lib/registration): status, deadline in the
+  // league time zone, and spots (every registration received takes one).
+  const reg = registrationState({
+    status: tournament.status,
+    registrationDeadline: tournament.registrationDeadline,
+    maxParticipants: tournament.maxParticipants,
+    participantCount: tournament.participants.length,
+  });
+  const canJoin = !!session && !isParticipant && reg.open;
 
   // Registration state for upcoming events (display mirrors the join rules).
-  const spotsFull = !!tournament.maxParticipants && tournament.participants.length >= tournament.maxParticipants;
-  const deadlinePassed = !!tournament.registrationDeadline && new Date(tournament.registrationDeadline).getTime() < Date.now();
-  const registrationOpen = tournament.status === "REGISTRATION" && !spotsFull && !deadlinePassed;
+  const registrationOpen = reg.open;
 
   // Suíço finals: a qualified player (in the knockout) may swap 1 deck combo once.
   const inKnockout = !!session?.user.id && hasKnockout &&
@@ -822,6 +838,7 @@ export default async function TournamentDetailPage({
     currentUserId: session?.user.id,
     deckType: tournament.deckType,
     openJudging,
+    canOperate,
     byeText,
     flagged,
   };
@@ -1397,14 +1414,14 @@ export default async function TournamentDetailPage({
   const registrationCard = (tournament.status === "REGISTRATION" || tournament.status === "DRAFT") && (
     <section aria-labelledby="inscricao-titulo" className={`${card} ${registrationOpen ? "border-amber-400/40" : ""}`}>
       <h3 id="inscricao-titulo" className="text-lg font-bold text-white mb-1">
-        {tournament.status === "DRAFT" ? "Inscrições ainda não abertas" : registrationOpen ? "Inscrições abertas" : "Inscrições encerradas"}
+        {registrationOpen ? "Inscrições abertas" : reg.message}
       </h3>
       <p className="text-sm text-gray-300 mb-4">
         {tournament.status === "DRAFT"
           ? "O organizador ainda está preparando o evento."
           : registrationOpen
-            ? `${tournament.registrationDeadline ? `Até ${fmtDate(tournament.registrationDeadline, true)}. ` : ""}${tournament.maxParticipants ? `${Math.max(0, tournament.maxParticipants - tournament.participants.length)} vaga(s) restante(s).` : "Sem limite de vagas."}`
-            : spotsFull ? "Todas as vagas foram preenchidas." : "O prazo de inscrição terminou."}
+            ? `${tournament.registrationDeadline ? `Até ${fmtDate(tournament.registrationDeadline, true)} (horário de Brasília). ` : ""}${reg.spotsLeft != null ? `${reg.spotsLeft} vaga(s) restante(s).` : "Sem limite de vagas."}`
+            : reg.code === "FULL" ? "Todas as vagas foram preenchidas." : reg.code === "DEADLINE" ? "O prazo de inscrição terminou." : "As inscrições não estão abertas."}
       </p>
       {registrationOpen && (
         canJoin ? (
@@ -1425,7 +1442,7 @@ export default async function TournamentDetailPage({
               ✓ Inscrição confirmada. Próximo passo: confira seus combos — dá para trocar até o torneio começar.
             </span>
           ) : (
-            <span className="text-sm bg-amber-500/15 text-amber-300 border border-amber-500/30 px-4 py-2 rounded-lg font-medium">⏳ Inscrição aguardando aprovação do pagamento</span>
+            <span role="status" className="text-sm bg-amber-500/15 text-amber-300 border border-amber-500/30 px-4 py-2 rounded-lg font-medium">⏳ Aguardando aprovação: sua inscrição será confirmada depois que a organização aprovar o pagamento.</span>
           )}
           <EditBeybladesButton tournamentId={tournament.id} deckType={tournament.deckType} currentBeybladeIds={currentBeybladeIds} />
         </div>
@@ -1543,6 +1560,9 @@ export default async function TournamentDetailPage({
                     <FinishTournamentButton tournamentId={tournament.id} isOfficial={tournament.isOfficial} />
                   )}
                   {isAdminUser && <LaunchVideoButton arenas={tournament.arenas ?? 1} community={tournament.communitySlug} />}
+                  {!tournament.isOfficial && tournament.status !== "FINISHED" && (isAdminUser || isOrganizerOfThis) && (
+                    <JudgingModeToggle tournamentId={tournament.id} mode={tournament.judgingMode} />
+                  )}
                   {isAdminUser && tournament.isTest && isSwissFormat(tournament.format) && tournament.status !== "FINISHED" && (
                     <AutoplaySwissButton tournamentId={tournament.id} />
                   )}

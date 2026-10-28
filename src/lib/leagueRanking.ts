@@ -1,4 +1,5 @@
 // League ranking query, shared by the home page and /rankings.
+import { unstable_cache, revalidateTag } from "next/cache";
 import { prisma } from "./prisma";
 import { sortRanking, type RankingEntry } from "./rankingMath";
 
@@ -9,7 +10,7 @@ export const RANKING_SCOPES = {
 } as const;
 export type RankingScope = keyof typeof RANKING_SCOPES;
 
-export async function getLeagueRanking(scope: RankingScope): Promise<RankingEntry[]> {
+async function computeLeagueRanking(scope: RankingScope): Promise<RankingEntry[]> {
   const ranking = await prisma.tournamentParticipant.groupBy({
     by: ["userId"],
     where: { tournament: { isOfficial: true, isTest: false, ...RANKING_SCOPES[scope].where }, user: { isGuest: false, deleted: false } },
@@ -27,4 +28,36 @@ export async function getLeagueRanking(scope: RankingScope): Promise<RankingEntr
     list.push({ id: u.id, name: u.bladerName ?? u.name, avatarUrl: u.avatarUrl, points: r._sum.rankingPoints ?? 0, wins: r._sum.wins ?? 0, losses: r._sum.losses ?? 0 });
   }
   return sortRanking(list);
+}
+
+/**
+ * THE official ranking of a league (also what every "ranking oficial" label
+ * shows). Shared, public data → cached 60 s and invalidated when an event is
+ * finalized (revalidateRankings). Never personalised.
+ */
+export function getLeagueRanking(scope: RankingScope): Promise<RankingEntry[]> {
+  const outsideNext = (e: unknown) => /incrementalCache|static generation store/i.test(String(e));
+  try {
+    return unstable_cache(() => computeLeagueRanking(scope), ["league-ranking", scope], { revalidate: 60, tags: ["ranking"] })()
+      .catch((e) => { if (outsideNext(e)) return computeLeagueRanking(scope); throw e; });
+  } catch (e) {
+    if (outsideNext(e)) return computeLeagueRanking(scope); // tests/scripts
+    throw e;
+  }
+}
+
+/** Official position of one player (1-based), or null if not ranked. */
+export async function officialPosition(scope: RankingScope, userId: string): Promise<{ position: number | null; total: number; points: number }> {
+  const list = await getLeagueRanking(scope);
+  const i = list.findIndex((r) => r.id === userId);
+  return { position: i >= 0 ? i + 1 : null, total: list.length, points: i >= 0 ? list[i].points : 0 };
+}
+
+/** League a player's personal summaries use for "ranking oficial". */
+export function scopeOfHome(home: string | null | undefined): RankingScope {
+  return home === "lbm" ? "lbm" : "lbl";
+}
+
+export function revalidateRankings() {
+  try { revalidateTag("ranking"); } catch { /* outside a Next request */ }
 }

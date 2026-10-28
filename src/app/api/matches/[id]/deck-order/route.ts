@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
+import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(
@@ -26,20 +27,14 @@ export async function POST(
     if (!match) return NextResponse.json({ error: "Partida não encontrada" }, { status: 404 });
 
     // A judge/organizer can set any player's order; a player can set their OWN
-    // order (choosing their deck sequence on their own phone).
-    const isJudge =
-      match.tournament.organizerId === session.user.id ||
-      session.user.role === "ORGANIZER" ||
-      session.user.canJudge ||
-      match.judgeId === session.user.id;
-    const isOwnOrder =
-      userId === session.user.id &&
-      (session.user.id === match.player1Id || session.user.id === match.player2Id);
+    // order (choosing their deck sequence on their own phone). lib/matchPolicy.
+    const access = await authorizeMatchOp(session, params.id, userId === session.user.id ? "deckOrderOwn" : "deckOrder");
+    if (!access.ok) return access.response;
 
-    if (!isJudge && !isOwnOrder) {
-      return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
+    if (access.as !== "player") {
+      // A judge/organizer setting someone else's order is recorded.
+      await prisma.matchAuditLog.create({ data: { tournamentId: access.tournamentId, matchId: params.id, actorId: access.actor.id, actorRole: access.as, op: "deck_order", after: { userId, setNumber, cycleIndex, bey1Id, bey2Id, bey3Id } } });
     }
-
     await prisma.matchDeckOrder.upsert({
       where: {
         matchId_userId_setNumber_cycleIndex: {

@@ -748,6 +748,18 @@ export async function GET() {
     },
     { name: "uniq TournamentAdminAction key", sql: `CREATE UNIQUE INDEX IF NOT EXISTS "TournamentAdminAction_idempotencyKey_key" ON "TournamentAdminAction" ("idempotencyKey")` },
     { name: "idx TournamentAdminAction tournament", sql: `CREATE INDEX IF NOT EXISTS "TournamentAdminAction_tournamentId_idx" ON "TournamentAdminAction" ("tournamentId")` },
+    // ── Etapa 1 (autorização, versão do evento, auditoria de partidas) ──
+    { name: "Tournament.judgingMode", sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "judgingMode" TEXT NOT NULL DEFAULT 'RESTRICTED'` },
+    { name: "Tournament.stateVersion", sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "stateVersion" INTEGER NOT NULL DEFAULT 0` },
+    {
+      name: "MatchAuditLog",
+      sql: `CREATE TABLE IF NOT EXISTS "MatchAuditLog" (
+        "id" TEXT PRIMARY KEY, "tournamentId" TEXT NOT NULL, "matchId" TEXT NOT NULL, "actorId" TEXT NOT NULL,
+        "actorRole" TEXT NOT NULL, "op" TEXT NOT NULL, "before" JSONB, "after" JSONB,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    },
+    { name: "idx MatchAuditLog tournament", sql: `CREATE INDEX IF NOT EXISTS "MatchAuditLog_tournamentId_createdAt_idx" ON "MatchAuditLog" ("tournamentId", "createdAt")` },
+    { name: "idx MatchAuditLog match", sql: `CREATE INDEX IF NOT EXISTS "MatchAuditLog_matchId_idx" ON "MatchAuditLog" ("matchId")` },
     // NOTE: RoundParticipation starts EMPTY for existing events. Backfilling it
     // is a separate, reviewable step (/api/admin/round-participation/backfill):
     // it first lists every historical conflict instead of failing or dropping rows.
