@@ -17,13 +17,35 @@ As migrações ficam em `prisma/migrations/`:
 | `20261028000060_align_foreign_keys` | Alinha 3 chaves estrangeiras (ON UPDATE CASCADE) que o `/api/migrate` criava sem essa opção. Só mexe em restrições: nenhuma linha é alterada. |
 | `20261028000100_state_version_triggers` | Gatilhos (triggers) do `Tournament.stateVersion`, usado pela atualização ao vivo. É uma cópia de `prisma/sql/state_version_triggers.sql`. Pode rodar mais de uma vez. |
 
+### Automático no deploy (padrão)
+
+O `npm run build` (usado pela Vercel) roda `scripts/deploy-migrations.mjs` **antes** do `next build`. Ninguém precisa rodar comando à mão.
+
+- **Quando roda:**
+  - só em **deploy de produção** (`VERCEL_ENV=production`);
+  - *previews* nunca migram, porque podem apontar para o banco de produção;
+  - em outro ambiente com banco próprio, defina `MIGRATE_ON_BUILD=1`.
+- **Primeira vez em produção:** o banco já existe, mas não tem histórico de migrações. O script detecta isso, marca a base como aplicada (o schema já existe) e aplica só o que falta. É o mesmo procedimento manual abaixo, validado na cópia simulada.
+- **Ordem:** o banco é migrado antes do código novo entrar no ar. As migrações só acrescentam, então a versão atual continua funcionando enquanto isso.
+- **Se algo falhar:** o build falha, a Vercel **mantém a versão atual no ar** e nada fica pela metade. Por exemplo: banco inacessível, migração com erro ou migração destrutiva sem autorização.
+- **Migração destrutiva** (DROP de tabela ou coluna, TRUNCATE, DELETE, UPDATE de dados, mudança de tipo) é **recusada** automaticamente.
+  - Para liberar uma, revise-a, faça backup e defina `ALLOW_DESTRUCTIVE_MIGRATION=1` só para aquele deploy.
+  - As migrações atuais não têm nenhum desses comandos (há teste para isso).
+- **Backup antes de migrar:** defina `MIGRATE_BACKUP_COMMAND` com o comando que cria um backup no seu provedor. Por exemplo, uma chamada à API dele que cria um *snapshot* ou *branch*.
+  - Se esse comando falhar, nada é migrado.
+  - Sem ele, conte com o backup automático ou PITR (*point-in-time recovery*) do provedor do banco. Confira se está ligado.
+- **Conexão via pooler (pgbouncer):** defina `MIGRATE_DATABASE_URL` com a conexão **direta**, só para as migrações. O app continua usando `DATABASE_URL`.
+- **Desligar de emergência:** `MIGRATE_ON_BUILD=0`.
+- **Concorrência:** dois deploys ao mesmo tempo não migram juntos (`migrate deploy` usa um bloqueio no banco).
+- **Onde acompanhar:** no log do build da Vercel, procure as linhas `[migrations]`. URLs e senhas não aparecem.
+
 ### Banco novo (homologação, CI)
 
 ```bash
 DATABASE_URL=… npx prisma migrate deploy
 ```
 
-### Produção: primeira adoção (uma única vez)
+### Produção: primeira adoção manual (alternativa ao automático)
 
 O banco de produção foi mantido até agora por `db push` e por `/api/migrate`. Ele **não tem** a tabela `_prisma_migrations`.
 
@@ -155,8 +177,8 @@ Cada linha de log é um JSON com o campo `event`. Não há infraestrutura nova.
 
 1. Rode a CI do commit e confira que está verde.
 2. Garanta Node 22.x no projeto da Vercel (já configurado).
-3. Se for a primeira implantação com migrações versionadas, faça o §1 na produção **antes** de promover o deploy.
-4. Promova o deploy.
+3. Confira se o backup automático ou PITR do provedor do banco está ligado. Se quiser, configure `MIGRATE_BACKUP_COMMAND` (§1).
+4. Faça o deploy de produção. As migrações pendentes rodam sozinhas no build (§1, "Automático no deploy"). Confira as linhas `[migrations]` no log do build.
 5. **Verificações após a implantação:**
    - login e logout;
    - `/tournaments` com filtros;

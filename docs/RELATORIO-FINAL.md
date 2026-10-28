@@ -112,7 +112,7 @@ As capturas foram entregues junto com este relatório, na conversa:
 O roteiro completo está em `docs/OPERACAO.md` §5 e §6. Em resumo:
 1. CI verde.
 2. Backup.
-3. Adoção das migrações (diff para revisão → `resolve` da base → `deploy`).
+3. Migrações: automáticas no deploy de produção (`scripts/deploy-migrations.mjs`, `docs/OPERACAO.md` §1), com adoção da base na primeira vez e bloqueio de migrações destrutivas.
 4. Promover o deploy.
 5. Verificações após a publicação.
 6. Trocar as senhas das contas de juiz e de arena.

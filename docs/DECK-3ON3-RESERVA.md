@@ -177,10 +177,11 @@ A migração `20261029000000_deck_3on3_plus_one` é **aditiva**:
 
 Nenhum dado existente é preenchido ou alterado.
 
-### Ordem de implantação
-1. **Banco:** `npx prisma migrate deploy`. Não rode automaticamente: faça backup e siga `docs/OPERACAO.md` §1.
-2. **Código:** deploy desta versão.
-3. **Habilitação:** a partir daí a organização já pode escolher o formato. Não há chave liga/desliga.
+### Ordem de implantação (automática)
+Um único deploy de produção faz tudo, nesta ordem (`docs/OPERACAO.md` §1):
+1. **Banco:** o build roda `scripts/deploy-migrations.mjs`, que aplica esta migração antes de o código novo entrar no ar. Na primeira vez, também adota a base do banco existente.
+2. **Código:** o `next build` e a publicação acontecem só se a migração deu certo. Se não deu, a versão atual continua no ar.
+3. **Habilitação:** logo depois, a organização já pode escolher o formato. Não há chave liga/desliga.
 
 Se preferir habilitar depois, basta não criar eventos no formato.
 
