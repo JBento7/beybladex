@@ -5,41 +5,9 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MY_REGISTRATION_MESSAGES, myRegistrationState, registrationState } from "@/lib/registration";
 import { claimRegistrationSpot } from "@/lib/registration-service";
+import { prepareDeck } from "@/lib/deckRegistration";
+import { hasMatchTrio, registeredIds } from "@/lib/deckFormat";
 import { withObservability, logEvent, errorResponse } from "@/lib/observability";
-
-type OwnedBey = {
-  blade: string | null;
-  ratchet: string | null;
-  bit: string | null;
-  lockChip: string | null;
-  metalBlade: string | null;
-};
-
-// Returns the list of duplicated part names if any part appears in more than one beyblade.
-function findDuplicateParts(beys: OwnedBey[]): string[] {
-  const PART_LABELS: [keyof OwnedBey, string][] = [
-    ["blade", "Blade"],
-    ["ratchet", "Ratchet"],
-    ["bit", "Bit"],
-    ["lockChip", "Lock Chip"],
-    ["metalBlade", "Metal Blade"],
-  ];
-  const seen = new Map<string, string>(); // key → label
-  const dupes = new Set<string>();
-  for (const bey of beys) {
-    for (const [field, label] of PART_LABELS) {
-      const val = bey[field];
-      if (!val) continue;
-      const key = `${field}:${val.trim().toLowerCase()}`;
-      if (seen.has(key)) {
-        dupes.add(`${label} "${val}"`);
-      } else {
-        seen.set(key, label);
-      }
-    }
-  }
-  return [...dupes];
-}
 
 async function postHandler(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -78,57 +46,11 @@ async function postHandler(req: NextRequest, props: { params: Promise<{ id: stri
       // body optional
     }
 
-    const beybladeIds = Array.isArray(body.beybladeIds)
-      ? body.beybladeIds.filter(Boolean)
-      : [];
-
-    const required = tournament.deckType === "THREE_ON_THREE" ? 3 : 1;
-
-    if (beybladeIds.length !== required) {
-      return NextResponse.json(
-        {
-          error:
-            required === 3
-              ? "Selecione exatamente 3 combos do seu repertório para o formato 3 contra 3."
-              : "Selecione 1 combo do seu repertório para o formato solo.",
-        },
-        { status: 400 }
-      );
-    }
-
-    // No duplicate beyblade IDs
-    if (new Set(beybladeIds).size !== beybladeIds.length) {
-      return NextResponse.json(
-        { error: "Não é possível selecionar o mesmo combo mais de uma vez." },
-        { status: 400 }
-      );
-    }
-
-    // All selected beyblades must belong to the user
-    const owned = await prisma.beyblade.findMany({
-      where: { id: { in: beybladeIds }, userId: session.user.id },
-    });
-
-    if (owned.length !== beybladeIds.length) {
-      return NextResponse.json(
-        { error: "Você só pode selecionar combos cadastrados na sua conta." },
-        { status: 400 }
-      );
-    }
-
-    // Official tournaments: no repeated parts across the deck
-    if (tournament.isOfficial && beybladeIds.length > 1) {
-      const dupes = findDuplicateParts(owned);
-      if (dupes.length > 0) {
-        return NextResponse.json(
-          {
-            error: `Em torneios oficiais as beyblades não podem ter peças repetidas. Peça(s) duplicada(s): ${dupes.join(", ")}.`,
-            duplicateParts: dupes,
-          },
-          { status: 400 }
-        );
-      }
-    }
+    // Count, distinct ids, ownership and (official) parts rule — per deck
+    // format (lib/deckFormat). 3on3 + 1 reserva: exactly 4, and at least one
+    // valid active trio among them.
+    const deck = await prepareDeck({ deckType: tournament.deckType, official: tournament.isOfficial, ownerId: session.user.id, ids: body.beybladeIds });
+    if (!deck.ok) return NextResponse.json({ error: deck.error, duplicateParts: deck.duplicateParts }, { status: deck.status });
 
     // Paid tournaments: the registration must be approved by an admin after the
     // payment is confirmed, so it starts as pending (approved = false).
@@ -137,9 +59,7 @@ async function postHandler(req: NextRequest, props: { params: Promise<{ id: stri
     // Last-spot protection: lock the tournament row, recount, then insert — in
     // one transaction (lib/registration-service).
     const result = await claimRegistrationSpot(params.id, session.user.id, {
-      beyblade1: beybladeIds[0] || null,
-      beyblade2: beybladeIds[1] || null,
-      beyblade3: beybladeIds[2] || null,
+      ...deck.columns!,
       approved: !needsApproval,
     });
     if (!result.ok) {
@@ -200,64 +120,16 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       // body optional
     }
 
-    const beybladeIds = Array.isArray(body.beybladeIds)
-      ? body.beybladeIds.filter(Boolean)
-      : [];
-
-    const required = tournament.deckType === "THREE_ON_THREE" ? 3 : 1;
-
-    if (beybladeIds.length !== required) {
-      return NextResponse.json(
-        {
-          error:
-            required === 3
-              ? "Selecione exatamente 3 combos do seu repertório para o formato 3 contra 3."
-              : "Selecione 1 combo do seu repertório para o formato solo.",
-        },
-        { status: 400 }
-      );
-    }
-
-    // No duplicate beyblade IDs
-    if (new Set(beybladeIds).size !== beybladeIds.length) {
-      return NextResponse.json(
-        { error: "Não é possível selecionar o mesmo combo mais de uma vez." },
-        { status: 400 }
-      );
-    }
-
-    // All selected beyblades must belong to the user
-    const owned = await prisma.beyblade.findMany({
-      where: { id: { in: beybladeIds }, userId: session.user.id },
-    });
-
-    if (owned.length !== beybladeIds.length) {
-      return NextResponse.json(
-        { error: "Você só pode selecionar combos cadastrados na sua conta." },
-        { status: 400 }
-      );
-    }
-
-    // Official tournaments: no repeated parts across the deck
-    if (tournament.isOfficial && beybladeIds.length > 1) {
-      const dupes = findDuplicateParts(owned);
-      if (dupes.length > 0) {
-        return NextResponse.json(
-          {
-            error: `Em torneios oficiais as beyblades não podem ter peças repetidas. Peça(s) duplicada(s): ${dupes.join(", ")}.`,
-            duplicateParts: dupes,
-          },
-          { status: 400 }
-        );
-      }
-    }
+    const deck = await prepareDeck({ deckType: tournament.deckType, official: tournament.isOfficial, ownerId: session.user.id, ids: body.beybladeIds });
+    if (!deck.ok) return NextResponse.json({ error: deck.error, duplicateParts: deck.duplicateParts }, { status: deck.status });
 
     const updated = await prisma.tournamentParticipant.update({
       where: { id: participant.id },
+      // 3on3 + 1 reserva: a changed deck goes back to "not inspected" (the
+      // organization must check the new set of 4). Other formats unchanged.
       data: {
-        beyblade1: beybladeIds[0] || null,
-        beyblade2: beybladeIds[1] || null,
-        beyblade3: beybladeIds[2] || null,
+        ...deck.columns!,
+        ...(hasMatchTrio(tournament.deckType) && registeredIds(participant).join() !== registeredIds(deck.columns!).join() ? { beybladeInspected: false } : {}),
       },
     });
 

@@ -8,6 +8,7 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { auditAdminAction } from "@/lib/adminAudit";
 import { recalculateStandings, revertBeybladeStats } from "@/lib/tournament-engine";
+import { Prisma } from "@prisma/client";
 
 // ORGANIZER-only: reset a match back to PENDING for re-scoring.
 // Clears all MatchPoints and MatchSets for this match, then
@@ -55,6 +56,10 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     // Clear all MatchPoints and MatchSets for this match
     await tx.matchPoint.deleteMany({ where: { matchId: params.id } });
     await tx.matchSet.deleteMany({ where: { matchId: params.id } });
+
+    // 3on3 + 1 reserva: the replayed match starts over, so its trios unlock
+    // (players confirm again; the reset itself is audited as MATCH_RESET).
+    await tx.matchTrioSelection.updateMany({ where: { matchId: params.id }, data: { lockedAt: null, lockedSnapshot: Prisma.DbNull } });
 
     // Reset match to PENDING
     await tx.match.update({

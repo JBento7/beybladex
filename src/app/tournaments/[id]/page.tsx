@@ -15,6 +15,7 @@ import AutoplaySwissButton from "./AutoplaySwissButton";
 import LaunchVideoButton from "./LaunchVideoButton";
 import ScoreModal from "./ScoreModal";
 import PlayerDeckOrder from "./PlayerDeckOrder";
+import PlayerTrioPanel from "./PlayerTrioPanel";
 import ClientJoinButton from "./ClientJoinButton";
 import EditBeybladesButton from "./EditBeybladesButton";
 import FinalsDeckButton from "./FinalsDeckButton";
@@ -36,6 +37,7 @@ import type { Metadata } from "next";
 import { canSeeDraft } from "@/lib/tournamentList";
 import { authUrl } from "@/lib/safeRedirect";
 import { testToolsAllowed } from "@/lib/adminAudit";
+import { deckLabel, hasMatchTrio, PLUS_ONE_PARTS_RULE, registeredIds, usesBattleDeck } from "@/lib/deckFormat";
 
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const params = await props.params;
@@ -100,6 +102,19 @@ function getRoundName(round: number, totalRounds: number, format?: string, swiss
 
 type BeybladeInfo = { id: string; name: string; blade: string | null; ratchet: string | null; bit: string | null };
 type ParticipantBeyblades = { userId: string; beyblades: BeybladeInfo[] };
+
+// A participant's registered deck for display: the snapshot taken at
+// registration (3on3 + 1 reserva), falling back to the live Beyblades.
+function snapshotOrLive(
+  p: { beyblade1: string | null; beyblade2: string | null; beyblade3: string | null; beyblade4: string | null; deckSnapshot: unknown },
+  live: Map<string, BeybladeInfo>
+): BeybladeInfo[] {
+  const snap = Array.isArray(p.deckSnapshot) ? (p.deckSnapshot as BeybladeInfo[]) : [];
+  return registeredIds(p)
+    .map((id) => snap.find((b) => b.id === id) ?? live.get(id))
+    .filter(Boolean)
+    .map((b) => ({ id: b!.id, name: b!.name, blade: b!.blade ?? null, ratchet: b!.ratchet ?? null, bit: b!.bit ?? null }));
+}
 
 // Blader name for display; admins also see the real name in parentheses.
 function playerLabel(p: { name: string; bladerName?: string | null }, admin = false) {
@@ -221,7 +236,7 @@ function MatchCard({
       </div>
       {flagBox}
       {(match.judge || match.isWalkover || (canScore && !isFinished) ||
-        (deckType === "THREE_ON_THREE" && !isFinished && currentUserId && (currentUserId === match.player1.id || currentUserId === match.player2.id))) && (
+        (usesBattleDeck(deckType) && !isFinished && currentUserId && (currentUserId === match.player1.id || currentUserId === match.player2.id))) && (
         <div className="flex items-center gap-2 flex-wrap">
           {match.judge && (
             <span className="text-xs px-2 py-1 rounded-full font-semibold bg-purple-500/10 text-purple-200 border border-purple-500/30">
@@ -245,14 +260,20 @@ function MatchCard({
               <WOButton matchId={match.id} player1={match.player1} player2={match.player2} />
             </>
           )}
+          {/* 3on3 + 1 reserva: the player picks this match's trio on their phone */}
+          {hasMatchTrio(deckType) && !isFinished && match.player1.id !== match.player2.id && currentUserId &&
+            (currentUserId === match.player1.id || currentUserId === match.player2.id) && (
+              <PlayerTrioPanel matchId={match.id} userId={currentUserId} color={currentUserId === match.player1.id ? "#f0a500" : "#c8102e"} />
+            )}
           {/* Player picks their own deck order on their phone (3-on-3 only) */}
-          {deckType === "THREE_ON_THREE" && !isFinished && currentUserId &&
+          {usesBattleDeck(deckType) && !isFinished && currentUserId &&
             (currentUserId === match.player1.id || currentUserId === match.player2.id) && (
               <PlayerDeckOrder
                 matchId={match.id}
                 userId={currentUserId}
                 beyblades={participantBeyblades.find((p) => p.userId === currentUserId)?.beyblades ?? []}
                 color={currentUserId === match.player1.id ? "#f0a500" : "#c8102e"}
+                trioMode={hasMatchTrio(deckType)}
               />
             )}
         </div>
@@ -439,9 +460,7 @@ export default async function TournamentDetailPage(
 
 
   // Collect all beyblade IDs registered by participants
-  const allBeybladeIds = tournament.participants.flatMap((p) =>
-    [p.beyblade1, p.beyblade2, p.beyblade3].filter(Boolean) as string[]
-  );
+  const allBeybladeIds = tournament.participants.flatMap((p) => registeredIds(p));
 
   // These two reads are independent — batch them in a single round-trip
   const [beybladeDetails, allPlayers] = await Promise.all([
@@ -470,7 +489,8 @@ export default async function TournamentDetailPage(
 
   type BeybladeWithUser = BeybladeInfo & { userId: string };
   const allParticipantBeyblades: Map<string, BeybladeInfo[]> = new Map();
-  if (!tournament.isOfficial && tournament.participants.length > 0 && (tab === "partidas" || tab === "resumo")) {
+  // 3on3 + 1 reserva: only the 4 registered may be used, even in casual events.
+  if (!tournament.isOfficial && !hasMatchTrio(tournament.deckType) && tournament.participants.length > 0 && (tab === "partidas" || tab === "resumo")) {
     const participantUserIds = tournament.participants.map((p) => p.userId);
     const allBeys = await prisma.beyblade.findMany({
       where: { userId: { in: participantUserIds } },
@@ -486,7 +506,10 @@ export default async function TournamentDetailPage(
     userId: p.userId,
     beyblades: !tournament.isOfficial && allParticipantBeyblades.has(p.userId)
       ? allParticipantBeyblades.get(p.userId)!
-      : [p.beyblade1, p.beyblade2, p.beyblade3]
+      : hasMatchTrio(tournament.deckType)
+        // Composition AS REGISTERED (snapshot), not today's profile.
+        ? snapshotOrLive(p, beybladeMap)
+        : [p.beyblade1, p.beyblade2, p.beyblade3]
           .filter(Boolean)
           .map((id) => beybladeMap.get(id!))
           .filter(Boolean) as BeybladeInfo[],
@@ -531,10 +554,12 @@ export default async function TournamentDetailPage(
   const currentSelectionMap: Map<string, BeybladeInfo[]> = new Map(
     tournament.participants.map((p) => [
       p.userId,
-      [p.beyblade1, p.beyblade2, p.beyblade3]
-        .filter(Boolean)
-        .map((id) => beybladeMap.get(id!))
-        .filter(Boolean) as BeybladeInfo[],
+      hasMatchTrio(tournament.deckType)
+        ? snapshotOrLive(p, beybladeMap)
+        : [p.beyblade1, p.beyblade2, p.beyblade3]
+          .filter(Boolean)
+          .map((id) => beybladeMap.get(id!))
+          .filter(Boolean) as BeybladeInfo[],
     ])
   );
   const myParticipant = tournament.participants.find((p) => p.userId === session?.user.id);
@@ -544,11 +569,7 @@ export default async function TournamentDetailPage(
   const currentParticipant = tournament.participants.find(
     (p) => p.userId === session?.user.id
   );
-  const currentBeybladeIds = currentParticipant
-    ? ([currentParticipant.beyblade1, currentParticipant.beyblade2, currentParticipant.beyblade3].filter(
-        Boolean
-      ) as string[])
-    : [];
+  const currentBeybladeIds = currentParticipant ? registeredIds(currentParticipant) : [];
 
   // ── Phases ────────────────────────────────────────────────────────────────
   const isSwiss = isSwissFormat(tournament.format);
@@ -1008,7 +1029,7 @@ export default async function TournamentDetailPage(
   const dateText = tournament.isMultiDay
     ? `Dia 1 (suíço): ${fmtDate(tournament.startDate, hasTime(tournament.startDate)) ?? "a definir"} · Dia 2 (mata-mata): ${fmtDate(tournament.day2Date) ?? "a definir"}`
     : fmtDate(tournament.startDate, hasTime(tournament.startDate)) ?? (tournament.status === "DRAFT" || tournament.status === "REGISTRATION" ? "Data a definir" : null);
-  const formatText = `${FORMAT_LABELS[tournament.format] ?? tournament.format}${isSwiss && qualifiersCount ? ` + mata-mata (top ${qualifiersCount})` : ""} · ${tournament.deckType === "THREE_ON_THREE" ? "Deck 3on3" : "Solo"}`;
+  const formatText = `${FORMAT_LABELS[tournament.format] ?? tournament.format}${isSwiss && qualifiersCount ? ` + mata-mata (top ${qualifiersCount})` : ""} · ${tournament.deckType === "SOLO" ? "Solo" : `Deck ${deckLabel(tournament.deckType)}`}`;
   const statusIcon = { DRAFT: "✎", REGISTRATION: "📝", IN_PROGRESS: "●", FINISHED: "✓" }[tournament.status];
 
   // Player list (read-only) for visitors; admins get the manager.
@@ -1029,6 +1050,7 @@ export default async function TournamentDetailPage(
             beyblade1: p.beyblade1,
             beyblade2: p.beyblade2,
             beyblade3: p.beyblade3,
+            beyblade4: p.beyblade4,
             currentBeyblades: currentSelectionMap.get(p.userId) ?? [],
             hasPaid: p.hasPaid,
             beybladeInspected: p.beybladeInspected,
@@ -1396,6 +1418,12 @@ export default async function TournamentDetailPage(
         <h3 id="formato-titulo" className="text-lg font-bold text-white mb-3">Formato e pontuação</h3>
         <ul className="space-y-2 text-sm text-gray-200 list-disc pl-5">
           <li>Formato: {formatText}.</li>
+          {hasMatchTrio(tournament.deckType) && (
+            <>
+              <li>Deck 3 on 3 + 1 reserva: cada participante inscreve 4 Beyblades e escolhe 3 antes de cada confronto; a 4ª fica como reserva. O trio é bloqueado quando o confronto começa e vale para todos os sets dele; no confronto seguinte pode ser outro.</li>
+              {tournament.isOfficial && <li>{PLUS_ONE_PARTS_RULE}</li>}
+            </>
+          )}
           {isSwiss && (
             <li>
               Fase suíça{tournament.swissRounds ? ` de ${swissRounds} rodadas` : ""}: cada vitória vale 1 ponto suíço; quem fica de folga (bye) também recebe 1 ponto.

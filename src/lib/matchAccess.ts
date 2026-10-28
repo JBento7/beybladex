@@ -63,3 +63,10 @@ export async function logMatchOp(
     },
   });
 }
+
+/** Judge/organizer/admin of this match (may act on any player's deck). */
+export async function isMatchStaff(session: Session | null, matchId: string): Promise<boolean> {
+  if (!session?.user) return false;
+  const r = await authorizeMatchOp(session, matchId, "deckOrder");
+  return r.ok;
+}

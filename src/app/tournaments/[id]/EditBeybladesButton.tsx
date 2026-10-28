@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { hasMatchTrio, registeredDeckSize } from "@/lib/deckFormat";
 
 interface Beyblade {
   id: string;
@@ -31,7 +32,8 @@ export default function EditBeybladesButton({
   const [loadError, setLoadError] = useState(false);
   const router = useRouter();
 
-  const required = deckType === "THREE_ON_THREE" ? 3 : 1;
+  const required = registeredDeckSize(deckType);
+  const plusOne = hasMatchTrio(deckType);
 
   useEffect(() => {
     if (!showModal) return;
@@ -109,11 +111,19 @@ export default function EditBeybladesButton({
             className="bg-card border border-line rounded-2xl p-6 w-full max-w-md max-h-[80vh] flex flex-col"
           >
             <h2 className="text-lg font-bold text-white mb-1">Editar Combos do Torneio</h2>
-            <p className="text-sm text-gray-400 mb-4">
-              {required === 3
-                ? "Selecione exatamente 3 combos do seu repertório."
-                : "Selecione 1 combo do seu repertório."}
+            <p className="text-sm text-gray-400 mb-2">
+              {plusOne
+                ? "Selecione 4 Beyblades — 3 serão usadas por confronto e 1 ficará como reserva."
+                : required === 3
+                  ? "Selecione exatamente 3 combos do seu repertório."
+                  : "Selecione 1 combo do seu repertório."}
             </p>
+            {plusOne && (
+              <p className="text-sm font-bold mb-3" aria-live="polite" style={{ color: selected.length === 4 ? "#22c55e" : "#f0a500" }}>
+                {selected.length} de 4 selecionadas
+                <span className="block font-normal text-xs text-gray-400">Ao trocar o conjunto, a organização precisa inspecionar o deck de novo.</span>
+              </p>
+            )}
 
             {err && (
               <div className="mb-4 text-sm px-4 py-2 rounded-lg bg-red-900/30 border border-red-700 text-red-400">
@@ -138,7 +148,7 @@ export default function EditBeybladesButton({
                 <div className="text-center py-6">
                   <p className="text-gray-400 text-sm">Você não tem combos cadastrados.</p>
                   <a
-                    href="/profile"
+                    href={`/profile?voltar=${encodeURIComponent(`/tournaments/${tournamentId}`)}`}
                     className="text-brand-yellow text-sm underline mt-1 inline-block"
                   >
                     Cadastrar combos no perfil →
@@ -167,8 +177,11 @@ export default function EditBeybladesButton({
                   return (
                     <button
                       key={b.id}
+                      type="button"
+                      aria-pressed={isSelected}
+                      disabled={!isSelected && required > 1 && selected.length >= required}
                       onClick={() => toggleSelect(b.id)}
-                      className={`w-full text-left p-3 rounded-xl border transition-all ${
+                      className={`w-full text-left p-3 min-h-[52px] rounded-xl border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                         isSelected
                           ? "border-brand-yellow bg-brand-yellow/10"
                           : "border-line bg-field hover:border-gray-600"

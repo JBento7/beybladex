@@ -7,6 +7,8 @@ import { startOfferer } from "@/lib/arenaLink";
 import { arenaChannel } from "@/lib/arenaIdentity";
 import type { FinishType } from "@prisma/client";
 import DeckOrderPicker, { type BeybladeInfo, comboParts } from "./DeckOrderPicker";
+import TrioPicker from "@/components/deck/TrioPicker";
+import { hasMatchTrio, usesBattleDeck, type DeckBey } from "@/lib/deckFormat";
 
 // Finish buttons in the Beyblade X scoreboard order.
 const FINISH_BTNS: { type: FinishType; label: string }[] = [
@@ -56,6 +58,11 @@ type MatchState = {
   community?: string;
   player1Id?: string;
   player2Id?: string;
+  /** 3on3 + 1 reserva (lib/matchTrio.trioView): judges see both trios. */
+  trio?: {
+    locked: boolean; bothConfirmed: boolean; official: boolean;
+    players: { userId: string; confirmed: boolean; active: string[] | null; reserveId: string | null; registered: DeckBey[]; previousTrio: string[] | null }[];
+  } | null;
 };
 
 const P1_COLOR = "#f0a500";
@@ -135,7 +142,7 @@ export default function ScoreModal({
   const [starting, setStarting] = useState(false);
 
   const router = useRouter();
-  const isDeck = deckType === "THREE_ON_THREE";
+  const isDeck = usesBattleDeck(deckType);
 
   // P2P link to this match's arena telão (LAN, works even if internet drops).
   const linkRef = useRef<ReturnType<typeof startOfferer> | null>(null);
@@ -265,9 +272,32 @@ export default function ScoreModal({
   }, [p1Pts, p2Pts, p1Sets, p2Sets, state?.player1Id, state?.player2Id]);
 
   const bothOrders = !isDeck || (!!p1Order && !!p2Order);
+  // 3on3 + 1 reserva: before anything else both trios must be confirmed (the
+  // first "Iniciar" locks them on the server). No "start without deck" here:
+  // every point must name one of the 3 active Beyblades.
+  const plusOne = hasMatchTrio(deckType);
+  const trio = state?.trio ?? null;
+  const trioReady = !plusOne || !!(trio && (trio.locked || trio.bothConfirmed));
+  const trioOf = (uid: string) => trio?.players.find((x) => x.userId === uid) ?? null;
+  const activeBeys = (uid: string, all: BeybladeInfo[]) => {
+    const act = trioOf(uid)?.active;
+    return plusOne ? (act ? all.filter((b) => act.includes(b.id)) : []) : all;
+  };
+  const [trioFor, setTrioFor] = useState<string | null>(null);
+  const [trioBusy, setTrioBusy] = useState(false);
+  async function saveTrio(userId: string, ids: string[]) {
+    setTrioBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/matches/${matchId}/trio`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, beybladeIds: ids }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) setErr(d.error || "Não foi possível salvar o trio.");
+      else setTrioFor(null);
+      await fetchState();
+    } catch { setErr("Sem conexão — o trio não foi salvo."); } finally { setTrioBusy(false); }
+  }
   // 3on3 normally needs both deck orders first — but the judge can override and
   // start anyway if a player forgot to register/pick their deck.
-  const gateReady = !isDeck || bothOrders || forceStart;
+  const gateReady = trioReady && (!isDeck || bothOrders || forceStart);
   // Every battle (point) gets its own countdown — in 3-on-3 the active beyblade
   // switches each battle, and in solo the countdown must also play before each
   // point. A battle is identified by set + points already scored in it.
@@ -277,7 +307,8 @@ export default function ScoreModal({
   const needSides = currentSetNum === 1 && currentSetBattleCount === 0 && !state?.xSidePlayerId;
   const revealScoring = gateReady && startedKey === startKey;
   const showStart = gateReady && startedKey !== startKey && !needSides;
-  const waitingOrders = isDeck && !bothOrders && !forceStart;
+  const waitingOrders = isDeck && trioReady && !bothOrders && !forceStart;
+  const waitingTrio = plusOne && !trioReady;
 
   // Poll while waiting for players to submit their deck orders.
   useEffect(() => {
@@ -429,17 +460,28 @@ export default function ScoreModal({
     startBusyRef.current = true;
     linkSend({ type: "countdown" }); // instant over LAN
     setStarting(true);
+    let refused = false;
     try {
-      await fetch(`/api/matches/${matchId}/countdown`, {
+      const res = await fetch(`/api/matches/${matchId}/countdown`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key: startKey }),
       });
+      // 3on3 + 1 reserva: the server refuses to start without both trios.
+      if (res.status === 409) {
+        refused = true;
+        const d = await res.json().catch(() => ({}));
+        setErr(d.error || "Não foi possível iniciar o confronto.");
+        await fetchState();
+      } else if (plusOne && !trio?.locked) {
+        // The start just locked the trios: reflect it right away.
+        fetchState();
+      }
     } catch {
       /* arena signal is best-effort */
     } finally {
       setStarting(false);
-      setStartedKey(startKey);
+      if (!refused) setStartedKey(startKey);
       // Brief cooldown so a double-tap can't fire two countdowns.
       setTimeout(() => { startBusyRef.current = false; }, 1500);
     }
@@ -669,6 +711,65 @@ export default function ScoreModal({
                   </div>
                 )}
 
+                {/* 3on3 + 1 reserva: once locked, a compact summary (the scoring
+                    buttons stay where the judge expects them). */}
+                {plusOne && trio?.locked && (
+                  <details className="mb-3 rounded-xl border border-line bg-card px-3 py-2 text-xs text-gray-300">
+                    <summary className="cursor-pointer font-bold text-gray-100 min-h-[36px] flex items-center">🔒 Trios bloqueados — ver ativas e reservas</summary>
+                    {[{ p: player1, n: p1Name, c: P1_COLOR }, { p: player2, n: p2Name, c: P2_COLOR }].map(({ p, n, c }) => {
+                      const tp = trioOf(p.id);
+                      const nm = (id: string | null) => tp?.registered.find((b) => b.id === id)?.name ?? "—";
+                      return (
+                        <p key={p.id} className="mt-1 break-words"><b style={{ color: c }}>{n}:</b> {tp?.active?.map(nm).join(", ") ?? "—"} · <span className="text-gray-400">reserva {nm(tp?.reserveId ?? null)}</span></p>
+                      );
+                    })}
+                  </details>
+                )}
+                {/* 3on3 + 1 reserva: trios of this match */}
+                {plusOne && trio && !trio.locked && (
+                  <div className="mb-3">
+                    {waitingTrio && (
+                      <div className="bg-brand-yellow/10 border border-brand-yellow/30 rounded-xl px-4 py-4 text-center mb-3">
+                        <div className="text-xl font-black text-brand-yellow mb-1">Aguardando trio dos jogadores</div>
+                        <div className="text-sm text-gray-300">Cada jogador escolhe 3 das 4 Beyblades no próprio celular. O trio é bloqueado ao iniciar.</div>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
+                      {[{ p: player1, c: P1_COLOR, n: p1Name, all: player1Beyblades }, { p: player2, c: P2_COLOR, n: p2Name, all: player2Beyblades }].map(({ p, c, n }) => {
+                        const tp = trioOf(p.id);
+                        const nm = (id: string | null) => tp?.registered.find((b) => b.id === id)?.name ?? "—";
+                        return (
+                          <div key={p.id} className="rounded-xl border-2 px-3 py-3" style={{ borderColor: tp?.confirmed ? "#22c55e" : "#333" }}>
+                            <div className="text-base font-bold text-white truncate" style={{ color: c }}>{n}</div>
+                            {tp?.active ? (
+                              <div className="text-xs text-gray-200 mt-1 break-words">
+                                {trio.locked ? "🔒 " : "✓ "}Ativas: {tp.active.map(nm).join(", ")}
+                                <div className="text-gray-400">Reserva: {nm(tp.reserveId)}</div>
+                              </div>
+                            ) : (
+                              <div className="text-sm font-bold mt-1" style={{ color: tp?.confirmed ? "#22c55e" : "#777" }}>{tp?.confirmed ? "✓ trio confirmado" : "aguardando trio..."}</div>
+                            )}
+                            {!trio.locked && (
+                              <button type="button" onClick={() => setTrioFor(trioFor === p.id ? null : p.id)} className="mt-2 w-full text-xs font-bold text-gray-200 bg-card border border-line rounded-lg min-h-[40px]">
+                                {trioFor === p.id ? "Fechar" : "✍️ Definir trio (juiz)"}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {trioFor && !trio.locked && (() => {
+                      const tp = trioOf(trioFor);
+                      return tp ? (
+                        <div className="mt-2 bg-card border border-line rounded-xl p-3">
+                          <TrioPicker registered={tp.registered} initial={tp.active} previous={tp.previousTrio} official={trio.official} color={trioFor === player1.id ? P1_COLOR : P2_COLOR} busy={trioBusy} confirmLabel="Salvar trio (juiz)" onConfirm={(ids) => saveTrio(trioFor, ids)} />
+                          <p className="mt-2 text-xs text-gray-500">A alteração feita pelo juiz fica registrada na auditoria da partida.</p>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+
                 {/* Waiting for player deck orders (3on3) */}
                 {waitingOrders && (
                   <div className="mb-3">
@@ -693,11 +794,11 @@ export default function ScoreModal({
                     </button>
                     {showManual && (
                       <div className="mt-2 space-y-2">
-                        {!p1Order && player1Beyblades.length >= 3 && (
-                          <DeckOrderPicker title={`${p1Name} — ordem`} beyblades={player1Beyblades} color={P1_COLOR} onConfirm={(o) => saveDeckOrder(player1.id, o)} />
+                        {!p1Order && activeBeys(player1.id, player1Beyblades).length >= 3 && (
+                          <DeckOrderPicker title={`${p1Name} — ordem`} beyblades={activeBeys(player1.id, player1Beyblades)} color={P1_COLOR} onConfirm={(o) => saveDeckOrder(player1.id, o)} />
                         )}
-                        {!p2Order && player2Beyblades.length >= 3 && (
-                          <DeckOrderPicker title={`${p2Name} — ordem`} beyblades={player2Beyblades} color={P2_COLOR} onConfirm={(o) => saveDeckOrder(player2.id, o)} />
+                        {!p2Order && activeBeys(player2.id, player2Beyblades).length >= 3 && (
+                          <DeckOrderPicker title={`${p2Name} — ordem`} beyblades={activeBeys(player2.id, player2Beyblades)} color={P2_COLOR} onConfirm={(o) => saveDeckOrder(player2.id, o)} />
                         )}
                         {(player1Beyblades.length < 3 || player2Beyblades.length < 3) && (
                           <div className="text-sm text-yellow-500 bg-yellow-900/20 border border-yellow-700/30 rounded-lg px-3 py-3">
@@ -707,8 +808,9 @@ export default function ScoreModal({
                       </div>
                     )}
 
-                    {/* Judge override: start without a deck (player forgot to register). */}
-                    <div className="mt-3 border-t border-line pt-3">
+                    {/* Judge override: start without a deck (player forgot to register).
+                        Not in 3on3 + 1 reserva: every point needs an active Beyblade. */}
+                    {!plusOne && <div className="mt-3 border-t border-line pt-3">
                       <button
                         onClick={() => setForceStart(true)}
                         className="w-full bg-brand-red/80 hover:bg-brand-red text-white text-lg font-bold py-4 rounded-xl transition-colors"
@@ -718,7 +820,7 @@ export default function ScoreModal({
                       <div className="text-sm text-gray-500 mt-2 text-center">
                         Use se um jogador esqueceu de cadastrar/enviar o deck. A partida inicia normalmente; a bey ativa não será exibida.
                       </div>
-                    </div>
+                    </div>}
                   </div>
                 )}
 

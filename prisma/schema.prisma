@@ -50,6 +50,7 @@ enum MatchStatus {
 enum DeckType {
   SOLO
   THREE_ON_THREE
+  THREE_ON_THREE_PLUS_ONE // 4 registered, 3 active per match (lib/deckFormat)
 }
 
 enum SetStatus {
@@ -246,6 +247,11 @@ model TournamentParticipant {
   beyblade1    String?
   beyblade2    String?
   beyblade3    String?
+  beyblade4    String?  // 3on3 + 1 reserva only
+  // Composition of the registered deck AS REGISTERED (name + parts per bey,
+  // with the original id for stats). Later profile edits don't change it.
+  deckSnapshot   Json?
+  deckSnapshotAt DateTime?
   hasPaid            Boolean  @default(false)
   beybladeInspected  Boolean  @default(false)
   approved           Boolean  @default(true) // paid tournaments start false (awaiting admin approval)
@@ -306,6 +312,7 @@ model Match {
   sets           MatchSet[]
   beybladeRecords BeybladeMatchRecord[]
   deckOrders     MatchDeckOrder[]
+  trioSelections MatchTrioSelection[]
   participations RoundParticipation[]
 
   @@index([tournamentId, round])
@@ -356,6 +363,33 @@ model MatchPoint {
   @@index([setId])
   @@index([userId])
   @@index([beybladeId])
+}
+
+// 3on3 + 1 reserva: the 3 active Beyblades a player uses in ONE match (the
+// 4th registered one is the reserve). Revisable until the match is locked
+// (first "Iniciar" or first point, under the match row lock); then frozen
+// with a snapshot. History of who changed it lives in MatchAuditLog.
+model MatchTrioSelection {
+  id             String    @id @default(cuid())
+  matchId        String
+  tournamentId   String
+  userId         String
+  bey1Id         String
+  bey2Id         String
+  bey3Id         String
+  reserveId      String?
+  revision       Int       @default(1)
+  confirmedAt    DateTime
+  confirmedById  String
+  lockedAt       DateTime?
+  lockedSnapshot Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, userId])
+  @@index([tournamentId, userId])
 }
 
 model MatchDeckOrder {

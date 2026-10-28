@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 // Transactional registration (shared by the join API and the integration tests).
 import { prisma } from "./prisma";
 import { registrationState } from "./registration";
@@ -15,7 +16,10 @@ export type JoinResult =
 export async function claimRegistrationSpot(
   tournamentId: string,
   userId: string,
-  data: { beyblade1: string | null; beyblade2: string | null; beyblade3: string | null; approved: boolean },
+  data: {
+    beyblade1: string | null; beyblade2: string | null; beyblade3: string | null; approved: boolean;
+    beyblade4?: string | null; deckSnapshot?: Prisma.InputJsonValue; deckSnapshotAt?: Date | null;
+  },
   now?: number
 ): Promise<JoinResult> {
   try {

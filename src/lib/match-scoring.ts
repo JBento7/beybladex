@@ -2,6 +2,7 @@
 import type { FinishType } from "@prisma/client";
 import { prisma } from "./prisma";
 import { applyPoint } from "./swiss";
+import { checkPointBeyTx } from "./matchTrio";
 
 export type PointOutcome =
   | { kind: "error"; status: number; error: string }
@@ -46,6 +47,13 @@ export async function recordPoint(
       points: p.points,
     });
     if ("error" in decision) return { kind: "error", status: fresh.status === "FINISHED" ? 409 : 400, error: decision.error } as const;
+    // 3on3 + 1 reserva: the first point locks both trios (same row lock, so a
+    // trio change can't race it) and every point must come from one of the
+    // scorer's 3 ACTIVE Beyblades — never the reserve (lib/matchTrio).
+    {
+      const trioErr = await checkPointBeyTx(tx, matchId, p.scorerId, p.beybladeId);
+      if (trioErr) return { kind: "error", status: trioErr.status, error: trioErr.error } as const;
+    }
 
     let setId: string;
     if (decision.newSet) {

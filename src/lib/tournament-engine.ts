@@ -1021,11 +1021,19 @@ async function resolveMatchBeyblade(
   // Deterministic tie-break by id so re-runs are stable.
   if (entries.length > 0) return entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
 
+  // 3on3 + 1 reserva: without a scoring Beyblade, credit the first ACTIVE one
+  // of this match's trio — never the reserve (registered ≠ used). A W.O.
+  // with no battle records the player's result but no Beyblade usage.
+  const trio = await prisma.matchTrioSelection.findUnique({ where: { matchId_userId: { matchId, userId } }, select: { bey1Id: true, match: { select: { isWalkover: true } } } });
+  if (trio) return trio.match.isWalkover ? null : trio.bey1Id;
+
   // Fallback: the beyblade this player registered for the tournament.
   const part = await prisma.tournamentParticipant.findUnique({
     where: { tournamentId_userId: { tournamentId, userId } },
-    select: { beyblade1: true },
+    select: { beyblade1: true, tournament: { select: { deckType: true } } },
   });
+  // A 3on3+1 match without a trio (e.g. W.O.) records no Beyblade usage.
+  if (part?.tournament.deckType === "THREE_ON_THREE_PLUS_ONE") return null;
   return part?.beyblade1 ?? null;
 }
 
@@ -1203,7 +1211,14 @@ export async function recalculateAllBeybladeStats() {
   // Fallback (W.O. / shutout side): the beyblade a player registered for that tournament.
   // Cache participants per tournament so we resolve each player's representative beyblade.
   const participantCache: Record<string, Record<string, string | null>> = {};
-  async function fallbackBeyblade(tournamentId: string, userId: string): Promise<string | null> {
+  // 3on3 + 1 reserva: the fallback is the match's first ACTIVE Beyblade; a
+  // match without a trio (e.g. W.O.) credits no Beyblade — never the reserve.
+  const trioRows = await prisma.matchTrioSelection.findMany({ select: { matchId: true, userId: true, bey1Id: true } });
+  const trioFirst = new Map(trioRows.map((t) => [`${t.matchId}:${t.userId}`, t.bey1Id]));
+  const walkoverMatches = new Set(matches.filter((m) => m.isWalkover).map((m) => m.id));
+  const plusOneTournaments = new Set((await prisma.tournament.findMany({ where: { deckType: "THREE_ON_THREE_PLUS_ONE" }, select: { id: true } })).map((t) => t.id));
+  async function fallbackBeyblade(tournamentId: string, userId: string, matchId?: string): Promise<string | null> {
+    if (plusOneTournaments.has(tournamentId)) return (matchId && !walkoverMatches.has(matchId) && trioFirst.get(`${matchId}:${userId}`)) || null;
     if (!participantCache[tournamentId]) {
       const parts = await prisma.tournamentParticipant.findMany({
         where: { tournamentId },
@@ -1244,8 +1259,8 @@ export async function recalculateAllBeybladeStats() {
     let loserBey = topBeybladeFor(m.id, loserId);
 
     // For walkovers (no points) or a shutout side, fall back to the registered beyblade.
-    if (!winnerBey) winnerBey = await fallbackBeyblade(m.tournamentId, m.winnerId);
-    if (!loserBey) loserBey = await fallbackBeyblade(m.tournamentId, loserId);
+    if (!winnerBey) winnerBey = await fallbackBeyblade(m.tournamentId, m.winnerId, m.id);
+    if (!loserBey) loserBey = await fallbackBeyblade(m.tournamentId, loserId, m.id);
 
     if (winnerBey && tallies[winnerBey]) tallies[winnerBey].wins++;
     if (loserBey && tallies[loserBey]) tallies[loserBey].losses++;

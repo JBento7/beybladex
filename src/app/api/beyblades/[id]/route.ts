@@ -77,6 +77,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
         { beyblade1: params.id },
         { beyblade2: params.id },
         { beyblade3: params.id },
+        { beyblade4: params.id },
       ],
       tournament: { status: { in: ["REGISTRATION", "IN_PROGRESS"] } },
     },

@@ -26,7 +26,7 @@ const FORMAT_LABELS: Record<string, string> = {
 export function formatLabel(format: string, qualifiers?: number | null, deckType?: string | null): string {
   const base = FORMAT_LABELS[format] ?? format;
   const ko = (format === "ROUND_ROBIN" || format === "SWISS") && qualifiers ? ` + mata-mata (top ${qualifiers})` : "";
-  const deck = deckType === "THREE_ON_THREE" ? " · Deck 3on3" : deckType ? " · Solo" : "";
+  const deck = deckType === "THREE_ON_THREE" ? " · Deck 3on3" : deckType === "THREE_ON_THREE_PLUS_ONE" ? " · Deck 3on3 + 1 reserva" : deckType ? " · Solo" : "";
   return `${base}${ko}${deck}`;
 }
 

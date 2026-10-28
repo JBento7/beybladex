@@ -6,6 +6,7 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 import { assignFreeJudge } from "@/lib/tournament-engine";
+import { lockTrios } from "@/lib/matchTrio";
 import { errorResponse } from "@/lib/observability";
 
 // The judge presses "Iniciar" → stamp the match so the arena display starts the
@@ -45,6 +46,12 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   } catch {
     /* body optional */
   }
+
+  // 3on3 + 1 reserva: "Iniciar" is the official start of the confrontation —
+  // both trios are validated and locked here (lib/matchTrio). Without both
+  // confirmed trios the match can't start.
+  const lock = await lockTrios(params.id);
+  if (lock && !lock.ok) return NextResponse.json({ error: lock.error, code: lock.code }, { status: lock.status });
 
   // If this match has no judge yet, try to grab one who's free right now.
   if (!match.judgeId) await assignFreeJudge(params.id);

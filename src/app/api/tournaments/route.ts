@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
+import { parseDeckType } from "@/lib/deckFormat";
 
 // Public summary (no regulation, no drafts, bounded). The paginated list with
 // filters is /api/tournaments/list.
@@ -51,6 +52,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Deck format is validated here, not only by the form's options.
+    const parsedDeck = deckType === undefined || deckType === null || deckType === "" ? "SOLO" : parseDeckType(deckType);
+    if (!parsedDeck) return NextResponse.json({ error: "Formato de deck inválido." }, { status: 400 });
+
     // Players can't pick a community: their BeyEncontro belongs to their own
     // league (it used to fall back to LBL, hiding LBM events from LBM judges).
     let communitySlug = session.user.adminCommunity ?? (["lbl", "lbm"].includes(community) ? community : "lbl");
@@ -64,7 +69,7 @@ export async function POST(req: NextRequest) {
         name,
         description: description || null,
         format,
-        deckType: deckType === "THREE_ON_THREE" ? "THREE_ON_THREE" : "SOLO",
+        deckType: parsedDeck,
         organizerId: session.user.id,
         maxParticipants: maxParticipants ? parseInt(maxParticipants) : null,
         startDate: startDate ? new Date(startDate) : null,

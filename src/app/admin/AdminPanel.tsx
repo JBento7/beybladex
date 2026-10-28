@@ -11,7 +11,8 @@ const FORMATS = [
 
 const DECK_TYPES = [
   { value: "SOLO", label: "Solo" },
-  { value: "THREE_ON_THREE", label: "3 vs 3" },
+  { value: "THREE_ON_THREE", label: "3 on 3" },
+  { value: "THREE_ON_THREE_PLUS_ONE", label: "3 on 3 + 1 reserva" },
 ];
 
 export default function AdminPanel() {

@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import Navbar from "@/components/Navbar";
 import CommunityPicker from "@/components/CommunityPicker";
 import { useHomeCommunity } from "@/components/CommunityTheme";
+import DeckTypePicker from "@/components/deck/DeckTypePicker";
 
 const FORMATS = [
   {
@@ -478,44 +479,7 @@ export default function CreateTournamentPage() {
           </div>
 
           {/* Deck Type */}
-          <div className="bg-card border border-line rounded-xl p-6">
-            <h2 className="text-base font-bold text-white mb-4">Tipo de Deck <span className="text-red-400">*</span></h2>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                {
-                  value: "SOLO",
-                  label: "Solo",
-                  icon: null,
-                  desc: "Cada jogador usa 1 Beyblade.",
-                },
-                {
-                  value: "THREE_ON_THREE",
-                  label: "3 contra 3",
-                  icon: "⚡",
-                  desc: "Cada jogador usa um deck de 3 Beyblades.",
-                },
-              ].map((d) => (
-                <button
-                  key={d.value}
-                  type="button"
-                  onClick={() => setForm({ ...form, deckType: d.value })}
-                  className={`text-left p-4 rounded-xl border transition-all ${
-                    form.deckType === d.value
-                      ? "border-brand-red bg-brand-red/10"
-                      : "border-line bg-field hover:border-gray-600"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    {d.icon ? <span className="text-xl">{d.icon}</span> : <img src="/brand/bey-96.webp" alt="" className="w-5 h-5 object-contain" />}
-                    <span className={`font-semibold text-sm ${form.deckType === d.value ? "text-danger" : "text-white"}`}>
-                      {d.label}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-400">{d.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
+          <DeckTypePicker value={form.deckType} onChange={(v) => setForm({ ...form, deckType: v })} />
 
           {/* Format Selection */}
           <div className="bg-card border border-line rounded-xl p-6">

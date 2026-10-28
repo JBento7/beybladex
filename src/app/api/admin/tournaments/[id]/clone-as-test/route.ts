@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       include: {
         participants: {
           where: { approved: { not: false } },
-          select: { userId: true, beyblade1: true, beyblade2: true, beyblade3: true },
+          select: { userId: true, beyblade1: true, beyblade2: true, beyblade3: true, beyblade4: true, deckSnapshot: true, deckSnapshotAt: true },
         },
         judges: { select: { userId: true } },
       },
@@ -84,6 +84,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         beyblade1: p.beyblade1,
         beyblade2: p.beyblade2,
         beyblade3: p.beyblade3,
+        // 3on3 + 1 reserva: the same 4 and the snapshot "as registered".
+        beyblade4: p.beyblade4,
+        deckSnapshot: p.deckSnapshot ?? undefined,
+        deckSnapshotAt: p.deckSnapshotAt,
         approved: true,
       })),
       skipDuplicates: true,

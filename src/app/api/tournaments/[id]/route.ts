@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
+import { deckLabel, parseDeckType, registrationComplete } from "@/lib/deckFormat";
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -94,11 +95,31 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       return NextResponse.json({ error: "Nome e formato são obrigatórios" }, { status: 400 });
     }
 
+    // Deck format: validated on the server. Registrations are never converted
+    // (3 → 4 Beyblades or back): a change that would leave anyone with an
+    // incomplete deck is refused, listing who would be affected.
+    const nextDeck = deckType === undefined || deckType === null || deckType === "" ? tournament.deckType : parseDeckType(deckType);
+    if (!nextDeck) return NextResponse.json({ error: "Formato de deck inválido." }, { status: 400 });
+    if (nextDeck !== tournament.deckType) {
+      const regs = await prisma.tournamentParticipant.findMany({
+        where: { tournamentId: params.id },
+        select: { beyblade1: true, beyblade2: true, beyblade3: true, beyblade4: true, user: { select: { name: true, bladerName: true } } },
+      });
+      const incomplete = regs.filter((r) => !registrationComplete(nextDeck, r)).map((r) => r.user.bladerName || r.user.name);
+      if (incomplete.length > 0) {
+        return NextResponse.json({
+          error: `Não é possível mudar para "${deckLabel(nextDeck, true)}": ${incomplete.length} inscrição(ões) ficariam com o deck incompleto. As inscrições não são convertidas automaticamente — peça que cada participante ajuste o deck (ou remova a inscrição) antes de mudar o formato.`,
+          code: "DECK_CHANGE_INCOMPATIBLE",
+          incomplete,
+        }, { status: 409 });
+      }
+    }
+
     const data: Record<string, unknown> = {
       name,
       description: description || null,
       format,
-      deckType: deckType === "THREE_ON_THREE" ? "THREE_ON_THREE" : "SOLO",
+      deckType: nextDeck,
       maxParticipants: maxParticipants ? parseInt(maxParticipants) : null,
       startDate: startDate ? new Date(startDate) : null,
       prize: prize || null,

@@ -17,6 +17,7 @@ import { errorResponse } from "@/lib/observability";
 // Query params (all optional):
 //   official=1   → official tournament (deck comes from each player's selection)
 //   deck=3on3    → 3-on-3 (default solo)
+//   deck=3on3+1  → 3 on 3 + 1 reserva (4 Beyblades per player)
 //   players=8    → number of test participants (default 8)
 //   multiday=1   → 2-day Suíço (Dia 1 Suíço · Dia 2 Mata-mata)
 // Example: /api/admin/seed-test-tournament?official=1&deck=3on3
@@ -34,14 +35,16 @@ export async function POST(req: Request) {
 
   const url = new URL(req.url);
   const official = url.searchParams.get("official") === "1";
-  const is3on3 = url.searchParams.get("deck") === "3on3";
+  const deckParam = url.searchParams.get("deck");
+  const isPlusOne = deckParam === "3on3+1" || deckParam === "3on3 1";
+  const is3on3 = deckParam === "3on3" || isPlusOne;
   const multiDay = url.searchParams.get("multiday") === "1";
   const autoplay = url.searchParams.get("autoplay") === "1";
   // real=1 → use registered bladers (with enough beys) and random decks, instead
   // of synthetic test users.
   const real = url.searchParams.get("real") === "1";
   const N = Math.max(4, Math.min(16, parseInt(url.searchParams.get("players") || "8") || 8));
-  const deckSize = is3on3 ? 3 : 1;
+  const deckSize = isPlusOne ? 4 : is3on3 ? 3 : 1;
   const qualifiers = 4;
 
   try {
@@ -72,10 +75,10 @@ export async function POST(req: Request) {
 
     const tournament = await prisma.tournament.create({
       data: {
-        name: `TESTE · ${official ? "Oficial" : "BeyEncontro"} ${is3on3 ? "3on3" : "Solo"} (${day1.toLocaleDateString("pt-BR")})`,
+        name: `TESTE · ${official ? "Oficial" : "BeyEncontro"} ${isPlusOne ? "3on3 + 1 reserva" : is3on3 ? "3on3" : "Solo"} (${day1.toLocaleDateString("pt-BR")})`,
         description: "Torneio de teste gerado automaticamente para validar seleção de bey e telão.",
         format: "ROUND_ROBIN",
-        deckType: is3on3 ? "THREE_ON_THREE" : "SOLO",
+        deckType: isPlusOne ? "THREE_ON_THREE_PLUS_ONE" : is3on3 ? "THREE_ON_THREE" : "SOLO",
         organizerId: session.user.id,
         status: "REGISTRATION",
         arenas: 1,
@@ -120,7 +123,7 @@ export async function POST(req: Request) {
           update: {},
           create: {
             tournamentId: tournament.id, userId: u.id, approved: true, hasPaid: true,
-            beyblade1: deck[0] ?? null, beyblade2: deck[1] ?? null, beyblade3: deck[2] ?? null,
+            beyblade1: deck[0] ?? null, beyblade2: deck[1] ?? null, beyblade3: deck[2] ?? null, beyblade4: deck[3] ?? null,
           },
         });
         participantIds.push(u.id);
@@ -172,6 +175,7 @@ export async function POST(req: Request) {
           beyblade1: deck[0] ?? null,
           beyblade2: deck[1] ?? null,
           beyblade3: deck[2] ?? null,
+          beyblade4: deck[3] ?? null,
         },
       });
       participantIds.push(user.id);
@@ -209,7 +213,7 @@ export async function POST(req: Request) {
       ok: true,
       tournamentId: tournament.id,
       link: `/tournaments/${tournament.id}`,
-      official, deckType: is3on3 ? "3on3" : "solo", players: participantIds.length, real, multiDay, autoplayed,
+      official, deckType: isPlusOne ? "3on3+1" : is3on3 ? "3on3" : "solo", players: participantIds.length, real, multiDay, autoplayed,
       message: autoplayed
         ? "Torneio de teste criado e fase suíça simulada. Abra o link: a classificação e a árvore do mata-mata já estão prontas."
         : "Torneio de teste criado com beys e decks selecionados. Abra o link, inicie e acompanhe o telão.",

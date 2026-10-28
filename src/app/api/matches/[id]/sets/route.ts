@@ -1,6 +1,12 @@
 export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hasMatchTrio } from "@/lib/deckFormat";
+import { trioView } from "@/lib/matchTrio";
+import { isMatchStaff } from "@/lib/matchAccess";
+import { usesBattleDeck } from "@/lib/deckFormat";
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -26,7 +32,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
     const currentSetBattleCount = currentSet ? currentSet.points.length : 0;
 
     // Fetch deck orders separately — table may not exist yet if migration hasn't run.
-    let deckOrders: object[] = [];
+    let deckOrders: { userId: string }[] = [];
     try {
       deckOrders = await prisma.matchDeckOrder.findMany({
         where: { matchId: params.id },
@@ -34,6 +40,18 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
       });
     } catch {
       // Table doesn't exist yet; deck order feature will be unavailable until /api/migrate is run.
+    }
+    // 3on3 + 1 reserva: an order reveals the trio. Until BOTH trios are
+    // confirmed, each player's order is visible only to that player and to
+    // staff (judge/organizer); after that (and after the lock) it's open.
+    let trio: Awaited<ReturnType<typeof trioView>> = null;
+    if (hasMatchTrio(match.tournament.deckType)) {
+      const session = await getServerSession(authOptions);
+      const viewer = session?.user ? { id: session.user.id, staff: await isMatchStaff(session, params.id) } : null;
+      trio = await trioView(params.id, viewer);
+      if (trio && !trio.bothConfirmed && !trio.locked && !viewer?.staff) {
+        deckOrders = deckOrders.filter((o) => o.userId === viewer?.id);
+      }
     }
 
     return NextResponse.json({
@@ -45,8 +63,9 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
       winnerId: match.winnerId,
       setsToWin: match.setsToWin ?? match.tournament.setsToWin,
       pointsToWinSet: match.pointsToWinSet ?? match.tournament.pointsToWinSet,
-      isDeckThreeOnThree: match.tournament.deckType === "THREE_ON_THREE",
+      isDeckThreeOnThree: usesBattleDeck(match.tournament.deckType),
       deckOrders,
+      trio,
       currentSetBattleCount,
       // Which player is on the X side (other = B side); null until the judge sets it.
       xSidePlayerId: (match as { xSidePlayerId?: string | null }).xSidePlayerId ?? null,

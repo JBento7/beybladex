@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { hasMatchTrio, registeredDeckSize } from "@/lib/deckFormat";
 
 interface Player {
   id: string;
@@ -15,6 +16,7 @@ interface Participant {
   beyblade1: string | null;
   beyblade2: string | null;
   beyblade3: string | null;
+  beyblade4?: string | null;
   currentBeyblades: { id: string; name: string }[];
   hasPaid: boolean;
   beybladeInspected: boolean;
@@ -50,7 +52,7 @@ export default function AdminParticipantManager({
 
   // Guest state
   const [guestName, setGuestName] = useState("");
-  const [guestBeyblades, setGuestBeyblades] = useState<string[]>(["", "", ""]);
+  const [guestBeyblades, setGuestBeyblades] = useState<string[]>(["", "", "", ""]);
 
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -60,10 +62,13 @@ export default function AdminParticipantManager({
   // Editing a participant's beyblades (registration phase only)
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editSelectedBeys, setEditSelectedBeys] = useState<string[]>([]);
-  const [editGuestBeyblades, setEditGuestBeyblades] = useState<string[]>(["", "", ""]);
+  const [editGuestBeyblades, setEditGuestBeyblades] = useState<string[]>(["", "", "", ""]);
   const [editSaving, setEditSaving] = useState(false);
 
-  const required = deckType === "THREE_ON_THREE" ? 3 : 1;
+  const required = registeredDeckSize(deckType);
+  const plusOne = hasMatchTrio(deckType);
+  // Correcting a registered deck (3on3 + 1 reserva) records who and why.
+  const [editReason, setEditReason] = useState("");
 
   const participantUserIds = new Set(localParticipants.map((p) => p.userId));
   const availablePlayers = allPlayers.filter((p) => !participantUserIds.has(p.id));
@@ -78,7 +83,7 @@ export default function AdminParticipantManager({
     setSelectedUserId("");
     setSelectedBeys([]);
     setGuestName("");
-    setGuestBeyblades(["", "", ""]);
+    setGuestBeyblades(["", "", "", ""]);
     setError(null);
   }
 
@@ -178,7 +183,7 @@ export default function AdminParticipantManager({
     setError(null);
     if (p.user.isGuest) {
       const names = p.currentBeyblades.map((b) => b.name);
-      setEditGuestBeyblades([names[0] ?? "", names[1] ?? "", names[2] ?? ""]);
+      setEditGuestBeyblades([names[0] ?? "", names[1] ?? "", names[2] ?? "", names[3] ?? ""]);
     } else {
       setEditSelectedBeys(p.currentBeyblades.map((b) => b.id));
     }
@@ -188,7 +193,7 @@ export default function AdminParticipantManager({
   function closeEdit() {
     setEditingUserId(null);
     setEditSelectedBeys([]);
-    setEditGuestBeyblades(["", "", ""]);
+    setEditGuestBeyblades(["", "", "", ""]);
   }
 
   function toggleEditBey(id: string) {
@@ -205,7 +210,8 @@ export default function AdminParticipantManager({
 
     const body = p.user.isGuest
       ? { userId: p.userId, guestBeyblades: editGuestBeyblades.filter((b) => b.trim()) }
-      : { userId: p.userId, beybladeIds: editSelectedBeys };
+      : { userId: p.userId, beybladeIds: editSelectedBeys, reason: editReason.trim() || undefined };
+    if (p.user.isGuest) Object.assign(body, { reason: editReason.trim() || undefined });
 
     let res: Response;
     try {
@@ -225,6 +231,7 @@ export default function AdminParticipantManager({
 
     if (res.ok) {
       flash("ok", `Combos de ${p.user.name} atualizados.`);
+      setEditReason("");
       closeEdit();
       router.refresh();
     } else {
@@ -447,6 +454,11 @@ export default function AdminParticipantManager({
                         {p.currentBeyblades.map((b) => b.name).join(", ")}
                       </div>
                     )}
+                    {required > 1 && p.currentBeyblades.length !== required && (
+                      <div className="text-[11px] font-bold text-amber-400 mt-0.5">
+                        Deck incompleto: {p.currentBeyblades.length} de {required} Beyblades
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -501,7 +513,8 @@ export default function AdminParticipantManager({
                     <input
                       type="checkbox"
                       checked={p.beybladeInspected}
-                      disabled={togglingFlag === `${p.userId}:beybladeInspected`}
+                      disabled={togglingFlag === `${p.userId}:beybladeInspected` || (plusOne && !p.beybladeInspected && p.currentBeyblades.length !== 4)}
+                      title={plusOne && p.currentBeyblades.length !== 4 ? "O deck precisa ter as 4 Beyblades para ser inspecionado" : undefined}
                       onChange={(e) => toggleFlag(p, "beybladeInspected", e.target.checked)}
                       className="accent-brand-yellow"
                     />
@@ -558,9 +571,21 @@ export default function AdminParticipantManager({
                     <p className="text-xs text-gray-500">Este jogador não tem beyblades cadastradas.</p>
                   )}
 
+                  {plusOne && (
+                    <label className="block text-xs text-gray-400">
+                      Motivo da correção (registrado na auditoria)
+                      <input
+                        type="text"
+                        value={editReason}
+                        onChange={(e) => setEditReason(e.target.value)}
+                        placeholder="Ex.: Beyblade trocada na inspeção"
+                        className="mt-1 w-full bg-card border border-line rounded-lg px-3 py-2 text-white text-sm outline-none focus:border-brand-yellow"
+                      />
+                    </label>
+                  )}
                   <button
                     onClick={() => handleEditSave(p)}
-                    disabled={editSaving}
+                    disabled={editSaving || (plusOne && !editReason.trim())}
                     className="bg-brand-yellow hover:bg-brand-yellow-hover text-black font-bold text-sm px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
                   >
                     {editSaving ? "Salvando..." : "Salvar combos"}

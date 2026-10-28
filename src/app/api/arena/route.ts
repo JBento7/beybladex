@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { createHash } from "crypto";
 import { arenaIdentity, arenaMatchWhere } from "@/lib/arenaIdentity";
 import { withObservability } from "@/lib/observability";
+import { usesBattleDeck } from "@/lib/deckFormat";
 
 // The telão polls this several times a minute per display, but between points
 // (and while an arena sits idle) the payload is byte-for-byte identical. Tag
@@ -211,7 +212,7 @@ async function getHandler(req: NextRequest) {
   const setsToWin = (match as { setsToWin?: number | null }).setsToWin ?? match.tournament.setsToWin;
   const pointsToWinSet = (match as { pointsToWinSet?: number | null }).pointsToWinSet ?? match.tournament.pointsToWinSet;
   const maxSets = setsToWin * 2 - 1;
-  const isDeck = match.tournament.deckType === "THREE_ON_THREE";
+  const isDeck = usesBattleDeck(match.tournament.deckType);
 
   const sets = match.sets.map((s) => ({
     setNumber: s.setNumber,

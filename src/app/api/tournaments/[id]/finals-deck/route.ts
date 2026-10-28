@@ -19,6 +19,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   });
   if (!tournament) return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
   if (!isSwissFormat(tournament.format)) return NextResponse.json({ error: "Disponível apenas no formato Suíço." }, { status: 400 });
+  // 3on3 + 1 reserva keeps the original 4: the player already alternates
+  // freely among them before each match — no 5th Beyblade via this flow.
+  if (tournament.deckType === "THREE_ON_THREE_PLUS_ONE") {
+    return NextResponse.json({ error: "No formato 3 on 3 + 1 reserva você já pode alternar entre as 4 Beyblades inscritas antes de cada confronto. Não é possível incluir uma quinta Beyblade." }, { status: 400 });
+  }
   if (tournament.deckType !== "THREE_ON_THREE") return NextResponse.json({ error: "Disponível apenas em torneios 3on3." }, { status: 400 });
 
   const participant = await prisma.tournamentParticipant.findUnique({

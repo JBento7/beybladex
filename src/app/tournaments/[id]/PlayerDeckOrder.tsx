@@ -19,6 +19,7 @@ type State = {
   isDeckThreeOnThree: boolean;
   deckOrders: DeckOrderRow[];
   currentSetBattleCount: number;
+  trio?: { players: { userId: string; active: string[] | null }[] } | null;
 };
 
 // Shown on a player's own device for a 3-on-3 match: lets them pick their deck
@@ -29,11 +30,14 @@ export default function PlayerDeckOrder({
   userId,
   beyblades,
   color = "#f0a500",
+  trioMode = false,
 }: {
   matchId: string;
   userId: string;
   beyblades: BeybladeInfo[];
   color?: string;
+  /** 3on3 + 1 reserva: restrict the order to the confirmed trio. */
+  trioMode?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<State | null>(null);
@@ -96,8 +100,13 @@ export default function PlayerDeckOrder({
     }
   }
 
+  // 3on3 + 1 reserva: the order uses ONLY this match's 3 active Beyblades
+  // (the reserve is never offered). Without a confirmed trio there is no order.
+  const myTrio = trioMode ? state?.trio?.players.find((p) => p.userId === userId)?.active ?? null : null;
+  const orderBeys = trioMode ? (myTrio ? beyblades.filter((b) => myTrio.includes(b.id)) : []) : beyblades;
+
   // Need at least 3 beys; players with more pick which 3 (in the picker).
-  if (beyblades.length < 3) return null;
+  if (!trioMode && beyblades.length < 3) return null;
 
   return (
     <>
@@ -160,15 +169,19 @@ export default function PlayerDeckOrder({
                     <p className="text-xs text-gray-400 text-center mb-3">
                       Toque nas suas beyblades na ordem em que quer usá-las e confirme.
                     </p>
+                    {trioMode && !myTrio ? (
+                      <p className="text-sm text-amber-300 text-center py-4">Confirme primeiro o trio desta partida (botão “Escolher trio”).</p>
+                    ) : (
                     <DeckOrderPicker
                       key={`${currentSetNum}:${cycleIndex}`}
                       title="Escolha a sequência"
-                      beyblades={beyblades}
+                      beyblades={orderBeys}
                       color={color}
                       confirmLabel="Confirmar e enviar"
                       onConfirm={submit}
                       busy={busy}
                     />
+                    )}
                   </>
                 )}
               </>

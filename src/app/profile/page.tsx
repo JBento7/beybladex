@@ -14,6 +14,7 @@ import MyDeckSection from "./MyDeckSection";
 import ProfileBeybladeStats, { type BeybladeWithRecords } from "./ProfileBeybladeStats";
 import type { RecordRow } from "@/app/beyblade/[id]/BeybladeStatsClient";
 import type { Metadata } from "next";
+import { safeCallbackUrl } from "@/lib/safeRedirect";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Meu Perfil" };
@@ -32,7 +33,10 @@ const finishBarColors: Record<string, string> = {
   SPIN_FINISH: "bg-gray-500",
 };
 
-export default async function ProfilePage() {
+export default async function ProfilePage(props: { searchParams?: Promise<{ voltar?: string }> }) {
+  // Came from an event (e.g. "Cadastrar Beyblades" during registration): offer
+  // the way back. Only same-site paths (lib/safeRedirect).
+  const back = safeCallbackUrl((await props.searchParams)?.voltar ?? null);
   const session = await getServerSession(authOptions);
   if (!session) redirect("/login");
 
@@ -154,6 +158,11 @@ export default async function ProfilePage() {
     <div className="min-h-screen bg-app">
       <Navbar />
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {back && (
+          <a href={back} className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-brand-yellow/40 bg-brand-yellow/10 px-4 py-3 text-sm font-semibold text-brand-yellow">
+            Cadastre suas Beyblades abaixo e depois volte para concluir a inscrição. <span className="underline whitespace-nowrap">Voltar ao torneio →</span>
+          </a>
+        )}
         {/* Profile Header */}
         <div className="bg-card border border-line rounded-2xl p-8 mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">

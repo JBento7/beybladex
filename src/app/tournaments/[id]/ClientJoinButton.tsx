@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { LineBadge } from "@/components/LineBadge";
+import { checkRegisteredDeck, findDuplicateParts, hasMatchTrio, PLUS_ONE_PARTS_RULE, registeredDeckSize, validTrios } from "@/lib/deckFormat";
 
 interface Beyblade {
   id: string;
@@ -13,28 +14,6 @@ interface Beyblade {
   lockChip: string | null;
   metalBlade: string | null;
   beyLine: string | null;
-}
-
-function findDuplicateParts(beys: Beyblade[]): string[] {
-  const PARTS: [keyof Beyblade, string][] = [
-    ["blade", "Blade"],
-    ["ratchet", "Ratchet"],
-    ["bit", "Bit"],
-    ["lockChip", "Lock Chip"],
-    ["metalBlade", "Metal Blade"],
-  ];
-  const seen = new Map<string, string>();
-  const dupes = new Set<string>();
-  for (const bey of beys) {
-    for (const [field, label] of PARTS) {
-      const val = bey[field];
-      if (!val) continue;
-      const key = `${field}:${(val as string).trim().toLowerCase()}`;
-      if (seen.has(key)) dupes.add(`${label} "${val}"`);
-      else seen.set(key, label);
-    }
-  }
-  return [...dupes];
 }
 
 export default function ClientJoinButton({
@@ -59,7 +38,8 @@ export default function ClientJoinButton({
   const [deckStep, setDeckStep] = useState<"ask" | "manual">("ask");
   const router = useRouter();
 
-  const required = deckType === "THREE_ON_THREE" ? 3 : 1;
+  const required = registeredDeckSize(deckType);
+  const plusOne = hasMatchTrio(deckType);
 
   useEffect(() => {
     if (!showModal) return;
@@ -102,14 +82,11 @@ export default function ClientJoinButton({
       setErr(`Selecione exatamente ${required} combo${required > 1 ? "s" : ""}.`);
       return;
     }
-    // Client-side duplicate parts guard for official tournaments
-    if (isOfficial && ids.length > 1) {
-      const selBeys = beyblades.filter((b) => ids.includes(b.id));
-      const dupes = findDuplicateParts(selBeys);
-      if (dupes.length > 0) {
-        setErr(`Peças repetidas não permitidas: ${dupes.join(", ")}.`);
-        return;
-      }
+    // Client-side guard (the server checks again): count, distinct and, in
+    // official events, the parts rule of the deck format (lib/deckFormat).
+    {
+      const check = checkRegisteredDeck(deckType, ids.map((id) => beyblades.find((b) => b.id === id) ?? { id }), isOfficial);
+      if (!check.ok) { setErr(check.error); return; }
     }
     if (loading) return; // a second tap while sending must not register twice
     setErr(null);
@@ -156,10 +133,13 @@ export default function ClientJoinButton({
   // Show the "ask featured deck" step only for required > 1 and when featured deck is available
   const showAskStep = deckStep === "ask" && featuredReady && required > 1 && !loadingBB && !loadError;
 
-  // Live duplicate-parts warning for official tournaments
-  const liveDupes = isOfficial && selected.length > 1
-    ? findDuplicateParts(beyblades.filter((b) => selected.includes(b.id)))
-    : [];
+  // Live parts warning for official tournaments. 3on3 + 1 reserva: the rule
+  // is about the active trio, so the 4 may share parts as long as at least
+  // one trio of 3 is valid.
+  const selectedBeys = beyblades.filter((b) => selected.includes(b.id));
+  const liveDupes = isOfficial && !plusOne && selected.length > 1 ? findDuplicateParts(selectedBeys) : [];
+  const liveTrios = plusOne && selected.length === 4 ? validTrios(selectedBeys, isOfficial).length : null;
+  const noValidTrio = liveTrios === 0;
 
   return (
     <>
@@ -248,11 +228,25 @@ export default function ClientJoinButton({
             ) : (
               /* ── Manual selection ── */
               <div className="flex flex-col flex-1 min-h-0">
-                <p className="text-sm text-gray-400 mb-4">
-                  {required === 3
-                    ? "Selecione exatamente 3 combos do seu repertório."
-                    : "Selecione 1 combo do seu repertório."}
+                <p className="text-sm text-gray-400 mb-2">
+                  {plusOne
+                    ? "Selecione 4 Beyblades — 3 serão usadas por confronto e 1 ficará como reserva."
+                    : required === 3
+                      ? "Selecione exatamente 3 combos do seu repertório."
+                      : "Selecione 1 combo do seu repertório."}
                 </p>
+                {plusOne && (
+                  <p className="text-sm font-bold mb-3" aria-live="polite" style={{ color: selected.length === 4 ? "#22c55e" : "#f0a500" }}>
+                    {selected.length} de 4 selecionadas
+                    <span className="font-normal text-xs text-gray-400"> · a reserva é escolhida em cada confronto, não agora</span>
+                  </p>
+                )}
+                {plusOne && beyblades.length > 0 && beyblades.length < 4 && (
+                  <div role="alert" className="mb-3 text-xs px-3 py-2 rounded-lg bg-yellow-900/20 border border-yellow-600/40 text-yellow-300">
+                    Você tem {beyblades.length} Beyblade(s) no repertório — este formato exige 4.{" "}
+                    <a href={`/profile?voltar=${encodeURIComponent(`/tournaments/${tournamentId}`)}`} className="underline font-semibold">Cadastrar Beyblades</a>
+                  </div>
+                )}
 
                 {err && (
                   <div role="alert" className="mb-3 text-sm px-3 py-2 rounded-lg bg-danger-bg border border-danger/40 text-danger">
@@ -266,9 +260,19 @@ export default function ClientJoinButton({
                   </div>
                 )}
 
+                {noValidTrio && (
+                  <div role="alert" className="mb-3 text-xs px-3 py-2 rounded-lg bg-yellow-900/20 border border-yellow-600/40 text-yellow-400">
+                    ⚠️ Nenhum trio entre estas 4 é válido (peças repetidas). Troque pelo menos uma.
+                  </div>
+                )}
+                {plusOne && liveTrios != null && liveTrios > 0 && isOfficial && (
+                  <div className="mb-3 text-xs px-3 py-2 rounded-lg bg-field border border-line text-gray-300">
+                    {liveTrios} de 4 trios possíveis respeitam a regra de peças.
+                  </div>
+                )}
                 {isOfficial && required > 1 && (
-                  <div className="mb-3 text-[10px] text-gray-600 bg-field rounded-lg px-3 py-2">
-                    Torneio oficial — as 3 beyblades não podem compartilhar nenhuma peça (blade, ratchet, bit).
+                  <div className="mb-3 text-xs text-gray-400 bg-field rounded-lg px-3 py-2">
+                    {plusOne ? PLUS_ONE_PARTS_RULE : "Torneio oficial — as 3 beyblades não podem compartilhar nenhuma peça (blade, ratchet, bit)."}
                   </div>
                 )}
 
@@ -276,7 +280,7 @@ export default function ClientJoinButton({
                   {beyblades.length === 0 ? (
                     <div className="text-center py-6">
                       <p className="text-gray-400 text-sm">Você não tem combos cadastrados.</p>
-                      <a href="/profile" className="text-brand-yellow text-sm underline mt-1 inline-block">
+                      <a href={`/profile?voltar=${encodeURIComponent(`/tournaments/${tournamentId}`)}`} className="text-brand-yellow text-sm underline mt-1 inline-block">
                         Cadastrar combos no perfil →
                       </a>
                     </div>
@@ -287,8 +291,11 @@ export default function ClientJoinButton({
                       return (
                         <button
                           key={b.id}
+                          type="button"
+                          aria-pressed={isSelected}
+                          disabled={!isSelected && required > 1 && selected.length >= required}
                           onClick={() => toggleSelect(b.id)}
-                          className={`w-full text-left p-3 rounded-xl border transition-all ${
+                          className={`w-full text-left p-3 min-h-[52px] rounded-xl border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                             isSelected
                               ? "border-brand-yellow bg-brand-yellow/10"
                               : "border-line bg-field hover:border-gray-600"
@@ -332,7 +339,7 @@ export default function ClientJoinButton({
                   )}
                   <button
                     onClick={() => handleJoin(selected)}
-                    disabled={loading || selected.length !== required || liveDupes.length > 0}
+                    disabled={loading || selected.length !== required || liveDupes.length > 0 || noValidTrio}
                     className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold py-2.5 rounded-xl transition-colors"
                   >
                     {loading ? "Inscrevendo..." : `Confirmar (${selected.length}/${required})`}

@@ -5,6 +5,10 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { randomBytes } from "crypto";
+import { Prisma } from "@prisma/client";
+import { deckColumns, prepareDeck } from "@/lib/deckRegistration";
+import { hasMatchTrio, registeredDeckSize, registeredIds, registrationComplete } from "@/lib/deckFormat";
+import { auditAdminAction } from "@/lib/adminAudit";
 
 // POST — admin adds a registered player OR a guest to a tournament
 // Registered: { userId, beybladeIds?: string[] }
@@ -57,7 +61,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         ? body.guestBeyblades.map((s) => s.trim()).filter(Boolean)
         : [];
 
-      const required = tournament.deckType === "THREE_ON_THREE" ? 3 : 1;
+      const required = registeredDeckSize(tournament.deckType);
       if (guestBeyblades.length > 0 && guestBeyblades.length !== required) {
         return NextResponse.json(
           { error: `Informe exatamente ${required} beyblade(s) para o convidado ou deixe em branco.` },
@@ -86,9 +90,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           data: {
             tournamentId: params.id,
             userId: shadowUser.id,
-            beyblade1: createdBeys[0]?.id ?? null,
-            beyblade2: createdBeys[1]?.id ?? null,
-            beyblade3: createdBeys[2]?.id ?? null,
+            ...(createdBeys.length ? deckColumns(createdBeys) : {}),
           },
           include: { user: { select: { id: true, name: true, isGuest: true } } },
         });
@@ -101,31 +103,37 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const { userId, beybladeIds = [] } = body;
     if (!userId) return NextResponse.json({ error: "userId ou guestName é obrigatório" }, { status: 400 });
 
-    const ids = Array.isArray(beybladeIds) ? beybladeIds.filter(Boolean) : [];
-
-    const [user, existing, owned] = await Promise.all([
+    const [user, existing] = await Promise.all([
       prisma.user.findFirst({ where: { id: userId, deleted: false }, select: { id: true } }),
       prisma.tournamentParticipant.findUnique({
         where: { tournamentId_userId: { tournamentId: params.id, userId } },
       }),
-      ids.length > 0
-        ? prisma.beyblade.findMany({ where: { id: { in: ids }, userId } })
-        : Promise.resolve([]),
     ]);
 
     if (!user) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
     if (existing) return NextResponse.json({ error: "Jogador já inscrito" }, { status: 409 });
-    if (ids.length > 0 && owned.length !== ids.length) {
-      return NextResponse.json({ error: "Algumas beyblades não pertencem ao jogador" }, { status: 400 });
+    // 3on3 + 1 reserva: no deck yet (completed later) or exactly 4 owned,
+    // distinct, with a valid trio in official events (lib/deckFormat). Other
+    // formats keep accepting a partial deck, as before.
+    let deckData: Record<string, unknown> = {};
+    if (hasMatchTrio(tournament.deckType)) {
+      const deck = await prepareDeck({ deckType: tournament.deckType, official: tournament.isOfficial, ownerId: userId, ids: beybladeIds, allowEmpty: true });
+      if (!deck.ok) return NextResponse.json({ error: deck.error, duplicateParts: deck.duplicateParts }, { status: deck.status });
+      deckData = deck.columns ?? {};
+    } else {
+      const ids = Array.isArray(beybladeIds) ? beybladeIds.filter(Boolean) : [];
+      const owned = ids.length > 0 ? await prisma.beyblade.findMany({ where: { id: { in: ids }, userId } }) : [];
+      if (ids.length > 0 && owned.length !== ids.length) {
+        return NextResponse.json({ error: "Algumas beyblades não pertencem ao jogador" }, { status: 400 });
+      }
+      deckData = { beyblade1: ids[0] ?? null, beyblade2: ids[1] ?? null, beyblade3: ids[2] ?? null };
     }
 
     const participant = await prisma.tournamentParticipant.create({
       data: {
         tournamentId: params.id,
         userId,
-        beyblade1: ids[0] ?? null,
-        beyblade2: ids[1] ?? null,
-        beyblade3: ids[2] ?? null,
+        ...deckData,
       },
       include: { user: { select: { id: true, name: true, isGuest: true } } },
     });
@@ -158,6 +166,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       hasPaid?: boolean;
       beybladeInspected?: boolean;
       approved?: boolean;
+      reason?: string;
     } = {};
     try { body = await req.json(); } catch { /* empty body */ }
 
@@ -179,6 +188,11 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         return NextResponse.json({ error: "Participante não encontrado" }, { status: 404 });
       }
 
+      // 3on3 + 1 reserva: an incomplete deck (≠ 4) can't be marked inspected
+      // or approved as complete.
+      if (hasMatchTrio(tournament.deckType) && (body.beybladeInspected === true || body.approved === true) && !registrationComplete(tournament.deckType, participant)) {
+        return NextResponse.json({ error: `Deck incompleto: ${registeredIds(participant).length} de 4 Beyblades. Complete o deck antes de inspecionar ou aprovar.` }, { status: 400 });
+      }
       const data: { hasPaid?: boolean; beybladeInspected?: boolean; approved?: boolean } = {};
       if (typeof body.hasPaid === "boolean") data.hasPaid = body.hasPaid;
       if (typeof body.beybladeInspected === "boolean") data.beybladeInspected = body.beybladeInspected;
@@ -220,7 +234,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         ? body.guestBeyblades.map((s) => s.trim()).filter(Boolean)
         : [];
 
-      const required = tournament.deckType === "THREE_ON_THREE" ? 3 : 1;
+      const required = registeredDeckSize(tournament.deckType);
       if (guestBeyblades.length > 0 && guestBeyblades.length !== required) {
         return NextResponse.json(
           { error: `Informe exatamente ${required} beyblade(s) para o convidado ou deixe em branco.` },
@@ -228,7 +242,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         );
       }
 
-      const oldIds = [participant.beyblade1, participant.beyblade2, participant.beyblade3].filter(Boolean) as string[];
+      const oldIds = registeredIds(participant);
 
       const updated = await prisma.$transaction(async (tx) => {
         const createdBeys = [];
@@ -238,11 +252,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
 
         const result = await tx.tournamentParticipant.update({
           where: { id: participant.id },
-          data: {
-            beyblade1: createdBeys[0]?.id ?? null,
-            beyblade2: createdBeys[1]?.id ?? null,
-            beyblade3: createdBeys[2]?.id ?? null,
-          },
+          data: createdBeys.length ? deckColumns(createdBeys) : { beyblade1: null, beyblade2: null, beyblade3: null, beyblade4: null, deckSnapshot: Prisma.DbNull, deckSnapshotAt: null },
         });
 
         if (oldIds.length > 0) {
@@ -257,6 +267,25 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     }
 
     // ── REGISTERED USER PATH ────────────────────────────────────────────────
+    if (hasMatchTrio(tournament.deckType)) {
+      // Organization correcting a 4-Beyblade deck: permission (ORGANIZER in
+      // scope, checked above), mandatory reason, before/after in the audit.
+      // Only during registration, so no match trio exists yet to revalidate.
+      const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 300) : "";
+      if (!reason) return NextResponse.json({ error: "Informe o motivo da correção do deck." }, { status: 400 });
+      const deck = await prepareDeck({ deckType: tournament.deckType, official: tournament.isOfficial, ownerId: userId, ids: body.beybladeIds, allowEmpty: true });
+      if (!deck.ok) return NextResponse.json({ error: deck.error, duplicateParts: deck.duplicateParts }, { status: deck.status });
+      const before = registeredIds(participant);
+      const cols = deck.columns ?? { beyblade1: null, beyblade2: null, beyblade3: null, beyblade4: null, deckSnapshot: Prisma.DbNull, deckSnapshotAt: null };
+      const after = deck.columns ? registeredIds(deck.columns) : [];
+      const updated = await prisma.tournamentParticipant.update({
+        where: { id: participant.id },
+        data: { ...cols, ...(before.join() !== after.join() ? { beybladeInspected: false } : {}) },
+      });
+      await auditAdminAction({ kind: "DECK_CORRECTION", session, tournamentId: params.id, reason, before: { userId, beyblades: before }, after: { userId, beyblades: after } });
+      return NextResponse.json(updated);
+    }
+
     const ids = Array.isArray(body.beybladeIds) ? body.beybladeIds.filter(Boolean) : [];
 
     if (new Set(ids).size !== ids.length) {
