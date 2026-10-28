@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { errorResponse } from "@/lib/observability";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const MAX_SIZE_MB = 3;
@@ -35,6 +36,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ path: dataUrl });
   } catch (e) {
     console.error("[upload] error:", e);
-    return NextResponse.json({ error: `Erro interno: ${String(e)}` }, { status: 500 });
+    return errorResponse("/api/admin/beyparts/upload", e, "Erro interno. Tente novamente.");
   }
 }

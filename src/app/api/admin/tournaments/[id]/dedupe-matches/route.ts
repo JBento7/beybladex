@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { recalculateStandings } from "@/lib/tournament-engine";
+import { errorResponse } from "@/lib/observability";
 
 // ORGANIZER-only: duplicate matches (same round + same unordered pair).
 // Default = simulation (no writes). With { apply: true, reason } it removes
@@ -74,6 +75,6 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     return NextResponse.json({ ok: true, removed: removable.length, needsDecision });
   } catch (err) {
     console.error("[dedupe-matches]", err);
-    return NextResponse.json({ error: `Erro ao remover duplicadas: ${String(err)}` }, { status: 500 });
+    return errorResponse("/api/admin/tournaments/[id]/dedupe-matches", err, "Erro ao remover duplicadas. Tente novamente.");
   }
 }

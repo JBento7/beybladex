@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { getSwissRounds, repairSwissRound } from "@/lib/tournament-engine";
+import { errorResponse } from "@/lib/observability";
 
 // ORGANIZER-only controlled repair of Swiss rounds (replaces the old automatic
 // "balancear", which could give a player a second match in a round and tore
@@ -39,6 +40,6 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     return NextResponse.json({ simulation: true, plans });
   } catch (err) {
     console.error("[balance-matches]", err);
-    return NextResponse.json({ error: `Erro no reparo: ${String(err)}` }, { status: 500 });
+    return errorResponse("/api/admin/tournaments/[id]/balance-matches", err, "Erro no reparo. Tente novamente.");
   }
 }

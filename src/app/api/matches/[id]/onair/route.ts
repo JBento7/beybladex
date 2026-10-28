@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
+import { errorResponse } from "@/lib/observability";
 
 // Heartbeat: while a judge keeps the scoreboard ("Placar") open, this is POSTed
 // periodically to stamp Match.onAirAt = now. The arena display only shows a
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     });
   } catch (e) {
     return NextResponse.json(
-      { error: "Banco desatualizado — rode /api/migrate", detail: String(e).slice(0, 200) },
+      { error: "Banco desatualizado — rode /api/migrate" },
       { status: 500 }
     );
   }

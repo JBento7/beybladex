@@ -7,6 +7,7 @@ import {
 } from "./swiss";
 import { Prisma } from "@prisma/client";
 import { revalidateRankings } from "./leagueRanking";
+import { logEvent } from "./observability";
 
 // Returns the userIds of every registered judge for a tournament. Used by the
 // match schedulers so judges never get a parallel match while arbitrating.
@@ -158,7 +159,11 @@ export const RANKING_POINTS_BY_PLACE = [100, 70, 50, 30, 10];
 // far each player advanced (bracket placement), so the champion always places
 // 1st. Points-based formats (ROUND_ROBIN, GROUPS) are ranked by totalPoints,
 // tie-broken by point differential (points scored - points conceded).
-export async function finalizeTournamentRanking(tournamentId: string) {
+export type ComputedPlacement = { participantId: string; userId: string; name: string; placement: number; rankingPoints: number };
+
+/** The final ranking a finalization WOULD write — no writes (used by
+ *  finalizeTournamentRanking and by the admin dry-run of a recalculation). */
+export async function computeTournamentRanking(tournamentId: string): Promise<ComputedPlacement[]> {
   const [tournament, participants, allMatchRows] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true, qualifiers: true } }),
     prisma.tournamentParticipant.findMany({
@@ -266,18 +271,28 @@ export async function finalizeTournamentRanking(tournamentId: string) {
   // the event has a bracket, only players who actually reached it score. Everyone
   // else still gets a placement (for the final table/certificates) but 0 points.
   // Without a knockout (pure Swiss / other formats) the top placements score.
+  return ranked.map((p, idx) => {
+    const eligible = !isSwissPlayoff || inPlayoff.has(p.userId!);
+    return {
+      participantId: p.id,
+      userId: p.userId!,
+      name: p.user?.bladerName || p.user?.name || "",
+      placement: idx + 1,
+      rankingPoints: eligible ? (RANKING_POINTS_BY_PLACE[idx] ?? 0) : 0,
+    };
+  });
+}
+
+export async function finalizeTournamentRanking(tournamentId: string) {
+  const computed = await computeTournamentRanking(tournamentId);
   await Promise.all(
-    ranked.map((p, idx) => {
-      const eligible = !isSwissPlayoff || inPlayoff.has(p.userId!);
-      return prisma.tournamentParticipant.update({
-        where: { id: p.id },
+    computed.map((c) =>
+      prisma.tournamentParticipant.update({
+        where: { id: c.participantId },
         // placement is 1-based final standing; feeds certificates and profile badges.
-        data: {
-          rankingPoints: eligible ? (RANKING_POINTS_BY_PLACE[idx] ?? 0) : 0,
-          placement: idx + 1,
-        },
-      });
-    })
+        data: { rankingPoints: c.rankingPoints, placement: c.placement },
+      })
+    )
   );
 
   await prisma.tournament.update({
@@ -457,7 +472,7 @@ async function advanceSwissTournamentUnlocked(tournamentId: string, completedRou
   // round (or a broken bye) stops the event until an organizer resolves it.
   const issues = await auditTournament(tournamentId);
   if (hasBlocking(issues)) {
-    console.warn("[swiss] avanço bloqueado por inconsistência", tournamentId, issues.filter((x) => x.severity === "bloqueante").map((x) => x.message));
+    logEvent("advance_blocked", { reason: "integrity", tournamentId, issues: issues.filter((x) => x.severity === "bloqueante").length });
     return;
   }
   // More Swiss rounds to play.
@@ -468,7 +483,7 @@ async function advanceSwissTournamentUnlocked(tournamentId: string, completedRou
   // Last Swiss round finished → cut to the knockout, or finalize the standings.
   const cutCheck = validateCut(tournament?.qualifiers ?? null, participantCount);
   if (cutCheck.mode === "error") {
-    console.warn("[swiss] corte inválido", tournamentId, cutCheck.message);
+    logEvent("advance_blocked", { reason: "invalid_cut", tournamentId });
     return; // stays IN_PROGRESS; the page/diagnostics show the configuration problem
   }
   if (cutCheck.mode === "none") {
@@ -870,7 +885,7 @@ async function advanceSingleEliminationUnlocked(
   if (winners.length < 2) {
     // Tournament complete — but never certify inconsistent records.
     const issues = await auditTournament(tournamentId);
-    if (hasBlocking(issues)) { console.warn("[knockout] finalização bloqueada por inconsistência", tournamentId); return; }
+    if (hasBlocking(issues)) { logEvent("advance_blocked", { reason: "knockout_integrity", tournamentId }); return; }
     await finalizeTournamentRanking(tournamentId);
     return;
   }

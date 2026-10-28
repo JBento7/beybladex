@@ -4,11 +4,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { arenaIdentity, arenaMatchWhere, arenaSignalKey } from "@/lib/arenaIdentity";
+import { withObservability } from "@/lib/observability";
 
 // Lightweight countdown poll for one arena: a single indexed query returning
 // only the current countdown signal. The telão polls this fast (so the video
 // starts almost immediately) while the heavy /api/arena poll stays slower.
-export async function GET(req: NextRequest) {
+async function getHandler(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -70,3 +71,5 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ countdown, finish, launch, ready });
 }
+
+export const GET = withObservability("/api/arena/tick", getHandler, { logSuccess: "slow" });

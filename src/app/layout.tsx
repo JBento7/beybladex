@@ -3,6 +3,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import ConnectionBanner from "@/components/ConnectionBanner";
+import WebVitals from "@/components/WebVitals";
 import CommunityTheme from "@/components/CommunityTheme";
 import { COMMUNITY_COOKIE } from "@/lib/communities";
 import { cookies } from "next/headers";
@@ -59,6 +60,7 @@ export default async function RootLayout(
       <body className="bg-app text-fg font-sans min-h-screen">
         <ServiceWorkerRegister />
         <ConnectionBanner />
+        <WebVitals />
         <Providers>
           <CommunityTheme initial={(await cookies()).get(COMMUNITY_COOKIE)?.value ?? null}>{children}</CommunityTheme>
         </Providers>

@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { RANKING_POINTS_BY_PLACE } from "@/lib/tournament-engine";
+import { auditAdminAction } from "@/lib/adminAudit";
 
 // ORGANIZER-only manual podium override.
 //
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   try {
     const participants = await prisma.tournamentParticipant.findMany({
       where: { tournamentId: params.id, approved: { not: false } },
-      select: { id: true, userId: true, totalPoints: true, user: { select: { name: true, bladerName: true } } },
+      select: { id: true, userId: true, totalPoints: true, placement: true, rankingPoints: true, user: { select: { name: true, bladerName: true } } },
     });
     if (!participants.length) {
       return NextResponse.json({ error: "Torneio sem participantes aprovados." }, { status: 400 });
@@ -73,10 +74,16 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         })
       ),
     ];
+    const before = participants.map((p) => ({ userId: p.userId, placement: p.placement, rankingPoints: p.rankingPoints }));
     await prisma.$transaction(writes);
 
     // The podium is the final word on this event — make sure it reads as closed.
     await prisma.tournament.update({ where: { id: params.id }, data: { status: "FINISHED" } });
+    await auditAdminAction({
+      kind: "PODIUM_SET", session, tournamentId: params.id,
+      before: { participants: before },
+      after: { podium: order.map((userId, idx) => ({ userId, placement: idx + 1, rankingPoints: RANKING_POINTS_BY_PLACE[idx] ?? 0 })), others: rest.length },
+    });
 
     return NextResponse.json({
       ok: true,
@@ -92,6 +99,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     });
   } catch (err) {
     console.error("[podium]", err);
-    return NextResponse.json({ error: `Erro ao definir pódio: ${String(err)}` }, { status: 500 });
+    return NextResponse.json({ error: "Erro ao definir pódio. Tente novamente." }, { status: 500 });
   }
 }

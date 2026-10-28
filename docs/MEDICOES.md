@@ -37,3 +37,48 @@ Avaliados com `EXPLAIN ANALYZE` na base em escala:
   - partidas por jogador (`Match_player1Id` e `player2Id`);
   - pontos por jogador (`MatchPoint_userId`);
   - lista de torneios (600 linhas).
+
+## Final — referência `6b50e09` × versão atual (Next 16)
+
+Comparação no mesmo banco sintético em escala (cópias idênticas para as duas versões) e na mesma máquina.
+- **Rotas no servidor:** mediana de 3 requisições após aquecimento.
+- **Web Vitals:** mediana de 5 execuções.
+- **Rede lenta:** mediana de 3 (400 ms de latência, 400 kbit/s).
+
+### Servidor
+
+| Rota | Antes | Depois |
+|---|---|---|
+| `/tournaments` | 853 ms · 3 476 KB | 118 ms · 411 KB |
+| `/tournaments?status=anteriores` | 801 ms · 3 179 KB | 46 ms · 164 KB |
+| `/tournaments?q=…` | 185 ms · 615 KB | 46 ms · 95 KB |
+| `/community` | 3 928 ms · 14 510 KB · 137 ms de SQL | 126 ms · 187 KB · 39 ms de SQL |
+| `/community?c=lbm` | 1 240 ms · 4 861 KB | 126 ms · 187 KB |
+| `/dashboard` | 192 ms · 113 ms de SQL | 60 ms · 26 ms de SQL |
+| Torneio · Regras | 66 ms · 15 consultas | 30 ms · 8 consultas |
+| `/rankings` | 60 ms · 2 consultas | 29 ms · 0 consultas (cache) |
+| Torneio · Classificação | 65 ms · 82 KB | 57 ms · 190 KB (*) |
+| Versão (polling) | 9 ms · 2,0 ms de SQL | 10 ms · 0,2 ms de SQL |
+| Telão · dados | 51 ms · 29 ms de SQL | 68 ms · 44 ms de SQL (**) |
+
+(*) A página ficou maior porque a auditoria do suíço passou a mostrar avisos de integridade e a classificação detalhada.
+
+(**) Uma única série de medições, com diferença pequena em valor absoluto. Não foi investigada.
+
+### Navegador
+
+| Medida | Antes | Depois |
+|---|---|---|
+| 1ª visita a `/` (1280 px, 15 s) | 30 requisições · 1 679 KB | 24 requisições · 840 KB |
+| Requisições em 60 s, telão ativo | 69 (4 KB) | 42 (2 KB) |
+| Requisições em 60 s, página de evento ao vivo | 15 | 15, cada uma lendo 1 inteiro (0,2 ms de SQL) |
+| LCP, início em 390 px | 196 ms | 132 ms |
+| LCP, início em 1280 px | 208 ms | 152 ms |
+| LCP, evento em 390 px | 232 ms | 204 ms |
+| LCP, evento em 1280 px | 228 ms | 384 ms (***) |
+| CLS | 0 | 0 |
+| Rede lenta: `/` carregada | 27,5 s | 8,3 s |
+| Rede lenta: evento carregado | 27,8 s | 8,2 s |
+| Rede lenta: `/tournaments` | FCP 5,0 s · load 33,6 s | FCP 2,6 s · load 9,2 s |
+
+(***) Na versão atual, o maior elemento da tela (LCP) passou a ser o aviso "Registros inconsistentes", que aparece porque os dados sintéticos repetem jogadores numa rodada. O título do evento é pintado mais cedo: 196 ms contra 236 ms. Com dados consistentes, esse aviso não aparece.

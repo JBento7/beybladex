@@ -6,15 +6,29 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { STATE_VERSION_TRIGGER_SQL } from "@/lib/sql/stateVersionTriggers";
+import { logEvent, withObservability } from "@/lib/observability";
 
-// One-time migration endpoint to apply missing schema columns.
-// Restricted to signed-in organizers — it runs destructive DDL.
-// Call: GET /api/migrate (while logged in as an ORGANIZER)
+// Legacy schema-compatibility endpoint (additive DDL only: ADD COLUMN /
+// CREATE TABLE / CREATE INDEX IF NOT EXISTS, constraints, triggers).
+// The supported path is now the versioned migrations in prisma/migrations
+// (docs/OPERACAO.md); this route stays for databases that predate them.
+//  - POST only (a GET must never change the database);
+//  - only an unscoped admin (ORGANIZER without adminCommunity);
+//  - data fixes that rewrote existing rows were removed from here
+//    (docs/sql/legacy-data-fixes.sql — manual, reviewed, never automatic).
 export async function GET() {
+  return NextResponse.json(
+    { error: "Use POST (somente administrador geral). Veja docs/OPERACAO.md — o caminho recomendado é prisma migrate deploy." },
+    { status: 405, headers: { Allow: "POST" } }
+  );
+}
+
+async function postHandler() {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "ORGANIZER") {
+  if (!session || session.user.role !== "ORGANIZER" || session.user.adminCommunity) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
+  logEvent("schema_compat_run", { actorId: session.user.id });
 
   const results: Record<string, string> = {};
 
@@ -172,11 +186,6 @@ export async function GET() {
     {
       name: "User.isGuest",
       sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isGuest" BOOLEAN NOT NULL DEFAULT false`,
-    },
-    {
-      // Clean up any orphan guest participants created while userId was nullable
-      name: "Delete null-userId participants",
-      sql: `DELETE FROM "TournamentParticipant" WHERE "userId" IS NULL`,
     },
     {
       name: "Restore TournamentParticipant.userId NOT NULL",
@@ -574,28 +583,6 @@ export async function GET() {
       sql: `DO $$ BEGIN ALTER TABLE "PollAnswer" ADD CONSTRAINT "PollAnswer_questionId_fkey" FOREIGN KEY ("questionId") REFERENCES "PollQuestion"("id") ON DELETE CASCADE ON UPDATE CASCADE; EXCEPTION WHEN duplicate_object THEN null; END $$`,
     },
     {
-      // Backfill: turn each legacy single-question poll (Announcement.pollType/
-      // options) into its PollQuestion #0, only if it doesn't have one yet.
-      // The old columns are no longer in the Prisma schema but still exist in
-      // the DB, so we read them via raw SQL here.
-      name: "Backfill legacy poll questions",
-      sql: `INSERT INTO "PollQuestion" (id, "announcementId", "order", text, type, options, "createdAt")
-        SELECT 'legacyq_' || substr(md5(a.id), 1, 20), a.id, 0, a.content, a."pollType", a.options, a."createdAt"
-        FROM "Announcement" a
-        WHERE a.type = 'POLL' AND a."pollType" IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM "PollQuestion" q WHERE q."announcementId" = a.id)`,
-    },
-    {
-      // Backfill: move each legacy PollResponse.answerText/selectedOptions
-      // into a PollAnswer row pointing at the question created above.
-      name: "Backfill legacy poll answers",
-      sql: `INSERT INTO "PollAnswer" (id, "responseId", "questionId", "answerText", "selectedOptions")
-        SELECT 'legacya_' || substr(md5(r.id), 1, 20), r.id, q.id, r."answerText", r."selectedOptions"
-        FROM "PollResponse" r
-        JOIN "PollQuestion" q ON q."announcementId" = r."announcementId" AND q."order" = 0
-        WHERE NOT EXISTS (SELECT 1 FROM "PollAnswer" pa WHERE pa."responseId" = r.id AND pa."questionId" = q.id)`,
-    },
-    {
       name: "Match.countdownAt",
       sql: `ALTER TABLE "Match" ADD COLUMN IF NOT EXISTS "countdownAt" TIMESTAMP(3)`,
     },
@@ -712,12 +699,8 @@ export async function GET() {
     { name: "Tournament.isPartnership", sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "isPartnership" BOOLEAN NOT NULL DEFAULT false` },
     { name: "User.adminCommunity", sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "adminCommunity" TEXT` },
     { name: "User.homeCommunity", sql: `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "homeCommunity" TEXT DEFAULT 'lbl'` },
-    { name: "Community branding", sql: `UPDATE "Community" SET "logoUrl" = CASE "slug" WHEN 'lbl' THEN '/lbl-logo.png' WHEN 'lbm' THEN '/lbm-logo.webp' END, "color" = CASE "slug" WHEN 'lbl' THEN '#f0a500' WHEN 'lbm' THEN '#6ac146' END WHERE "slug" IN ('lbl','lbm')` },
     { name: "Tournament.swissRounds", sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "swissRounds" INTEGER` },
     { name: "idx Tournament community", sql: `CREATE INDEX IF NOT EXISTS "Tournament_communitySlug_idx" ON "Tournament" ("communitySlug")` },
-    // Player-created BeyEncontros were all saved as LBL; move each one to its
-    // creator's league (players have no community picker). Idempotent.
-    { name: "BeyEncontro community fix", sql: `UPDATE "Tournament" t SET "communitySlug" = u."homeCommunity" FROM "User" u WHERE u.id = t."organizerId" AND t."isOfficial" = false AND u.role <> 'ORGANIZER' AND u."homeCommunity" IS NOT NULL AND t."communitySlug" IS DISTINCT FROM u."homeCommunity"` },
     // ── Swiss integrity (suico-v2). Additive only: new tables/columns, no data rewritten. ──
     { name: "Tournament.rulesVersion", sql: `ALTER TABLE "Tournament" ADD COLUMN IF NOT EXISTS "rulesVersion" TEXT` },
     { name: "MatchPoint.actionId", sql: `ALTER TABLE "MatchPoint" ADD COLUMN IF NOT EXISTS "actionId" TEXT` },
@@ -776,9 +759,17 @@ export async function GET() {
       await prisma.$executeRawUnsafe(migration.sql);
       results[migration.name] = "OK";
     } catch (e) {
-      results[migration.name] = String(e);
+      const msg = String((e as Error)?.message ?? e);
+      // Already present (e.g. a unique index created by the baseline under the
+      // constraint's name) is the desired end state, not a failure.
+      if (/already exists|42P07|42710|42701/.test(msg)) { results[migration.name] = "OK (já existia)"; continue; }
+      // Admin-only response; keep it short (no full driver error / query).
+      results[migration.name] = `ERRO: ${String((e as { code?: string })?.code ?? "")} ${msg.split("\n")[0].slice(0, 160)}`;
     }
   }
+  logEvent("schema_compat_done", { actorId: session.user.id, failed: Object.values(results).filter((r) => r.startsWith("ERRO")).length });
 
   return NextResponse.json(results);
 }
+
+export const POST = withObservability("/api/migrate", postHandler);

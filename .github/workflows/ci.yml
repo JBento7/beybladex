@@ -1,0 +1,101 @@
+# CI: unit tests, types, lint, build, migrations + integration tests on a
+# disposable Postgres, and the offline/service-worker browser test.
+# No production credentials or secrets: every value below is local to the job.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Types
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint
+      - name: Generated migration is up to date
+        run: node scripts/gen-compat-migration.mjs --check
+      - name: Build
+        run: npm run build
+
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lbl_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/lbl_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Applies every migration from scratch, checks schema == migrations,
+      # then runs tests/integration (registration races, Swiss, scoring, ranking…).
+      - name: Migrations + integration tests
+        run: npm run test:integration
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: checks
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lbl_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/lbl_e2e
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ci-only-not-a-secret
+      E2E_PASSWORD: ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: node scripts/ci-seed-e2e.mjs
+      - run: npm run build
+      # Browser only for this job (not a project dependency).
+      - run: npm install --no-save playwright@1.64.0 && npx playwright install --with-deps chromium
+      - name: Offline cache / service worker e2e
+        run: |
+          npx next start -p 3000 > next.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 1; done
+          curl -sf -o /dev/null http://localhost:3000/ || (cat next.log; exit 1)
+          BASE=http://localhost:3000 USER_A=a@e2e.test USER_B=b@e2e.test ARENA_USER=arena1@lbl.arena PASSWORD="$E2E_PASSWORD" node tests/e2e/offline-cache.e2e.cjs

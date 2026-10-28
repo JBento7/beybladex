@@ -15,6 +15,7 @@ import {
   getSwissRounds,
 } from "@/lib/tournament-engine";
 import { hasBlocking, isSwissFormat } from "@/lib/swiss";
+import { errorResponse, withObservability } from "@/lib/observability";
 
 // ORGANIZER-only: force round advancement for a tournament whose latest round
 // is fully finished but whose next round/knockout was never generated (e.g. the
@@ -22,7 +23,7 @@ import { hasBlocking, isSwissFormat } from "@/lib/swiss";
 // does nothing if the next round already exists or the round isn't complete.
 // Body (optional): { allowRematches: true, reason: "..." } — explicit, logged
 // exception when no Swiss round without rematches exists.
-export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+async function postHandler(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
@@ -94,9 +95,11 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     }
   } catch (e) {
     console.error("[advance-round]", e);
-    return NextResponse.json({ error: `Erro ao avançar: ${String(e)}` }, { status: 500 });
+    return errorResponse("/api/admin/tournaments/[id]/advance-round", e, "Erro ao avançar. Tente novamente.");
   }
 
   const created = await prisma.match.count({ where: { tournamentId: tournament.id, round: round + 1 } });
   return NextResponse.json({ ok: true, round, nextRoundMatches: created });
 }
+
+export const POST = withObservability("/api/admin/tournaments/[id]/advance-round", postHandler);

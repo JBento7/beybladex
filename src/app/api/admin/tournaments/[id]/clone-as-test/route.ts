@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { errorResponse } from "@/lib/observability";
 
 // ORGANIZER-only: duplicate a tournament as a TEST event — same settings, same
 // players, no results. Lets you rehearse the whole flow (start, Swiss rounds and
@@ -107,6 +108,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     });
   } catch (err) {
     console.error("[clone-as-test]", err);
-    return NextResponse.json({ error: `Erro ao duplicar: ${String(err)}` }, { status: 500 });
+    return errorResponse("/api/admin/tournaments/[id]/clone-as-test", err, "Erro ao duplicar. Tente novamente.");
   }
 }

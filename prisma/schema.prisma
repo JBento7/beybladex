@@ -218,6 +218,8 @@ model Tournament {
   beybladeRecords BeybladeMatchRecord[]
   roundLogs       SwissRoundLog[]
   adminActions    TournamentAdminAction[]
+
+  @@index([communitySlug]) // created by /api/migrate since the leagues split; declared so migrations and schema agree
 }
 
 model TournamentJudge {

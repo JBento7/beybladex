@@ -10,6 +10,7 @@ import ResetTokenManager from "./ResetTokenManager";
 import TournamentManager from "./TournamentManager";
 import ResetBeybladeStatsButton from "./ResetBeybladeStatsButton";
 import RecalculateBeybladeStatsButton from "./RecalculateBeybladeStatsButton";
+import KioskAccountsTool from "./KioskAccountsTool";
 import AnnouncementManager from "./AnnouncementManager";
 import PermissionsManager from "./PermissionsManager";
 import type { TournamentFormat, TournamentStatus } from "@prisma/client";
@@ -138,11 +139,12 @@ export default async function AdminPage() {
         {/* Reset Token Management */}
         <ResetTokenManager />
 
-        {/* Recalculate Beyblade Stats (non-destructive) */}
-        <RecalculateBeybladeStatsButton />
+        {/* Kiosk accounts (telão + juiz): random passwords, shown once */}
+        <KioskAccountsTool generalAdmin={!session.user.adminCommunity} />
 
-        {/* Reset Beyblade Stats */}
-        <ResetBeybladeStatsButton />
+        {/* Beyblade stats tools affect both leagues: general admin only */}
+        {!session.user.adminCommunity && <RecalculateBeybladeStatsButton />}
+        {!session.user.adminCommunity && <ResetBeybladeStatsButton />}
 
         {/* Announcements & Polls */}
         <AnnouncementManager />

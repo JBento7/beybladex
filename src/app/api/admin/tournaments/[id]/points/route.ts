@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { auditAdminAction } from "@/lib/adminAudit";
 import { recalculateStandings } from "@/lib/tournament-engine";
 
 // GET — list all matches with points for this tournament
@@ -65,6 +66,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
   });
   const byeIds = byes.filter((m) => m.player1Id === m.player2Id).map((m) => m.id);
 
+  const before = await prisma.matchPoint.aggregate({ where: { match: { tournamentId: params.id } }, _count: { _all: true }, _sum: { points: true } });
   await prisma.$transaction([
     prisma.matchPoint.deleteMany({ where: { match: { tournamentId: params.id } } }),
     prisma.matchSet.deleteMany({ where: { match: { tournamentId: params.id } } }),
@@ -84,5 +86,10 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
     if (p.userId) await recalculateStandings(params.id, p.userId);
   }
 
+  await auditAdminAction({
+    kind: "TOURNAMENT_POINTS_RESET", session, tournamentId: params.id,
+    before: { points: before._count._all, pointSum: before._sum.points ?? 0 },
+    after: { points: 0, byesKept: byeIds.length },
+  });
   return NextResponse.json({ ok: true, byesKept: byeIds.length });
 }

@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createHash } from "crypto";
 import { arenaIdentity, arenaMatchWhere } from "@/lib/arenaIdentity";
+import { withObservability } from "@/lib/observability";
 
 // The telão polls this several times a minute per display, but between points
 // (and while an arena sits idle) the payload is byte-for-byte identical. Tag
@@ -62,7 +63,7 @@ async function lookupPartImage(categories: string[], rawName: string | null): Pr
 // Returns the live scoreboard for one arena. The arena number comes from the
 // logged-in arena user's email (arena{N}@lbl.arena); an ORGANIZER may preview
 // any arena via ?n=N.
-export async function GET(req: NextRequest) {
+async function getHandler(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -562,3 +563,5 @@ export async function GET(req: NextRequest) {
     },
   });
 }
+
+export const GET = withObservability("/api/arena", getHandler, { logSuccess: "slow" });

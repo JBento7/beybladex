@@ -1,6 +1,7 @@
 // Runs tests/integration/* against a DISPOSABLE database given in
 // TEST_DATABASE_URL. Refuses to run against the app's DATABASE_URL so a
-// production/development database is never touched. Pushes the schema first.
+// production/development database is never touched. Rebuilds the database from
+// the versioned migrations (prisma/migrations), so every run also validates them.
 import { execSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 
@@ -12,7 +13,9 @@ if (appUrl && appUrl === url) { console.error("TEST_DATABASE_URL não pode ser o
 if (/vercel|supabase|neon|amazonaws|pooler/i.test(url)) { console.error("TEST_DATABASE_URL parece um banco hospedado. Use um banco local descartável."); process.exit(1); }
 
 const env = { ...process.env, DATABASE_URL: url, DIRECT_URL: url };
-execSync("npx prisma db push --skip-generate --accept-data-loss", { stdio: "inherit", env });
-// Raw-SQL parts of the schema that Prisma doesn't model (event version triggers).
-execSync("npx prisma db execute --file prisma/sql/state_version_triggers.sql --schema prisma/schema.prisma", { stdio: "inherit", env });
+// Disposable database: drop everything and apply every migration from scratch
+// (baseline → schema compat → foreign keys → state-version triggers).
+execSync("npx prisma migrate reset --force --skip-generate --skip-seed", { stdio: "inherit", env });
+// The database must match the schema exactly after the migrations.
+execSync("npx prisma migrate diff --from-url \"$DATABASE_URL\" --to-schema-datamodel prisma/schema.prisma --exit-code", { stdio: "inherit", env });
 execSync('node --import tsx --test --test-concurrency=1 "tests/integration/*.int.test.ts"', { stdio: "inherit", env });

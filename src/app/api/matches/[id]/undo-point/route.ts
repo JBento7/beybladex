@@ -7,11 +7,12 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
+import { withObservability } from "@/lib/observability";
 
 // Remove the most recent point from the current active set.
 // Works only while the match is IN_PROGRESS.
 // Authorized: ORGANIZER, match judge, or tournament organizer.
-export async function DELETE(_req: Request, props: { params: Promise<{ id: string }> }) {
+async function deleteHandler(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { matchId: params.id }); if (denied) return denied; }
@@ -98,3 +99,5 @@ export async function DELETE(_req: Request, props: { params: Promise<{ id: strin
 
   return NextResponse.json({ ok: true });
 }
+
+export const DELETE = withObservability("/api/matches/[id]/undo-point", deleteHandler);

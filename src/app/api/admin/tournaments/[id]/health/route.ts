@@ -10,6 +10,7 @@ import { isSwissFormat } from "@/lib/swiss";
 import { computeSwissStandings } from "@/lib/standings";
 import { auditTournament } from "@/lib/tournament-engine";
 import { recalculateStandings, getSwissRounds } from "@/lib/tournament-engine";
+import { auditAdminAction } from "@/lib/adminAudit";
 
 // ORGANIZER-only health check for a tournament. Detects the damage the fixed
 // bugs could have left behind in existing data, and repairs what can be repaired
@@ -235,6 +236,13 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       });
     }
 
+    if (fix) {
+      await auditAdminAction({
+        kind: "HEALTH_REPAIR", session, tournamentId: params.id,
+        before: { issues: issues.map((i) => ({ code: i.code, count: i.count })) },
+        after: { repaired: JSON.parse(JSON.stringify(repaired ?? null)) },
+      });
+    }
     return NextResponse.json({
       ok: true,
       fixApplied: fix,
@@ -245,6 +253,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     });
   } catch (err) {
     console.error("[health]", err);
-    return NextResponse.json({ error: `Erro no diagnóstico: ${String(err)}` }, { status: 500 });
+    return NextResponse.json({ error: "Erro no diagnóstico. Veja os logs do servidor." }, { status: 500 });
   }
 }

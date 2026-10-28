@@ -3,12 +3,20 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { testToolsAllowed, TEST_TOOLS_DISABLED_MESSAGE } from "@/lib/adminAudit";
+import { errorResponse } from "@/lib/observability";
 
+// Test tool: POST only, and disabled in production (lib/adminAudit).
 export async function GET() {
+  return NextResponse.json({ error: "Use POST." }, { status: 405, headers: { Allow: "POST" } });
+}
+
+export async function POST() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ORGANIZER") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
+  if (!testToolsAllowed()) return NextResponse.json({ error: TEST_TOOLS_DISABLED_MESSAGE }, { status: 403 });
   try {
     // Find test users
     const testEmails = [
@@ -68,6 +76,6 @@ export async function GET() {
       participants: users.map((u) => u.name),
     });
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+    return errorResponse("/api/seed-tournament", e);
   }
 }

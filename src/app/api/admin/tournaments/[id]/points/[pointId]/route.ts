@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { auditAdminAction } from "@/lib/adminAudit";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
 import { recalculateStandings } from "@/lib/tournament-engine";
 import type { FinishType } from "@prisma/client";
@@ -52,6 +53,11 @@ export async function DELETE(
     recalculateStandings(params.id, point.match.player2Id),
   ]);
 
+  await auditAdminAction({
+    kind: "POINT_DELETE", session, tournamentId: params.id,
+    before: { pointId: point.id, matchId: point.matchId, userId: point.userId, finishType: point.finishType, points: point.points, matchStatus: point.match.status },
+    target: { matchId: point.matchId },
+  });
   return NextResponse.json({ ok: true });
 }
 
@@ -123,5 +129,10 @@ export async function POST(
     recalculateStandings(params.id, match.player2Id),
   ]);
 
+  await auditAdminAction({
+    kind: "POINT_ADD", session, tournamentId: params.id,
+    after: { matchId: match.id, scorerId, points, matchStatus: match.status },
+    target: { matchId: match.id },
+  });
   return NextResponse.json({ ok: true });
 }

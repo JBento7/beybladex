@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { auditAdminAction } from "@/lib/adminAudit";
 
 async function requireAdmin() {
   const session = await getServerSession(authOptions);
@@ -64,6 +65,11 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     data,
     select: { id: true, name: true, email: true, role: true, canJudge: true, adminCommunity: true },
   });
+  // Which fields changed — never the values of email/password.
+  await auditAdminAction({
+    kind: "USER_UPDATE", session,
+    target: { userId: params.id, fields: Object.keys(data).join(","), roleBefore: user.role, roleAfter: updated.role, canJudgeAfter: updated.canJudge, adminCommunityAfter: updated.adminCommunity ?? "geral" },
+  });
 
   return NextResponse.json(updated);
 }
@@ -95,6 +101,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
       password: "",
     },
   });
+  await auditAdminAction({ kind: "USER_DELETE", session, target: { userId: params.id, roleBefore: user.role } });
 
   return NextResponse.json({ ok: true });
 }

@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { recalculateStandings } from "@/lib/tournament-engine";
+import { auditAdminAction } from "@/lib/adminAudit";
 
 // ORGANIZER-only: recompute wins/losses/points for EVERY participant from the
 // current finished matches. Use it to verify/repair the standings after manual
@@ -31,9 +32,10 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
       if (p.userId) await recalculateStandings(params.id, p.userId);
     }
 
+    await auditAdminAction({ kind: "STANDINGS_RECALC", session, tournamentId: params.id, target: { participants: participants.length } });
     return NextResponse.json({ ok: true, participants: participants.length });
   } catch (err) {
     console.error("[recalc-standings]", err);
-    return NextResponse.json({ error: `Erro ao recalcular: ${String(err)}` }, { status: 500 });
+    return NextResponse.json({ error: "Erro ao recalcular. Veja os logs do servidor." }, { status: 500 });
   }
 }

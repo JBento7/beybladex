@@ -8,6 +8,8 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
 import { generateSwissRound, advanceSwissTournament, getSwissRounds, recalculateStandings } from "@/lib/tournament-engine";
+import { testToolsAllowed, TEST_TOOLS_DISABLED_MESSAGE } from "@/lib/adminAudit";
+import { errorResponse } from "@/lib/observability";
 
 // Admin/test-only: simulate the whole Swiss phase of a TEST tournament (random
 // winners), advancing to the knockout. Only pending matches are finished, so it
@@ -19,6 +21,7 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
   if (!session || session.user.role !== "ORGANIZER") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
+  if (!testToolsAllowed()) return NextResponse.json({ error: TEST_TOOLS_DISABLED_MESSAGE }, { status: 403 });
 
   try {
     const tournament = await prisma.tournament.findUnique({
@@ -68,6 +71,6 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[autoplay-swiss]", err);
-    return NextResponse.json({ error: `Erro no autoplay: ${String(err)}` }, { status: 500 });
+    return errorResponse("/api/admin/tournaments/[id]/autoplay-swiss", err, "Erro no autoplay. Tente novamente.");
   }
 }

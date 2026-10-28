@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { auditAdminAction } from "@/lib/adminAudit";
 
 // POST — wipe all matches/results from a test tournament and reopen
 // registration, so admins can reuse it to test the site's flows again.
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       }),
     ]);
 
+    await auditAdminAction({ kind: "TEST_TOURNAMENT_RESET", session, tournamentId: params.id, before: { status: tournament.status, matches: matchIds.length } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error(err);

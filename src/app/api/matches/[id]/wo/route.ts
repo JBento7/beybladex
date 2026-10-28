@@ -10,10 +10,11 @@ import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
 import { recordWalkover } from "@/lib/match-scoring";
 import { recalculateStandings, advanceSingleElimination, generateSwissRound, advanceSwissTournament, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
+import { withObservability } from "@/lib/observability";
 
 // POST — declare a walkover (W.O.): the opponent of `winnerId` didn't show up,
 // so the match is finished without playing any sets.
-export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+async function postHandler(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
@@ -90,3 +91,5 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Erro no servidor" }, { status: 500 });
   }
 }
+
+export const POST = withObservability("/api/matches/[id]/wo", postHandler);

@@ -6,6 +6,7 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 import { assignFreeJudge } from "@/lib/tournament-engine";
+import { errorResponse } from "@/lib/observability";
 
 // The judge presses "Iniciar" → stamp the match so the arena display starts the
 // 3-2-1-GO-SHOOT countdown video. Authorized for the judge/organizer, or anyone
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     });
   } catch (e) {
     return NextResponse.json(
-      { error: "Banco desatualizado — rode /api/migrate", detail: String(e).slice(0, 200) },
+      { error: "Banco desatualizado — rode /api/migrate" },
       { status: 500 }
     );
   }

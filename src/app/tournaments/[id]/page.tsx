@@ -35,6 +35,7 @@ import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/cl
 import type { Metadata } from "next";
 import { canSeeDraft } from "@/lib/tournamentList";
 import { authUrl } from "@/lib/safeRedirect";
+import { testToolsAllowed } from "@/lib/adminAudit";
 
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const params = await props.params;
@@ -1607,7 +1608,7 @@ export default async function TournamentDetailPage(
                   {!tournament.isOfficial && tournament.status !== "FINISHED" && (isAdminUser || isOrganizerOfThis) && (
                     <JudgingModeToggle tournamentId={tournament.id} mode={tournament.judgingMode} />
                   )}
-                  {isAdminUser && tournament.isTest && isSwissFormat(tournament.format) && tournament.status !== "FINISHED" && (
+                  {isAdminUser && tournament.isTest && testToolsAllowed() && isSwissFormat(tournament.format) && tournament.status !== "FINISHED" && (
                     <AutoplaySwissButton tournamentId={tournament.id} />
                   )}
                   {isAdminUser && tournament.isTest && tournament.status !== "REGISTRATION" && (

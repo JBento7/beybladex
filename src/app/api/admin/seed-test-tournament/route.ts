@@ -7,6 +7,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { generateSwissRound, advanceSwissTournament, getSwissRounds, recalculateStandings } from "@/lib/tournament-engine";
+import { testToolsAllowed, TEST_TOOLS_DISABLED_MESSAGE } from "@/lib/adminAudit";
+import { errorResponse } from "@/lib/observability";
 
 // Admin-only seed for a ready-to-test tournament with test participants that
 // already have registered beys and a selected deck — so the bey selection and
@@ -18,11 +20,17 @@ import { generateSwissRound, advanceSwissTournament, getSwissRounds, recalculate
 //   players=8    → number of test participants (default 8)
 //   multiday=1   → 2-day Suíço (Dia 1 Suíço · Dia 2 Mata-mata)
 // Example: /api/admin/seed-test-tournament?official=1&deck=3on3
-export async function GET(req: Request) {
+// Test tool: POST only, and disabled in production (lib/adminAudit).
+export async function GET() {
+  return NextResponse.json({ error: "Use POST." }, { status: 405, headers: { Allow: "POST" } });
+}
+
+export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ORGANIZER") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
   }
+  if (!testToolsAllowed()) return NextResponse.json({ error: TEST_TOOLS_DISABLED_MESSAGE }, { status: 403 });
 
   const url = new URL(req.url);
   const official = url.searchParams.get("official") === "1";
@@ -208,9 +216,6 @@ export async function GET(req: Request) {
     });
   } catch (err) {
     console.error("[seed-test-tournament]", err);
-    return NextResponse.json(
-      { error: `Erro ao criar torneio de teste: ${String(err)}. Talvez falte rodar /api/migrate.` },
-      { status: 500 }
-    );
+    return errorResponse("/api/admin/seed-test-tournament", err, "Erro ao criar torneio de teste. Tente novamente.");
   }
 }

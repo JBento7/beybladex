@@ -14,6 +14,7 @@ import {
   generateSwissRound,
   finalizeTournamentRanking,
 } from "@/lib/tournament-engine";
+import { errorResponse } from "@/lib/observability";
 
 // ORGANIZER-only manual score editor. Unlike /reset, this does NOT reset the
 // match — it rewrites the recorded score directly. The admin supplies, per set,
@@ -179,6 +180,6 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   return NextResponse.json({ ok: true, p1SetsWon, p2SetsWon, winnerId: matchWinnerId });
   } catch (err) {
     console.error("[set-score]", err);
-    return NextResponse.json({ error: `Erro ao salvar: ${String(err)}` }, { status: 500 });
+    return errorResponse("/api/admin/matches/[id]/set-score", err, "Erro ao salvar. Tente novamente.");
   }
 }

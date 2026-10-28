@@ -7,15 +7,23 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
-import { recalculateStandings, finalizeTournamentRanking, getSwissRounds, auditTournament } from "@/lib/tournament-engine";
+import { recalculateStandings, finalizeTournamentRanking, computeTournamentRanking, getSwissRounds, auditTournament } from "@/lib/tournament-engine";
 import { hasBlocking } from "@/lib/swiss";
+import { auditAdminAction } from "@/lib/adminAudit";
+import { errorResponse } from "@/lib/observability";
 
 // ORGANIZER-only: recompute the FINAL ranking (placement + rankingPoints) of a
 // tournament, even one already marked FINISHED. Use it to repair events that
 // were finalized with the old, buggy playoff-boundary logic (which ranked a
 // Suíço by "last round lost" instead of by wins). It first recomputes every
 // participant's wins/points from the recorded matches, then re-runs the ranking.
-export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+//
+// Historical change → simulate first: POST ?dryRun=1 returns, per player, the
+// placement/ranking points stored today vs. what the recalculation would
+// write, and changes nothing. (For non-Suíço formats the simulation uses the
+// stored match tallies; the real run recomputes them from the matches first.)
+// The real run records before/after in TournamentAdminAction.
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const session = await getServerSession(authOptions);
   { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
@@ -49,10 +57,22 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
       }, { status: 409 });
     }
 
-    const participants = await prisma.tournamentParticipant.findMany({
+    const stored = await prisma.tournamentParticipant.findMany({
       where: { tournamentId: params.id, approved: { not: false } },
-      select: { userId: true },
+      select: { id: true, userId: true, placement: true, rankingPoints: true },
     });
+    const dryRun = new URL(req.url).searchParams.get("dryRun") === "1";
+    if (dryRun) {
+      const computed = await computeTournamentRanking(params.id);
+      const byId = new Map(stored.map((p) => [p.id, p]));
+      const rows = computed.map((c) => {
+        const cur = byId.get(c.participantId);
+        return { name: c.name, placementNow: cur?.placement ?? null, placementAfter: c.placement, pointsNow: cur?.rankingPoints ?? 0, pointsAfter: c.rankingPoints };
+      });
+      const changes = rows.filter((r) => r.placementNow !== r.placementAfter || r.pointsNow !== r.pointsAfter);
+      return NextResponse.json({ dryRun: true, changed: changes.length, unchanged: rows.length - changes.length, changes });
+    }
+    const participants = stored;
     // Players excluded from the ranking because they were never approved.
     const notApproved = await prisma.tournamentParticipant.count({
       where: { tournamentId: params.id, approved: false },
@@ -65,6 +85,15 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
 
     // 2) Final placement + ranking points.
     await finalizeTournamentRanking(params.id);
+    const after = await prisma.tournamentParticipant.findMany({
+      where: { tournamentId: params.id, approved: { not: false } },
+      select: { userId: true, placement: true, rankingPoints: true },
+    });
+    await auditAdminAction({
+      kind: "RANKING_RECALC", session, tournamentId: params.id,
+      before: stored.map((p) => ({ userId: p.userId, placement: p.placement, rankingPoints: p.rankingPoints })),
+      after: after.map((p) => ({ userId: p.userId, placement: p.placement, rankingPoints: p.rankingPoints })),
+    });
 
     const top = await prisma.tournamentParticipant.findMany({
       where: { tournamentId: params.id, approved: { not: false }, placement: { not: null } },
@@ -123,6 +152,6 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     });
   } catch (err) {
     console.error("[recalc-ranking]", err);
-    return NextResponse.json({ error: `Erro ao recalcular ranking: ${String(err)}` }, { status: 500 });
+    return errorResponse("/api/admin/tournaments/[id]/recalc-ranking", err, "Erro ao recalcular ranking. Tente novamente.");
   }
 }

@@ -11,9 +11,10 @@ import { FINISH_TYPE_POINTS } from "@/lib/scoring";
 import { recalculateStandings, advanceSingleElimination, advanceSwissTournament, finalizeTournamentRanking, updateBeybladeStats } from "@/lib/tournament-engine";
 import { isSwissFormat } from "@/lib/swiss";
 import { recordPoint } from "@/lib/match-scoring";
+import { errorResponse, withObservability } from "@/lib/observability";
 import type { FinishType } from "@prisma/client";
 
-export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+async function postHandler(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
@@ -94,17 +95,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     return NextResponse.json({ success: true, matchFinished, winnerId: matchWinnerId });
   } catch (err) {
-    console.error(err);
-    const detail = String(err);
-    const missingColumn = /column .*(countdown|does not exist)/i.test(detail);
-    return NextResponse.json(
-      {
-        error: missingColumn
-          ? "Banco desatualizado — rode /api/migrate (colunas novas ausentes)."
-          : "Erro no servidor",
-        detail: detail.slice(0, 300),
-      },
-      { status: 500 }
-    );
+    // Full error only in the server log; the judge's screen gets a short,
+    // actionable message (no database internals).
+    const missingColumn = /column .*(countdown|does not exist)/i.test(String(err));
+    return errorResponse("/api/matches/[id]/point", err, missingColumn ? "Banco desatualizado — avise o administrador (migrações pendentes)." : undefined, req);
   }
 }
+
+export const POST = withObservability("/api/matches/[id]/point", postHandler);

@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MY_REGISTRATION_MESSAGES, myRegistrationState, registrationState } from "@/lib/registration";
 import { claimRegistrationSpot } from "@/lib/registration-service";
+import { withObservability, logEvent, errorResponse } from "@/lib/observability";
 
 type OwnedBey = {
   blade: string | null;
@@ -40,7 +41,7 @@ function findDuplicateParts(beys: OwnedBey[]): string[] {
   return [...dupes];
 }
 
-export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+async function postHandler(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
     const session = await getServerSession(authOptions);
@@ -142,14 +143,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       approved: !needsApproval,
     });
     if (!result.ok) {
+      logEvent("registration_rejected", { tournamentId: params.id, code: result.code ?? null });
       return NextResponse.json({ error: result.error, code: result.code, alreadyRegistered: result.alreadyRegistered }, { status: result.status });
     }
     const participant = { id: result.participantId };
+    logEvent("registration_ok", { tournamentId: params.id, needsApproval });
 
     return NextResponse.json({ ...participant, needsApproval }, { status: 201 });
   } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: "Erro no servidor" }, { status: 500 });
+    return errorResponse("/api/tournaments/[id]/join", err, "Não foi possível concluir a inscrição. Tente novamente.");
   }
 }
 
@@ -265,3 +267,5 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     return NextResponse.json({ error: "Erro no servidor" }, { status: 500 });
   }
 }
+
+export const POST = withObservability("/api/tournaments/[id]/join", postHandler);

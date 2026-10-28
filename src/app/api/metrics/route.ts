@@ -4,7 +4,7 @@ import { logEvent } from "@/lib/observability";
 
 // Receives client metrics (Web Vitals, arena fallback counters) and writes
 // one structured log line. Only whitelisted numeric fields are kept — no
-// cookies, tokens, names or free text.
+// cookies, tokens, names or free text. CLS arrives ×1000 (integer).
 const NUM_FIELDS = ["value", "delta", "arena", "p2pMessages", "tickPolls", "fullPolls", "signalsViaServer", "windowMs"] as const;
 const NAMES = new Set(["CLS", "FCP", "INP", "LCP", "TTFB", "FID"]);
 

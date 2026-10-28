@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { auditAdminAction } from "@/lib/adminAudit";
 import { recalculateStandings, revertBeybladeStats } from "@/lib/tournament-engine";
 
 // ORGANIZER-only: reset a match back to PENDING for re-scoring.
@@ -48,6 +49,8 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     await revertBeybladeStats(match.id, match.winnerId, loserId);
   }
 
+  const pointsBefore = await prisma.matchPoint.aggregate({ where: { matchId: params.id }, _count: { _all: true }, _sum: { points: true } });
+
   await prisma.$transaction(async (tx) => {
     // Clear all MatchPoints and MatchSets for this match
     await tx.matchPoint.deleteMany({ where: { matchId: params.id } });
@@ -66,5 +69,11 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     recalculateStandings(match.tournamentId, match.player2Id),
   ]);
 
+  await auditAdminAction({
+    kind: "MATCH_RESET", session, tournamentId: match.tournamentId,
+    before: { matchId: match.id, status: match.status, winnerId: match.winnerId, points: pointsBefore._count._all, pointSum: pointsBefore._sum.points ?? 0 },
+    after: { status: "PENDING" },
+    target: { matchId: match.id },
+  });
   return NextResponse.json({ ok: true });
 }

@@ -1,9 +1,10 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { tournamentsVersion } from "@/lib/publicVersion";
+import { withObservability } from "@/lib/observability";
 
 // Fingerprint of the tournament list (lib/publicVersion).
-export async function GET(req: Request) {
+async function getHandler(req: Request) {
   try {
     const v = await tournamentsVersion();
     const etag = `W/"list-${v}"`;
@@ -15,3 +16,5 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Indisponível" }, { status: 503 });
   }
 }
+
+export const GET = withObservability("/api/tournaments/version", getHandler, { logSuccess: "slow" });

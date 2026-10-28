@@ -32,18 +32,26 @@ export const PUBLIC_ERROR_MESSAGES: Record<ErrorClass, string> = {
   internal: "Erro inesperado. Tente novamente.",
 };
 
-/** Wraps a route handler: request id, timing, classified errors, safe messages. */
-export function withObservability<A extends unknown[]>(
+/** Wraps a route handler: request id, timing, classified errors, safe messages.
+ *  `logSuccess: "slow"` (for endpoints polled every few seconds) logs only
+ *  errors, 5xx and requests slower than `slowMs`; "all" logs every request. */
+export function withObservability<R extends Request, A extends unknown[]>(
   route: string,
-  handler: (req: Request, ...rest: A) => Promise<Response>
+  handler: (req: R, ...rest: A) => Promise<Response>,
+  opts: { logSuccess?: "all" | "slow"; slowMs?: number } = {}
 ) {
-  return async (req: Request, ...rest: A): Promise<Response> => {
+  const mode = opts.logSuccess ?? "all";
+  const slowMs = opts.slowMs ?? 500;
+  return async (req: R, ...rest: A): Promise<Response> => {
     const id = requestIdOf(req);
     const t0 = performance.now();
     try {
       const res = await handler(req, ...rest);
-      logEvent("api", { route, method: req.method, status: res.status, ms: Math.round(performance.now() - t0), requestId: id });
-      res.headers.set("x-request-id", id);
+      const ms = Math.round(performance.now() - t0);
+      if (mode === "all" || res.status >= 500 || ms >= slowMs) {
+        logEvent(ms >= slowMs ? "api_slow" : "api", { route, method: req.method, status: res.status, ms, requestId: id });
+      }
+      try { res.headers.set("x-request-id", id); } catch { /* immutable headers (e.g. redirects) */ }
       return res;
     } catch (e) {
       const cls = classifyError(e);
@@ -52,4 +60,14 @@ export function withObservability<A extends unknown[]>(
       return Response.json({ error: PUBLIC_ERROR_MESSAGES[cls], requestId: id }, { status, headers: { "x-request-id": id } });
     }
   };
+}
+
+/** Error response for a caught exception: full error in the server log,
+ *  only a public message + request id for the caller (never DB internals). */
+export function errorResponse(route: string, e: unknown, publicMessage?: string, req?: Request): Response {
+  const cls = classifyError(e);
+  const id = req ? requestIdOf(req) : randomUUID();
+  logEvent("api_error", { route, class: cls, code: (e as { code?: string })?.code ?? null, requestId: id, err: String((e as Error)?.message ?? e).slice(0, 300) });
+  const status = cls === "conflict" ? 409 : cls === "infrastructure" ? 503 : 500;
+  return Response.json({ error: publicMessage ?? PUBLIC_ERROR_MESSAGES[cls], requestId: id }, { status, headers: { "x-request-id": id } });
 }

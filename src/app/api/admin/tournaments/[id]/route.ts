@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { auditAdminAction } from "@/lib/adminAudit";
 
 // PATCH — edit tournament fields
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -53,7 +54,7 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: params.id },
-    select: { id: true },
+    select: { id: true, name: true, status: true, isOfficial: true, isTest: true, communitySlug: true, _count: { select: { participants: true, matches: true } } },
   });
   if (!tournament) {
     return NextResponse.json({ error: "Torneio não encontrado" }, { status: 404 });
@@ -72,6 +73,11 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
       prisma.tournamentParticipant.deleteMany({ where: { tournamentId: params.id } }),
       prisma.tournamentJudge.deleteMany({ where: { tournamentId: params.id } }),
       prisma.group.deleteMany({ where: { tournamentId: params.id } }),
+      // Logs that reference the tournament (FK RESTRICT) go with it; the
+      // deletion itself is recorded in the structured log below.
+      prisma.swissRoundLog.deleteMany({ where: { tournamentId: params.id } }),
+      prisma.tournamentAdminAction.deleteMany({ where: { tournamentId: params.id } }),
+      prisma.matchAuditLog.deleteMany({ where: { tournamentId: params.id } }),
       prisma.tournament.delete({ where: { id: params.id } }),
     ]);
   } catch (err) {
@@ -82,5 +88,10 @@ export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: s
     );
   }
 
+  // The tournament row is gone, so this audit lives in the structured log.
+  await auditAdminAction({
+    kind: "TOURNAMENT_DELETE", session,
+    target: { tournamentId: tournament.id, status: tournament.status, isOfficial: tournament.isOfficial, isTest: tournament.isTest, participants: tournament._count.participants, matches: tournament._count.matches },
+  });
   return NextResponse.json({ ok: true });
 }

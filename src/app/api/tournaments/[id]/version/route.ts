@@ -1,12 +1,13 @@
 export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withObservability } from "@/lib/observability";
 
 // Live-page polling. Reads ONE row (stateVersion is bumped by database
 // triggers in the same transaction as every relevant change — see
 // prisma/sql/state_version_triggers.sql), so it never walks the point
 // history. Answers 304 when the client already has this version.
-export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+async function getHandler(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
     const t = await prisma.tournament.findUnique({ where: { id: params.id }, select: { stateVersion: true, status: true } });
@@ -20,3 +21,5 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     return NextResponse.json({ error: "Indisponível" }, { status: 503 });
   }
 }
+
+export const GET = withObservability("/api/tournaments/[id]/version", getHandler, { logSuccess: "slow" });

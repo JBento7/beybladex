@@ -4,10 +4,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { listTournaments } from "@/lib/tournamentList";
 import { parseLiga, parseStatus } from "@/lib/tournamentFilters";
+import { withObservability } from "@/lib/observability";
 
 // One page of the tournament list (filters + "carregar mais"). The result
 // depends on the viewer (drafts, "inscrito"), so it is never shared-cached.
-export async function GET(req: NextRequest) {
+async function getHandler(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const session = await getServerSession(authOptions);
   try {
@@ -24,3 +25,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Não foi possível carregar os torneios agora." }, { status: 503 });
   }
 }
+
+export const GET = withObservability("/api/tournaments/list", getHandler, { logSuccess: "slow" });

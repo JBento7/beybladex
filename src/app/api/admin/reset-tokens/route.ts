@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { auditAdminAction } from "@/lib/adminAudit";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -42,7 +43,7 @@ export async function DELETE() {
         { expiresAt: { lt: new Date() } },
       ],
     },
-  });
+  }).then((r) => auditAdminAction({ kind: "RESET_TOKENS_CLEANUP", session, target: { removed: r.count } }));
 
   return NextResponse.json({ ok: true });
 }
