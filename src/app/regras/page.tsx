@@ -48,7 +48,7 @@ export default function RulesPage() {
         <section aria-labelledby="formatos" className={card}>
           <SectionTitle id="formatos">Formatos</SectionTitle>
           <ul className="mt-3 space-y-3 text-body text-fg-2 list-disc pl-5">
-            <li><strong className="text-fg">Suíço:</strong> várias rodadas em que jogadores com campanhas parecidas se enfrentam. Cada vitória vale 1 ponto suíço; quem fica de folga (bye) também recebe 1 ponto. Desempate por pontos de batalha feitos e depois pelo saldo (feitos − sofridos). Os melhores avançam para o mata-mata quando o evento tem corte.</li>
+            <li><strong className="text-fg">Suíço:</strong> várias rodadas em que jogadores com campanhas parecidas se enfrentam. Cada vitória vale 1 ponto suíço; quem fica de folga (bye) também recebe 1 ponto. Desempate por pontos de batalha feitos, depois pelo saldo (feitos − sofridos) e, em empate completo, pela ordem alfabética do apelido. Os melhores avançam para o mata-mata quando o evento tem corte.</li>
             <li><strong className="text-fg">Mata-mata:</strong> quem perde sai. A colocação final segue a fase em que cada jogador parou; a disputa de 3º lugar define o 3º e o 4º.</li>
             <li><strong className="text-fg">Grupos:</strong> pontos corridos dentro de cada grupo, depois eliminatória.</li>
           </ul>
@@ -56,7 +56,7 @@ export default function RulesPage() {
 
         <section id="ranking" aria-labelledby="ranking-titulo" className={`${card} scroll-mt-24`}>
           <SectionTitle id="ranking-titulo">Pontos do ranking</SectionTitle>
-          <p className="mt-2 text-body text-fg-2">O ranking de cada liga soma os pontos conquistados nos <strong className="text-fg">torneios oficiais</strong> daquela liga.</p>
+          <p className="mt-2 text-body text-fg-2">O ranking geral de cada liga é a pontuação acumulada nos <strong className="text-fg">torneios oficiais</strong> daquela liga.</p>
           <ol className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
             {RANKING_POINTS_BY_PLACE.map((pts, i) => (
               <li key={i} className="rounded-ctl bg-field p-3 text-center">
@@ -71,7 +71,7 @@ export default function RulesPage() {
             <li>Em eventos com mata-mata, só pontua quem chegou ao mata-mata.</li>
             <li>BeyEncontros e torneios de teste não contam. Eventos de parceria contam só no ranking compartilhado LBL + LBM.</li>
             <li>Empate no total de pontos: ordem alfabética do apelido.</li>
-            <li>O ranking ainda não é dividido por temporada: ele soma todos os torneios oficiais registrados.</li>
+            <li>O ranking geral soma todos os torneios oficiais registrados da liga.</li>
           </ul>
         </section>
 

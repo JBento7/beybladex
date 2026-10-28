@@ -7,12 +7,20 @@ export type CommunityInfo = {
   city: string;
   logo: string;
   color: string;
+  /** Default event cover: wide logo + brand color for the diagonal stripes. */
+  coverLogo: string;
+  coverColor: string;
 };
 
 export const COMMUNITY_LIST: CommunityInfo[] = [
-  { slug: "lbl", name: "LBL", fullName: "Liga Beyblade Londrina", city: "Londrina", logo: "/lbl-logo.png", color: "#f0a500" },
-  { slug: "lbm", name: "LBM", fullName: "Liga Beyblade Maringá", city: "Maringá", logo: "/lbm-logo.webp", color: "#6ac146" },
+  { slug: "lbl", name: "LBL", fullName: "Liga Beyblade Londrina", city: "Londrina", logo: "/lbl-logo.png", color: "#f0a500", coverLogo: "/lblnovo.png", coverColor: "#C8102E" },
+  { slug: "lbm", name: "LBM", fullName: "Liga Beyblade Maringá", city: "Maringá", logo: "/lbm-logo.webp", color: "#6ac146", coverLogo: "/lbm-logo.webp", coverColor: "#6ac146" },
 ];
+
+/** Exact lookup — no fallback to another league (used for event identity). */
+export function findCommunity(slug: string | null | undefined): CommunityInfo | null {
+  return COMMUNITY_LIST.find((c) => c.slug === slug) ?? null;
+}
 
 export function communityOf(slug: string | null | undefined): CommunityInfo {
   return COMMUNITY_LIST.find((c) => c.slug === slug) ?? COMMUNITY_LIST[0];

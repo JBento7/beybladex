@@ -6,7 +6,7 @@ import { CalendarDays, MapPin, Search, Users, X } from "lucide-react";
 import StatusBadge, { Tag } from "@/components/ui/StatusBadge";
 import { Button, ButtonLink, buttonClass } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/States";
-import DefaultCover from "@/components/home/DefaultCover";
+import EventCover from "@/components/EventCover";
 import { formatEventDate, formatMoney, hasWallTime } from "@/lib/format";
 import { COMMUNITY_LIST, communityOf } from "@/lib/communities";
 import { parseStatus, parseLiga, type StatusFilter } from "@/lib/tournamentFilters";
@@ -253,12 +253,9 @@ function TournamentCard({ t, onOpen }: { t: Tournament; onOpen: () => void }) {
   return (
     <li className="flex flex-col rounded-card border border-line bg-card shadow-card overflow-hidden min-w-0">
       <div className="relative aspect-video bg-field">
-        {t.bannerUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={t.bannerUrl} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
-        ) : (
-          <DefaultCover name={t.name} date={date} className="absolute inset-0" />
-        )}
+        <div className="absolute inset-0">
+          <EventCover bannerUrl={t.bannerUrl} communitySlug={t.communitySlug} isPartnership={t.isPartnership} />
+        </div>
       </div>
       <div className="flex flex-1 flex-col gap-3 p-5 min-w-0">
         <div className="flex flex-wrap items-center gap-2">

@@ -7,6 +7,10 @@
 //  - Battle points ("Pts de batalha"): finish points scored inside matches
 //    (Spin 1, Over/Burst 2, Xtreme 3...). Tiebreaker #1.
 //  - Balance ("Saldo"): battle points scored − conceded. Tiebreaker #2.
+//  - Complete tie: nickname in alphabetical order (pt-BR), then internal id.
+//    Explicit on purpose — the order rows come back from the database is NOT
+//    a tiebreaker (it used to be, and the Swiss table and the saved final
+//    placement each fell back to a different query order).
 // A bye is a self-match (player1 = player2) marked isWalkover with the player
 // as winner. Knockout padding byes are self-matches WITHOUT isWalkover.
 
@@ -31,7 +35,15 @@ export type SwissRow = {
   battlePoints: number;
   conceded: number;
   balance: number;
+  /** Nickname used for the alphabetical tiebreak (falls back to the id). */
+  name: string;
 };
+
+/** Display names for the alphabetical tiebreak: userId → nickname. */
+export type NameLookup = Map<string, string> | Record<string, string>;
+const nameIn = (names: NameLookup | undefined, id: string) =>
+  (names instanceof Map ? names.get(id) : names?.[id]) ?? id;
+const collator = new Intl.Collator("pt-BR", { sensitivity: "base", numeric: true });
 
 /** A match belongs to the Swiss phase when its round is within the Swiss rounds. */
 export function isSwissMatch(m: Pick<StandingsMatch, "round" | "isThirdPlace">, swissRounds: number): boolean {
@@ -42,23 +54,36 @@ export function isSwissBye(m: StandingsMatch): boolean {
   return m.player1Id === m.player2Id && !!m.isWalkover;
 }
 
-/** Same ordering everywhere: Swiss points, then battle points, then balance. */
+/**
+ * THE Swiss ordering, used by every table and by the engine:
+ * Swiss points → battle points → balance → nickname (A→Z) → id.
+ * Fully deterministic: never depends on input/database order.
+ */
 export function compareSwissRows(a: SwissRow, b: SwissRow): number {
   if (b.swissPoints !== a.swissPoints) return b.swissPoints - a.swissPoints;
   if (b.battlePoints !== a.battlePoints) return b.battlePoints - a.battlePoints;
-  return b.balance - a.balance;
+  if (b.balance !== a.balance) return b.balance - a.balance;
+  return collator.compare(a.name, b.name) || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0);
+}
+
+/** Which criterion separated two adjacent rows (for explanations on screen). */
+export function tiebreakBetween(a: SwissRow, b: SwissRow): "pontos" | "batalha" | "saldo" | "alfabetica" {
+  if (a.swissPoints !== b.swissPoints) return "pontos";
+  if (a.battlePoints !== b.battlePoints) return "batalha";
+  if (a.balance !== b.balance) return "saldo";
+  return "alfabetica";
 }
 
 /**
  * Standings of the Swiss phase ONLY. Knockout rounds (round > swissRounds) and
  * the third-place match never count, so the table keeps showing the result of
- * the Swiss phase after the bracket is played. Players are returned sorted;
- * full ties keep the input order (Array.prototype.sort is stable).
+ * the Swiss phase after the bracket is played. Players are returned sorted by
+ * compareSwissRows (deterministic, independent of input order).
  */
-export function computeSwissStandings(userIds: string[], matches: StandingsMatch[], swissRounds: number): SwissRow[] {
+export function computeSwissStandings(userIds: string[], matches: StandingsMatch[], swissRounds: number, names?: NameLookup): SwissRow[] {
   const rows = new Map<string, SwissRow>();
   for (const id of userIds) {
-    rows.set(id, { userId: id, swissPoints: 0, wins: 0, losses: 0, byes: 0, played: 0, battlePoints: 0, conceded: 0, balance: 0 });
+    rows.set(id, { userId: id, swissPoints: 0, wins: 0, losses: 0, byes: 0, played: 0, battlePoints: 0, conceded: 0, balance: 0, name: nameIn(names, id) });
   }
   for (const m of matches) {
     if (m.status !== "FINISHED" || !isSwissMatch(m, swissRounds)) continue;
@@ -100,8 +125,8 @@ export type PlacementInfo = {
  * match splits the two semifinal losers. Ties inside the bracket and everyone
  * outside it fall back to the Swiss standings.
  */
-export function computeSwissFinalPlacement(userIds: string[], matches: StandingsMatch[], swissRounds: number): PlacementInfo[] {
-  const swiss = computeSwissStandings(userIds, matches, swissRounds);
+export function computeSwissFinalPlacement(userIds: string[], matches: StandingsMatch[], swissRounds: number, names?: NameLookup): PlacementInfo[] {
+  const swiss = computeSwissStandings(userIds, matches, swissRounds, names);
   const swissIndex = new Map(swiss.map((r, i) => [r.userId, i]));
   const playoff = matches.filter((m) => m.round > swissRounds && m.player1Id !== m.player2Id);
   const inPlayoff = new Set<string>();
@@ -177,4 +202,41 @@ export function eventPodium(input: {
   if (status !== "FINISHED") return {};
   const at = (n: number) => placements.find((p) => p.placement === n)?.userId;
   return { first: at(1), second: at(2), third: at(3) };
+}
+
+export type PlacementDivergence = {
+  userId: string;
+  storedPlace: number;
+  recalculatedPlace: number;
+  /** "empate" = complete Swiss tie (only the tiebreak order differs);
+   *  "resultado" = the recorded results now produce a different order
+   *  (e.g. a score edited after the event was closed). */
+  reason: "empate" | "resultado";
+};
+
+/**
+ * Compares the final placement SAVED when the event was closed with the one
+ * the current results and rules produce. The saved one is the historical
+ * result and is never rewritten automatically; this only explains the gap.
+ */
+export function comparePlacements(
+  stored: { userId: string; placement: number | null }[],
+  recalculated: PlacementInfo[],
+  swissRows: SwissRow[]
+): PlacementDivergence[] {
+  const recalcPlace = new Map(recalculated.map((p) => [p.userId, p.place]));
+  const row = new Map(swissRows.map((r) => [r.userId, r]));
+  const out: PlacementDivergence[] = [];
+  for (const s of stored) {
+    if (s.placement == null) continue;
+    const rp = recalcPlace.get(s.userId);
+    if (rp == null || rp === s.placement) continue;
+    // Who sits in my stored slot now? If we are tied on every Swiss criterion,
+    // only the tiebreak order differs.
+    const other = stored.find((x) => x.placement === rp)?.userId;
+    const a = row.get(s.userId), b = other ? row.get(other) : undefined;
+    const tied = !!a && !!b && a.swissPoints === b.swissPoints && a.battlePoints === b.battlePoints && a.balance === b.balance;
+    out.push({ userId: s.userId, storedPlace: s.placement, recalculatedPlace: rp, reason: tied ? "empate" : "resultado" });
+  }
+  return out.sort((x, y) => x.storedPlace - y.storedPlace);
 }

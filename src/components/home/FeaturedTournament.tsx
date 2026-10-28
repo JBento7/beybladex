@@ -1,8 +1,7 @@
 import { CalendarDays, Coins, MapPin, Trophy, Users } from "lucide-react";
 import StatusBadge, { Tag } from "@/components/ui/StatusBadge";
-import { ButtonLink } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/States";
-import DefaultCover from "./DefaultCover";
+import { ButtonLink, buttonClass } from "@/components/ui/Button";
+import EventCover from "@/components/EventCover";
 import { formatEventDate, formatLabel, formatMoney } from "@/lib/format";
 import type { FeaturedEvent } from "@/lib/homeData";
 
@@ -13,29 +12,39 @@ export default function FeaturedTournament({
   event,
   registered,
   channelUrl,
+  hasDraft = false,
 }: {
   event: FeaturedEvent | null;
   registered: boolean;
   channelUrl?: string;
+  hasDraft?: boolean;
 }) {
   if (!event) {
+    // Compact notice: the absence of an event must not dominate the page.
+    // "Em preparação" only when a league event really exists as a draft.
     return (
-      <EmptyState
-        icon={CalendarDays}
-        title="O próximo encontro está sendo preparado."
-        actions={
-          <>
-            <ButtonLink href="/tournaments?status=anteriores" variant="primary">Ver últimos resultados</ButtonLink>
-            {channelUrl && (
-              <a href={channelUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center min-h-12 px-5 rounded-ctl text-small font-semibold bg-field text-fg border border-line hover:bg-hover transition-colors duration-150">
-                Acompanhar o canal oficial
-              </a>
-            )}
-          </>
-        }
+      <section
+        aria-labelledby="sem-evento-titulo"
+        className="rounded-card border border-line bg-card p-5 md:p-6 flex flex-col gap-4 md:flex-row md:items-center md:gap-5"
       >
-        Quando um novo evento for publicado, ele aparece aqui.
-      </EmptyState>
+        <div className="flex items-start gap-4 md:gap-5 md:flex-1 min-w-0">
+          <CalendarDays aria-hidden="true" className="w-8 h-8 shrink-0 text-fg-3" />
+          <div className="min-w-0">
+            <h2 id="sem-evento-titulo" className="font-display text-title-4 text-fg">
+              {hasDraft ? "Próximo encontro em preparação" : "Nenhum próximo encontro anunciado"}
+            </h2>
+            <p className="mt-1 text-small text-fg-2">Confira os resultados dos últimos encontros.</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-3 md:shrink-0">
+          <ButtonLink href="/tournaments?status=anteriores" variant="secondary" className="w-full sm:w-auto">Ver últimos resultados</ButtonLink>
+          {channelUrl && (
+            <a href={channelUrl} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "md", "w-full sm:w-auto")}>
+              Acompanhar o canal oficial
+            </a>
+          )}
+        </div>
+      </section>
     );
   }
 
@@ -59,12 +68,9 @@ export default function FeaturedTournament({
   return (
     <article aria-labelledby="destaque-titulo" className="rounded-card border border-line bg-card shadow-card overflow-hidden md:grid md:grid-cols-[45fr_55fr]">
       <div className="relative aspect-video md:aspect-auto md:min-h-[320px] bg-field">
-        {event.bannerUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={event.bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-        ) : (
-          <DefaultCover name={event.name} date={date} className="absolute inset-0" />
-        )}
+        <div className="absolute inset-0">
+          <EventCover bannerUrl={event.bannerUrl} communitySlug={event.communitySlug} isPartnership={event.isPartnership} />
+        </div>
       </div>
       <div className="p-5 md:p-8 flex flex-col gap-4 min-w-0">
         <div className="flex flex-wrap gap-2">

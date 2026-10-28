@@ -6,6 +6,7 @@ import { prisma } from "./prisma";
 import { eventPodium, type StandingsMatch } from "./standings";
 import { swissRoundCount } from "./tournament-engine";
 import { getLeagueRanking } from "./leagueRanking";
+import { formatLabel } from "./format";
 import type { RankingEntry } from "./rankingMath";
 
 const LEAGUE = "lbl";
@@ -18,6 +19,7 @@ export type FeaturedEvent = {
   status: string;
   isOfficial: boolean;
   isPartnership: boolean;
+  communitySlug: string;
   bannerUrl: string | null;
   startDate: string | null; // ISO, wall time stored as UTC
   hasTime: boolean;
@@ -37,6 +39,8 @@ export type LastEvent = {
   id: string;
   name: string;
   date: string | null;
+  participantCount: number;
+  formatText: string;
   first?: PodiumPerson;
   second?: PodiumPerson;
   third?: PodiumPerson;
@@ -44,7 +48,7 @@ export type LastEvent = {
 
 async function loadFeatured(): Promise<FeaturedEvent | null> {
   const select = {
-    id: true, name: true, status: true, isOfficial: true, isPartnership: true, bannerUrl: true, startDate: true,
+    id: true, name: true, status: true, isOfficial: true, isPartnership: true, communitySlug: true, bannerUrl: true, startDate: true,
     venueName: true, location: true, address: true, format: true, deckType: true, qualifiers: true, entryFee: true,
     maxParticipants: true, registrationDeadline: true, _count: { select: { participants: true } },
   } as const;
@@ -66,7 +70,7 @@ async function loadFeatured(): Promise<FeaturedEvent | null> {
   const full = !!t.maxParticipants && t._count.participants >= t.maxParticipants;
   const deadlinePassed = !!t.registrationDeadline && t.registrationDeadline.getTime() < Date.now();
   return {
-    id: t.id, name: t.name, status: t.status, isOfficial: t.isOfficial, isPartnership: t.isPartnership,
+    id: t.id, name: t.name, status: t.status, isOfficial: t.isOfficial, isPartnership: t.isPartnership, communitySlug: t.communitySlug,
     bannerUrl: t.bannerUrl, startDate: d ? d.toISOString() : null,
     hasTime: !!d && (d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0),
     venue: t.venueName ?? t.location, address: t.address, format: t.format, deckType: t.deckType,
@@ -81,7 +85,7 @@ async function loadLastEvent(): Promise<LastEvent | null> {
     where: { ...leagueWhere, status: "FINISHED" },
     orderBy: [{ startDate: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     select: {
-      id: true, name: true, startDate: true, format: true, status: true, swissRounds: true,
+      id: true, name: true, startDate: true, format: true, status: true, swissRounds: true, qualifiers: true, deckType: true,
       participants: {
         where: { approved: { not: false } },
         select: { userId: true, placement: true, user: { select: { name: true, bladerName: true, avatarUrl: true } } },
@@ -108,6 +112,8 @@ async function loadLastEvent(): Promise<LastEvent | null> {
     id: t.id,
     name: t.name,
     date: t.startDate ? t.startDate.toISOString() : null,
+    participantCount: t.participants.length,
+    formatText: formatLabel(t.format, t.qualifiers, t.deckType),
     first: person(podium.first),
     second: person(podium.second),
     third: person(podium.third),
@@ -116,16 +122,23 @@ async function loadLastEvent(): Promise<LastEvent | null> {
 
 export type HomeData = {
   featured: FeaturedEvent | null;
+  /** A league event exists as a draft (being set up, not announced yet). */
+  hasDraft: boolean;
   last: LastEvent | null;
   ranking: RankingEntry[];
 };
 
 export const getHomeData = unstable_cache(
   async (): Promise<HomeData> => {
-    const [featured, last, ranking] = await Promise.all([loadFeatured(), loadLastEvent(), getLeagueRanking(LEAGUE)]);
-    return { featured, last, ranking };
+    const [featured, last, ranking, drafts] = await Promise.all([
+      loadFeatured(),
+      loadLastEvent(),
+      getLeagueRanking(LEAGUE),
+      prisma.tournament.count({ where: { ...leagueWhere, status: "DRAFT" } }),
+    ]);
+    return { featured, hasDraft: drafts > 0, last, ranking };
   },
-  ["home-data-v1"],
+  ["home-data-v4"],
   { revalidate: 60 }
 );
 

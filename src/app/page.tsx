@@ -58,7 +58,7 @@ export default async function HomePage() {
         ) : (
           <>
             {/* B. Next event / live event */}
-            <FeaturedTournament event={data.featured} registered={registered} channelUrl={CHANNEL_URL} />
+            <FeaturedTournament event={data.featured} registered={registered} channelUrl={CHANNEL_URL} hasDraft={data.hasDraft} />
 
             {/* C. Quick actions */}
             <section aria-labelledby="atalhos-titulo">
@@ -68,31 +68,33 @@ export default async function HomePage() {
                   href="/quick-match"
                   Icon={Zap}
                   title="Partida rápida"
-                  description={signedIn ? "Placar 1 contra 1 entre jogadores cadastrados, sem montar torneio." : "Placar 1 contra 1 sem torneio. Entre com sua conta para usar."}
+                  description="Use o placar para uma batalha 1 contra 1."
+                  note={signedIn ? undefined : "Requer login"}
                 />
                 <QuickAction
                   href="/tournaments/create"
                   Icon={Swords}
                   title="Criar torneio"
-                  description={signedIn ? "Crie um BeyEncontro vinculado à sua conta, com inscrições e resultados no site." : "Entre com sua conta para criar; depois do login você volta direto para a criação."}
+                  description="Organize um encontro ou campeonato."
+                  note={signedIn ? undefined : "Requer login"}
                 />
-                <QuickAction href="/regras" Icon={BookOpen} title="Consultar regras" description="Pontuação das batalhas, formatos e pontos do ranking." />
+                <QuickAction href="/regras" Icon={BookOpen} title="Consultar regras" description="Veja pontuação, formatos e critérios do ranking." />
               </div>
               <p className="mt-3 text-small text-fg-2">
-                Sem conta?{" "}
                 <Link href="/quick-tournament" className="font-semibold text-fg underline underline-offset-2 hover:text-brand-yellow">
-                  Monte um torneio rápido sem cadastro
+                  Torneio rápido sem cadastro
                 </Link>
-                {" "}— fica salvo só neste aparelho e não conta para o ranking.
+                {" "}— salvo neste aparelho e sem pontos no ranking.
               </p>
             </section>
 
             {/* D + E. Ranking (7/12) and last podium (5/12) */}
-            <div className="grid gap-4 desk:gap-6 desk:grid-cols-12 items-stretch">
-              <div className="desk:col-span-7 flex flex-col [&>section]:flex-1">
-                <RankingPreview top={preview!.top} me={preview!.me} currentUserId={session?.user.id} leagueLabel="LBL · Londrina" />
+            {/* Top-aligned, each card as tall as its own content. */}
+            <div className="grid gap-4 desk:gap-6 desk:grid-cols-12 items-start">
+              <div className="desk:col-span-7">
+                <RankingPreview top={preview!.top} me={preview!.me} currentUserId={session?.user.id} title="Ranking geral da LBL" />
               </div>
-              <div className="desk:col-span-5 flex flex-col [&>section]:flex-1">
+              <div className="desk:col-span-5">
                 <PodiumSummary event={data.last} />
               </div>
             </div>

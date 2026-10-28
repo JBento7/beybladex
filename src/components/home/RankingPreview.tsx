@@ -7,27 +7,28 @@ import type { RankingEntry } from "@/lib/rankingMath";
 
 type Row = RankingEntry & { position: number };
 
-// Top 5 of the league ranking. If the signed-in player is outside the top 5,
+// Top 5 of the league ranking (all-time total of official events). If the signed-in player is outside the top 5,
 // their real position is shown on a separate line (never moved into the top).
 // No up/down arrows: there is no ranking history to compare against.
 export default function RankingPreview({
   top,
   me,
   currentUserId,
-  leagueLabel,
+  title,
 }: {
   top: Row[];
   me: Row | null;
   currentUserId?: string | null;
-  leagueLabel: string;
+  /** e.g. "Ranking geral da LBL" — the data is the all-time total, not a season. */
+  title: string;
 }) {
   return (
-    <section aria-labelledby="ranking-titulo" className="rounded-card border border-line bg-card shadow-card p-5 md:p-6 flex flex-col">
+    <section aria-labelledby="ranking-titulo" className="rounded-card border border-line bg-card shadow-card p-5 md:p-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <SectionTitle id="ranking-titulo">Ranking da temporada</SectionTitle>
+          <SectionTitle id="ranking-titulo">{title}</SectionTitle>
           <p className="mt-1 text-small text-fg-2">
-            {leagueLabel} · soma dos torneios oficiais (o sistema ainda não separa temporadas).{" "}
+            Pontuação acumulada em torneios oficiais da liga.{" "}
             <Link href="/regras#ranking" className="underline underline-offset-2 text-fg hover:text-brand-yellow">Como os pontos funcionam</Link>
           </p>
         </div>
@@ -54,7 +55,7 @@ export default function RankingPreview({
           )}
         </>
       )}
-      <div className="mt-5 pt-1 md:mt-auto">
+      <div className="mt-5">
         <ButtonLink href="/rankings?r=lbl" variant="secondary" className="w-full sm:w-auto">Ver ranking completo</ButtonLink>
       </div>
     </section>

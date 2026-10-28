@@ -138,6 +138,13 @@ export async function generateRoundRobin(tournamentId: string) {
 
 // Ranking points awarded to the top 5 finishers of an official tournament,
 // added to TournamentParticipant.rankingPoints (which feeds the global ranking).
+// userId → nickname, for the alphabetical tiebreak of lib/standings.
+function nicknames(ps: { userId: string | null; user?: { name: string; bladerName: string | null } | null }[]) {
+  const m = new Map<string, string>();
+  for (const p of ps) if (p.userId) m.set(p.userId, p.user?.bladerName || p.user?.name || p.userId);
+  return m;
+}
+
 export const RANKING_POINTS_BY_PLACE = [100, 70, 50, 30, 10];
 
 // Ranks the final standings, awards rankingPoints to the top 5 and marks the
@@ -148,7 +155,11 @@ export const RANKING_POINTS_BY_PLACE = [100, 70, 50, 30, 10];
 export async function finalizeTournamentRanking(tournamentId: string) {
   const [tournament, participants, allMatchRows] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true, qualifiers: true } }),
-    prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } } }),
+    prisma.tournamentParticipant.findMany({
+      where: { tournamentId, approved: { not: false } },
+      include: { user: { select: { name: true, bladerName: true } } },
+      orderBy: { id: "asc" }, // stable input; the ranking itself never relies on it
+    }),
     prisma.match.findMany({
       // Every match, not just finished ones: whether the event HAS a knockout is
       // a structural fact (the bracket exists), independent of whether it has
@@ -211,7 +222,8 @@ export async function finalizeTournamentRanking(tournamentId: string) {
     ranked = computeSwissFinalPlacement(
       participants.map((p) => p.userId!).filter(Boolean),
       allMatchRows,
-      swissRounds
+      swissRounds,
+      nicknames(participants)
     ).map((x) => byUser.get(x.userId)!).filter(Boolean);
   } else if (tournament?.format === "SINGLE_ELIMINATION") {
     // The round each player LOST in; the champion never loses (treated as ∞).
@@ -290,7 +302,11 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
   const [tournament, judges, participants] = await Promise.all([
     prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true, isMultiDay: true, day2SetsToWin: true, day2PointsToWinSet: true } }),
     getTournamentJudgeIds(tournamentId),
-    prisma.tournamentParticipant.findMany({ where: { tournamentId, approved: { not: false } }, orderBy: { totalPoints: "desc" } }),
+    prisma.tournamentParticipant.findMany({
+      where: { tournamentId, approved: { not: false } },
+      include: { user: { select: { name: true, bladerName: true } } },
+      orderBy: { id: "asc" },
+    }),
   ]);
   const arenaCount = tournament?.arenas ?? 1;
 
@@ -306,7 +322,8 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
   const swissRows = computeSwissStandings(
     participants.map((p) => p.userId!).filter(Boolean),
     decided,
-    startRound - 1
+    startRound - 1,
+    nicknames(participants)
   );
   const byUser = new Map(participants.map((p) => [p.userId, p]));
   const seeded = swissRows.map((r) => byUser.get(r.userId)!).filter(Boolean);

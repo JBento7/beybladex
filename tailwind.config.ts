@@ -34,6 +34,7 @@ const config: Config = {
         warn: { DEFAULT: "#FDE047", bg: "#30270F" },
         danger: { DEFAULT: "#FDA4AF", bg: "#351720" },
         medal: { gold: "#F5B800", silver: "#CBD5E1", bronze: "#D6A06A" },
+        champion: { bg: "#2B2718", line: "#75601D" }, // champion highlight (yellow-tinted surface)
         // Gray scale realigned to the tokens, so existing gray-* classes
         // follow the new palette.
         gray: {
@@ -52,6 +53,7 @@ const config: Config = {
         "title-2": ["1.5rem", { lineHeight: "1.875rem", fontWeight: "700" }],        // 24/30 mobile
         "title-2-lg": ["1.75rem", { lineHeight: "2.125rem", fontWeight: "700" }],    // 28/34 desktop
         "title-3": ["1.375rem", { lineHeight: "1.75rem", fontWeight: "600" }],       // 22/28 card title
+        "title-4": ["1.25rem", { lineHeight: "1.625rem", fontWeight: "600" }],       // 20/26 compact title
         body: ["1rem", { lineHeight: "1.5rem" }],                                    // 16/24
         small: ["0.875rem", { lineHeight: "1.25rem" }],                              // 14/20
         label: ["0.75rem", { lineHeight: "1rem", fontWeight: "600" }],               // 12/16 tags

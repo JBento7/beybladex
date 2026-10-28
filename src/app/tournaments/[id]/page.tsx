@@ -22,7 +22,7 @@ import ShareButton from "@/components/ShareButton";
 import AutoRefresh from "@/components/AutoRefresh";
 import { isJudgeAccount } from "@/lib/judgeAccount";
 import { communityOf } from "@/lib/communities";
-import { computeSwissStandings, computeSwissFinalPlacement, compareSwissRows, decidedPodium, type StandingsMatch } from "@/lib/standings";
+import { computeSwissStandings, computeSwissFinalPlacement, comparePlacements, decidedPodium, type PlacementDivergence, type StandingsMatch } from "@/lib/standings";
 import RichText, { isLongText } from "@/components/RichText";
 import ExpandableText from "@/components/ExpandableText";
 import RetryButton from "@/components/RetryButton";
@@ -573,12 +573,16 @@ export default async function TournamentDetailPage({
       ? tournament.matches.filter((m) => m.round > swissRounds && m.player1.id !== m.player2.id).flatMap((m) => [m.player1.id, m.player2.id])
       : []
   );
-  // On a complete tie the bracket already settled who went through, so list
-  // those players first (the table then matches who actually qualified).
+  // Nicknames for the alphabetical tiebreak (same rule as the engine).
+  const nickOf = new Map(tournament.participants.map((p) => [p.userId, p.user.bladerName || p.user.name]));
   const swissRows = isSwiss
-    ? computeSwissStandings(approvedParticipants.map((p) => p.userId), standingsMatches, swissRounds)
-        .sort((a, b) => compareSwissRows(a, b) || Number(knockoutPlayers.has(b.userId)) - Number(knockoutPlayers.has(a.userId)))
+    ? computeSwissStandings(approvedParticipants.map((p) => p.userId), standingsMatches, swissRounds, nickOf)
     : [];
+  // A player listed as qualified below a non-qualified one: the bracket was
+  // seeded by an older/undefined tiebreak on a complete tie.
+  const seedingMismatch = isSwiss && knockoutPlayers.size > 0 && swissRows.some((r, i) =>
+    !knockoutPlayers.has(r.userId) && swissRows.slice(i + 1).some((x) => knockoutPlayers.has(x.userId))
+  );
   const qualifiersCount = tournament.qualifiers ?? 0;
 
   // Whole-event tallies for the other formats and the "all matches" stats.
@@ -598,7 +602,10 @@ export default async function TournamentDetailPage({
     if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
     const bp = (battlePointsMap.get(b.userId) ?? 0) - (battlePointsMap.get(a.userId) ?? 0);
     if (bp !== 0) return bp;
-    return diffOf(b.userId) - diffOf(a.userId);
+    const d = diffOf(b.userId) - diffOf(a.userId);
+    if (d !== 0) return d;
+    // Explicit final tiebreak (never the database order): nickname, then id.
+    return (nickOf.get(a.userId) ?? "").localeCompare(nickOf.get(b.userId) ?? "", "pt-BR") || (a.userId < b.userId ? -1 : 1);
   };
 
   // b) Final placement.
@@ -606,14 +613,26 @@ export default async function TournamentDetailPage({
   let finalPlacement: PlaceRow[] = [];
   let finalIsOfficial = false; // true = the stored result written when the event closed
   const allPlaced = approvedParticipants.length > 0 && approvedParticipants.every((p) => p.placement != null);
+  // The current rule applied to the current results (Swiss events).
+  const recalculated = isSwiss
+    ? computeSwissFinalPlacement(approvedParticipants.map((p) => p.userId), standingsMatches, swissRounds, nickOf)
+    : [];
+  // Saved placements differing from that recalculation (kept as historical).
+  let divergences: PlacementDivergence[] = [];
   if (tournament.status === "FINISHED" && allPlaced) {
     finalIsOfficial = true;
     finalPlacement = [...approvedParticipants]
       .sort((a, b) => (a.placement ?? 0) - (b.placement ?? 0))
       .map((p) => ({ userId: p.userId, place: p.placement!, note: "" }));
+    if (isSwiss) {
+      divergences = comparePlacements(
+        approvedParticipants.map((p) => ({ userId: p.userId, placement: p.placement })),
+        recalculated,
+        swissRows
+      );
+    }
   } else if (isSwiss && hasKnockout) {
-    finalPlacement = computeSwissFinalPlacement(approvedParticipants.map((p) => p.userId), standingsMatches, swissRounds)
-      .map((x) => ({ userId: x.userId, place: x.place, note: "" }));
+    finalPlacement = recalculated.map((x) => ({ userId: x.userId, place: x.place, note: "" }));
   } else if (tournament.format === "SINGLE_ELIMINATION" && sortedRounds.length > 0) {
     const elimRound = new Map<string, number>();
     for (const m of tournament.matches) {
@@ -967,6 +986,7 @@ export default async function TournamentDetailPage({
       <div><dt className="inline font-bold text-gray-300">Bye</dt> <dd className="inline">— rodadas de folga (sem adversário).</dd></div>
       <div><dt className="inline font-bold text-gray-300">Pts batalha</dt> <dd className="inline">— pontos de finish feitos (Spin 1, Over/Burst 2, Xtreme 3). 1º desempate.</dd></div>
       <div><dt className="inline font-bold text-gray-300">Saldo</dt> <dd className="inline">— pontos de batalha feitos − sofridos. 2º desempate.</dd></div>
+      <div className="sm:col-span-2"><dt className="inline font-bold text-gray-300">Empate completo</dt> <dd className="inline">— mesmos pontos suíços, pontos de batalha e saldo: ordem alfabética do apelido.</dd></div>
     </dl>
   );
 
@@ -976,7 +996,14 @@ export default async function TournamentDetailPage({
       <p className="text-sm text-gray-400 mb-4">
         Somente as {swissRounds} rodada{swissRounds > 1 ? "s" : ""} suíça{swissRounds > 1 ? "s" : ""}. Partidas do mata-mata não entram nesta tabela.
         {qualifiersCount > 0 && ` Os ${qualifiersCount} primeiros avançam para o mata-mata.`}
+        {" "}Ordem: pontos suíços, pontos de batalha, saldo e, em empate completo, ordem alfabética do apelido.
       </p>
+      {seedingMismatch && (
+        <p role="note" className="mb-4 rounded-lg border border-warn/40 bg-warn-bg p-3 text-sm text-gray-100">
+          Um jogador marcado como classificado aparece abaixo de outro que não avançou: o corte do mata-mata foi feito
+          num empate completo, antes de existir o desempate alfabético. A marcação “Classificado” mostra quem de fato jogou o mata-mata.
+        </p>
+      )}
       <div className="overflow-x-auto -mx-1 px-1" tabIndex={0} aria-label="Tabela da fase suíça">
         <table className="w-full text-sm">
           <caption className="sr-only">Classificação da fase suíça</caption>
@@ -1025,14 +1052,46 @@ export default async function TournamentDetailPage({
         {tournament.status === "FINISHED" ? "Colocação final" : "Colocação (parcial)"}
       </h3>
       <p className="text-sm text-gray-400 mb-4">
+        {finalIsOfficial
+          ? "Resultado registrado no encerramento do torneio. "
+          : ""}
         {isSwiss && hasKnockout
-          ? "Quem chegou ao mata-mata fica à frente, ordenado pela fase em que parou; os demais seguem a fase suíça."
-          : tournament.format === "SINGLE_ELIMINATION"
-            ? "Ordenada pela fase do chaveamento em que cada jogador parou."
-            : "Ordenada pela classificação do torneio."}
+          ? divergences.length
+            ? "Critério: quem chegou ao mata-mata fica à frente, pela fase em que parou; os demais foram ordenados pela fase suíça na época do encerramento."
+            : "Critério: quem chegou ao mata-mata fica à frente, pela fase em que parou; os demais seguem a classificação da fase suíça abaixo."
+          : isSwiss
+            ? divergences.length
+              ? "Critério: classificação da fase suíça na época do encerramento."
+              : "Critério: classificação da fase suíça abaixo."
+            : tournament.format === "SINGLE_ELIMINATION"
+              ? "Critério: fase do chaveamento em que cada jogador parou."
+              : "Critério: classificação do torneio."}
         {tournament.status !== "FINISHED" && " Pode mudar até o fim do torneio."}
-        {finalIsOfficial && " Resultado registrado no encerramento."}
       </p>
+      {divergences.length > 0 && (
+        <div role="note" className="mb-4 rounded-lg border border-warn/40 bg-warn-bg p-3 text-sm text-gray-100">
+          <p className="font-bold text-warn">Diferença em relação à tabela da fase suíça</p>
+          <p className="mt-1 text-gray-200">
+            {divergences.every((d) => d.reason === "empate")
+              ? "Estes jogadores estão empatados em tudo na fase suíça (pontos, pontos de batalha e saldo). Quando o torneio foi encerrado, o empate não tinha critério fixo; hoje ele é decidido pela ordem alfabética do apelido. A colocação registrada foi mantida."
+              : "Os resultados registrados hoje levam a uma ordem diferente da que foi salva no encerramento (por exemplo, um placar corrigido depois). A colocação registrada foi mantida."}
+          </p>
+          <ul className="mt-2 space-y-0.5 text-gray-200">
+            {divergences.map((d) => (
+              <li key={d.userId}>
+                <strong className="text-white">{nameOf(d.userId)}</strong>: {d.storedPlace}º registrado · {d.recalculatedPlace}º pela regra atual
+                {d.reason === "empate" ? " (empate completo)" : ""}
+              </li>
+            ))}
+          </ul>
+          {isAdminUser && (
+            <p className="mt-2 text-xs text-gray-300">
+              Organizador: para regravar a colocação e os pontos de ranking deste evento com a regra atual, use
+              “Recalcular Ranking Final” em Editar Resultados. Isso altera o histórico e os pontos do ranking.
+            </p>
+          )}
+        </div>
+      )}
       <ol className="space-y-1.5">
         {finalPlacement.map((row) => {
           const p = userById.get(row.userId);
