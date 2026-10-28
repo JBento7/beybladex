@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { signOut } from "next-auth/react";
+import { logout } from "@/lib/client/logout";
 import { fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type Layout, type FontDef } from "@/lib/arenaLayout";
 import FontLoader from "@/components/FontLoader";
 import { startAnswerer } from "@/lib/arenaLink";
@@ -122,6 +122,7 @@ type ArenaData = {
 export default function ArenaDisplay({ arena, community = "lbl", previewParam }: { arena: number | null; community?: string; previewParam: string | null }) {
   const [data, setData] = useState<ArenaData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const lastOkRef = useRef<number | null>(null); // last successful refresh (stale indicator)
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const [started, setStarted] = useState(false);
@@ -331,6 +332,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
         return;
       }
       setError(null);
+      lastOkRef.current = Date.now();
       const d: ArenaData = await res.json();
       if (seq !== loadSeqRef.current) return;
       // Sticky: ignore a transient "no match" right after we had one (e.g. the
@@ -353,7 +355,8 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
         playCountdown();
       }
     } catch {
-      setError("Sem conexão");
+      const t = lastOkRef.current;
+      setError(t ? `Sem conexão — placar de ${new Date(t).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "Sem conexão");
     }
   }, [previewParam]);
 
@@ -641,6 +644,10 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
     }
     await acquireWakeLock();
     setStarted(true);
+    // Prepare this telão for connection drops: the service worker downloads
+    // the arena media in full into its own cache (public/sw.js). Only arena
+    // screens do this — ordinary visitors never store these files.
+    try { navigator.serviceWorker?.controller?.postMessage({ type: "lbl:warm-arena", extra: [scoreboardBg, winnerBg] }); } catch { /* no SW */ }
   }
 
   if (arena == null) {
@@ -763,7 +770,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
             Ativa som e mantém a tela ligada. Para tela cheia sem barra: Compartilhar → Adicionar à Tela de Início, e abra pelo ícone.
           </div>
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => logout("/login")}
             style={{ marginTop: 28, background: "transparent", color: "#9ca3af", border: "1px solid #374151", borderRadius: 8, fontSize: 14, padding: "8px 18px" }}
           >
             ⎋ Sair desta arena
@@ -771,7 +778,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
         </div>
       )}
 
-      {error && <div style={{ position: "absolute", bottom: 8, left: 12, zIndex: 20, fontSize: 12, color: "#f87171" }}>{error}</div>}
+      {error && <div role="status" style={{ position: "absolute", bottom: 8, left: 12, zIndex: 20, fontSize: "max(12px, 1.1vw)", fontWeight: 700, color: "#fff", background: "rgba(185,28,28,0.85)", borderRadius: 6, padding: "2px 10px" }}>{error}</div>}
 
       {/* Fullscreen toggle (works on Android Chrome; hides the URL bar) */}
       {started && !isFs && (
@@ -798,7 +805,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
       {started && (
         <button
           onClick={() => {
-            if (window.confirm("Sair desta arena?")) signOut({ callbackUrl: "/login" });
+            if (window.confirm("Sair desta arena?")) logout("/login");
           }}
           style={{ position: "absolute", top: "0.6vh", right: "22.5vw", zIndex: 20, background: "rgba(200,16,46,0.35)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}
         >

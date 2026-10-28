@@ -4,8 +4,8 @@ import { prisma } from "./prisma";
 import { sortRanking, type RankingEntry } from "./rankingMath";
 
 export const RANKING_SCOPES = {
-  lbl: { label: "LBL · Londrina", logo: "/lbl-logo.png", where: { communitySlug: "lbl", isPartnership: false } },
-  lbm: { label: "LBM · Maringá", logo: "/lbm-logo.webp", where: { communitySlug: "lbm", isPartnership: false } },
+  lbl: { label: "LBL · Londrina", logo: "/brand/lbl-icon-96.webp", where: { communitySlug: "lbl", isPartnership: false } },
+  lbm: { label: "LBM · Maringá", logo: "/brand/lbm-icon-96.webp", where: { communitySlug: "lbm", isPartnership: false } },
   parceria: { label: "LBL + LBM (parceria)", logo: null, where: { isPartnership: true } },
 } as const;
 export type RankingScope = keyof typeof RANKING_SCOPES;
@@ -35,8 +35,8 @@ async function computeLeagueRanking(scope: RankingScope): Promise<RankingEntry[]
  * shows). Shared, public data → cached 60 s and invalidated when an event is
  * finalized (revalidateRankings). Never personalised.
  */
+const outsideNext = (e: unknown) => /incrementalCache|static generation store/i.test(String(e));
 export function getLeagueRanking(scope: RankingScope): Promise<RankingEntry[]> {
-  const outsideNext = (e: unknown) => /incrementalCache|static generation store/i.test(String(e));
   try {
     return unstable_cache(() => computeLeagueRanking(scope), ["league-ranking", scope], { revalidate: 60, tags: ["ranking"] })()
       .catch((e) => { if (outsideNext(e)) return computeLeagueRanking(scope); throw e; });
@@ -60,4 +60,25 @@ export function scopeOfHome(home: string | null | undefined): RankingScope {
 
 export function revalidateRankings() {
   try { revalidateTag("ranking"); } catch { /* outside a Next request */ }
+}
+
+// Battle points scored in official events, per player (the "pts" metric used
+// to order the community list). A scan of every official point, so it's
+// cached like the ranking (public data, 60 s, invalidated with "ranking").
+async function computeOfficialBattlePoints(): Promise<Record<string, number>> {
+  const agg = await prisma.matchPoint.groupBy({
+    by: ["userId"],
+    where: { match: { tournament: { isOfficial: true, isTest: false } } },
+    _sum: { points: true },
+  });
+  return Object.fromEntries(agg.map((b) => [b.userId, b._sum.points ?? 0]));
+}
+export async function getOfficialBattlePoints(): Promise<Record<string, number>> {
+  try {
+    return await unstable_cache(computeOfficialBattlePoints, ["official-battle-points"], { revalidate: 60, tags: ["ranking"] })()
+      .catch((e) => { if (outsideNext(e)) return computeOfficialBattlePoints(); throw e; });
+  } catch (e) {
+    if (outsideNext(e)) return computeOfficialBattlePoints();
+    throw e;
+  }
 }

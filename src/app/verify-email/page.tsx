@@ -36,7 +36,7 @@ function VerifyEmailContent() {
     <div className="w-full max-w-md bg-card border border-line rounded-2xl p-8 shadow-2xl text-center">
       {status === "loading" && (
         <>
-          <div className="mb-4 flex justify-center animate-spin"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain" /></div>
+          <div className="mb-4 flex justify-center animate-spin"><img src="/brand/bey-96.webp" alt="" className="w-10 h-10 object-contain" /></div>
           <p className="text-gray-400">Verificando seu e-mail...</p>
         </>
       )}
@@ -74,7 +74,7 @@ export default function VerifyEmailPage() {
   return (
     <div className="min-h-screen bg-app flex flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="mb-8 block">
-        <img src="/lblnovo.png" alt="Liga Beyblade Londrina" className="h-14 md:h-20 w-auto" />
+        <img src="/brand/lblnovo-384.webp" width={178} height={100} fetchPriority="high" alt="Liga Beyblade Londrina" className="h-14 md:h-20 w-auto" />
       </Link>
       <Suspense fallback={<div className="text-gray-400">Carregando...</div>}>
         <VerifyEmailContent />

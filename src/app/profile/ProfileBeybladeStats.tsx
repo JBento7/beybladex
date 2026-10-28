@@ -151,7 +151,7 @@ function DrillDown({ records }: { records: RecordRow[] }) {
                                 <div className="flex items-start justify-between gap-2 mb-2">
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1.5">
-                                      <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain flex-shrink-0" />
+                                      <img src="/brand/bey-96.webp" alt="" className="w-3.5 h-3.5 object-contain flex-shrink-0" />
                                       <span className="text-xs font-bold text-white truncate">{ob.beyName}</span>
                                     </div>
                                     <span className="text-[10px] text-gray-600">{bW + bL} batalha{(bW + bL) !== 1 ? "s" : ""}</span>
@@ -222,7 +222,7 @@ export default function ProfileBeybladeStats({ beyblades }: { beyblades: Beyblad
                 className="w-full flex items-center gap-3 px-4 py-3 bg-field hover:bg-field transition-colors text-left"
               >
                 <div className="w-8 h-8 rounded-lg bg-brand-yellow/10 border border-brand-yellow/20 flex items-center justify-center flex-shrink-0">
-                  <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
+                  <img src="/brand/bey-96.webp" alt="" className="w-5 h-5 object-contain" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

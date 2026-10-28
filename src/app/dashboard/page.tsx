@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getLeagueRanking, scopeOfHome } from "@/lib/leagueRanking";
 import { redirect } from "next/navigation";
+import { authUrl } from "@/lib/safeRedirect";
 
 export const metadata: Metadata = { title: "Painel" };
 import Navbar from "@/components/Navbar";
@@ -11,6 +12,8 @@ import NewsPopup from "./NewsPopup";
 import Link from "next/link";
 import { FINISH_TYPE_LABELS } from "@/lib/scoring";
 import { tierFor } from "@/lib/tiers";
+import { myRegistrationState } from "@/lib/registration";
+import RetryButton from "@/components/RetryButton";
 import type { FinishType } from "@prisma/client";
 
 
@@ -23,29 +26,35 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
+  if (!session) redirect(authUrl("/dashboard"));
   if (/^arena\d+@/i.test(session.user.email ?? "")) redirect("/arena");
 
   const userId = session.user.id;
 
-  // Errors here bubble up to dashboard/error.tsx (friendly boundary)
-  const [participations, recentMatches, upcomingMatches, organizedTournaments, beyblades, ranking] =
+  // Errors here bubble up to dashboard/error.tsx (friendly boundary).
+  // Everything is scoped to THIS player: no global scan of every point or
+  // participation (the official ranking comes from the cached ranking service).
+  const realEvent = { isTest: false } as const;
+  const [participations, recentMatches, upcomingMatches, organizedTournaments, beyblades, myOfficial, myBattle, finishAgg, currentUser] =
     await Promise.all([
       prisma.tournamentParticipant.findMany({
-        where: { userId },
+        where: { userId, tournament: realEvent },
         select: {
           id: true,
           totalPoints: true,
           wins: true,
           losses: true,
+          approved: true,
+          placement: true,
           createdAt: true,
-          tournament: { select: { id: true, name: true, status: true, isOfficial: true } },
+          tournament: { select: { id: true, name: true, status: true, isOfficial: true, startDate: true } },
         },
         orderBy: { createdAt: "desc" },
       }),
       prisma.match.findMany({
         where: {
           status: "FINISHED",
+          tournament: realEvent,
           OR: [{ player1Id: userId }, { player2Id: userId }],
         },
         include: {
@@ -55,22 +64,24 @@ export default async function DashboardPage() {
           tournament: { select: { id: true, name: true } },
           points: { where: { userId }, select: { points: true, finishType: true } },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
         take: 10,
       }),
       prisma.match.findMany({
         where: {
           status: { in: ["PENDING", "IN_PROGRESS"] },
           OR: [{ player1Id: userId }, { player2Id: userId }],
-          tournament: { status: { not: "FINISHED" } },
+          tournament: { status: "IN_PROGRESS", ...realEvent },
         },
         include: {
-          player1: { select: { id: true, name: true } },
-          player2: { select: { id: true, name: true } },
+          player1: { select: { id: true, name: true, bladerName: true } },
+          player2: { select: { id: true, name: true, bladerName: true } },
           tournament: { select: { id: true, name: true } },
         },
-        orderBy: { createdAt: "asc" },
-        take: 5,
+        // Earliest round / slot first; a match being played now is moved to
+        // the front below (enum order would put PENDING first).
+        orderBy: [{ round: "asc" }, { slot: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
+        take: 6,
       }),
       prisma.tournament.findMany({
         where: { organizerId: userId, status: { not: "FINISHED" } },
@@ -79,35 +90,36 @@ export default async function DashboardPage() {
       }),
       prisma.beyblade.findMany({
         where: { userId },
-        include: { matchPoints: { select: { points: true } } },
-        orderBy: { wins: "desc" },
+        select: { id: true, name: true, blade: true, ratchet: true, bit: true, wins: true, losses: true },
+        orderBy: [{ wins: "desc" }, { id: "asc" }],
       }),
-      prisma.tournamentParticipant.groupBy({
-        by: ["userId"],
-        where: { tournament: { isOfficial: true, isTest: false }, user: { isGuest: false, deleted: false } },
-        _sum: { rankingPoints: true, wins: true, losses: true },
+      prisma.tournamentParticipant.aggregate({
+        where: { userId, tournament: { isOfficial: true, isTest: false } },
+        _sum: { wins: true, losses: true },
+      }),
+      // Battle points scored in official events (the classification "pts").
+      prisma.matchPoint.aggregate({
+        where: { userId, match: { tournament: { isOfficial: true, isTest: false } } },
+        _sum: { points: true },
+      }),
+      // My finish-type distribution (which finishes I score most).
+      prisma.matchPoint.groupBy({
+        by: ["finishType"],
+        where: { userId },
+        _count: { _all: true },
+        _sum: { points: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { bladerName: true, avatarUrl: true, homeCommunity: true },
       }),
     ]);
+  // A bye (player vs. themself) is not a match to play.
+  const upcoming = upcomingMatches
+    .filter((m) => m.player1Id !== m.player2Id)
+    .sort((a, b) => Number(b.status === "IN_PROGRESS") - Number(a.status === "IN_PROGRESS"));
+  const nextMatch = upcoming[0] ?? null;
 
-  // Battle points scored across official tournaments (same metric as the
-  // tournament classification's "pts"), summed per player. Byes have no
-  // MatchPoint rows, so they're naturally excluded.
-  const battlePointAgg = await prisma.matchPoint.groupBy({
-    by: ["userId"],
-    where: { match: { tournament: { isOfficial: true, isTest: false } } },
-    _sum: { points: true },
-  });
-  const battlePointsByUser = new Map<string, number>(
-    battlePointAgg.map((b: { userId: string; _sum: { points: number | null } }) => [b.userId, b._sum.points ?? 0])
-  );
-
-  // My finish-type distribution (which finishes I score most).
-  const finishAgg = await prisma.matchPoint.groupBy({
-    by: ["finishType"],
-    where: { userId },
-    _count: { _all: true },
-    _sum: { points: true },
-  });
   const finishTotal = finishAgg.reduce((s: number, f: { _count: { _all: number } }) => s + f._count._all, 0);
   const FINISH_META: Record<string, { color: string }> = {
     SPIN_FINISH: { color: "#9ca3af" },
@@ -126,19 +138,13 @@ export default async function DashboardPage() {
     }))
     .sort((a: { count: number }, b: { count: number }) => b.count - a.count);
 
-  const currentUser = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { bladerName: true, avatarUrl: true, homeCommunity: true },
-  });
   // "Ranking oficial" = the same service as /rankings and the home page.
   const rankScope = scopeOfHome(currentUser?.homeCommunity);
   const official = await getLeagueRanking(rankScope);
 
-  // Official career wins (ranking metric) and my position in the full ranking.
-  const myRankingRow = ranking.find((r: { userId: string }) => r.userId === userId);
-  const myOfficialWins = myRankingRow?._sum.wins ?? 0;
-  const myOfficialLosses = myRankingRow?._sum.losses ?? 0;
-  const myBattlePoints = battlePointsByUser.get(userId) ?? 0;
+  const myOfficialWins = myOfficial._sum.wins ?? 0;
+  const myOfficialLosses = myOfficial._sum.losses ?? 0;
+  const myBattlePoints = myBattle._sum.points ?? 0;
   // Official position: ranking points of the player's league (lib/leagueRanking).
   const myRankIdx = official.findIndex((r) => r.id === userId);
   const myRank = myRankIdx >= 0 ? myRankIdx + 1 : null;
@@ -147,9 +153,24 @@ export default async function DashboardPage() {
   const winRate = officialGames > 0 ? Math.round((myOfficialWins / officialGames) * 100) : 0;
   const { tier, next, progress, toNext } = tierFor(myOfficialWins);
 
-  // Top 10 of the official ranking (same order as /rankings).
-  const rankingList = official.slice(0, 10).map((r) => ({
+  // Top 10 of the official ranking (same order as /rankings) — plus my own row
+  // when I'm below it, so I always see where I stand.
+  const shown = official.slice(0, 10).map((r, i) => ({ r, pos: i + 1 }));
+  if (myRankIdx >= 10) shown.push({ r: official[myRankIdx], pos: myRankIdx + 1 });
+  const shownIds = shown.map((x) => x.r.id);
+  const [shownBattle, beyPointAgg] = await Promise.all([
+    shownIds.length
+      ? prisma.matchPoint.groupBy({ by: ["userId"], where: { userId: { in: shownIds }, match: { tournament: { isOfficial: true, isTest: false } } }, _sum: { points: true } })
+      : Promise.resolve([] as { userId: string; _sum: { points: number | null } }[]),
+    beyblades.length
+      ? prisma.matchPoint.groupBy({ by: ["beybladeId"], where: { beybladeId: { in: beyblades.map((b) => b.id) } }, _sum: { points: true } })
+      : Promise.resolve([] as { beybladeId: string | null; _sum: { points: number | null } }[]),
+  ]);
+  const battlePointsByUser = new Map(shownBattle.map((b) => [b.userId, b._sum.points ?? 0]));
+  const beyPoints = new Map(beyPointAgg.map((b) => [b.beybladeId, b._sum.points ?? 0]));
+  const rankingList = shown.map(({ r, pos }) => ({
     id: r.id,
+    pos,
     name: r.name,
     bladerName: r.name,
     avatarUrl: r.avatarUrl ?? null,
@@ -159,6 +180,26 @@ export default async function DashboardPage() {
     battlePoints: battlePointsByUser.get(r.id) ?? 0,
     isMe: r.id === userId,
   }));
+
+  // My registrations still in play: status, approval and what to do next.
+  const myRegistrations = participations
+    .filter((p) => p.tournament.status === "REGISTRATION" || p.tournament.status === "IN_PROGRESS")
+    .map((p) => {
+      const pending = myRegistrationState(p) === "PENDING";
+      const live = p.tournament.status === "IN_PROGRESS";
+      return {
+        id: p.id,
+        tournament: p.tournament,
+        approval: pending ? "Aguardando aprovação" : "Inscrição confirmada",
+        pending,
+        next: pending
+          ? { label: "Ver pagamento e inscrição", href: `/tournaments/${p.tournament.id}?aba=resumo#inscricao` }
+          : live
+            ? { label: "Ver minhas partidas", href: `/tournaments/${p.tournament.id}?aba=partidas` }
+            : { label: "Ver detalhes do evento", href: `/tournaments/${p.tournament.id}?aba=resumo` },
+      };
+    });
+  const loadedAt = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
 
   const totalPoints = participations.reduce((sum: number, p: { totalPoints: number }) => sum + p.totalPoints, 0);
   const totalWins = participations.reduce((sum: number, p: { wins: number }) => sum + p.wins, 0);
@@ -182,6 +223,61 @@ export default async function DashboardPage() {
           <p className="text-gray-400 mt-1">Acompanhe suas partidas, torneios e suba no ranking.</p>
         </div>
 
+        {/* What matters now: next match and registrations in play. This page
+            does not update by itself, so it says when it was loaded instead of
+            claiming to be live. */}
+        <div className="mb-6 grid gap-4 lg:grid-cols-2">
+          <section aria-labelledby="proxima-partida" className="bg-card border border-line rounded-2xl p-5">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h2 id="proxima-partida" className="text-base font-bold text-white">Sua próxima partida</h2>
+              <span className="flex items-center gap-2 text-[11px] text-gray-400">Atualizado às {loadedAt} <RetryButton subtle label="Atualizar" /></span>
+            </div>
+            {nextMatch ? (() => {
+              const opp = nextMatch.player1Id === userId ? nextMatch.player2 : nextMatch.player1;
+              return (
+                <Link href={`/tournaments/${nextMatch.tournament.id}?aba=partidas`} className="block rounded-xl bg-field p-4 hover:ring-1 hover:ring-brand-yellow/40">
+                  <div className="text-lg font-black text-white">vs {opp.bladerName || opp.name}</div>
+                  <div className="text-sm text-gray-300 mt-1">
+                    {nextMatch.tournament.name} · Rodada {nextMatch.round}{nextMatch.arena ? ` · Arena ${nextMatch.arena}` : ""}
+                  </div>
+                  <div className="mt-2 text-xs font-semibold">
+                    {nextMatch.status === "IN_PROGRESS"
+                      ? <span className="text-green-400">Partida iniciada — vá para a arena</span>
+                      : <span className="text-brand-yellow">Aguardando chamada</span>}
+                  </div>
+                </Link>
+              );
+            })() : (
+              <p className="text-sm text-gray-400">Nenhuma partida sua em torneios em andamento.</p>
+            )}
+          </section>
+
+          <section aria-labelledby="minhas-inscricoes" className="bg-card border border-line rounded-2xl p-5">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h2 id="minhas-inscricoes" className="text-base font-bold text-white">Minhas inscrições</h2>
+              <Link href="/tournaments?status=inscricoes" className="text-xs text-brand-yellow hover:underline">Inscrições abertas →</Link>
+            </div>
+            {myRegistrations.length === 0 ? (
+              <p className="text-sm text-gray-400">Você não tem inscrições em eventos abertos ou em andamento.</p>
+            ) : (
+              <ul className="space-y-2">
+                {myRegistrations.slice(0, 4).map((r) => (
+                  <li key={r.id} className="rounded-xl bg-field p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-white">{r.tournament.name}</span>
+                      <span className="text-[11px] text-gray-400">{STATUS_LABELS[r.tournament.status]}</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className={r.pending ? "text-amber-400 font-semibold" : "text-green-400 font-semibold"}>{r.approval}</span>
+                      <Link href={r.next.href} className="text-brand-yellow hover:underline">{r.next.label} →</Link>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
         {/* Hero player card — tier, rank position, win rate (LBB-style) */}
         <div className="mb-6 bg-gradient-to-br from-card to-card border border-line rounded-2xl p-5 sm:p-6">
           <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
@@ -190,7 +286,7 @@ export default async function DashboardPage() {
               <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 flex items-center justify-center bg-field" style={{ borderColor: tier.color }}>
                 {currentUser?.avatarUrl
                   ? <img src={currentUser.avatarUrl} alt="" className="w-full h-full object-cover" />
-                  : <img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain" />}
+                  : <img src="/brand/bey-96.webp" alt="" className="w-10 h-10 object-contain" />}
               </div>
               <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap" style={{ background: tier.color, color: "#111" }}>
                 {tier.icon} {tier.name}
@@ -241,7 +337,7 @@ export default async function DashboardPage() {
                 { label: "Total de Pontos", value: totalPoints, icon: "⭐", color: "text-brand-yellow" },
                 { label: "Vitórias", value: totalWins, icon: "🏆", color: "text-green-400" },
                 { label: "Derrotas", value: totalLosses, icon: "💀", color: "text-red-400" },
-                { label: "Torneios Ativos", value: activeTournaments, icon: "/bey-removebg-preview.png", color: "text-blue-400" },
+                { label: "Torneios Ativos", value: activeTournaments, icon: "/brand/bey-96.webp", color: "text-blue-400" },
               ].map((stat) => (
                 <div key={stat.label} className="bg-card border border-line rounded-xl p-5">
                   <div className="flex items-center justify-between mb-2">
@@ -256,18 +352,18 @@ export default async function DashboardPage() {
             <div className="grid lg:grid-cols-2 gap-6">
           {/* Upcoming Matches */}
           <div className="bg-card border border-line rounded-xl p-6">
-            <h2 className="text-lg font-bold text-white mb-4">Próximas Partidas</h2>
-            {upcomingMatches.length === 0 ? (
-              <p className="text-gray-500 text-sm py-4 text-center">Nenhuma partida agendada</p>
+            <h2 className="text-lg font-bold text-white mb-4">Próximas partidas</h2>
+            {upcoming.length <= 1 ? (
+              <p className="text-gray-500 text-sm py-4 text-center">{upcoming.length === 1 ? "Só a partida acima por enquanto" : "Nenhuma partida agendada"}</p>
             ) : (
               <div className="space-y-3">
-                {upcomingMatches.map((match: { id: string; player1Id: string; player2: { name: string }; player1: { name: string }; tournament: { id: string; name: string }; round: number; status: string }) => {
+                {upcoming.slice(1).map((match) => {
                   const opponent =
                     match.player1Id === userId ? match.player2 : match.player1;
                   return (
                     <Link
                       key={match.id}
-                      href={`/tournaments/${match.tournament.id}`}
+                      href={`/tournaments/${match.tournament.id}?aba=partidas`}
                       className="flex items-center justify-between p-3 bg-field hover:bg-field rounded-lg transition-colors"
                     >
                       <div>
@@ -290,7 +386,7 @@ export default async function DashboardPage() {
 
           {/* Recent Match History */}
           <div className="bg-card border border-line rounded-xl p-6">
-            <h2 className="text-lg font-bold text-white mb-4">Batalhas Recentes</h2>
+            <h2 className="text-lg font-bold text-white mb-4">Resultados recentes</h2>
             {recentMatches.length === 0 ? (
               <p className="text-gray-500 text-sm py-4 text-center">Nenhum histórico de partidas ainda</p>
             ) : (
@@ -368,7 +464,7 @@ export default async function DashboardPage() {
               <p className="text-gray-500 text-sm text-center py-6">Nenhum dado ainda</p>
             ) : (
               <div className="space-y-2">
-                {rankingList.map((player: { id: string; name: string; bladerName: string | null; avatarUrl: string | null; leaguePoints: number; battlePoints: number; wins: number; losses: number; isMe: boolean }, i: number) => (
+                {rankingList.map((player) => { const i = player.pos - 1; return (
                   <Link
                     key={player.id}
                     href={`/community/${player.id}`}
@@ -386,7 +482,7 @@ export default async function DashboardPage() {
                     <div className="w-7 h-7 rounded-full overflow-hidden border border-line flex-shrink-0 bg-field flex items-center justify-center">
                       {player.avatarUrl
                         ? <img src={player.avatarUrl} alt="" className="w-full h-full object-cover" />
-                        : <img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain" />
+                        : <img src="/brand/bey-96.webp" alt="" className="w-4 h-4 object-contain" />
                       }
                     </div>
                     <div className="flex-1 min-w-0">
@@ -400,7 +496,7 @@ export default async function DashboardPage() {
                       <div className="text-[9px] text-gray-500">vit.</div>
                     </div>
                   </Link>
-                ))}
+                ); })}
               </div>
             )}
           </div>
@@ -475,16 +571,16 @@ export default async function DashboardPage() {
               </Link>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {beyblades.map((b: { id: string; name: string; blade: string | null; ratchet: string | null; bit: string | null; wins: number; losses: number; matchPoints: { points: number }[] }) => {
+              {beyblades.map((b) => {
                 const total = b.wins + b.losses;
                 const winRate = total > 0 ? Math.round((b.wins / total) * 100) : 0;
-                const points = b.matchPoints.reduce((s: number, mp: { points: number }) => s + mp.points, 0);
+                const points = beyPoints.get(b.id) ?? 0;
                 const parts = [b.blade, b.ratchet, b.bit].filter(Boolean).join(" / ");
                 return (
                   <div key={b.id} className="bg-field border border-line rounded-xl p-4">
                     <div className="flex items-start justify-between mb-3 gap-2">
                       <div className="min-w-0">
-                        <div className="font-bold text-white truncate flex items-center"><img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />{b.name}</div>
+                        <div className="font-bold text-white truncate flex items-center"><img src="/brand/bey-96.webp" alt="" className="w-4 h-4 object-contain inline-block mr-1" />{b.name}</div>
                         {parts && <div className="text-xs text-gray-500 mt-0.5 truncate">{parts}</div>}
                       </div>
                       <div className="text-right flex-shrink-0">
@@ -518,7 +614,7 @@ export default async function DashboardPage() {
           <div className="mt-6 bg-card border border-line rounded-xl p-6">
             <h2 className="text-lg font-bold text-white mb-4">Meus Torneios</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {participations.map((p: { id: string; totalPoints: number; wins: number; losses: number; tournament: { id: string; name: string; status: string; isOfficial: boolean } }) => (
+              {participations.slice(0, 12).map((p) => (
                 <Link
                   key={p.id}
                   href={`/tournaments/${p.tournament.id}`}
@@ -540,6 +636,8 @@ export default async function DashboardPage() {
                     p.tournament.status === "IN_PROGRESS" ? "text-green-400" : "text-gray-500"
                   }`}>
                     {STATUS_LABELS[p.tournament.status] || p.tournament.status}
+                    {p.approved === false && p.tournament.status !== "FINISHED" && <span className="ml-2 text-amber-400">· Aguardando aprovação</span>}
+                    {p.tournament.status === "FINISHED" && p.placement ? <span className="ml-2 text-gray-300">· {p.placement}º lugar</span> : null}
                   </div>
                 </Link>
               ))}

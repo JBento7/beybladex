@@ -49,7 +49,7 @@ function LoginForm() {
   return (
     <div className="min-h-screen bg-app flex flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="mb-8 block">
-        <img src="/lblnovo.png" alt="Liga Beyblade Londrina" className="h-14 md:h-[100px] w-auto" />
+        <img src="/brand/lblnovo-384.webp" width={178} height={100} fetchPriority="high" alt="Liga Beyblade Londrina" className="h-14 md:h-[100px] w-auto" />
       </Link>
 
       <div className="w-full max-w-md bg-card border border-line rounded-2xl p-8 shadow-2xl">
@@ -70,7 +70,7 @@ function LoginForm() {
 
         {verified && (
           <div aria-live="polite" className="bg-brand-yellow/10 border border-brand-yellow/40 text-brand-yellow text-sm px-4 py-3 rounded-lg mb-4">
-            <img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />E-mail confirmado! Faça login para entrar.
+            <img src="/brand/bey-96.webp" alt="" className="w-4 h-4 object-contain inline-block mr-1" />E-mail confirmado! Faça login para entrar.
           </div>
         )}
 

@@ -28,10 +28,10 @@ function sumStats(parts: (Partial<CombinedStats> | null | undefined)[]): Combine
 }
 
 const TYPE_IMAGES: Record<string, string> = {
-  ATTACK:  "/ataque.png",
-  DEFENSE: "/defesa.png",
-  STAMINA: "/resistencia.png",
-  BALANCE: "/equilibrio.png",
+  ATTACK:  "/brand/ataque-96.webp",
+  DEFENSE: "/brand/defesa-96.webp",
+  STAMINA: "/brand/resistencia-96.webp",
+  BALANCE: "/brand/equilibrio-96.webp",
 };
 
 function detectType(stats: CombinedStats): string | null {

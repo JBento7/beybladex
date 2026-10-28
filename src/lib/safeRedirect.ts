@@ -15,3 +15,10 @@ export function safeCallbackUrl(raw: string | null | undefined): string | null {
   if (v.startsWith("/login") || v.startsWith("/register")) return null;
   return v;
 }
+
+/** /login (or /register) URL that brings the user back to `returnTo` —
+ *  path, tab, search and filters included. Unsafe targets are dropped. */
+export function authUrl(returnTo: string | null | undefined, page: "/login" | "/register" = "/login"): string {
+  const back = safeCallbackUrl(returnTo);
+  return back && back !== "/" ? `${page}?callbackUrl=${encodeURIComponent(back)}` : page;
+}

@@ -23,3 +23,12 @@ test("never loops back to login/register", () => {
   assert.equal(safeCallbackUrl("/login?x=1"), null);
   assert.equal(safeCallbackUrl("/register"), null);
 });
+
+test("login links keep path, tab, search and filters — never an outside target", async () => {
+  const { authUrl } = await import("../src/lib/safeRedirect.ts");
+  assert.equal(authUrl("/tournaments?status=proximos&liga=lbm&q=copa"), "/login?callbackUrl=%2Ftournaments%3Fstatus%3Dproximos%26liga%3Dlbm%26q%3Dcopa");
+  assert.equal(authUrl("/tournaments/abc?aba=resumo#inscricao", "/register"), "/register?callbackUrl=%2Ftournaments%2Fabc%3Faba%3Dresumo%23inscricao");
+  assert.equal(authUrl("//evil.example"), "/login");
+  assert.equal(authUrl("/login?callbackUrl=/x"), "/login"); // no loop
+  assert.equal(authUrl("/"), "/login");
+});

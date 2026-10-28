@@ -1,5 +1,6 @@
 "use client";
 
+import { announceProfileUpdated } from "@/lib/client/profileCache";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { COMMUNITY_LIST } from "@/lib/communities";
@@ -71,6 +72,7 @@ export default function ProfileEditor({ initialName, initialEmail, initialBlader
       setError(data.error || "Erro ao salvar.");
     } else {
       setSuccess("Perfil atualizado com sucesso!");
+      announceProfileUpdated();
       if (successTimer.current) clearTimeout(successTimer.current);
       successTimer.current = setTimeout(() => setSuccess(""), 4000);
       setCurrentPassword("");

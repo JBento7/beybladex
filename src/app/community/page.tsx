@@ -4,17 +4,21 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { authUrl } from "@/lib/safeRedirect";
 import Navbar from "@/components/Navbar";
 import { TierBadge } from "@/components/TierBadge";
 
 export const metadata: Metadata = { title: "Comunidade" };
 import Link from "next/link";
 import { COMMUNITY_LIST, communityOf } from "@/lib/communities";
+import { getOfficialBattlePoints } from "@/lib/leagueRanking";
 
 // Tabs: everyone ("geral") or only the members of one league.
-export default async function CommunityPage({ searchParams }: { searchParams: { c?: string } }) {
+const PAGE_SIZE = 30;
+
+export default async function CommunityPage({ searchParams }: { searchParams: { c?: string; pagina?: string } }) {
   const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
+  if (!session) redirect(authUrl(`/community${searchParams.c ? `?c=${encodeURIComponent(searchParams.c)}` : ""}`));
   const tab = COMMUNITY_LIST.some((c) => c.slug === searchParams.c) ? (searchParams.c as string) : "geral";
 
   // Beyblades are hidden once an official tournament is in progress, or
@@ -51,45 +55,37 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
       name: true,
       bladerName: true,
       role: true,
-      avatarUrl: true,
       homeCommunity: true,
-      beyblades: {
-        where: { hiddenFromCommunity: false },
-        select: { id: true, name: true, wins: true, losses: true },
-      },
-      participations: {
-        where: { tournament: { isTest: false } },
-        select: { wins: true, losses: true, totalPoints: true, rankingPoints: true, tournament: { select: { isOfficial: true } } },
-      },
+      _count: { select: { beyblades: { where: { hiddenFromCommunity: false } } } },
     },
     orderBy: { name: "asc" },
   });
 
-  // Real battle points scored in official tournaments (the classification "pts"
-  // metric). For ROUND_ROBIN, participation.totalPoints holds wins — not battle
-  // points — so we sum MatchPoint.points directly instead. Byes have no points.
-  const battlePointAgg = await prisma.matchPoint.groupBy({
-    by: ["userId"],
-    where: { match: { tournament: { isOfficial: true, isTest: false } } },
-    _sum: { points: true },
-  });
-  const officialBattleByUser = new Map<string, number>(
-    battlePointAgg.map((b) => [b.userId, b._sum.points ?? 0])
-  );
+  // Career totals summed IN THE DATABASE (it used to load every participation
+  // row of every player). Official battle points come from the cached
+  // ranking service (public data, invalidated with the ranking).
+  const [allAgg, officialAgg, beyAgg, officialBattleByUser] = await Promise.all([
+    prisma.tournamentParticipant.groupBy({ by: ["userId"], where: { tournament: { isTest: false } }, _sum: { wins: true, losses: true, totalPoints: true } }),
+    prisma.tournamentParticipant.groupBy({ by: ["userId"], where: { tournament: { isTest: false, isOfficial: true } }, _sum: { wins: true, rankingPoints: true } }),
+    prisma.tournamentParticipant.groupBy({ by: ["userId"], where: { tournament: { isTest: false, isOfficial: false } }, _sum: { rankingPoints: true } }),
+    getOfficialBattlePoints(),
+  ]);
+  const allBy = new Map(allAgg.map((r) => [r.userId, r._sum]));
+  const offBy = new Map(officialAgg.map((r) => [r.userId, r._sum]));
+  const beyBy = new Map(beyAgg.map((r) => [r.userId, r._sum]));
 
   const playersWithStats = players.map((p) => {
-    const official = p.participations.filter((x) => x.tournament.isOfficial);
-    const wins = p.participations.reduce((s, x) => s + x.wins, 0);
-    const losses = p.participations.reduce((s, x) => s + x.losses, 0);
-    const officialPoints = official.reduce((s, x) => s + x.rankingPoints, 0);
-    const beyPoints = p.participations
-      .filter((x) => !x.tournament.isOfficial)
-      .reduce((s, x) => s + x.rankingPoints, 0);
-    const battlePoints = p.participations.reduce((s, x) => s + x.totalPoints, 0);
-    // Official-only ranking keys, matching the dashboard and the tournament
-    // classification: official wins → official battle points scored.
-    const officialWins = official.reduce((s, x) => s + x.wins, 0);
-    const officialBattlePoints = officialBattleByUser.get(p.id) ?? 0;
+    const all = allBy.get(p.id);
+    const off = offBy.get(p.id);
+    const wins = all?.wins ?? 0;
+    const losses = all?.losses ?? 0;
+    const officialPoints = off?.rankingPoints ?? 0;
+    const beyPoints = beyBy.get(p.id)?.rankingPoints ?? 0;
+    const battlePoints = all?.totalPoints ?? 0;
+    // Official-only ranking keys, matching the tournament classification:
+    // official wins → official battle points scored.
+    const officialWins = off?.wins ?? 0;
+    const officialBattlePoints = officialBattleByUser[p.id] ?? 0;
     const matches = wins + losses;
     const winRate = matches > 0 ? Math.round((wins / matches) * 100) : 0;
     return { ...p, wins, losses, officialPoints, beyPoints, battlePoints, officialWins, officialBattlePoints, matches, winRate };
@@ -103,6 +99,32 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
     b.officialBattlePoints - a.officialBattlePoints ||
     a.name.localeCompare(b.name)
   );
+
+  // One page of cards; only that page's beyblade previews (top 3) are read —
+  // the card shows a count, never the full collection.
+  const pages = Math.max(1, Math.ceil(playersWithStats.length / PAGE_SIZE));
+  const pageNo = Math.min(pages, Math.max(1, Math.floor(Number(searchParams.pagina)) || 1));
+  const pagePlayers = playersWithStats.slice((pageNo - 1) * PAGE_SIZE, pageNo * PAGE_SIZE);
+  // Avatars can be inline images (tens of KB each): read only this page's.
+  const avatars = new Map((await prisma.user.findMany({ where: { id: { in: pagePlayers.map((p) => p.id) } }, select: { id: true, avatarUrl: true } })).map((u) => [u.id, u.avatarUrl]));
+  const previews = beybladesHidden || pagePlayers.length === 0 ? [] : await prisma.beyblade.findMany({
+    where: { userId: { in: pagePlayers.map((p) => p.id) }, hiddenFromCommunity: false },
+    select: { id: true, userId: true, name: true, wins: true, losses: true },
+    orderBy: [{ wins: "desc" }, { createdAt: "asc" }, { id: "asc" }],
+  });
+  const previewByUser = new Map<string, typeof previews>();
+  for (const b of previews) {
+    const list = previewByUser.get(b.userId) ?? [];
+    if (list.length < 3) list.push(b);
+    previewByUser.set(b.userId, list);
+  }
+  const pageHref = (n: number) => {
+    const qs = new URLSearchParams();
+    if (tab !== "geral") qs.set("c", tab);
+    if (n > 1) qs.set("pagina", String(n));
+    const q = qs.toString();
+    return `/community${q ? `?${q}` : ""}`;
+  };
 
   return (
     <div className="min-h-screen bg-app">
@@ -121,7 +143,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
             <Link href="/rankings" className="underline underline-offset-2 text-gray-200 hover:text-brand-yellow">Ver ranking oficial</Link>
           </p>
           <div className="flex flex-wrap gap-2 mt-4">
-            {[{ slug: "geral", name: "Geral", logo: null as string | null, color: "#f0a500" }, ...COMMUNITY_LIST].map((c) => {
+            {[{ slug: "geral", name: "Geral", logo: null as string | null, icon: null as string | null, color: "#f0a500" }, ...COMMUNITY_LIST].map((c) => {
               const active = tab === c.slug;
               return (
                 <Link
@@ -132,7 +154,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
                 >
                   {c.logo && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.logo} alt="" className="w-5 h-5 rounded-full object-cover" />
+                    <img src={c.icon ?? c.logo} alt="" width={20} height={20} loading="lazy" decoding="async" className="w-5 h-5 rounded-full object-cover" />
                   )}
                   {c.name}
                 </Link>
@@ -151,7 +173,11 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
           <p className="text-gray-500 text-center py-16">Nenhum jogador cadastrado ainda.</p>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {playersWithStats.map((player) => (
+            {pagePlayers.map((player) => {
+              const beyCount = player._count.beyblades;
+              const avatarUrl = avatars.get(player.id) ?? null;
+              const beyPreview = previewByUser.get(player.id) ?? [];
+              return (
               <Link
                 key={player.id}
                 href={`/community/${player.id}`}
@@ -160,11 +186,11 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
                 {/* Header */}
                 <div className="flex items-center gap-4 mb-5">
                   <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-brand-yellow/30 flex-shrink-0">
-                    {player.avatarUrl ? (
-                      <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={player.name} width={56} height={56} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full bg-brand-yellow/20 flex items-center justify-center">
-                        <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
+                        <img src="/brand/bey-96.webp" alt="" className="w-5 h-5 object-contain" />
                       </div>
                     )}
                   </div>
@@ -176,7 +202,8 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
                       <TierBadge wins={player.officialWins} />
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={communityOf(player.homeCommunity).logo}
+                        src={communityOf(player.homeCommunity).icon}
+                        width={20} height={20} loading="lazy" decoding="async"
                         alt={communityOf(player.homeCommunity).name}
                         title={communityOf(player.homeCommunity).fullName}
                         className="w-5 h-5 rounded-full object-cover flex-shrink-0"
@@ -190,7 +217,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
                     <div className="text-xs text-gray-500 mt-0.5">
                       {beybladesHidden
                         ? "Beyblades ocultas"
-                        : `${player.beyblades.length} beyblade${player.beyblades.length !== 1 ? "s" : ""}`}
+                        : `${beyCount} beyblade${beyCount !== 1 ? "s" : ""}`}
                     </div>
                   </div>
                 </div>
@@ -220,21 +247,21 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
                 {/* Beyblades preview */}
                 {beybladesHidden ? (
                   <div className="text-xs text-gray-600 text-center py-2">🔒 Ocultas durante o torneio oficial</div>
-                ) : player.beyblades.length > 0 ? (
+                ) : beyCount > 0 ? (
                   <div className="space-y-1.5">
-                    {player.beyblades.slice(0, 3).map((bey) => {
+                    {beyPreview.map((bey) => {
                       const t = bey.wins + bey.losses;
                       const wr = t > 0 ? Math.round((bey.wins / t) * 100) : 0;
                       return (
                         <div key={bey.id} className="flex items-center justify-between text-xs bg-field rounded-lg px-3 py-2">
-                          <span className="text-gray-300 truncate mr-2 flex items-center gap-1"><img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />{bey.name}</span>
+                          <span className="text-gray-300 truncate mr-2 flex items-center gap-1"><img src="/brand/bey-96.webp" alt="" className="w-4 h-4 object-contain inline-block mr-1" />{bey.name}</span>
                           <span className="text-brand-yellow font-semibold flex-shrink-0">{wr}% WR</span>
                         </div>
                       );
                     })}
-                    {player.beyblades.length > 3 && (
+                    {beyCount > 3 && (
                       <div className="text-xs text-gray-500 text-center pt-1">
-                        +{player.beyblades.length - 3} mais
+                        +{beyCount - 3} mais
                       </div>
                     )}
                   </div>
@@ -242,8 +269,17 @@ export default async function CommunityPage({ searchParams }: { searchParams: { 
                   <div className="text-xs text-gray-600 text-center py-2">Nenhuma beyblade cadastrada</div>
                 )}
               </Link>
-            ))}
+              );
+            })}
           </div>
+        )}
+
+        {pages > 1 && (
+          <nav aria-label="Páginas da comunidade" className="mt-8 flex flex-wrap items-center justify-center gap-3 text-sm">
+            {pageNo > 1 && <Link href={pageHref(pageNo - 1)} className="px-4 py-2 rounded-lg border border-line text-gray-200 hover:border-brand-yellow">‹ Anterior</Link>}
+            <span className="text-gray-400">Página {pageNo} de {pages} · {playersWithStats.length} jogadores</span>
+            {pageNo < pages && <Link href={pageHref(pageNo + 1)} className="px-4 py-2 rounded-lg border border-line text-gray-200 hover:border-brand-yellow">Próxima ›</Link>}
+          </nav>
         )}
       </main>
     </div>

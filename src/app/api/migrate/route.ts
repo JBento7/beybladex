@@ -765,6 +765,7 @@ export async function GET() {
     // is a separate, reviewable step (/api/admin/round-participation/backfill):
     // it first lists every historical conflict instead of failing or dropping rows.
     { name: "idx TournamentParticipant user", sql: `CREATE INDEX IF NOT EXISTS "TournamentParticipant_userId_idx" ON "TournamentParticipant" ("userId")` },
+    { name: "idx Beyblade user", sql: `CREATE INDEX IF NOT EXISTS "Beyblade_userId_idx" ON "Beyblade" ("userId")` },
   ];
 
   // Database-side event version (triggers). Statements from lib/sql.

@@ -5,15 +5,20 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
 
+// Public summary (no regulation, no drafts, bounded). The paginated list with
+// filters is /api/tournaments/list.
 export async function GET() {
   try {
     const tournaments = await prisma.tournament.findMany({
-      where: { isTest: false },
-      include: {
+      where: { isTest: false, status: { not: "DRAFT" } },
+      select: {
+        id: true, name: true, status: true, format: true, isOfficial: true, communitySlug: true, isPartnership: true,
+        startDate: true, location: true, maxParticipants: true,
         organizer: { select: { id: true, name: true } },
         _count: { select: { participants: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 100,
     });
 
     return NextResponse.json(tournaments);

@@ -37,7 +37,7 @@ export default async function RankingsPage({ searchParams }: { searchParams: { r
               >
                 {SCOPES[k].logo && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={SCOPES[k].logo!} alt="" className="inline-block w-5 h-5 rounded-full object-cover mr-1.5 align-[-4px]" />
+                  <img src={SCOPES[k].logo!} alt="" width={20} height={20} decoding="async" className="inline-block w-5 h-5 rounded-full object-cover mr-1.5 align-[-4px]" />
                 )}
                 {SCOPES[k].label}
               </a>

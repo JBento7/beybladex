@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Home, LogIn, LogOut, Medal, MoreHorizontal, Trophy, UserPlus, X } from "lucide-react";
+import AuthLink from "@/components/AuthLink";
 import { MAIN_NAV, ACCOUNT_NAV, ORGANIZER_NAV, isActive, type NavItem } from "./navItems";
 
 const BAR: NavItem[] = [
@@ -147,12 +148,12 @@ export default function MobileNavigation({
                 </button>
               ) : (
                 <>
-                  <Link href={`/login?callbackUrl=${encodeURIComponent(pathname)}`} className="flex items-center gap-3 min-h-12 px-4 rounded-ctl text-body font-semibold text-fg hover:bg-hover">
+                  <AuthLink pathname={pathname} className="flex items-center gap-3 min-h-12 px-4 rounded-ctl text-body font-semibold text-fg hover:bg-hover">
                     <LogIn aria-hidden="true" className="w-[22px] h-[22px]" /> Entrar
-                  </Link>
-                  <Link href="/register" className="flex items-center gap-3 min-h-12 px-4 rounded-ctl text-body font-semibold text-fg hover:bg-hover">
+                  </AuthLink>
+                  <AuthLink page="/register" pathname={pathname} className="flex items-center gap-3 min-h-12 px-4 rounded-ctl text-body font-semibold text-fg hover:bg-hover">
                     <UserPlus aria-hidden="true" className="w-[22px] h-[22px]" /> Criar conta
-                  </Link>
+                  </AuthLink>
                 </>
               )}
             </div>

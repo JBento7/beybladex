@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ShareButton from "@/components/ShareButton";
 import { CalendarDays, MapPin, Search, Users, X } from "lucide-react";
 import StatusBadge, { Tag } from "@/components/ui/StatusBadge";
@@ -10,39 +10,21 @@ import EventCover from "@/components/EventCover";
 import { formatEventDate, formatMoney, hasWallTime } from "@/lib/format";
 import { COMMUNITY_LIST, communityOf } from "@/lib/communities";
 import { parseStatus, parseLiga, type StatusFilter } from "@/lib/tournamentFilters";
+import type { TournamentListItem, TournamentListPage } from "@/lib/tournamentList";
 
-type Tournament = {
-  id: string;
-  name: string;
-  description: string | null;
-  format: string;
-  status: string;
-  isOfficial: boolean;
-  communitySlug: string;
-  isPartnership: boolean;
-  prize: string | null;
-  startDate: string | null;
-  maxParticipants: number | null;
-  bannerUrl: string | null;
-  location: string | null;
-  entryFee: number | null;
-  organizer: { name: string };
-  participantCount: number;
-  isJoined: boolean;
-  canJoin: boolean;
-};
+type Tournament = TournamentListItem;
 
 // Status filter, from the real Tournament.status values:
 //  - "proximos": hasn't started yet (REGISTRATION + DRAFT) — what the home
 //    page's "Próximos campeonatos" button opens;
 //  - "inscricoes": only the ones taking sign-ups now (REGISTRATION);
 //  - "andamento" (IN_PROGRESS) and "anteriores" (FINISHED).
-const STATUS_FILTERS: { key: StatusFilter; label: string; match: (s: string) => boolean }[] = [
-  { key: "todos", label: "Todos", match: () => true },
-  { key: "proximos", label: "Próximos", match: (s) => s === "REGISTRATION" || s === "DRAFT" },
-  { key: "inscricoes", label: "Inscrições abertas", match: (s) => s === "REGISTRATION" },
-  { key: "andamento", label: "Em andamento", match: (s) => s === "IN_PROGRESS" },
-  { key: "anteriores", label: "Anteriores", match: (s) => s === "FINISHED" },
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+  { key: "todos", label: "Todos" },
+  { key: "proximos", label: "Próximos" },
+  { key: "inscricoes", label: "Inscrições abertas" },
+  { key: "andamento", label: "Em andamento" },
+  { key: "anteriores", label: "Anteriores" },
 ];
 // Display order of the sections when "Todos" is selected.
 const SECTIONS: { key: string; label: string; statuses: string[] }[] = [
@@ -58,12 +40,12 @@ const OFFICIAL_CHANNEL_URL = process.env.NEXT_PUBLIC_OFFICIAL_CHANNEL_URL;
 const OFFICIAL_CHANNEL_LABEL = process.env.NEXT_PUBLIC_OFFICIAL_CHANNEL_LABEL || "Acompanhar o canal oficial";
 
 export default function TournamentList({
-  tournaments,
+  initial,
   initialStatus = "todos",
   initialLiga = "todas",
   initialQuery = "",
 }: {
-  tournaments: Tournament[];
+  initial: TournamentListPage;
   initialStatus?: StatusFilter;
   initialLiga?: string;
   initialQuery?: string;
@@ -72,9 +54,13 @@ export default function TournamentList({
   const [status, setStatus] = useState<StatusFilter>(initialStatus);
   // Community filter: a league's own events plus the partnerships it takes part in.
   const [liga, setLiga] = useState<string>(initialLiga);
+  const [data, setData] = useState<{ items: Tournament[]; counts: TournamentListPage["counts"]; hasMore: boolean; page: number }>(initial);
+  const [loading, setLoading] = useState<"filter" | "more" | null>(null);
+  const [failed, setFailed] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const filtersRef = useRef(`${initialStatus}|${initialLiga}|${initialQuery.trim()}`);
 
-  // Keep the filters in the URL (shareable, survive a refresh) without a
-  // server round-trip on every keystroke.
+  // Keep the filters in the URL (shareable, survive a refresh).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const set = (k: string, v: string, def: string) => (v && v !== def ? params.set(k, v) : params.delete(k));
@@ -83,35 +69,50 @@ export default function TournamentList({
     set("q", query.trim(), "");
     const qs = params.toString();
     const next = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
-    if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(null, "", next);
+    if (next !== `${window.location.pathname}${window.location.search}`) window.history.replaceState(window.history.state, "", next);
   }, [status, liga, query]);
 
-  // Search + league (status is applied after, so its counts reflect the others).
-  const base = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return tournaments.filter((t) => {
-      if (liga !== "todas" && t.communitySlug !== liga && !t.isPartnership) return false;
-      if (!q) return true;
-      return (
-        t.name.toLowerCase().includes(q) ||
-        (t.location ?? "").toLowerCase().includes(q) ||
-        t.organizer.name.toLowerCase().includes(q)
-      );
-    });
-  }, [tournaments, query, liga]);
+  // Fresh server data (live refresh) for the same filters → take it, unless
+  // the visitor already loaded more pages.
+  useEffect(() => {
+    if (filtersRef.current === `${initialStatus}|${initialLiga}|${initialQuery.trim()}`) setData((d) => (d.page === 0 ? initial : d));
+  }, [initial, initialStatus, initialLiga, initialQuery]);
 
-  const counts = useMemo(() => {
-    const c = {} as Record<StatusFilter, number>;
-    for (const f of STATUS_FILTERS) c[f.key] = base.filter((t) => f.match(t.status)).length;
-    return c;
-  }, [base]);
+  // Filtering runs in the database: debounce typing, cancel the request a
+  // newer filter makes obsolete, and ignore any late answer.
+  const load = async (page: number, filters: { status: StatusFilter; liga: string; q: string }) => {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setLoading(page === 0 ? "filter" : "more");
+    setFailed(false);
+    try {
+      const qs = new URLSearchParams({ status: filters.status, liga: filters.liga, q: filters.q, page: String(page) });
+      const res = await fetch(`/api/tournaments/list?${qs}`, { signal: ctrl.signal, cache: "no-store" });
+      if (!res.ok) throw new Error(String(res.status));
+      const next = (await res.json()) as TournamentListPage;
+      if (ctrl.signal.aborted) return;
+      setData((d) => (page === 0 ? next : { ...next, items: [...d.items, ...next.items.filter((t) => !d.items.some((x) => x.id === t.id))] }));
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") setFailed(true);
+    } finally {
+      if (abortRef.current === ctrl) setLoading(null);
+    }
+  };
+  useEffect(() => {
+    const key = `${status}|${liga}|${query.trim()}`;
+    if (key === filtersRef.current) return;
+    filtersRef.current = key;
+    const t = setTimeout(() => load(0, { status, liga, q: query.trim() }), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, liga, query]);
+  useEffect(() => () => abortRef.current?.abort(), []);
 
+  const counts = data.counts;
   const current = STATUS_FILTERS.find((f) => f.key === status)!;
-  // Upcoming views: soonest first (undated last); otherwise newest first.
-  const filtered = base.filter((t) => current.match(t.status));
-  if (status === "proximos" || status === "inscricoes") {
-    filtered.sort((a, b) => (a.startDate ? Date.parse(a.startDate) : Infinity) - (b.startDate ? Date.parse(b.startDate) : Infinity));
-  }
+  const filtered = data.items;
+  const total = counts[status];
   const anyFilter = status !== "todos" || liga !== "todas" || query.trim() !== "";
   const clearAll = () => { setStatus("todos"); setLiga("todas"); setQuery(""); };
 
@@ -168,7 +169,7 @@ export default function TournamentList({
 
       <div className="flex flex-wrap items-center gap-3 mb-6 min-h-11">
         <p className="text-small text-fg-2" aria-live="polite">
-          {filtered.length} torneio{filtered.length === 1 ? "" : "s"}
+          {total} torneio{total === 1 ? "" : "s"}
           {status !== "todos" && <> · <strong className="text-fg">{current.label}</strong></>}
           {liga !== "todas" && <> · <strong className="text-fg">{communityOf(liga).name}</strong></>}
           {query.trim() && <> · busca “{query.trim()}”</>}
@@ -180,7 +181,17 @@ export default function TournamentList({
         )}
       </div>
 
-      {filtered.length === 0 ? (
+      {failed && (
+        <div role="alert" className="mb-4 rounded-ctl border border-line bg-field px-4 py-3 text-small text-fg-2 flex flex-wrap items-center gap-3">
+          Não foi possível atualizar a lista. Verifique a conexão.
+          <Button variant="secondary" size="sm" onClick={() => load(loading === "more" ? data.page + 1 : 0, { status, liga, q: query.trim() })}>Tentar novamente</Button>
+        </div>
+      )}
+
+      <div aria-busy={loading === "filter"} className={loading === "filter" ? "opacity-60 transition-opacity" : undefined}>
+      {filtered.length === 0 && loading === "filter" ? (
+        <p className="text-small text-fg-2 py-12 text-center">Carregando torneios…</p>
+      ) : filtered.length === 0 ? (
         status === "proximos" && !query.trim() ? (
           <EmptyState
             icon={CalendarDays}
@@ -213,7 +224,7 @@ export default function TournamentList({
             return (
               <section key={s.key} aria-labelledby={`sec-${s.key}`}>
                 <h2 id={`sec-${s.key}`} className="font-display text-title-2 desk:text-title-2-lg text-fg mb-4">
-                  {s.label} <span className="text-fg-3 text-title-3">({list.length})</span>
+                  {s.label} <span className="text-fg-3 text-title-3">({sectionCount(s.key, counts)})</span>
                 </h2>
                 <Grid list={list} onOpen={rememberScroll} />
               </section>
@@ -223,8 +234,25 @@ export default function TournamentList({
       ) : (
         <Grid list={filtered} onOpen={rememberScroll} />
       )}
+      </div>
+
+      {data.hasMore && (
+        <div className="mt-8 flex flex-col items-center gap-2">
+          <p className="text-small text-fg-3">Mostrando {filtered.length} de {total}</p>
+          <Button variant="secondary" onClick={() => load(data.page + 1, { status, liga, q: query.trim() })} disabled={loading !== null}>
+            {loading === "more" ? "Carregando…" : status === "todos" ? "Carregar mais torneios anteriores" : "Carregar mais"}
+          </Button>
+        </div>
+      )}
     </div>
   );
+}
+
+function sectionCount(key: string, c: TournamentListPage["counts"]): number {
+  if (key === "andamento") return c.andamento;
+  if (key === "inscricoes") return c.inscricoes;
+  if (key === "preparo") return c.proximos - c.inscricoes;
+  return c.anteriores;
 }
 
 // Cards: 3 columns on desktop, 2 on tablet, 1 on phones — and fewer whenever
@@ -312,7 +340,7 @@ function CommunityBadge({ slug, partnership }: { slug: string; partnership: bool
   return (
     <span className="inline-flex items-center gap-1.5 rounded-tag border border-line bg-field pl-1 pr-2 py-0.5 text-label text-fg-2">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={c.logo} alt="" className="w-5 h-5 rounded-full object-cover" />
+      <img src={c.icon} alt="" width={20} height={20} loading="lazy" decoding="async" className="w-5 h-5 rounded-full object-cover" />
       {c.name}
     </span>
   );

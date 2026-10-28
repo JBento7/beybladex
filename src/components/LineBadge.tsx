@@ -1,10 +1,10 @@
 const LINE_IMAGES: Record<string, string> = {
-  BX: "/BX.png",
-  UX: "/UX.png",
-  CX: "/CX.png",
-  BX_EXPAND: "/BXE.png",
-  UX_EXPAND: "/UXE.png",
-  CX_EXPAND: "/CXE.png",
+  BX: "/brand/BX-64.webp",
+  UX: "/brand/UX-64.webp",
+  CX: "/brand/CX-64.webp",
+  BX_EXPAND: "/brand/BXE-64.webp",
+  UX_EXPAND: "/brand/UXE-64.webp",
+  CX_EXPAND: "/brand/CXE-64.webp",
 };
 
 export const LINE_LABELS: Record<string, string> = {
@@ -24,6 +24,10 @@ export function LineBadge({ line, className = "" }: { line: string; className?: 
       src={src}
       alt={LINE_LABELS[line] ?? line}
       title={LINE_LABELS[line] ?? line}
+      width={20}
+      height={20}
+      loading="lazy"
+      decoding="async"
       className={`h-5 w-auto object-contain inline-block ${className}`}
     />
   );
@@ -34,7 +38,7 @@ export function LineButtonLabel({ line }: { line: string }) {
   if (!src) return <span>{LINE_LABELS[line] ?? line}</span>;
   return (
     <span className="flex items-center gap-1.5">
-      <img src={src} alt={LINE_LABELS[line] ?? line} className="h-4 w-auto object-contain" />
+      <img src={src} alt={LINE_LABELS[line] ?? line} width={16} height={16} loading="lazy" decoding="async" className="h-4 w-auto object-contain" />
       <span>{LINE_LABELS[line] ?? line}</span>
     </span>
   );

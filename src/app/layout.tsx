@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import ConnectionBanner from "@/components/ConnectionBanner";
 import CommunityTheme from "@/components/CommunityTheme";
 import { COMMUNITY_COOKIE } from "@/lib/communities";
 import { cookies } from "next/headers";
@@ -55,6 +56,7 @@ export default function RootLayout({
     >
       <body className="bg-app text-fg font-sans min-h-screen">
         <ServiceWorkerRegister />
+        <ConnectionBanner />
         <Providers>
           <CommunityTheme initial={cookies().get(COMMUNITY_COOKIE)?.value ?? null}>{children}</CommunityTheme>
         </Providers>

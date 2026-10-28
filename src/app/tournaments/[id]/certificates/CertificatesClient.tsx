@@ -141,7 +141,7 @@ function CertificateCard({
           </div>
           {/* Logo */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/lblnovo.png" alt="LBL" style={{ height: 52, objectFit: "contain" }} />
+          <img src="/brand/lblnovo-384.webp" alt="LBL" style={{ height: 52, objectFit: "contain" }} />
           {/* Right decoration (mirror) */}
           <div style={{ position: "absolute", right: 16, top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: 4, flexDirection: "row-reverse" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2,6px)", gap: 2 }}>
@@ -249,7 +249,7 @@ function CertificateCard({
             {data.playerName}
           </span>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/liga.png" alt="LBL" style={{ height: 28, objectFit: "contain" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+          <img src="/brand/liga-200.webp" alt="LBL" style={{ height: 28, objectFit: "contain" }} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
         </div>
       </div>
 

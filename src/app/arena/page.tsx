@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { authUrl } from "@/lib/safeRedirect";
 import ArenaDisplay from "./ArenaDisplay";
 import { arenaIdentity } from "@/lib/arenaIdentity";
 
@@ -29,7 +30,7 @@ export default async function ArenaPage({
   searchParams: { n?: string; c?: string };
 }) {
   const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
+  if (!session) redirect(authUrl("/arena"));
 
   // Arena number: from the arena user's email, or ?n for an organizer preview.
   const { arena, community } = arenaIdentity(session.user.email, session.user.role, searchParams.n, searchParams.c);

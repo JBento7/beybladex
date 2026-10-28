@@ -365,7 +365,7 @@ export default function AdminParticipantManager({
                             : "bg-card text-gray-300 border-line hover:border-brand-yellow/50"
                         }`}
                       >
-                        <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" />{b.name}
+                        <img src="/brand/bey-96.webp" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" />{b.name}
                       </button>
                     ))}
                   </div>
@@ -549,7 +549,7 @@ export default function AdminParticipantManager({
                                 : "bg-card text-gray-300 border-line hover:border-brand-yellow/50"
                             }`}
                           >
-                            <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" />{b.name}
+                            <img src="/brand/bey-96.webp" alt="" className="w-3.5 h-3.5 object-contain inline-block mr-1" />{b.name}
                           </button>
                         ))}
                       </div>

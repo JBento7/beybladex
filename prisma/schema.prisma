@@ -393,6 +393,8 @@ model Beyblade {
   user         User                  @relation(fields: [userId], references: [id])
   matchPoints  MatchPoint[]
   matchRecords BeybladeMatchRecord[]
+
+  @@index([userId]) // profile/dashboard/community previews (EXPLAIN: seq scan 2.5 ms → 0.17 ms at 12k rows)
 }
 
 model Announcement {

@@ -31,7 +31,7 @@ export default function CommunityPicker({
           >
             <div className="flex items-center gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={c.logo} alt="" className="w-7 h-7 rounded-full object-cover" />
+              <img src={c.icon} alt="" width={28} height={28} loading="lazy" decoding="async" className="w-7 h-7 rounded-full object-cover" />
               <span className="font-black text-sm" style={{ color: community === c.slug ? c.color : "#fff" }}>{c.name}</span>
             </div>
             <div className="text-xs text-gray-400">{c.city} · organiza o evento</div>

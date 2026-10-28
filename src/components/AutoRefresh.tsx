@@ -25,6 +25,9 @@ export default function AutoRefresh({ url, intervalMs = 5000 }: { url: string; i
     let errors = 0;
     let quietSince = Date.now();
     let lastRefresh = 0;
+    let okAt: number | null = null;
+    // Report live status to ConnectionBanner (stale-data indicator).
+    const report = () => window.dispatchEvent(new CustomEvent("lbl:live", { detail: { ok: errors < 2, at: okAt } }));
 
     const modalOpen = () => !!document.querySelector('[role="dialog"][aria-modal="true"]');
     const schedule = (ms: number) => { if (active) { clearTimeout(timer); timer = setTimeout(tick, ms); } };
@@ -36,9 +39,9 @@ export default function AutoRefresh({ url, intervalMs = 5000 }: { url: string; i
       try {
         const res = await fetch(url, { cache: "no-store", headers: etagRef.current ? { "If-None-Match": etagRef.current } : {} });
         if (res.status === 304) {
-          errors = 0;
+          errors = 0; okAt = Date.now();
         } else if (res.ok) {
-          errors = 0;
+          errors = 0; okAt = Date.now();
           etagRef.current = res.headers.get("ETag");
           const { v } = (await res.json()) as { v?: string | null };
           if (v != null) {
@@ -52,6 +55,7 @@ export default function AutoRefresh({ url, intervalMs = 5000 }: { url: string; i
         errors++;
       } finally {
         inflight = false;
+        report();
       }
       // Coalesce: at most one refresh every 1.5 s, and never under a modal.
       if (pendingRef.current && !modalOpen() && Date.now() - lastRefresh > 1500) {
@@ -71,6 +75,7 @@ export default function AutoRefresh({ url, intervalMs = 5000 }: { url: string; i
     return () => {
       active = false;
       clearTimeout(timer);
+      window.dispatchEvent(new CustomEvent("lbl:live", { detail: { ok: true, at: null } }));
       document.removeEventListener("visibilitychange", wake);
       window.removeEventListener("online", wake);
     };

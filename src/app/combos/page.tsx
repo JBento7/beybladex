@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { authUrl } from "@/lib/safeRedirect";
 import Navbar from "@/components/Navbar";
 import CombosTabs from "./CombosTabs";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CombosPage() {
   const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
+  if (!session) redirect(authUrl("/combos"));
 
   return (
     <div className="min-h-screen bg-app text-white">

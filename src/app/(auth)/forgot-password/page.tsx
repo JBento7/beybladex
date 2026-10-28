@@ -36,7 +36,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen bg-app flex flex-col items-center justify-center px-4 py-12">
       <Link href="/" className="mb-8 block">
-        <img src="/lblnovo.png" alt="Liga Beyblade Londrina" className="h-14 md:h-20 w-auto" />
+        <img src="/brand/lblnovo-384.webp" width={178} height={100} fetchPriority="high" alt="Liga Beyblade Londrina" className="h-14 md:h-20 w-auto" />
       </Link>
 
       <div className="w-full max-w-md bg-card border border-line rounded-2xl p-8 shadow-2xl">

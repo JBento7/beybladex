@@ -143,7 +143,7 @@ export default async function PlayerProfilePage({
                 <img src={player.avatarUrl} alt={player.name} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full bg-brand-yellow/20 flex items-center justify-center">
-                  <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
+                  <img src="/brand/bey-96.webp" alt="" className="w-5 h-5 object-contain" />
                 </div>
               )}
             </div>
@@ -186,7 +186,7 @@ export default async function PlayerProfilePage({
             { label: "Pts BeyEncontro", value: beyPoints, color: "text-purple-400", icon: "🎲" },
             { label: "Taxa de Vitória", value: `${winRate}%`, color: "text-green-400", icon: "📈" },
             { label: "Vitórias", value: totalWins, color: "text-green-400", icon: "🏆" },
-            { label: "Torneios", value: player.participations.length, color: "text-blue-400", icon: "/bey-removebg-preview.png" },
+            { label: "Torneios", value: player.participations.length, color: "text-blue-400", icon: "/brand/bey-96.webp" },
           ].map((stat) => (
             <div key={stat.label} className="bg-card border border-line rounded-xl p-5 text-center">
               <div className="flex justify-center mb-2">{stat.icon.startsWith("/") ? <img src={stat.icon} alt="" className="w-6 h-6 object-contain" /> : <span className="text-2xl">{stat.icon}</span>}</div>
@@ -304,7 +304,7 @@ export default async function PlayerProfilePage({
                         <div className="font-bold text-white">{bey.name}</div>
                         {parts && <div className="text-xs text-gray-500 mt-0.5">{parts}</div>}
                       </div>
-                      <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain flex-shrink-0" />
+                      <img src="/brand/bey-96.webp" alt="" className="w-5 h-5 object-contain flex-shrink-0" />
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center text-xs">
                       <div>

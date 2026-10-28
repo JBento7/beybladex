@@ -4,20 +4,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// Header profile (avatar + display name). The client caches it per visit
+// (lib/client/profileCache), so this is not hit on every navigation.
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ avatarUrl: null });
-
+  if (!session) return NextResponse.json({ avatarUrl: null, name: null }, { headers: { "Cache-Control": "private, no-store" } });
   try {
-    const rows = await prisma.$queryRaw<{ avatarUrl: string | null }[]>`
-      SELECT CASE WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name='User' AND column_name='avatarUrl'
-      ) THEN "avatarUrl" ELSE NULL END AS "avatarUrl"
-      FROM "User" WHERE id = ${session.user.id} LIMIT 1
-    `;
-    return NextResponse.json({ avatarUrl: rows[0]?.avatarUrl ?? null });
+    const u = await prisma.user.findUnique({ where: { id: session.user.id }, select: { avatarUrl: true, name: true } });
+    return NextResponse.json({ avatarUrl: u?.avatarUrl ?? null, name: u?.name ?? null }, { headers: { "Cache-Control": "private, no-store" } });
   } catch {
-    return NextResponse.json({ avatarUrl: null });
+    return NextResponse.json({ avatarUrl: null, name: null }, { status: 503 });
   }
 }

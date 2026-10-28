@@ -477,7 +477,7 @@ export default function QuickTournamentPage() {
             {/* Champion banner */}
             {state.phase === "finished" && (
               <div className="bg-brand-yellow/10 border border-brand-yellow/40 rounded-xl p-5 text-center">
-                <img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto mb-2" />
+                <img src="/brand/bey-96.webp" alt="" className="w-10 h-10 object-contain mx-auto mb-2" />
                 <div className="text-lg font-black text-brand-yellow mb-1">Torneio Encerrado!</div>
                 <div className="text-white font-bold">
                   🏆 Campeão: {elimChampion ?? rrChampion}

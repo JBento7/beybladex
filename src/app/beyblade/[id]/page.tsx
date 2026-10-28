@@ -114,7 +114,7 @@ export default async function BeybladeStatsPage({ params }: { params: { id: stri
         <div className="bg-card border border-line rounded-2xl p-6 mb-6">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-xl bg-brand-yellow/10 border border-brand-yellow/20 flex items-center justify-center flex-shrink-0">
-              <img src="/bey-removebg-preview.png" alt="" className="w-7 h-7 object-contain" />
+              <img src="/brand/bey-96.webp" alt="" className="w-7 h-7 object-contain" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">

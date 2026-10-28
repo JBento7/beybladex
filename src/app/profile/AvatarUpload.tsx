@@ -1,5 +1,6 @@
 "use client";
 
+import { announceProfileUpdated } from "@/lib/client/profileCache";
 import { useEffect, useRef, useState } from "react";
 
 interface AvatarUploadProps {
@@ -50,6 +51,7 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
       const data = await res.json();
       if (res.ok) {
         setAvatar(resized);
+        announceProfileUpdated();
         flashSuccess("Foto atualizada!");
       } else {
         setError(data.error ?? "Erro ao salvar foto.");
@@ -73,6 +75,7 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
       });
       if (res.ok) {
         setAvatar(null);
+        announceProfileUpdated();
         flashSuccess("Foto atualizada!");
       } else {
         const data = await res.json().catch(() => ({}));
@@ -96,7 +99,7 @@ export default function AvatarUpload({ currentAvatar, userName }: AvatarUploadPr
             <img src={avatar} alt={userName} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-brand-yellow/20 flex items-center justify-center">
-              <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />
+              <img src="/brand/bey-96.webp" alt="" className="w-5 h-5 object-contain" />
             </div>
           )}
           <div className={`absolute inset-0 bg-black/50 rounded-full flex items-center justify-center transition-opacity ${uploading ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>

@@ -76,7 +76,7 @@ export default async function TestTournamentsPage() {
 
         {tournaments.length === 0 ? (
           <div className="text-center py-24">
-            <div className="mb-4"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
+            <div className="mb-4"><img src="/brand/bey-96.webp" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
             <h2 className="text-2xl font-bold text-white mb-2">Nenhum Torneio de Teste Ainda</h2>
             <p className="text-gray-400 mb-6">
               Marque a opção &quot;Torneio de Teste&quot; ao criar um torneio para que ele apareça aqui.

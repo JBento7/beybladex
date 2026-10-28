@@ -33,13 +33,15 @@ import ExpandableText from "@/components/ExpandableText";
 import RetryButton from "@/components/RetryButton";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 import type { Metadata } from "next";
+import { canSeeDraft } from "@/lib/tournamentList";
+import { authUrl } from "@/lib/safeRedirect";
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const t = await prisma.tournament.findUnique({
     where: { id: params.id },
-    select: { name: true },
+    select: { name: true, status: true },
   });
-  return { title: t?.name ?? "Torneio" };
+  return { title: t && t.status !== "DRAFT" ? t.name : "Torneio" };
 }
 
 const FORMAT_LABELS: Partial<Record<TournamentFormat, string>> & Record<string, string> = {
@@ -330,8 +332,9 @@ export default async function TournamentDetailPage({
   // reads matches without points, "Classificação"/"Partidas" read per-player
   // point SUMS (one aggregate) instead of every point row, and sets only for
   // admins on "Partidas".
-  const meta = await prisma.tournament.findUnique({ where: { id: params.id }, select: { status: true } });
-  if (!meta) notFound();
+  const meta = await prisma.tournament.findUnique({ where: { id: params.id }, select: { status: true, organizerId: true, communitySlug: true, isPartnership: true } });
+  // Drafts are private: only the organizer and admins of the league see them.
+  if (!meta || (meta.status === "DRAFT" && !canSeeDraft(session, meta))) notFound();
   const TAB_KEYS = ["resumo", "classificacao", "partidas", "regras"] as const;
   type TabKey = (typeof TAB_KEYS)[number];
   const kioskViewer = isJudgeAccount(session?.user?.email);
@@ -1451,7 +1454,7 @@ export default async function TournamentDetailPage({
   );
 
   const registrationCard = (tournament.status === "REGISTRATION" || tournament.status === "DRAFT") && (
-    <section aria-labelledby="inscricao-titulo" className={`${card} ${registrationOpen ? "border-amber-400/40" : ""}`}>
+    <section id="inscricao" aria-labelledby="inscricao-titulo" className={`${card} ${registrationOpen ? "border-amber-400/40" : ""}`}>
       <h3 id="inscricao-titulo" className="text-lg font-bold text-white mb-1">
         {registrationOpen ? "Inscrições abertas" : reg.message}
       </h3>
@@ -1467,7 +1470,7 @@ export default async function TournamentDetailPage({
           <ClientJoinButton tournamentId={tournament.id} deckType={tournament.deckType} isOfficial={tournament.isOfficial} />
         ) : !session ? (
           <Link
-            href={`/login?callbackUrl=${encodeURIComponent(`/tournaments/${tournament.id}`)}`}
+            href={authUrl(`/tournaments/${tournament.id}?aba=resumo#inscricao`)}
             className="tap inline-flex items-center justify-center px-5 rounded-lg bg-brand-red hover:bg-brand-red-hover text-white font-bold"
           >
             Entrar para se inscrever
@@ -1667,7 +1670,7 @@ export default async function TournamentDetailPage({
         <Navbar />
         <div className="flex items-center justify-center p-8">
           <div className="bg-card border border-line rounded-2xl p-8 max-w-md w-full text-center mt-16">
-            <div className="mb-4"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
+            <div className="mb-4"><img src="/brand/bey-96.webp" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
             <h1 className="text-xl font-bold text-white mb-2">Não foi possível carregar o torneio</h1>
             <p className="text-gray-300 text-sm mb-6">
               Parece uma falha temporária de conexão — o torneio continua salvo. Tente novamente em instantes.

@@ -17,10 +17,10 @@ const PART_TYPE_LABELS: Record<PartType, string> = {
 };
 
 const PART_TYPE_IMAGES: Record<PartType, string> = {
-  ATTACK:  "/ataque.png",
-  DEFENSE: "/defesa.png",
-  STAMINA: "/resistencia.png",
-  BALANCE: "/equilibrio.png",
+  ATTACK:  "/brand/ataque-96.webp",
+  DEFENSE: "/brand/defesa-96.webp",
+  STAMINA: "/brand/resistencia-96.webp",
+  BALANCE: "/brand/equilibrio-96.webp",
 };
 
 // Categories that show a type badge (Ataque/Defesa/etc.)

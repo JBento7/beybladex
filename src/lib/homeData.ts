@@ -3,6 +3,7 @@
 // (am I registered? where am I in the ranking?) are added per request.
 import { unstable_cache } from "next/cache";
 import { prisma } from "./prisma";
+import { tournamentsVersion } from "./publicVersion";
 import { eventPodium, type StandingsMatch } from "./standings";
 import { swissRoundCount } from "./tournament-engine";
 import { isSwissFormat } from "./swiss";
@@ -129,7 +130,7 @@ export type HomeData = {
   ranking: RankingEntry[];
 };
 
-export const getHomeData = unstable_cache(
+const cachedHomeData = (version: string) => unstable_cache(
   async (): Promise<HomeData> => {
     const [featured, last, ranking, drafts] = await Promise.all([
       loadFeatured(),
@@ -139,9 +140,18 @@ export const getHomeData = unstable_cache(
     ]);
     return { featured, hasDraft: drafts > 0, last, ranking };
   },
-  ["home-data-v4"],
-  { revalidate: 60 }
-);
+  ["home-data-v5", version],
+  { revalidate: 300, tags: ["home", "ranking"] }
+)();
+
+/** Shared home data (no per-user bits). Keyed by the public tournaments
+ *  version, so it refreshes on the first request after any change; the timer
+ *  is only a backstop. If the version can't be read, fall back to a short
+ *  time-based entry rather than failing the page. */
+export async function getHomeData(): Promise<HomeData> {
+  const version = await tournamentsVersion().catch(() => `t${Math.floor(Date.now() / 60_000)}`);
+  return cachedHomeData(version);
+}
 
 /** Per-user: is this player registered in the featured event? */
 export async function isRegistered(tournamentId: string, userId: string | undefined | null): Promise<boolean> {

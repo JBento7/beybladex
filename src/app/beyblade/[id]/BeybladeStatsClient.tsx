@@ -233,7 +233,7 @@ function TournamentAccordion({ records }: { records: RecordRow[] }) {
                                 <div className="flex items-start justify-between gap-2 mb-2">
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-1.5 mb-0.5">
-                                      <img src="/bey-removebg-preview.png" alt="" className="w-3.5 h-3.5 object-contain flex-shrink-0" />
+                                      <img src="/brand/bey-96.webp" alt="" className="w-3.5 h-3.5 object-contain flex-shrink-0" />
                                       <span className="text-xs font-bold text-white truncate">{ob.beyName}</span>
                                     </div>
                                     <span className="text-[10px] text-gray-500">{bTotal} batalha{bTotal !== 1 ? "s" : ""}</span>

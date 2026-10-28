@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { logout } from "@/lib/client/logout";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { communityOf } from "@/lib/communities";
 import { useHomeCommunity, clearCommunityCookie } from "@/components/CommunityTheme";
 import { isJudgeAccount } from "@/lib/judgeAccount";
 import JudgeKiosk from "@/components/JudgeKiosk";
+import AuthLink from "@/components/AuthLink";
+import { cachedProfile, loadProfile, type HeaderProfile } from "@/lib/client/profileCache";
 import Sidebar from "@/components/shell/Sidebar";
 import MobileNavigation from "@/components/shell/MobileNavigation";
 import AccountMenu from "@/components/shell/AccountMenu";
@@ -22,22 +25,26 @@ export default function Navbar() {
   // The app is branded with the player's own league (logo + accent color).
   const home = communityOf(useHomeCommunity());
   const isLbm = home.slug === "lbm";
-  const logo = isLbm ? home.logo : "/lblnovo.png";
+  const logo = isLbm ? home.icon : "/brand/lblnovo-384.webp";
   const pathname = usePathname() ?? "/";
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const uid = session?.user?.id ?? null;
+  const [profile, setProfile] = useState<HeaderProfile | null>(null);
+  const avatarUrl = profile?.avatarUrl ?? null;
 
+  // Cached per user (lib/client/profileCache): no request per navigation;
+  // refetched only when the profile screen announces a change.
   useEffect(() => {
-    if (session) {
-      fetch("/api/profile/me")
-        .then((r) => r.json())
-        .then((d) => setAvatarUrl(d.avatarUrl ?? null))
-        .catch(() => {});
-    } else {
-      setAvatarUrl(null);
-    }
-  }, [session]);
+    if (!uid) { setProfile(null); return; }
+    setProfile(cachedProfile(uid));
+    let alive = true;
+    const pull = (force: boolean) => loadProfile(uid, force).then((p) => { if (alive && p) setProfile(p); });
+    pull(false);
+    const onUpdate = () => pull(true);
+    window.addEventListener("lbl:profile-updated", onUpdate);
+    return () => { alive = false; window.removeEventListener("lbl:profile-updated", onUpdate); };
+  }, [uid]);
 
-  const doSignOut = () => { clearCommunityCookie(); signOut({ callbackUrl: "/" }); };
+  const doSignOut = () => { clearCommunityCookie(); logout("/"); };
 
   // Judge accounts get no menu: just the way back to their tournament list.
   if (isJudgeAccount(session?.user?.email)) {
@@ -49,7 +56,7 @@ export default function Navbar() {
             {pathname === "/juiz" ? "Juiz" : "‹ Torneios"}
           </Link>
           <button
-            onClick={() => { clearCommunityCookie(); signOut({ callbackUrl: "/login" }); }}
+            onClick={() => { clearCommunityCookie(); logout("/login"); }}
             className="tap text-sm text-gray-400 hover:text-white"
           >
             Sair
@@ -71,7 +78,7 @@ export default function Navbar() {
           {/* Phones have no side menu, so the logo lives in the header. */}
           <Link href="/" aria-label="LBL — página inicial" className="md:hidden shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={logo} alt={home.fullName} className="h-9 w-auto max-w-[96px] object-contain" />
+            <img src={logo} alt={home.fullName} width={isLbm ? 36 : 64} height={36} fetchPriority="high" className="h-9 w-auto max-w-[96px] object-contain" />
           </Link>
           <p className="flex-1 min-w-0 truncate font-display text-title-3 text-fg" aria-hidden="true">
             {sectionTitle(pathname)}
@@ -79,11 +86,11 @@ export default function Navbar() {
           {status === "loading" ? (
             <span className="w-24 h-9 rounded-ctl bg-field animate-pulse" aria-hidden="true" />
           ) : signedIn ? (
-            <AccountMenu name={session.user.name ?? "Conta"} avatarUrl={avatarUrl} isOrganizer={isOrganizer} onSignOut={doSignOut} />
+            <AccountMenu name={profile?.name ?? session.user.name ?? "Conta"} avatarUrl={avatarUrl} isOrganizer={isOrganizer} onSignOut={doSignOut} />
           ) : (
             <div className="flex items-center gap-2">
-              <Link href={`/login?callbackUrl=${encodeURIComponent(pathname)}`} className={buttonClass("secondary", "sm")}>Entrar</Link>
-              <Link href="/register" className={buttonClass("primary", "sm", "hidden sm:inline-flex")}>Criar conta</Link>
+              <AuthLink pathname={pathname} className={buttonClass("secondary", "sm")}>Entrar</AuthLink>
+              <AuthLink page="/register" pathname={pathname} className={buttonClass("primary", "sm", "hidden sm:inline-flex")}>Criar conta</AuthLink>
             </div>
           )}
         </div>

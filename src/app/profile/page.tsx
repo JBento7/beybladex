@@ -178,7 +178,7 @@ export default async function ProfilePage() {
             { label: "Pontos Totais", value: totalPoints, color: "text-brand-yellow", icon: "⭐" },
             { label: "Taxa de Vitória", value: `${winRate}%`, color: "text-green-400", icon: "📈" },
             { label: "Total de Vitórias", value: totalWins, color: "text-green-400", icon: "🏆" },
-            { label: "Torneios", value: participations.length, color: "text-blue-400", icon: "/bey-removebg-preview.png" },
+            { label: "Torneios", value: participations.length, color: "text-blue-400", icon: "/brand/bey-96.webp" },
           ].map((stat) => (
             <div key={stat.label} className="bg-card border border-line rounded-xl p-5 text-center">
               <div className="flex justify-center mb-2">{stat.icon.startsWith("/") ? <img src={stat.icon} alt="" className="w-6 h-6 object-contain" /> : <span className="text-2xl">{stat.icon}</span>}</div>

@@ -504,7 +504,7 @@ export default function EditTournamentForm({
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    {d.icon ? <span className="text-xl">{d.icon}</span> : <img src="/bey-removebg-preview.png" alt="" className="w-5 h-5 object-contain" />}
+                    {d.icon ? <span className="text-xl">{d.icon}</span> : <img src="/brand/bey-96.webp" alt="" className="w-5 h-5 object-contain" />}
                     <span className={`font-semibold text-sm ${form.deckType === d.value ? "text-danger" : "text-white"}`}>
                       {d.label}
                     </span>

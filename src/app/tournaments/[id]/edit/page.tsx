@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
+import { authUrl } from "@/lib/safeRedirect";
 import EditTournamentForm from "./EditTournamentForm";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export default async function EditTournamentPage({
   params: { id: string };
 }) {
   const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
+  if (!session) redirect(authUrl(`/tournaments/${params.id}/edit`));
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: params.id },

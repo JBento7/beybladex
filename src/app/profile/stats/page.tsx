@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { authUrl } from "@/lib/safeRedirect";
 import Navbar from "@/components/Navbar";
 import Link from "next/link";
 import { getComboStats } from "@/lib/beyblade-stats";
@@ -48,7 +49,7 @@ function WinLossDonut({ wins, losses }: { wins: number; losses: number }) {
 
 export default async function ProfileStatsPage() {
   const session = await getServerSession(authOptions);
-  if (!session) redirect("/login");
+  if (!session) redirect(authUrl("/profile/stats"));
 
   const combos = await getComboStats(session.user.id);
   const maxPoints = Math.max(1, ...combos.map((c) => Math.max(c.pointsScored, c.pointsSuffered)));
@@ -68,7 +69,7 @@ export default async function ProfileStatsPage() {
 
         {combos.length === 0 ? (
           <div className="bg-card border border-line rounded-xl p-10 text-center">
-            <div className="mb-3"><img src="/bey-removebg-preview.png" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
+            <div className="mb-3"><img src="/brand/bey-96.webp" alt="" className="w-10 h-10 object-contain mx-auto" /></div>
             <p className="text-gray-500">Nenhum combo cadastrado ainda.</p>
             <Link href="/profile" className="text-brand-yellow hover:underline text-sm mt-2 inline-block">Cadastrar combos →</Link>
           </div>
@@ -79,7 +80,7 @@ export default async function ProfileStatsPage() {
                 {/* Header */}
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
                   <div>
-                    <h2 className="text-xl font-black text-white flex items-center"><img src="/bey-removebg-preview.png" alt="" className="w-4 h-4 object-contain inline-block mr-1" />{c.name}</h2>
+                    <h2 className="text-xl font-black text-white flex items-center"><img src="/brand/bey-96.webp" alt="" className="w-4 h-4 object-contain inline-block mr-1" />{c.name}</h2>
                     {c.parts && <p className="text-xs text-gray-500 mt-0.5">{c.parts}</p>}
                   </div>
                   <div className={`text-sm font-bold px-3 py-1 rounded-full ${
@@ -198,7 +199,7 @@ export default async function ProfileStatsPage() {
                             {/* Opponent name + win/loss */}
                             <div className="flex items-center justify-between text-xs mb-2">
                               <span className="text-gray-200 font-semibold truncate mr-2 flex items-center gap-1">
-                                <img src="/bey-removebg-preview.png" alt="" className="w-3 h-3 object-contain inline-block opacity-60" />
+                                <img src="/brand/bey-96.webp" alt="" className="w-3 h-3 object-contain inline-block opacity-60" />
                                 {mu.opponentBey}
                               </span>
                               <span className="flex items-center gap-2 flex-shrink-0">
