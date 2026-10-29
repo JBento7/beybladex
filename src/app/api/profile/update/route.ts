@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions, invalidatePermissions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { revalidatePath } from "next/cache";
 
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -79,6 +80,8 @@ export async function PATCH(req: NextRequest) {
   });
   // The session carries the player's community (drives the app's branding).
   invalidatePermissions(userId);
+  // Home cards (ranking / last event) follow the profile's league.
+  if (updates.homeCommunity) { try { revalidatePath("/"); } catch { /* outside a Next request */ } }
 
   const res = NextResponse.json({ ok: true });
   // Branding reads this cookie on every page (see CommunityTheme).

@@ -14,7 +14,7 @@ export default function PodiumSummary({ event }: { event: LastEvent | null }) {
     <section aria-labelledby="podio-titulo" className="rounded-card border border-line bg-card shadow-card p-5 md:p-6 space-y-4">
       <SectionTitle id="podio-titulo">Último torneio</SectionTitle>
       {!event ? (
-        <p className="text-body text-fg-2">Ainda não há torneios concluídos.</p>
+        <p className="text-body text-fg-2">Ainda não há torneios finalizados nesta liga.</p>
       ) : (
         <>
           <div>

@@ -15,12 +15,15 @@ export default function RankingPreview({
   me,
   currentUserId,
   title,
+  league = "lbl",
 }: {
   top: Row[];
   me: Row | null;
   currentUserId?: string | null;
   /** e.g. "Ranking geral da LBL" — the data is the all-time total, not a season. */
   title: string;
+  /** League of the data; the full-ranking link opens the same one. */
+  league?: "lbl" | "lbm";
 }) {
   return (
     <section aria-labelledby="ranking-titulo" className="rounded-card border border-line bg-card shadow-card p-5 md:p-6">
@@ -56,7 +59,7 @@ export default function RankingPreview({
         </>
       )}
       <div className="mt-5">
-        <ButtonLink href="/rankings?r=lbl" variant="secondary" className="w-full sm:w-auto">Ver ranking completo</ButtonLink>
+        <ButtonLink href={`/rankings?r=${league}`} variant="secondary" className="w-full sm:w-auto">Ver ranking completo</ButtonLink>
       </div>
     </section>
   );

@@ -1,6 +1,8 @@
 // Data for the public league panel (home page). Everything comes from the
 // database; shared parts are cached briefly (60 s) and the per-user bits
 // (am I registered? where am I in the ranking?) are added per request.
+// "Ranking geral" and "Último torneio" follow the league of the signed-in
+// player's profile (homeCommunity); visitors and profiles without one see LBL.
 import { unstable_cache } from "next/cache";
 import { prisma } from "./prisma";
 import { tournamentsVersion } from "./publicVersion";
@@ -12,9 +14,32 @@ import { formatLabel } from "./format";
 import { registrationState } from "./registration";
 import type { RankingEntry } from "./rankingMath";
 
-const LEAGUE = "lbl";
-// League events: hosted by the league or partnerships it takes part in; never tests.
-const leagueWhere = { isTest: false, OR: [{ communitySlug: LEAGUE }, { isPartnership: true }] };
+export type HomeLeague = "lbl" | "lbm";
+export const DEFAULT_HOME_LEAGUE: HomeLeague = "lbl";
+
+/** Normalizes a profile's homeCommunity: "lbm" → LBM, anything else → LBL. */
+export function homeLeagueOf(raw: string | null | undefined): HomeLeague {
+  return String(raw ?? "").trim().toLowerCase() === "lbm" ? "lbm" : "lbl";
+}
+
+/** League of the signed-in player, read from the profile itself (not the
+ *  theme cookie, and not a JWT that may predate a change). Falls back to the
+ *  session's copy if the read fails; no user → LBL. */
+export async function homeLeagueForUser(userId: string | null | undefined, sessionValue?: string | null): Promise<HomeLeague> {
+  if (!userId) return DEFAULT_HOME_LEAGUE;
+  try {
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { homeCommunity: true } });
+    return homeLeagueOf(u ? u.homeCommunity : sessionValue);
+  } catch {
+    return homeLeagueOf(sessionValue);
+  }
+}
+
+// Featured event block (unchanged): LBL events or partnerships; never tests.
+const featuredWhere = { isTest: false, OR: [{ communitySlug: DEFAULT_HOME_LEAGUE }, { isPartnership: true }] };
+// "Último torneio": only events of that league — partnerships are not pulled
+// in, and the other league is never used as a substitute.
+const lastEventWhere = (league: HomeLeague) => ({ isTest: false, communitySlug: league, isPartnership: false });
 
 export type FeaturedEvent = {
   id: string;
@@ -59,12 +84,12 @@ async function loadFeatured(): Promise<FeaturedEvent | null> {
   // taking sign-ups, soonest date first (undated last). Finished events and
   // drafts are never presented as "next".
   const live = await prisma.tournament.findFirst({
-    where: { ...leagueWhere, status: "IN_PROGRESS" },
+    where: { ...featuredWhere, status: "IN_PROGRESS" },
     orderBy: [{ isOfficial: "desc" }, { startDate: { sort: "desc", nulls: "last" } }],
     select,
   });
   const t = live ?? (await prisma.tournament.findFirst({
-    where: { ...leagueWhere, status: "REGISTRATION" },
+    where: { ...featuredWhere, status: "REGISTRATION" },
     orderBy: [{ startDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
     select,
   }));
@@ -82,9 +107,9 @@ async function loadFeatured(): Promise<FeaturedEvent | null> {
   };
 }
 
-async function loadLastEvent(): Promise<LastEvent | null> {
+async function loadLastEvent(league: HomeLeague): Promise<LastEvent | null> {
   const t = await prisma.tournament.findFirst({
-    where: { ...leagueWhere, status: "FINISHED" },
+    where: { ...lastEventWhere(league), status: "FINISHED" },
     orderBy: [{ startDate: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     select: {
       id: true, name: true, startDate: true, format: true, status: true, swissRounds: true, qualifiers: true, deckType: true,
@@ -123,6 +148,8 @@ async function loadLastEvent(): Promise<LastEvent | null> {
 }
 
 export type HomeData = {
+  /** League shown by the ranking and last-event cards. */
+  league: HomeLeague;
   featured: FeaturedEvent | null;
   /** A league event exists as a draft (being set up, not announced yet). */
   hasDraft: boolean;
@@ -130,27 +157,38 @@ export type HomeData = {
   ranking: RankingEntry[];
 };
 
-const cachedHomeData = (version: string) => unstable_cache(
-  async (): Promise<HomeData> => {
-    const [featured, last, ranking, drafts] = await Promise.all([
-      loadFeatured(),
-      loadLastEvent(),
-      getLeagueRanking(LEAGUE),
-      prisma.tournament.count({ where: { ...leagueWhere, status: "DRAFT" } }),
-    ]);
-    return { featured, hasDraft: drafts > 0, last, ranking };
-  },
-  ["home-data-v5", version],
-  { revalidate: 300, tags: ["home", "ranking"] }
-)();
+// Public, shared entries only (nothing per user). The league is part of the
+// key so LBL and LBM results can never be mixed. Outside a Next request
+// (tests/scripts) there is no cache: compute directly, like getLeagueRanking.
+const outsideNext = (e: unknown) => /incrementalCache|static generation store/i.test(String(e));
+function cached<T>(fn: () => Promise<T>, key: string[], tags: string[]): Promise<T> {
+  try {
+    return unstable_cache(fn, key, { revalidate: 300, tags })().catch((e) => { if (outsideNext(e)) return fn(); throw e; });
+  } catch (e) {
+    if (outsideNext(e)) return fn();
+    throw e;
+  }
+}
+const loadShared = async () => {
+  const [featured, drafts] = await Promise.all([
+    loadFeatured(),
+    prisma.tournament.count({ where: { ...featuredWhere, status: "DRAFT" } }),
+  ]);
+  return { featured, hasDraft: drafts > 0 };
+};
 
-/** Shared home data (no per-user bits). Keyed by the public tournaments
- *  version, so it refreshes on the first request after any change; the timer
- *  is only a backstop. If the version can't be read, fall back to a short
- *  time-based entry rather than failing the page. */
-export async function getHomeData(): Promise<HomeData> {
+/** Shared home data (no per-user bits) for one league. Keyed by the public
+ *  tournaments version, so it refreshes on the first request after any
+ *  change; the timer is only a backstop. If the version can't be read, fall
+ *  back to a short time-based entry rather than failing the page. */
+export async function getHomeData(league: HomeLeague = DEFAULT_HOME_LEAGUE): Promise<HomeData> {
   const version = await tournamentsVersion().catch(() => `t${Math.floor(Date.now() / 60_000)}`);
-  return cachedHomeData(version);
+  const [shared, last, ranking] = await Promise.all([
+    cached(loadShared, ["home-shared-v6", version], ["home"]),
+    cached(() => loadLastEvent(league), ["home-last-event-v1", league, version], ["home", "ranking"]),
+    getLeagueRanking(league),
+  ]);
+  return { league, ...shared, last, ranking };
 }
 
 /** Per-user: is this player registered in the featured event? */

@@ -12,7 +12,7 @@ import FeaturedTournament from "@/components/home/FeaturedTournament";
 import QuickAction from "@/components/home/QuickAction";
 import RankingPreview from "@/components/home/RankingPreview";
 import PodiumSummary from "@/components/home/PodiumSummary";
-import { getHomeData, isRegistered, type HomeData } from "@/lib/homeData";
+import { getHomeData, homeLeagueForUser, isRegistered, type HomeData } from "@/lib/homeData";
 import { getLeagueStats } from "@/lib/leagueStats";
 import { rankingPreview } from "@/lib/rankingMath";
 
@@ -28,9 +28,12 @@ export default async function HomePage() {
   // Arena display accounts go straight to their fullscreen scoreboard.
   if (session && /^arena\d+@/i.test(session.user.email ?? "")) redirect("/arena");
 
+  // Ranking and last-event cards follow the league in the player's profile.
+  const league = await homeLeagueForUser(session?.user.id, session?.user.homeCommunity);
+  const leagueName = league.toUpperCase();
   let data: HomeData | null = null;
   try {
-    data = await getHomeData();
+    data = await getHomeData(league);
   } catch (e) {
     console.error("[home]", e);
   }
@@ -92,7 +95,7 @@ export default async function HomePage() {
             {/* Top-aligned, each card as tall as its own content. */}
             <div className="grid gap-4 desk:gap-6 desk:grid-cols-12 items-start">
               <div className="desk:col-span-7">
-                <RankingPreview top={preview!.top} me={preview!.me} currentUserId={session?.user.id} title="Ranking geral da LBL" />
+                <RankingPreview top={preview!.top} me={preview!.me} currentUserId={session?.user.id} title={`Ranking geral da ${leagueName}`} league={league} />
               </div>
               <div className="desk:col-span-5">
                 <PodiumSummary event={data.last} />
