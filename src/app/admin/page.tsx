@@ -13,6 +13,8 @@ import RecalculateBeybladeStatsButton from "./RecalculateBeybladeStatsButton";
 import KioskAccountsTool from "./KioskAccountsTool";
 import AnnouncementManager from "./AnnouncementManager";
 import PermissionsManager from "./PermissionsManager";
+import MonthlyRankingAdmin from "./MonthlyRankingAdmin";
+import { currentMonth } from "@/lib/monthlyRules";
 import type { TournamentFormat, TournamentStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -126,6 +128,12 @@ export default async function AdminPage() {
             </div>
           )}
         </div>
+
+        {/* Monthly rankings: a league-scoped admin only sees their own league */}
+        <MonthlyRankingAdmin
+          leagues={session.user.adminCommunity === "lbm" ? ["lbm"] : session.user.adminCommunity === "lbl" ? ["lbl"] : ["lbl", "lbm"]}
+          initialMonth={currentMonth()}
+        />
 
         {/* Tournament Management */}
         <TournamentManager />

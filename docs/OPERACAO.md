@@ -190,7 +190,8 @@ Cada linha de log é um JSON com o campo `event`. Não há infraestrutura nova.
    - página de um torneio em andamento;
    - `GET /api/tournaments/<id>/version`: deve responder 200 com ETag, e 304 ao reenviar o ETag;
    - telão de uma arena num evento de teste;
-   - logs sem `api_error` novos.
+   - logs sem `api_error` novos;
+   - ranking mensal: ver `docs/RANKING-MENSAL.md` §6 (migração `20261031000000_monthly_rankings` e conferências).
 6. Troque as senhas das contas de juiz e de arena (§2), uma única vez.
 
 ## 6. Recuperação

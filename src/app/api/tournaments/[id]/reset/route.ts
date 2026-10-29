@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { auditAdminAction } from "@/lib/adminAudit";
 
 // POST — wipe all matches/results from a test tournament and reopen
@@ -43,7 +44,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       prisma.tournament.update({
         where: { id: params.id },
         // Un-freeze the Swiss round count: the next start re-derives it.
-        data: { status: "REGISTRATION", swissRounds: null },
+        // Same for the frozen ranking table: the next finalization freezes it again.
+        data: { status: "REGISTRATION", swissRounds: null, rankingPointsTable: Prisma.DbNull },
       }),
     ]);
 

@@ -61,8 +61,12 @@ test("each league shows only its own last event and ranking; tests and partnersh
   const homeLbm = await getHomeData("lbm");
   assert.equal(homeLbm.last?.id, lbm.t.id);
   assert.equal(homeLbm.last?.first?.userId, lbm.champion.id);
-  assert.ok(homeLbm.ranking.length > 0);
-  const lbmPlayers = new Set((await prisma.tournamentParticipant.findMany({ where: { tournament: { communitySlug: "lbm", isPartnership: false, isTest: false } }, select: { userId: true } })).map((p) => p.userId));
+  // The ranking card is the current month's ranking (these events are in 2031,
+  // so they don't score in it — tests/integration/monthly-ranking covers it).
+  const lbmPlayers = new Set([
+    ...(await prisma.tournamentParticipant.findMany({ where: { tournament: { communitySlug: "lbm", isPartnership: false, isTest: false } }, select: { userId: true } })).map((p) => p.userId),
+    ...(await prisma.rankingOperation.findMany({ where: { period: { communitySlug: "lbm" } }, select: { userId: true } })).map((o) => o.userId),
+  ]);
   assert.ok(homeLbm.ranking.every((r) => lbmPlayers.has(r.id)));
 
   const homeLbl = await getHomeData("lbl");

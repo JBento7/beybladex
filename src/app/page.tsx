@@ -15,6 +15,7 @@ import PodiumSummary from "@/components/home/PodiumSummary";
 import { getHomeData, homeLeagueForUser, isRegistered, type HomeData } from "@/lib/homeData";
 import { getLeagueStats } from "@/lib/leagueStats";
 import { rankingPreview } from "@/lib/rankingMath";
+import { monthLabel } from "@/lib/monthlyRules";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: { absolute: "A arena da LBL — Liga Beyblade Londrina" } };
@@ -95,7 +96,13 @@ export default async function HomePage() {
             {/* Top-aligned, each card as tall as its own content. */}
             <div className="grid gap-4 desk:gap-6 desk:grid-cols-12 items-start">
               <div className="desk:col-span-7">
-                <RankingPreview top={preview!.top} me={preview!.me} currentUserId={session?.user.id} title={`Ranking geral da ${leagueName}`} league={league} />
+                <RankingPreview
+                  top={preview!.top} me={preview!.me} currentUserId={session?.user.id} league={league}
+                  title={`Ranking mensal da ${leagueName} · ${monthLabel(data.month)}`}
+                  subtitle="Pontos dos torneios oficiais da liga neste mês. Zera na virada do mês."
+                  emptyText="Ainda não há pontos neste mês. O ranking começa no primeiro torneio oficial finalizado."
+                  href={`/rankings?r=${league}&mes=${data.month}`}
+                />
               </div>
               <div className="desk:col-span-5">
                 <PodiumSummary event={data.last} />

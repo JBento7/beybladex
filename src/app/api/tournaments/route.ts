@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseMatchRules } from "@/lib/matchRules";
 import { resolveDoubleRankingPoints } from "@/lib/rankingPoints";
+import { closedMonthError } from "@/lib/monthlyRanking";
 import { isSwissFormat } from "@/lib/swiss";
 import { parseDeckType } from "@/lib/deckFormat";
 
@@ -79,6 +80,13 @@ export async function POST(req: NextRequest) {
       const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { homeCommunity: true } });
       communitySlug = me?.homeCommunity && /^[a-z0-9]+$/.test(me.homeCommunity) ? me.homeCommunity : "lbl";
     }
+
+    // Never create an official event inside a closed monthly ranking.
+    const closedMsg = await closedMonthError({
+      isOfficial: willBeOfficial, isTest: isOrganizer && !!isTest, isPartnership: isOrganizer && !!isPartnership,
+      communitySlug, startDate: startDate ? new Date(startDate) : null, createdAt: new Date(),
+    });
+    if (closedMsg) return NextResponse.json({ error: closedMsg }, { status: 400 });
 
     const tournament = await prisma.tournament.create({
       data: {

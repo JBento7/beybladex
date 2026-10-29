@@ -183,6 +183,10 @@ model Tournament {
   isPartnership   Boolean @default(false)
   // "Pontuação dobrada" (official events only): placement points × 2.
   doubleRankingPoints Boolean @default(false)
+  // Points per placement (base, before "Pontuação dobrada") frozen at the first
+  // finalization, so later recalculations never use newer rules. Null = not
+  // finalized yet (or finalized before this existed: the default table).
+  rankingPointsTable Json?
   // Suíço: number of Swiss rounds, frozen when first needed so approving or
   // removing a player mid-event can't move the Swiss/knockout boundary.
   swissRounds     Int?
@@ -624,4 +628,56 @@ model MatchAuditLog {
 
   @@index([tournamentId, createdAt])
   @@index([matchId])
+}
+
+// Monthly ranking of one league (docs/RANKING-MENSAL.md). One row per league and
+// month ("AAAA-MM", calendar of America/Sao_Paulo). Created on the first admin
+// operation or rules change of that month; a month without a row is open and
+// inherits the rules of the latest earlier month that set them.
+model RankingPeriod {
+  id             String    @id @default(cuid())
+  communitySlug  String
+  month          String
+  // Rules set in this month (inherited by the following months until changed):
+  // points per placement (index 0 = 1st) and tiebreak ("NICKNAME" | "WINS").
+  // Null = this month did not change the rules.
+  pointsTable    Json?
+  tiebreak       String?
+  // Closing: full archived classification (positions, players as they were,
+  // points, wins, losses), rules used, champion, who closed and when.
+  standings      Json?
+  championUserId String?
+  closedAt       DateTime?
+  closedById     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  operations RankingOperation[]
+
+  @@unique([communitySlug, month])
+}
+
+// Every admin operation on a monthly ranking. Point adjustments live here, apart
+// from the tournament results (which are never changed): the monthly total of a
+// player is tournament points + the sum of their adjustments. idempotencyKey
+// (request id, plus the player for a whole-month reset) makes a repeated click
+// or resent request a no-op.
+model RankingOperation {
+  id             String   @id @default(cuid())
+  periodId       String
+  requestId      String
+  idempotencyKey String   @unique
+  kind           String   // ADD | REMOVE | RESET_PLAYER | RESET_MONTH | RULES | CLOSE
+  userId         String?
+  points         Int      @default(0) // signed: + added, - removed
+  reason         String
+  actorId        String
+  before         Json?
+  after          Json?
+  createdAt      DateTime @default(now())
+
+  period RankingPeriod @relation(fields: [periodId], references: [id], onDelete: Restrict)
+
+  @@index([periodId, userId])
+  @@index([requestId])
 }

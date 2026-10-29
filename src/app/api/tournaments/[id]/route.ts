@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
 import { hasKnockoutPhase, parseMatchRules } from "@/lib/matchRules";
 import { resolveDoubleRankingPoints } from "@/lib/rankingPoints";
+import { closedMonthError } from "@/lib/monthlyRanking";
 import { deckLabel, parseDeckType, registrationComplete } from "@/lib/deckFormat";
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -169,6 +170,15 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     });
     if (!double.ok) return NextResponse.json({ error: double.error }, { status: double.status });
     data.doubleRankingPoints = double.value;
+
+    // Never move an official event into a closed monthly ranking.
+    const closedMsg = await closedMonthError({
+      isOfficial: (data.isOfficial as boolean | undefined) ?? tournament.isOfficial, isTest: tournament.isTest,
+      isPartnership: (data.isPartnership as boolean | undefined) ?? tournament.isPartnership,
+      communitySlug: (data.communitySlug as string | undefined) ?? tournament.communitySlug,
+      startDate: data.startDate as Date | null, createdAt: tournament.createdAt,
+    });
+    if (closedMsg) return NextResponse.json({ error: closedMsg }, { status: 400 });
 
     const updated = await prisma.tournament.update({
       where: { id: params.id },

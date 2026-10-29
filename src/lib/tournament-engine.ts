@@ -8,7 +8,9 @@ import {
 import { Prisma } from "@prisma/client";
 import { revalidateRankings } from "./leagueRanking";
 import { logEvent } from "./observability";
-import { RANKING_POINTS_BY_PLACE, placementRankingPoints, rankingMultiplier } from "./rankingPoints";
+import { RANKING_POINTS_BY_PLACE, rankingMultiplier } from "./rankingPoints";
+import { DEFAULT_POINTS_TABLE, pointsForPlacement, storedTable, type MonthlyLeague } from "./monthlyRules";
+import { effectiveRules, isMonthClosed, lockMonth, monthlyScopeOf } from "./monthlyRanking";
 
 // Returns the userIds of every registered judge for a tournament. Used by the
 // match schedulers so judges never get a parallel match while arbitrating.
@@ -163,11 +165,44 @@ export { RANKING_POINTS_BY_PLACE };
 // tie-broken by point differential (points scored - points conceded).
 export type ComputedPlacement = { participantId: string; userId: string; name: string; placement: number; rankingPoints: number };
 
+type TableSource = {
+  rankingPointsTable: Prisma.JsonValue | null; status: string;
+  isOfficial: boolean; isTest: boolean; isPartnership: boolean; communitySlug: string; startDate: Date | null; createdAt: Date;
+};
+/**
+ * Base points per placement for an event (before "Pontuação dobrada"):
+ *  - the table frozen at its first finalization, if any;
+ *  - an event already finalized before tables were frozen (it has placements)
+ *    → the default table it was finalized with (new rules never rewrite old
+ *    results);
+ *  - otherwise the rules of its league and month (docs/RANKING-MENSAL.md);
+ *    events outside the monthly rankings (partnership, BeyEncontro, test) use
+ *    the default table.
+ */
+export async function pointsTableFor(t: TableSource, alreadyFinalized: boolean): Promise<number[]> {
+  const frozen = storedTable(t.rankingPointsTable);
+  if (frozen) return frozen;
+  if (alreadyFinalized) return [...DEFAULT_POINTS_TABLE];
+  const scope = monthlyScopeOf(t);
+  return scope ? (await effectiveRules(scope.league, scope.month)).pointsTable : [...DEFAULT_POINTS_TABLE];
+}
+const TABLE_SOURCE_SELECT = {
+  rankingPointsTable: true, status: true, isOfficial: true, isTest: true, isPartnership: true, communitySlug: true, startDate: true, createdAt: true,
+} as const;
+
 /** The final ranking a finalization WOULD write — no writes (used by
  *  finalizeTournamentRanking and by the admin dry-run of a recalculation). */
 export async function computeTournamentRanking(tournamentId: string): Promise<ComputedPlacement[]> {
+  return (await computeTournamentRankingDetailed(tournamentId)).placements;
+}
+
+export async function computeTournamentRankingDetailed(tournamentId: string): Promise<{
+  placements: ComputedPlacement[];
+  table: number[];
+  scope: { league: MonthlyLeague; month: string } | null;
+}> {
   const [tournament, participants, allMatchRows] = await Promise.all([
-    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true, qualifiers: true, isOfficial: true, isTest: true, doubleRankingPoints: true } }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true, qualifiers: true, doubleRankingPoints: true, ...TABLE_SOURCE_SELECT } }),
     prisma.tournamentParticipant.findMany({
       where: { tournamentId, approved: { not: false } },
       include: { user: { select: { name: true, bladerName: true } } },
@@ -273,38 +308,63 @@ export async function computeTournamentRanking(tournamentId: string): Promise<Co
   // the event has a bracket, only players who actually reached it score. Everyone
   // else still gets a placement (for the final table/certificates) but 0 points.
   // Without a knockout (pure Swiss / other formats) the top placements score.
-  // Always from the base table × multiplier ("Pontuação dobrada" = 2), never
-  // from stored points, so recalculating can't double them again.
+  // Always from the event's base table × multiplier ("Pontuação dobrada" = 2),
+  // never from stored points, so recalculating can't double them again.
   const multiplier = tournament ? rankingMultiplier(tournament) : 1;
-  return ranked.map((p, idx) => {
+  // Placements are only written by a finalization (or the manual podium).
+  const alreadyFinalized = participants.some((p) => p.placement != null);
+  const table = tournament ? await pointsTableFor(tournament, alreadyFinalized) : [...DEFAULT_POINTS_TABLE];
+  const placements = ranked.map((p, idx) => {
     const eligible = !isSwissPlayoff || inPlayoff.has(p.userId!);
     return {
       participantId: p.id,
       userId: p.userId!,
       name: p.user?.bladerName || p.user?.name || "",
       placement: idx + 1,
-      rankingPoints: placementRankingPoints(idx, multiplier, eligible),
+      rankingPoints: pointsForPlacement(table, idx, multiplier, eligible),
     };
   });
+  return { placements, table, scope: tournament ? monthlyScopeOf(tournament) : null };
 }
 
-export async function finalizeTournamentRanking(tournamentId: string) {
-  const computed = await computeTournamentRanking(tournamentId);
-  await Promise.all(
-    computed.map((c) =>
-      prisma.tournamentParticipant.update({
+export type FinalizeResult = { ok: true } | { ok: false; reason: "month_closed"; league: MonthlyLeague; month: string };
+
+/** Refuses when the event's league month is already closed (its ranking is archived). */
+export async function monthClosedFor(tournamentId: string): Promise<{ league: MonthlyLeague; month: string } | null> {
+  const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: TABLE_SOURCE_SELECT });
+  const scope = t ? monthlyScopeOf(t) : null;
+  return scope && (await isMonthClosed(scope.league, scope.month)) ? scope : null;
+}
+
+export async function finalizeTournamentRanking(tournamentId: string): Promise<FinalizeResult> {
+  const { placements, table, scope } = await computeTournamentRankingDetailed(tournamentId);
+  // Same lock as the monthly adjustments/closing: a finalization can't slip
+  // into a month while it is being closed, and never into a closed month.
+  const result = await prisma.$transaction(async (tx): Promise<FinalizeResult> => {
+    if (scope) {
+      await lockMonth(tx, scope.league, scope.month);
+      if (await isMonthClosed(scope.league, scope.month, tx)) return { ok: false, reason: "month_closed", ...scope };
+    }
+    for (const c of placements) {
+      await tx.tournamentParticipant.update({
         where: { id: c.participantId },
         // placement is 1-based final standing; feeds certificates and profile badges.
         data: { rankingPoints: c.rankingPoints, placement: c.placement },
-      })
-    )
-  );
-
-  await prisma.tournament.update({
-    where: { id: tournamentId },
-    data: { status: "FINISHED", stateVersion: { increment: 1 } },
-  });
+      });
+    }
+    await tx.tournament.update({
+      where: { id: tournamentId },
+      // The base table is frozen at the first finalization (same value after).
+      data: { status: "FINISHED", stateVersion: { increment: 1 }, rankingPointsTable: table },
+    });
+    return { ok: true };
+  }, { maxWait: 20000, timeout: 30000 });
+  if (!result.ok) {
+    logEvent("finalize_blocked", { reason: "month_closed", tournamentId, league: result.league, month: result.month });
+    return result;
+  }
   revalidateRankings(); // official ranking changed
+  return result;
 }
 
 // Suíço → top-N knockout. Seeding = the same Swiss standings the page shows

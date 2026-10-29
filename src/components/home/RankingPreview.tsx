@@ -7,7 +7,7 @@ import type { RankingEntry } from "@/lib/rankingMath";
 
 type Row = RankingEntry & { position: number };
 
-// Top 5 of the league ranking (all-time total of official events). If the signed-in player is outside the top 5,
+// Top 5 of the league ranking (the home page shows the current monthly ranking). If the signed-in player is outside the top 5,
 // their real position is shown on a separate line (never moved into the top).
 // No up/down arrows: there is no ranking history to compare against.
 export default function RankingPreview({
@@ -16,14 +16,21 @@ export default function RankingPreview({
   currentUserId,
   title,
   league = "lbl",
+  href,
+  subtitle = "Pontuação acumulada em torneios oficiais da liga.",
+  emptyText = "O ranking aparece depois do primeiro torneio oficial concluído.",
 }: {
   top: Row[];
   me: Row | null;
   currentUserId?: string | null;
-  /** e.g. "Ranking geral da LBL" — the data is the all-time total, not a season. */
+  /** e.g. "Ranking mensal da LBL · outubro de 2026". */
   title: string;
   /** League of the data; the full-ranking link opens the same one. */
   league?: "lbl" | "lbm";
+  /** Full ranking link (defaults to the league's ranking page). */
+  href?: string;
+  subtitle?: string;
+  emptyText?: string;
 }) {
   return (
     <section aria-labelledby="ranking-titulo" className="rounded-card border border-line bg-card shadow-card p-5 md:p-6">
@@ -31,7 +38,7 @@ export default function RankingPreview({
         <div>
           <SectionTitle id="ranking-titulo">{title}</SectionTitle>
           <p className="mt-1 text-small text-fg-2">
-            Pontuação acumulada em torneios oficiais da liga.{" "}
+            {subtitle}{" "}
             <Link href="/regras#ranking" className="underline underline-offset-2 text-fg hover:text-brand-yellow">Como os pontos funcionam</Link>
           </p>
         </div>
@@ -39,7 +46,7 @@ export default function RankingPreview({
       {top.length === 0 ? (
         <div className="mt-6 rounded-ctl bg-field p-6 text-center">
           <Medal aria-hidden="true" className="mx-auto w-8 h-8 text-fg-3" />
-          <p className="mt-2 text-body text-fg-2">O ranking aparece depois do primeiro torneio oficial concluído.</p>
+          <p className="mt-2 text-body text-fg-2">{emptyText}</p>
         </div>
       ) : (
         <>
@@ -59,7 +66,7 @@ export default function RankingPreview({
         </>
       )}
       <div className="mt-5">
-        <ButtonLink href={`/rankings?r=${league}`} variant="secondary" className="w-full sm:w-auto">Ver ranking completo</ButtonLink>
+        <ButtonLink href={href ?? `/rankings?r=${league}`} variant="secondary" className="w-full sm:w-auto">Ver ranking completo</ButtonLink>
       </div>
     </section>
   );

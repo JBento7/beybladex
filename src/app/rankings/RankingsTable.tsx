@@ -16,9 +16,11 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50];
 export default function RankingsTable({
   list,
   currentUserId,
+  emptyText = "Ainda não há pontuações registradas no ranking.",
 }: {
   list: RankRow[];
   currentUserId: string | null;
+  emptyText?: string;
 }) {
   const [query, setQuery] = useState("");
   const [pageSize, setPageSize] = useState(25);
@@ -39,7 +41,7 @@ export default function RankingsTable({
   if (list.length === 0) {
     return (
       <div className="text-center py-16 text-gray-500">
-        Ainda não há pontuações registradas no ranking.
+        {emptyText}
       </div>
     );
   }

@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getLeagueRanking, scopeOfHome } from "@/lib/leagueRanking";
+import { scopeOfHome } from "@/lib/leagueRanking";
+import { getMonthlyRanking } from "@/lib/monthlyRanking";
+import { currentMonth, monthLabel } from "@/lib/monthlyRules";
 import { redirect } from "next/navigation";
 import { authUrl } from "@/lib/safeRedirect";
 
@@ -138,14 +140,16 @@ export default async function DashboardPage() {
     }))
     .sort((a: { count: number }, b: { count: number }) => b.count - a.count);
 
-  // "Ranking oficial" = the same service as /rankings and the home page.
-  const rankScope = scopeOfHome(currentUser?.homeCommunity);
-  const official = await getLeagueRanking(rankScope);
+  // Monthly ranking of the player's league = the same service as /rankings
+  // and the home page (lib/monthlyRanking).
+  const rankScope = scopeOfHome(currentUser?.homeCommunity) === "lbm" ? "lbm" : "lbl";
+  const rankMonth = currentMonth();
+  const official = (await getMonthlyRanking(rankScope, rankMonth)).entries;
 
   const myOfficialWins = myOfficial._sum.wins ?? 0;
   const myOfficialLosses = myOfficial._sum.losses ?? 0;
   const myBattlePoints = myBattle._sum.points ?? 0;
-  // Official position: ranking points of the player's league (lib/leagueRanking).
+  // Position in the current month of the player's league.
   const myRankIdx = official.findIndex((r) => r.id === userId);
   const myRank = myRankIdx >= 0 ? myRankIdx + 1 : null;
   const rankedTotal = official.length;
@@ -297,7 +301,7 @@ export default async function DashboardPage() {
             <div className="flex-1 min-w-[240px] grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
                 <div className="text-2xl font-black text-brand-yellow leading-none">{myRank ? `#${myRank}` : "—"}</div>
-                <div className="text-xs text-gray-500 mt-1">Ranking oficial {rankScope.toUpperCase()}{rankedTotal ? ` · de ${rankedTotal}` : ""}</div>
+                <div className="text-xs text-gray-500 mt-1">Ranking mensal {rankScope.toUpperCase()}{rankedTotal ? ` · de ${rankedTotal}` : ""}</div>
               </div>
               <div>
                 <div className="text-2xl font-black text-green-400 leading-none">{winRate}%</div>
@@ -457,11 +461,11 @@ export default async function DashboardPage() {
           {/* Right column — Ranking */}
           <div className="bg-card border border-line rounded-xl p-5 lg:self-start lg:sticky lg:top-[88px]">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-white">Ranking oficial {rankScope.toUpperCase()}</h2>
-              <Link href={`/rankings?r=${rankScope}`} className="text-xs text-brand-yellow hover:underline">Ver ranking completo →</Link>
+              <h2 className="text-base font-bold text-white">Ranking mensal {rankScope.toUpperCase()} <span className="font-normal text-gray-400">· {monthLabel(rankMonth)}</span></h2>
+              <Link href={`/rankings?r=${rankScope}&mes=${rankMonth}`} className="text-xs text-brand-yellow hover:underline">Ver ranking completo →</Link>
             </div>
             {rankingList.length === 0 ? (
-              <p className="text-gray-500 text-sm text-center py-6">Nenhum dado ainda</p>
+              <p className="text-gray-500 text-sm text-center py-6">Ninguém pontuou neste mês ainda.</p>
             ) : (
               <div className="space-y-2">
                 {rankingList.map((player) => { const i = player.pos - 1; return (

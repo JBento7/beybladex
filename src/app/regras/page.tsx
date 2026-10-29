@@ -3,9 +3,12 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import PageHeader, { SectionTitle } from "@/components/ui/PageHeader";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
-import { RANKING_POINTS_BY_PLACE } from "@/lib/rankingPoints";
+import { effectiveRules } from "@/lib/monthlyRanking";
+import { currentMonth, DEFAULT_RULES, monthLabel, TIEBREAKS, type MonthlyRules } from "@/lib/monthlyRules";
 
 export const metadata: Metadata = { title: "Regras" };
+// The ranking tables can be changed by the admins (per league): re-read each minute.
+export const revalidate = 60;
 
 // General rules of the platform, generated from the same constants the
 // scoring and ranking code use, so the page can't drift from the system.
@@ -18,7 +21,15 @@ const FINISHES = [
   { key: "MISSLAUNCH", label: "Misslaunch do adversário", desc: "O adversário erra o lançamento." },
 ] as const;
 
-export default function RulesPage() {
+async function rulesOf(league: "lbl" | "lbm", month: string): Promise<MonthlyRules> {
+  try { return await effectiveRules(league, month); } catch { return DEFAULT_RULES; }
+}
+
+export default async function RulesPage() {
+  const month = currentMonth();
+  const [lbl, lbm] = await Promise.all([rulesOf("lbl", month), rulesOf("lbm", month)]);
+  const same = JSON.stringify(lbl) === JSON.stringify(lbm);
+  const tables: { title: string; rules: MonthlyRules }[] = same ? [{ title: "LBL e LBM", rules: lbl }] : [{ title: "LBL", rules: lbl }, { title: "LBM", rules: lbm }];
   const card = "rounded-card border border-line bg-card shadow-card p-5 md:p-6";
   return (
     <div className="min-h-screen bg-app">
@@ -56,23 +67,34 @@ export default function RulesPage() {
 
         <section id="ranking" aria-labelledby="ranking-titulo" className={`${card} scroll-mt-24`}>
           <SectionTitle id="ranking-titulo">Pontos do ranking</SectionTitle>
-          <p className="mt-2 text-body text-fg-2">O ranking geral de cada liga é a pontuação acumulada nos <strong className="text-fg">torneios oficiais</strong> daquela liga.</p>
-          <ol className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
-            {RANKING_POINTS_BY_PLACE.map((pts, i) => (
-              <li key={i} className="rounded-ctl bg-field p-3 text-center">
-                <span className="block text-small text-fg-2">{i + 1}º lugar</span>
-                <span className="block font-display text-stat tabular text-fg">{pts}</span>
-                <span className="block text-label text-fg-3">pontos</span>
-              </li>
-            ))}
-          </ol>
+          <p className="mt-2 text-body text-fg-2">
+            LBL e LBM têm cada uma o seu <strong className="text-fg">ranking mensal</strong>: a soma dos pontos de ranking dos <strong className="text-fg">torneios oficiais finalizados</strong> da liga
+            naquele mês, mais os ajustes feitos pela organização. Pontos por colocação em vigor em {monthLabel(month)}:
+          </p>
+          {tables.map((t) => (
+            <div key={t.title} className="mt-4">
+              {!same && <p className="text-small font-semibold text-fg">{t.title}</p>}
+              <ol className="mt-2 grid grid-cols-2 sm:grid-cols-5 gap-3">
+                {t.rules.pointsTable.map((pts, i) => (
+                  <li key={i} className="rounded-ctl bg-field p-3 text-center">
+                    <span className="block text-small text-fg-2">{i + 1}º lugar</span>
+                    <span className="block font-display text-stat tabular text-fg">{pts}</span>
+                    <span className="block text-label text-fg-3">pontos</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-2 text-small text-fg-2">Demais colocações: 0 pontos. Desempate no total do mês: {TIEBREAKS[t.rules.tiebreak].toLowerCase()}; por último, uma ordem fixa por jogador.</p>
+            </div>
+          ))}
           <ul className="mt-4 space-y-2 text-body text-fg-2 list-disc pl-5">
-            <li>Do 6º lugar em diante não há pontos de ranking.</li>
+            <li><strong className="text-fg">Mês do torneio:</strong> o mês da data de início (ou, sem data, o mês em que foi criado), no horário de Brasília.</li>
+            <li><strong className="text-fg">Virada do mês:</strong> cada mês começa com todos em 0. Os meses anteriores continuam visíveis na página de rankings.</li>
             <li>Em eventos com mata-mata, só pontua quem chegou ao mata-mata.</li>
-            <li>Torneios com <strong className="text-fg">pontuação dobrada</strong> concedem o dobro desses pontos (1º lugar: 200). Pontos de batalha, sets e desempates não mudam.</li>
-            <li>BeyEncontros e torneios de teste não contam. Eventos de parceria contam só no ranking compartilhado LBL + LBM.</li>
-            <li>Empate no total de pontos: ordem alfabética do apelido.</li>
-            <li>O ranking geral soma todos os torneios oficiais registrados da liga.</li>
+            <li>Torneios com <strong className="text-fg">pontuação dobrada</strong> concedem o dobro da tabela (com a tabela acima, 1º lugar: {(tables[0].rules.pointsTable[0] ?? 0) * 2}). Pontos de batalha, sets e desempates das partidas não mudam.</li>
+            <li><strong className="text-fg">Tabela de cada torneio:</strong> fica registrada na primeira finalização. Se a organização mudar a tabela depois, torneios já finalizados não são recalculados.</li>
+            <li><strong className="text-fg">Ajustes da organização:</strong> pontos adicionados ou retirados aparecem separados dos resultados dos torneios, sempre com motivo registrado. O total do mês nunca fica negativo, e zerar um jogador não apaga os resultados dele.</li>
+            <li><strong className="text-fg">Fechamento:</strong> a organização fecha o mês e define o campeão (o 1º colocado). A classificação completa fica arquivada e não muda mais. Fechar a LBL não fecha a LBM.</li>
+            <li>BeyEncontros e torneios de teste não contam. Eventos de parceria contam só no ranking compartilhado LBL + LBM, que continua somando todos os eventos de parceria (não é mensal).</li>
           </ul>
         </section>
 

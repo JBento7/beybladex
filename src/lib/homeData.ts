@@ -9,7 +9,8 @@ import { tournamentsVersion } from "./publicVersion";
 import { eventPodium, type StandingsMatch } from "./standings";
 import { swissRoundCount } from "./tournament-engine";
 import { isSwissFormat } from "./swiss";
-import { getLeagueRanking } from "./leagueRanking";
+import { getMonthlyRanking } from "./monthlyRanking";
+import { currentMonth } from "./monthlyRules";
 import { formatLabel } from "./format";
 import { registrationState } from "./registration";
 import type { RankingEntry } from "./rankingMath";
@@ -152,6 +153,8 @@ async function loadLastEvent(league: HomeLeague): Promise<LastEvent | null> {
 export type HomeData = {
   /** League shown by the ranking and last-event cards. */
   league: HomeLeague;
+  /** Month ("AAAA-MM", São Paulo) of the monthly ranking card. */
+  month: string;
   featured: FeaturedEvent | null;
   /** A league event exists as a draft (being set up, not announced yet). */
   hasDraft: boolean;
@@ -161,7 +164,7 @@ export type HomeData = {
 
 // Public, shared entries only (nothing per user). The league is part of the
 // key so LBL and LBM results can never be mixed. Outside a Next request
-// (tests/scripts) there is no cache: compute directly, like getLeagueRanking.
+// (tests/scripts) there is no cache: compute directly, like getMonthlyRanking.
 const outsideNext = (e: unknown) => /incrementalCache|static generation store/i.test(String(e));
 function cached<T>(fn: () => Promise<T>, key: string[], tags: string[]): Promise<T> {
   try {
@@ -185,12 +188,14 @@ const loadShared = async () => {
  *  back to a short time-based entry rather than failing the page. */
 export async function getHomeData(league: HomeLeague = DEFAULT_HOME_LEAGUE): Promise<HomeData> {
   const version = await tournamentsVersion().catch(() => `t${Math.floor(Date.now() / 60_000)}`);
-  const [shared, last, ranking] = await Promise.all([
+  const month = currentMonth();
+  const [shared, last, monthly] = await Promise.all([
     cached(loadShared, ["home-shared-v7", version], ["home"]),
     cached(() => loadLastEvent(league), ["home-last-event-v1", league, version], ["home", "ranking"]),
-    getLeagueRanking(league),
+    // The same classification as /rankings (lib/monthlyRanking).
+    getMonthlyRanking(league, month),
   ]);
-  return { league, ...shared, last, ranking };
+  return { league, month, ...shared, last, ranking: monthly.entries };
 }
 
 /** Per-user: is this player registered in the featured event? */

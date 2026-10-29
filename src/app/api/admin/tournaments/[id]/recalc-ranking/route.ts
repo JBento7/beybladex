@@ -7,7 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
-import { recalculateStandings, finalizeTournamentRanking, computeTournamentRanking, getSwissRounds, auditTournament } from "@/lib/tournament-engine";
+import { recalculateStandings, finalizeTournamentRanking, computeTournamentRanking, getSwissRounds, auditTournament, monthClosedFor } from "@/lib/tournament-engine";
 import { hasBlocking } from "@/lib/swiss";
 import { auditAdminAction } from "@/lib/adminAudit";
 import { errorResponse } from "@/lib/observability";
@@ -47,6 +47,10 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       );
     }
 
+    // After the monthly ranking is closed its results are archived: no recalculation.
+    const closed = await monthClosedFor(params.id);
+    if (closed) return NextResponse.json({ error: `O ranking mensal deste torneio (${closed.league.toUpperCase()} · ${closed.month}) já foi encerrado. Recálculos estão bloqueados.` }, { status: 409 });
+
     // Rewriting placements/ranking points from inconsistent records would
     // certify an invalid table — refuse until the conflicts are resolved.
     const integrity = await auditTournament(params.id);
@@ -83,8 +87,9 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       if (p.userId) await recalculateStandings(params.id, p.userId);
     }
 
-    // 2) Final placement + ranking points.
-    await finalizeTournamentRanking(params.id);
+    // 2) Final placement + ranking points (refused if the month closed meanwhile).
+    const fin = await finalizeTournamentRanking(params.id);
+    if (!fin.ok) return NextResponse.json({ error: "O ranking mensal deste torneio foi encerrado durante o recálculo. A colocação e os pontos de ranking não foram alterados." }, { status: 409 });
     const after = await prisma.tournamentParticipant.findMany({
       where: { tournamentId: params.id, approved: { not: false } },
       select: { userId: true, placement: true, rankingPoints: true },

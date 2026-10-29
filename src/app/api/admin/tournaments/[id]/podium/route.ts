@@ -6,7 +6,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
-import { placementRankingPoints, rankingMultiplier } from "@/lib/rankingPoints";
+import { rankingMultiplier } from "@/lib/rankingPoints";
+import { pointsForPlacement } from "@/lib/monthlyRules";
+import { isMonthClosed, lockMonth, monthlyScopeOf } from "@/lib/monthlyRanking";
+import { pointsTableFor } from "@/lib/tournament-engine";
+import { revalidateRankings } from "@/lib/leagueRanking";
 import { auditAdminAction } from "@/lib/adminAudit";
 
 // ORGANIZER-only manual podium override.
@@ -37,9 +41,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   }
 
   try {
-    const event = await prisma.tournament.findUnique({ where: { id: params.id }, select: { isOfficial: true, isTest: true, doubleRankingPoints: true } });
+    const event = await prisma.tournament.findUnique({
+      where: { id: params.id },
+      select: { isOfficial: true, isTest: true, doubleRankingPoints: true, rankingPointsTable: true, status: true, isPartnership: true, communitySlug: true, startDate: true, createdAt: true },
+    });
     if (!event) return NextResponse.json({ error: "Torneio não encontrado." }, { status: 404 });
     const multiplier = rankingMultiplier(event); // from the base table, never from stored points
+    const scope = monthlyScopeOf(event);
+    const closedMsg = "O ranking mensal deste torneio já foi encerrado — o pódio não pode mais ser alterado.";
+    if (scope && (await isMonthClosed(scope.league, scope.month))) return NextResponse.json({ error: closedMsg }, { status: 409 });
     const participants = await prisma.tournamentParticipant.findMany({
       where: { tournamentId: params.id, approved: { not: false } },
       select: { id: true, userId: true, totalPoints: true, placement: true, rankingPoints: true, user: { select: { name: true, bladerName: true } } },
@@ -48,6 +58,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json({ error: "Torneio sem participantes aprovados." }, { status: 400 });
     }
 
+    // Base table of this event: frozen at the first finalization, else the
+    // rules of its league/month (docs/RANKING-MENSAL.md).
+    const table = await pointsTableFor(event, participants.some((p) => p.placement != null));
+    const pts = (idx: number) => pointsForPlacement(table, idx, multiplier);
     const byUser = new Map(participants.map((p) => [p.userId, p]));
     const unknown = order.filter((u) => !byUser.has(u));
     if (unknown.length) {
@@ -63,29 +77,30 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       .filter((p) => !order.includes(p.userId))
       .sort((a, b) => b.totalPoints - a.totalPoints);
 
-    const writes = [
-      ...order.map((userId, idx) =>
-        prisma.tournamentParticipant.update({
-          where: { id: byUser.get(userId)!.id },
-          data: { placement: idx + 1, rankingPoints: placementRankingPoints(idx, multiplier) },
-        })
-      ),
-      ...rest.map((p, i) =>
-        prisma.tournamentParticipant.update({
-          where: { id: p.id },
-          data: { placement: order.length + i + 1, rankingPoints: 0 },
-        })
-      ),
-    ];
     const before = participants.map((p) => ({ userId: p.userId, placement: p.placement, rankingPoints: p.rankingPoints }));
-    await prisma.$transaction(writes);
-
-    // The podium is the final word on this event — make sure it reads as closed.
-    await prisma.tournament.update({ where: { id: params.id }, data: { status: "FINISHED" } });
+    // One transaction under the month lock: never writes into a closed month.
+    const done = await prisma.$transaction(async (tx) => {
+      if (scope) {
+        await lockMonth(tx, scope.league, scope.month);
+        if (await isMonthClosed(scope.league, scope.month, tx)) return false;
+      }
+      for (const [idx, userId] of order.entries()) {
+        await tx.tournamentParticipant.update({ where: { id: byUser.get(userId)!.id }, data: { placement: idx + 1, rankingPoints: pts(idx) } });
+      }
+      for (const [i, p] of rest.entries()) {
+        await tx.tournamentParticipant.update({ where: { id: p.id }, data: { placement: order.length + i + 1, rankingPoints: 0 } });
+      }
+      // The podium is the final word on this event — make sure it reads as
+      // closed — and its base table is frozen like a normal finalization.
+      await tx.tournament.update({ where: { id: params.id }, data: { status: "FINISHED", rankingPointsTable: table } });
+      return true;
+    }, { maxWait: 20000, timeout: 30000 });
+    if (!done) return NextResponse.json({ error: closedMsg }, { status: 409 });
+    revalidateRankings();
     await auditAdminAction({
       kind: "PODIUM_SET", session, tournamentId: params.id,
       before: { participants: before },
-      after: { podium: order.map((userId, idx) => ({ userId, placement: idx + 1, rankingPoints: placementRankingPoints(idx, multiplier) })), others: rest.length },
+      after: { podium: order.map((userId, idx) => ({ userId, placement: idx + 1, rankingPoints: pts(idx) })), others: rest.length },
     });
 
     return NextResponse.json({
@@ -95,7 +110,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         return {
           placement: idx + 1,
           name: p.user?.bladerName || p.user?.name || "—",
-          rankingPoints: placementRankingPoints(idx, multiplier),
+          rankingPoints: pts(idx),
         };
       }),
       others: rest.length,
