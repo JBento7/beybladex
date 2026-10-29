@@ -23,6 +23,8 @@ const DESCRIPTION_CHARS = 180;
 export type TournamentListItem = {
   id: string; name: string; description: string | null; format: string; status: string;
   isOfficial: boolean; communitySlug: string; isPartnership: boolean; prize: string | null;
+  /** "Pontuação dobrada" (official event awarding 2× ranking points). */
+  doubleRankingPoints: boolean;
   startDate: string | null; maxParticipants: number | null; bannerUrl: string | null;
   location: string | null; entryFee: number | null; organizer: { name: string };
   participantCount: number; isJoined: boolean; canJoin: boolean;
@@ -65,7 +67,7 @@ const RECENT_ORDER: Prisma.TournamentOrderByWithRelationInput[] = [{ startDate: 
 
 const SELECT = {
   id: true, name: true, description: true, format: true, status: true, isOfficial: true, communitySlug: true,
-  isPartnership: true, prize: true, startDate: true, maxParticipants: true, bannerUrl: true, location: true,
+  isPartnership: true, doubleRankingPoints: true, prize: true, startDate: true, maxParticipants: true, bannerUrl: true, location: true,
   entryFee: true, registrationDeadline: true,
   organizer: { select: { name: true } },
   _count: { select: { participants: true } },
@@ -134,7 +136,7 @@ export async function listTournaments(opts: {
 
   const items = list.map((t): TournamentListItem => ({
     id: t.id, name: t.name, description: excerpt(t.description), format: t.format, status: t.status,
-    isOfficial: t.isOfficial, communitySlug: t.communitySlug, isPartnership: t.isPartnership, prize: t.prize,
+    isOfficial: t.isOfficial, communitySlug: t.communitySlug, isPartnership: t.isPartnership, doubleRankingPoints: t.isOfficial && t.doubleRankingPoints, prize: t.prize,
     startDate: t.startDate ? t.startDate.toISOString() : null, maxParticipants: t.maxParticipants,
     bannerUrl: t.bannerUrl, location: t.location, entryFee: t.entryFee, organizer: { name: t.organizer.name },
     participantCount: t._count.participants,

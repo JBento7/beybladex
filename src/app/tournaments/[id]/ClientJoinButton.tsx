@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { LineBadge } from "@/components/LineBadge";
 import { checkRegisteredDeck, findDuplicateParts, hasMatchTrio, PLUS_ONE_PARTS_RULE, registeredDeckSize, validTrios } from "@/lib/deckFormat";
+import { DoubleRankingBadge, DOUBLE_POINTS_DESC } from "@/components/tournament/DoubleRankingPoints";
 
 interface Beyblade {
   id: string;
@@ -20,10 +21,13 @@ export default function ClientJoinButton({
   tournamentId,
   deckType = "SOLO",
   isOfficial = false,
+  doubleRankingPoints = false,
 }: {
   tournamentId: string;
   deckType?: string;
   isOfficial?: boolean;
+  /** "Pontuação dobrada": shown in the dialog before the confirmation. */
+  doubleRankingPoints?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -167,6 +171,11 @@ export default function ClientJoinButton({
               <h2 className="text-lg font-bold text-white">Inscrição no Torneio</h2>
               <button onClick={() => setShowModal(false)} aria-label="Fechar" className="text-gray-400 hover:text-white text-2xl leading-none p-1 -m-1 flex-shrink-0">✕</button>
             </div>
+            {doubleRankingPoints && (
+              <p className="mb-3 flex flex-wrap items-center gap-2 text-xs text-gray-300">
+                <DoubleRankingBadge /> {DOUBLE_POINTS_DESC}
+              </p>
+            )}
 
             {loadingBB ? (
               <p className="text-gray-500 text-sm text-center py-8">Carregando combos...</p>

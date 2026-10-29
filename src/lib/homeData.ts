@@ -47,6 +47,8 @@ export type FeaturedEvent = {
   status: string;
   isOfficial: boolean;
   isPartnership: boolean;
+  /** "Pontuação dobrada" (official event awarding 2× ranking points). */
+  doubleRankingPoints: boolean;
   communitySlug: string;
   bannerUrl: string | null;
   startDate: string | null; // ISO, wall time stored as UTC
@@ -76,7 +78,7 @@ export type LastEvent = {
 
 async function loadFeatured(): Promise<FeaturedEvent | null> {
   const select = {
-    id: true, name: true, status: true, isOfficial: true, isPartnership: true, communitySlug: true, bannerUrl: true, startDate: true,
+    id: true, name: true, status: true, isOfficial: true, isPartnership: true, doubleRankingPoints: true, communitySlug: true, bannerUrl: true, startDate: true,
     venueName: true, location: true, address: true, format: true, deckType: true, qualifiers: true, entryFee: true,
     maxParticipants: true, registrationDeadline: true, _count: { select: { participants: true } },
   } as const;
@@ -97,7 +99,7 @@ async function loadFeatured(): Promise<FeaturedEvent | null> {
   const d = t.startDate ? new Date(t.startDate) : null;
   const reg = registrationState({ status: t.status, registrationDeadline: t.registrationDeadline, maxParticipants: t.maxParticipants, participantCount: t._count.participants });
   return {
-    id: t.id, name: t.name, status: t.status, isOfficial: t.isOfficial, isPartnership: t.isPartnership, communitySlug: t.communitySlug,
+    id: t.id, name: t.name, status: t.status, isOfficial: t.isOfficial, isPartnership: t.isPartnership, doubleRankingPoints: t.isOfficial && t.doubleRankingPoints, communitySlug: t.communitySlug,
     bannerUrl: t.bannerUrl, startDate: d ? d.toISOString() : null,
     hasTime: !!d && (d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0),
     venue: t.venueName ?? t.location, address: t.address, format: t.format, deckType: t.deckType,
@@ -184,7 +186,7 @@ const loadShared = async () => {
 export async function getHomeData(league: HomeLeague = DEFAULT_HOME_LEAGUE): Promise<HomeData> {
   const version = await tournamentsVersion().catch(() => `t${Math.floor(Date.now() / 60_000)}`);
   const [shared, last, ranking] = await Promise.all([
-    cached(loadShared, ["home-shared-v6", version], ["home"]),
+    cached(loadShared, ["home-shared-v7", version], ["home"]),
     cached(() => loadLastEvent(league), ["home-last-event-v1", league, version], ["home", "ranking"]),
     getLeagueRanking(league),
   ]);

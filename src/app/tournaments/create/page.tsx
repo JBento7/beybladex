@@ -7,6 +7,7 @@ import Navbar from "@/components/Navbar";
 import CommunityPicker from "@/components/CommunityPicker";
 import { useHomeCommunity } from "@/components/CommunityTheme";
 import DeckTypePicker from "@/components/deck/DeckTypePicker";
+import { DoubleRankingOption } from "@/components/tournament/DoubleRankingPoints";
 
 const FORMATS = [
   {
@@ -59,6 +60,7 @@ export default function CreateTournamentPage() {
     registrationDeadline: "",
   });
   const [isTest, setIsTest] = useState(false);
+  const [doubleRankingPoints, setDoubleRankingPoints] = useState(false);
   const [dateTBD, setDateTBD] = useState(false);
   // Knockout rules (stored in the "day2" columns, see lib/matchRules).
   const [day2SetsToWin, setDay2SetsToWin] = useState("2");
@@ -95,6 +97,8 @@ export default function CreateTournamentPage() {
         community: form.community,
         isPartnership: isAdmin ? form.isPartnership : false,
         isTest: isAdmin ? isTest : false,
+        // Only official events can award double ranking points.
+        doubleRankingPoints: isAdmin && form.eventType !== "BEYENCONTRO" ? doubleRankingPoints : false,
         setsToWin: form.setsToWin,
         pointsToWinSet: form.pointsToWinSet,
         qualifiers: form.format === "ROUND_ROBIN" ? parseInt(form.qualifiers) : undefined,
@@ -200,6 +204,10 @@ export default function CreateTournamentPage() {
                   <p className="text-xs text-gray-400 mt-0.5">Seus eventos são criados como BeyEncontro — estatísticas de beyblade são registradas, mas pontos não contam no ranking da comunidade.</p>
                 </div>
               </div>
+            )}
+
+            {isAdmin && form.eventType !== "BEYENCONTRO" && (
+              <DoubleRankingOption checked={doubleRankingPoints} onChange={setDoubleRankingPoints} />
             )}
 
             {isAdmin && (

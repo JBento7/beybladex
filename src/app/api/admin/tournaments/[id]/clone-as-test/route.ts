@@ -52,6 +52,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         // telões and its community-scoped admins can manage it.
         communitySlug: src.communitySlug,
         isPartnership: src.isPartnership,
+        // Kept so the rehearsal shows the real (doubled) ranking points.
+        doubleRankingPoints: src.doubleRankingPoints,
         status: "REGISTRATION",
         organizerId: session.user.id,
         maxParticipants: src.maxParticipants,

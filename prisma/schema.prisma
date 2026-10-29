@@ -181,6 +181,8 @@ model Tournament {
   communitySlug   String  @default("lbl")
   // Partnership event between communities: counts ONLY in the shared ranking.
   isPartnership   Boolean @default(false)
+  // "Pontuação dobrada" (official events only): placement points × 2.
+  doubleRankingPoints Boolean @default(false)
   // Suíço: number of Swiss rounds, frozen when first needed so approving or
   // removing a player mid-event can't move the Swiss/knockout boundary.
   swissRounds     Int?

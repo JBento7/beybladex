@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseMatchRules } from "@/lib/matchRules";
+import { resolveDoubleRankingPoints } from "@/lib/rankingPoints";
 import { isSwissFormat } from "@/lib/swiss";
 import { parseDeckType } from "@/lib/deckFormat";
 
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
       day2SetsToWin, day2PointsToWinSet,
       community,
       isPartnership,
+      doubleRankingPoints,
     } = await req.json();
 
     if (!name || !format) {
@@ -56,6 +58,15 @@ export async function POST(req: NextRequest) {
     // Match rules of each phase, validated against the form's options.
     const rules = parseMatchRules({ format, setsToWin, pointsToWinSet, day2SetsToWin, day2PointsToWinSet });
     if (!rules.ok) return NextResponse.json({ error: rules.error }, { status: 400 });
+
+    // "Pontuação dobrada": organizers only, official events only.
+    const isOrganizer = session.user.role === "ORGANIZER";
+    const willBeOfficial = isOrganizer && eventType !== "BEYENCONTRO";
+    const double = resolveDoubleRankingPoints({
+      requested: doubleRankingPoints, isAdmin: isOrganizer,
+      event: { isOfficial: willBeOfficial, isTest: isOrganizer && !!isTest },
+    });
+    if (!double.ok) return NextResponse.json({ error: double.error }, { status: double.status });
 
     // Deck format is validated here, not only by the form's options.
     const parsedDeck = deckType === undefined || deckType === null || deckType === "" ? "SOLO" : parseDeckType(deckType);
@@ -81,7 +92,8 @@ export async function POST(req: NextRequest) {
         prize: prize || null,
         arenas: arenas ? Math.max(1, parseInt(arenas)) : 1,
         status: "REGISTRATION",
-        isOfficial: session.user.role === "ORGANIZER" && eventType !== "BEYENCONTRO",
+        isOfficial: willBeOfficial,
+        doubleRankingPoints: double.value,
         isTest: session.user.role === "ORGANIZER" && !!isTest,
         // A community-scoped admin always creates in their own community.
         communitySlug,

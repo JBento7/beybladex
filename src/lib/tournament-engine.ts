@@ -8,6 +8,7 @@ import {
 import { Prisma } from "@prisma/client";
 import { revalidateRankings } from "./leagueRanking";
 import { logEvent } from "./observability";
+import { RANKING_POINTS_BY_PLACE, placementRankingPoints, rankingMultiplier } from "./rankingPoints";
 
 // Returns the userIds of every registered judge for a tournament. Used by the
 // match schedulers so judges never get a parallel match while arbitrating.
@@ -152,7 +153,8 @@ function nicknames(ps: { userId: string | null; user?: { name: string; bladerNam
   return m;
 }
 
-export const RANKING_POINTS_BY_PLACE = [100, 70, 50, 30, 10];
+// Base table lives in lib/rankingPoints (× 2 on "Pontuação dobrada" events).
+export { RANKING_POINTS_BY_PLACE };
 
 // Ranks the final standings, awards rankingPoints to the top 5 and marks the
 // tournament FINISHED. Knockout formats (SINGLE_ELIMINATION) are ranked by how
@@ -165,7 +167,7 @@ export type ComputedPlacement = { participantId: string; userId: string; name: s
  *  finalizeTournamentRanking and by the admin dry-run of a recalculation). */
 export async function computeTournamentRanking(tournamentId: string): Promise<ComputedPlacement[]> {
   const [tournament, participants, allMatchRows] = await Promise.all([
-    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true, qualifiers: true } }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true, qualifiers: true, isOfficial: true, isTest: true, doubleRankingPoints: true } }),
     prisma.tournamentParticipant.findMany({
       where: { tournamentId, approved: { not: false } },
       include: { user: { select: { name: true, bladerName: true } } },
@@ -271,6 +273,9 @@ export async function computeTournamentRanking(tournamentId: string): Promise<Co
   // the event has a bracket, only players who actually reached it score. Everyone
   // else still gets a placement (for the final table/certificates) but 0 points.
   // Without a knockout (pure Swiss / other formats) the top placements score.
+  // Always from the base table × multiplier ("Pontuação dobrada" = 2), never
+  // from stored points, so recalculating can't double them again.
+  const multiplier = tournament ? rankingMultiplier(tournament) : 1;
   return ranked.map((p, idx) => {
     const eligible = !isSwissPlayoff || inPlayoff.has(p.userId!);
     return {
@@ -278,7 +283,7 @@ export async function computeTournamentRanking(tournamentId: string): Promise<Co
       userId: p.userId!,
       name: p.user?.bladerName || p.user?.name || "",
       placement: idx + 1,
-      rankingPoints: eligible ? (RANKING_POINTS_BY_PLACE[idx] ?? 0) : 0,
+      rankingPoints: placementRankingPoints(idx, multiplier, eligible),
     };
   });
 }

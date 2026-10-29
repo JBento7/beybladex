@@ -3,7 +3,7 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import PageHeader, { SectionTitle } from "@/components/ui/PageHeader";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
-import { RANKING_POINTS_BY_PLACE } from "@/lib/tournament-engine";
+import { RANKING_POINTS_BY_PLACE } from "@/lib/rankingPoints";
 
 export const metadata: Metadata = { title: "Regras" };
 
@@ -69,6 +69,7 @@ export default function RulesPage() {
           <ul className="mt-4 space-y-2 text-body text-fg-2 list-disc pl-5">
             <li>Do 6º lugar em diante não há pontos de ranking.</li>
             <li>Em eventos com mata-mata, só pontua quem chegou ao mata-mata.</li>
+            <li>Torneios com <strong className="text-fg">pontuação dobrada</strong> concedem o dobro desses pontos (1º lugar: 200). Pontos de batalha, sets e desempates não mudam.</li>
             <li>BeyEncontros e torneios de teste não contam. Eventos de parceria contam só no ranking compartilhado LBL + LBM.</li>
             <li>Empate no total de pontos: ordem alfabética do apelido.</li>
             <li>O ranking geral soma todos os torneios oficiais registrados da liga.</li>

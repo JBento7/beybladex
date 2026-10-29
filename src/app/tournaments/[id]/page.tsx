@@ -36,6 +36,8 @@ import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/cl
 import type { Metadata } from "next";
 import { canSeeDraft } from "@/lib/tournamentList";
 import { knockoutRules, setsLabel } from "@/lib/matchRules";
+import { rankingMultiplier } from "@/lib/rankingPoints";
+import { DoubleRankingBadge, DOUBLE_POINTS_DESC } from "@/components/tournament/DoubleRankingPoints";
 import { authUrl } from "@/lib/safeRedirect";
 import { testToolsAllowed } from "@/lib/adminAudit";
 import { deckLabel, hasMatchTrio, PLUS_ONE_PARTS_RULE, registeredIds, usesBattleDeck } from "@/lib/deckFormat";
@@ -665,6 +667,8 @@ export default async function TournamentDetailPage(
     !knockoutPlayers.has(r.userId) && swissRows.slice(i + 1).some((x) => knockoutPlayers.has(x.userId))
   );
   const qualifiersCount = tournament.qualifiers ?? 0;
+  // "Pontuação dobrada": ranking points of this event are × 2.
+  const doubled = rankingMultiplier(tournament) === 2;
   // Knockout match rules (own rules, or the main ones on old events).
   const knockout = knockoutRules(tournament);
 
@@ -1206,6 +1210,7 @@ export default async function TournamentDetailPage(
               ? "Critério: fase do chaveamento em que cada jogador parou."
               : "Critério: classificação do torneio."}
         {tournament.status !== "FINISHED" && " Pode mudar até o fim do torneio."}
+        {doubled && " Pontuação dobrada: os pontos de ranking exibidos já incluem o multiplicador ×2."}
       </p>
       {divergences.length > 0 && blockingIssues.length === 0 && (
         <div role="note" className="mb-4 rounded-lg border border-warn/40 bg-warn-bg p-3 text-sm text-gray-100">
@@ -1245,7 +1250,7 @@ export default async function TournamentDetailPage(
                 {row.note && <span className="block text-xs text-gray-400">{row.note}</span>}
               </span>
               {tournament.status === "FINISHED" && tournament.isOfficial && (p?.rankingPoints ?? 0) > 0 && (
-                <span className="shrink-0 text-xs font-bold text-amber-300 tabular-nums">+{p!.rankingPoints} ranking</span>
+                <span className="shrink-0 text-xs font-bold text-amber-300 tabular-nums">+{p!.rankingPoints} ranking{doubled && <span className="font-normal text-amber-200"> (×2)</span>}</span>
               )}
             </li>
           );
@@ -1439,6 +1444,7 @@ export default async function TournamentDetailPage(
             {isSwiss && qualifiersCount > 0 && ` Mata-mata (inclui final e 3º lugar): ${setsLabel(knockout.setsToWin)}, ${knockout.pointsToWinSet} pontos para vencer o set.`}
           </li>
           <li>Pontos de finish: Spin 1 · Over 2 · Burst 2 · Xtreme 3 · Misslaunch do adversário 1.</li>
+          {doubled && <li><strong className="text-white">Pontuação dobrada:</strong> este torneio concede o dobro dos pontos de ranking (1º lugar: 200 em vez de 100). Pontos de batalha, sets, pontos suíços e desempates não mudam.</li>}
           {!tournament.isOfficial && <li>BeyEncontro: estatísticas de beyblade são registradas, mas os pontos não contam no ranking da comunidade.</li>}
           {tournament.isPartnership && <li>Evento de parceria: conta somente no ranking compartilhado.</li>}
         </ul>
@@ -1499,9 +1505,14 @@ export default async function TournamentDetailPage(
             ? `${tournament.registrationDeadline ? `Até ${fmtDate(tournament.registrationDeadline, true)} (horário de Brasília). ` : ""}${reg.spotsLeft != null ? `${reg.spotsLeft} vaga(s) restante(s).` : "Sem limite de vagas."}`
             : reg.code === "FULL" ? "Todas as vagas foram preenchidas." : reg.code === "DEADLINE" ? "O prazo de inscrição terminou." : "As inscrições não estão abertas."}
       </p>
+      {doubled && (
+        <p className="-mt-2 mb-4 flex flex-wrap items-center gap-2 text-sm text-gray-300">
+          <DoubleRankingBadge /> {DOUBLE_POINTS_DESC}
+        </p>
+      )}
       {registrationOpen && (
         canJoin ? (
-          <ClientJoinButton tournamentId={tournament.id} deckType={tournament.deckType} isOfficial={tournament.isOfficial} />
+          <ClientJoinButton tournamentId={tournament.id} deckType={tournament.deckType} isOfficial={tournament.isOfficial} doubleRankingPoints={doubled} />
         ) : !session ? (
           <Link
             href={authUrl(`/tournaments/${tournament.id}?aba=resumo#inscricao`)}
@@ -1608,6 +1619,7 @@ export default async function TournamentDetailPage(
                     <li className={`text-xs font-bold px-3 py-1 rounded-full ${tournament.isOfficial ? "bg-brand-red/20 text-red-200 border border-brand-red/50" : "bg-blue-500/15 text-blue-200 border border-blue-500/40"}`}>
                       {tournament.isOfficial ? "Oficial" : "BeyEncontro"}
                     </li>
+                    {doubled && <li><DoubleRankingBadge className="text-xs px-3 py-1" /></li>}
                     {tournament.isTest && <li className="text-xs font-bold px-3 py-1 rounded-full bg-yellow-900/40 text-yellow-300">Teste</li>}
                   </ul>
                   <h1 className="text-2xl sm:text-3xl font-black text-white break-anywhere">{tournament.name}</h1>

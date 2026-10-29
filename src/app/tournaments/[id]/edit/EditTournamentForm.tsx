@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import CommunityPicker from "@/components/CommunityPicker";
 import DeckTypePicker from "@/components/deck/DeckTypePicker";
+import { DoubleRankingOption } from "@/components/tournament/DoubleRankingPoints";
 
 const FORMATS = [
   {
@@ -41,6 +42,7 @@ type Initial = {
   isOfficial: boolean;
   communitySlug: string;
   isPartnership: boolean;
+  doubleRankingPoints: boolean;
   setsToWin: number;
   pointsToWinSet: number;
   qualifiers: number | null;
@@ -75,6 +77,7 @@ export default function EditTournamentForm({
     eventType: tournament.isOfficial ? "TORNEIO" : "BEYENCONTRO",
     community: tournament.communitySlug,
     isPartnership: tournament.isPartnership,
+    doubleRankingPoints: tournament.doubleRankingPoints,
     setsToWin: String(tournament.setsToWin),
     pointsToWinSet: String(tournament.pointsToWinSet),
     qualifiers: String(tournament.qualifiers ?? 8),
@@ -120,6 +123,9 @@ export default function EditTournamentForm({
         eventType: form.eventType,
         community: form.community,
         isPartnership: form.isPartnership,
+        // Only admins (who can change the event type) send it; the server
+        // keeps the stored value otherwise and refuses it on a BeyEncontro.
+        doubleRankingPoints: canChangeEventType ? form.eventType !== "BEYENCONTRO" && form.doubleRankingPoints : undefined,
         setsToWin: form.setsToWin,
         pointsToWinSet: form.pointsToWinSet,
         qualifiers: form.format === "ROUND_ROBIN" ? parseInt(form.qualifiers) : null,
@@ -217,6 +223,9 @@ export default function EditTournamentForm({
                   </button>
                 ))}
               </div>
+              {form.eventType !== "BEYENCONTRO" && (
+                <DoubleRankingOption checked={form.doubleRankingPoints} onChange={(v) => setForm({ ...form, doubleRankingPoints: v })} />
+              )}
             </div>
           ) : null}
 

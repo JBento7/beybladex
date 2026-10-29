@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
-import { RANKING_POINTS_BY_PLACE } from "@/lib/tournament-engine";
+import { placementRankingPoints, rankingMultiplier } from "@/lib/rankingPoints";
 import { auditAdminAction } from "@/lib/adminAudit";
 
 // ORGANIZER-only manual podium override.
@@ -15,7 +15,7 @@ import { auditAdminAction } from "@/lib/adminAudit";
 // those don't reflect what actually happened (a knockout that was played but
 // never fully registered, or an event ranked under an older, buggy rule), the
 // organizer can state the real podium here. Positions listed get the standard
-// ranking points (100/70/50/30/10); everyone else keeps a placement below them
+// ranking points (100/70/50/30/10, doubled on "Pontuação dobrada"); everyone else keeps a placement below them
 // and 0 ranking points.
 //
 // Body: { order: string[] }  — userIds from 1st place onward.
@@ -37,6 +37,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   }
 
   try {
+    const event = await prisma.tournament.findUnique({ where: { id: params.id }, select: { isOfficial: true, isTest: true, doubleRankingPoints: true } });
+    if (!event) return NextResponse.json({ error: "Torneio não encontrado." }, { status: 404 });
+    const multiplier = rankingMultiplier(event); // from the base table, never from stored points
     const participants = await prisma.tournamentParticipant.findMany({
       where: { tournamentId: params.id, approved: { not: false } },
       select: { id: true, userId: true, totalPoints: true, placement: true, rankingPoints: true, user: { select: { name: true, bladerName: true } } },
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       ...order.map((userId, idx) =>
         prisma.tournamentParticipant.update({
           where: { id: byUser.get(userId)!.id },
-          data: { placement: idx + 1, rankingPoints: RANKING_POINTS_BY_PLACE[idx] ?? 0 },
+          data: { placement: idx + 1, rankingPoints: placementRankingPoints(idx, multiplier) },
         })
       ),
       ...rest.map((p, i) =>
@@ -82,7 +85,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     await auditAdminAction({
       kind: "PODIUM_SET", session, tournamentId: params.id,
       before: { participants: before },
-      after: { podium: order.map((userId, idx) => ({ userId, placement: idx + 1, rankingPoints: RANKING_POINTS_BY_PLACE[idx] ?? 0 })), others: rest.length },
+      after: { podium: order.map((userId, idx) => ({ userId, placement: idx + 1, rankingPoints: placementRankingPoints(idx, multiplier) })), others: rest.length },
     });
 
     return NextResponse.json({
@@ -92,7 +95,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         return {
           placement: idx + 1,
           name: p.user?.bladerName || p.user?.name || "—",
-          rankingPoints: RANKING_POINTS_BY_PLACE[idx] ?? 0,
+          rankingPoints: placementRankingPoints(idx, multiplier),
         };
       }),
       others: rest.length,

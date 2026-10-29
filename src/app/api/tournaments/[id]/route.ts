@@ -6,6 +6,7 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
 import { hasKnockoutPhase, parseMatchRules } from "@/lib/matchRules";
+import { resolveDoubleRankingPoints } from "@/lib/rankingPoints";
 import { deckLabel, parseDeckType, registrationComplete } from "@/lib/deckFormat";
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -90,6 +91,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       day2SetsToWin, day2PointsToWinSet,
       community,
       isPartnership,
+      doubleRankingPoints,
     } = await req.json();
 
     if (!name || !format) {
@@ -158,6 +160,15 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     }
     if (isAdmin && !session.user.adminCommunity && ["lbl", "lbm"].includes(community)) data.communitySlug = community;
     if (isAdmin && typeof isPartnership === "boolean") data.isPartnership = isPartnership;
+    // "Pontuação dobrada": admins only, official events only. Editing is only
+    // possible before the start (checked above), so it can't change mid-event.
+    const double = resolveDoubleRankingPoints({
+      requested: doubleRankingPoints, isAdmin,
+      event: { isOfficial: (data.isOfficial as boolean | undefined) ?? tournament.isOfficial, isTest: tournament.isTest },
+      current: tournament.doubleRankingPoints,
+    });
+    if (!double.ok) return NextResponse.json({ error: double.error }, { status: double.status });
+    data.doubleRankingPoints = double.value;
 
     const updated = await prisma.tournament.update({
       where: { id: params.id },

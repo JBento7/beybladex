@@ -290,6 +290,7 @@ function TournamentCard({ t, onOpen }: { t: Tournament; onOpen: () => void }) {
           {t.isJoined && t.status === "REGISTRATION" ? <Tag tone="info">Você está inscrito</Tag> : <StatusBadge status={t.status} />}
           <CommunityBadge slug={t.communitySlug} partnership={t.isPartnership} />
           {!t.isOfficial && <Tag>BeyEncontro</Tag>}
+          {t.doubleRankingPoints && <Tag tone="yellow"><span aria-hidden="true">×2</span> Pontuação dobrada</Tag>}
         </div>
         <h3 className="font-display text-title-3 text-fg line-clamp-3 break-anywhere">{t.name}</h3>
         <dl className="space-y-1.5 text-small text-fg-2">

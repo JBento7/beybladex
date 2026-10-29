@@ -82,6 +82,7 @@ export default function FeaturedTournament({
             <StatusBadge status={event.status} />
           )}
           <Tag tone={event.isOfficial ? "yellow" : "neutral"}>{event.isOfficial ? "Oficial · vale ranking" : "BeyEncontro"}</Tag>
+          {event.doubleRankingPoints && <Tag tone="yellow"><span aria-hidden="true">×2</span> Pontuação dobrada</Tag>}
           {event.isPartnership && <Tag>LBL + LBM</Tag>}
         </div>
         <div>
