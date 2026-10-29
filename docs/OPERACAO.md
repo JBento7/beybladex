@@ -34,7 +34,12 @@ O `npm run build` (usado pela Vercel) roda `scripts/deploy-migrations.mjs` **ant
 - **Backup antes de migrar:** defina `MIGRATE_BACKUP_COMMAND` com o comando que cria um backup no seu provedor. Por exemplo, uma chamada à API dele que cria um *snapshot* ou *branch*.
   - Se esse comando falhar, nada é migrado.
   - Sem ele, conte com o backup automático ou PITR (*point-in-time recovery*) do provedor do banco. Confira se está ligado.
-- **Conexão via pooler (pgbouncer):** defina `MIGRATE_DATABASE_URL` com a conexão **direta**, só para as migrações. O app continua usando `DATABASE_URL`.
+- **Conexão via pooler:** o pooler de transação (pgbouncer) não roda migrações; a tentativa trava.
+  - Supabase na porta 6543 (`*.pooler.supabase.com:6543`, o caso da produção): o script migra sozinho pelo pooler de sessão do mesmo endereço, na porta 5432, com as mesmas credenciais.
+  - Neon com `-pooler` no endereço: o script usa a conexão direta.
+  - Outro pgbouncer: o deploy para com aviso. Defina `MIGRATE_DATABASE_URL` com a conexão direta ou de sessão.
+  - `MIGRATE_DATABASE_URL`, quando definida, sempre tem prioridade. O app continua usando `DATABASE_URL`.
+- **Tentativa anterior interrompida:** basta refazer o deploy. Uma migração registrada como falha é marcada como revertida e reaplicada (todas são idempotentes), e uma adoção da base que ficou pela metade é completada.
 - **Desligar de emergência:** `MIGRATE_ON_BUILD=0`.
 - **Concorrência:** dois deploys ao mesmo tempo não migram juntos (`migrate deploy` usa um bloqueio no banco).
 - **Onde acompanhar:** no log do build da Vercel, procure as linhas `[migrations]`. URLs e senhas não aparecem.
