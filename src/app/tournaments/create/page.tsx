@@ -60,8 +60,7 @@ export default function CreateTournamentPage() {
   });
   const [isTest, setIsTest] = useState(false);
   const [dateTBD, setDateTBD] = useState(false);
-  const [isMultiDay, setIsMultiDay] = useState(false);
-  const [day2Date, setDay2Date] = useState("");
+  // Knockout rules (stored in the "day2" columns, see lib/matchRules).
   const [day2SetsToWin, setDay2SetsToWin] = useState("2");
   const [day2PointsToWinSet, setDay2PointsToWinSet] = useState("4");
   const [loading, setLoading] = useState(false);
@@ -99,10 +98,8 @@ export default function CreateTournamentPage() {
         setsToWin: form.setsToWin,
         pointsToWinSet: form.pointsToWinSet,
         qualifiers: form.format === "ROUND_ROBIN" ? parseInt(form.qualifiers) : undefined,
-        isMultiDay: form.format === "ROUND_ROBIN" && isMultiDay,
-        day2Date: form.format === "ROUND_ROBIN" && isMultiDay && !dateTBD ? day2Date || undefined : undefined,
-        day2SetsToWin: form.format === "ROUND_ROBIN" && isMultiDay ? day2SetsToWin : undefined,
-        day2PointsToWinSet: form.format === "ROUND_ROBIN" && isMultiDay ? day2PointsToWinSet : undefined,
+        day2SetsToWin: form.format === "ROUND_ROBIN" ? day2SetsToWin : undefined,
+        day2PointsToWinSet: form.format === "ROUND_ROBIN" ? day2PointsToWinSet : undefined,
         bannerUrl: form.bannerUrl || undefined,
         location: form.location || undefined,
         venueName: form.venueName || undefined,
@@ -332,44 +329,6 @@ export default function CreateTournamentPage() {
                 </label>
               </div>
             </div>
-
-            {/* Days of the tournament (Suíço only) */}
-            {form.format === "ROUND_ROBIN" && (
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">Dias de torneio</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsMultiDay(false)}
-                    className={`flex-1 py-2.5 rounded-lg font-bold border transition-colors ${!isMultiDay ? "border-brand-yellow bg-brand-yellow/10 text-brand-yellow" : "border-line bg-field text-gray-400 hover:bg-field"}`}
-                  >
-                    1 dia
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsMultiDay(true)}
-                    className={`flex-1 py-2.5 rounded-lg font-bold border transition-colors ${isMultiDay ? "border-brand-yellow bg-brand-yellow/10 text-brand-yellow" : "border-line bg-field text-gray-400 hover:bg-field"}`}
-                  >
-                    2 dias (Suíço + Mata-mata)
-                  </button>
-                </div>
-                {isMultiDay && (
-                  <div className="mt-3">
-                    <label className="block text-xs font-medium text-gray-400 mb-1.5">Data do Dia 2 — Mata-mata</label>
-                    <input
-                      type="date"
-                      value={day2Date}
-                      onChange={(e) => setDay2Date(e.target.value)}
-                      disabled={dateTBD}
-                      className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none transition-colors disabled:opacity-50"
-                    />
-                    <p className="text-xs text-gray-500 mt-1.5">
-                      Dia 1 = fase suíça · Dia 2 = mata-mata dos {form.qualifiers} classificados (gerado automaticamente ao fim do suíço). Ajuste as regras de cada dia abaixo.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Location & Registration */}
@@ -532,8 +491,8 @@ export default function CreateTournamentPage() {
           {/* Match Rules */}
           <div className="bg-card border border-line rounded-xl p-6">
             <h2 className="text-base font-bold text-white mb-4">Regras da Partida</h2>
-            {isMultiDay && form.format === "ROUND_ROBIN" && (
-              <div className="text-xs font-bold text-brand-yellow mb-2">Dia 1 — Fase Suíça</div>
+            {form.format === "ROUND_ROBIN" && (
+              <div className="text-xs font-bold text-brand-yellow mb-2">Fase suíça</div>
             )}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -569,10 +528,10 @@ export default function CreateTournamentPage() {
               </div>
             </div>
 
-            {/* Day 2 (knockout) rules, only for 2-day Suíço */}
-            {isMultiDay && form.format === "ROUND_ROBIN" && (
+            {/* Knockout rules (Suíço with cut), independent from the Swiss phase */}
+            {form.format === "ROUND_ROBIN" && (
               <div className="mt-5 border-t border-line pt-4">
-                <div className="text-xs font-bold text-brand-yellow mb-2">Dia 2 — Mata-mata</div>
+                <div className="text-xs font-bold text-brand-yellow mb-2">Mata-mata</div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1.5">Sets por partida</label>

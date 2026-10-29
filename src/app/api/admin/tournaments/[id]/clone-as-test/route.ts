@@ -61,8 +61,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         setsToWin: src.setsToWin,
         pointsToWinSet: src.pointsToWinSet,
         qualifiers: src.qualifiers,
-        isMultiDay: src.isMultiDay,
-        day2Date: src.day2Date,
+        // Single day; the knockout rules ("day2" columns) are kept as they are.
+        isMultiDay: false,
+        day2Date: null,
         day2SetsToWin: src.day2SetsToWin,
         day2PointsToWinSet: src.day2PointsToWinSet,
         location: src.location,

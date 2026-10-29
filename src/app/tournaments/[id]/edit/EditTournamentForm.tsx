@@ -51,8 +51,6 @@ type Initial = {
   entryFee: number | null;
   regulation: string | null;
   registrationDeadline: string | null;
-  isMultiDay: boolean;
-  day2Date: string | null;
   day2SetsToWin: number | null;
   day2PointsToWinSet: number | null;
 };
@@ -89,10 +87,10 @@ export default function EditTournamentForm({
     registrationDeadline: tournament.registrationDeadline ? tournament.registrationDeadline.slice(0, 16) : "",
   });
   const [dateTBD, setDateTBD] = useState(!tournament.startDate);
-  const [isMultiDay, setIsMultiDay] = useState(tournament.isMultiDay);
-  const [day2Date, setDay2Date] = useState(tournament.day2Date ? tournament.day2Date.slice(0, 10) : "");
-  const [day2SetsToWin, setDay2SetsToWin] = useState(String(tournament.day2SetsToWin ?? 2));
-  const [day2PointsToWinSet, setDay2PointsToWinSet] = useState(String(tournament.day2PointsToWinSet ?? 4));
+  // Knockout rules (stored in the "day2" columns, see lib/matchRules). An old
+  // event without specific knockout rules shows the main ones (what applies).
+  const [day2SetsToWin, setDay2SetsToWin] = useState(String(tournament.day2SetsToWin ?? tournament.setsToWin ?? 2));
+  const [day2PointsToWinSet, setDay2PointsToWinSet] = useState(String(tournament.day2PointsToWinSet ?? tournament.pointsToWinSet ?? 4));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -132,10 +130,8 @@ export default function EditTournamentForm({
         entryFee: form.entryFee ? parseFloat(form.entryFee) : undefined,
         regulation: form.regulation || undefined,
         registrationDeadline: form.registrationDeadline || undefined,
-        isMultiDay: form.format === "ROUND_ROBIN" && isMultiDay,
-        day2Date: form.format === "ROUND_ROBIN" && isMultiDay && !dateTBD ? day2Date || null : null,
-        day2SetsToWin: form.format === "ROUND_ROBIN" && isMultiDay ? day2SetsToWin : null,
-        day2PointsToWinSet: form.format === "ROUND_ROBIN" && isMultiDay ? day2PointsToWinSet : null,
+        day2SetsToWin: form.format === "ROUND_ROBIN" ? day2SetsToWin : undefined,
+        day2PointsToWinSet: form.format === "ROUND_ROBIN" ? day2PointsToWinSet : undefined,
       }),
     });
 
@@ -331,44 +327,6 @@ export default function EditTournamentForm({
                   Data a definir
                 </label>
               </div>
-
-              {/* Days of the tournament (Suíço only) */}
-              {form.format === "ROUND_ROBIN" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">Dias de torneio</label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsMultiDay(false)}
-                      className={`flex-1 py-2.5 rounded-lg font-bold border transition-colors ${!isMultiDay ? "border-brand-yellow bg-brand-yellow/10 text-brand-yellow" : "border-line bg-field text-gray-400 hover:bg-field"}`}
-                    >
-                      1 dia
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsMultiDay(true)}
-                      className={`flex-1 py-2.5 rounded-lg font-bold border transition-colors ${isMultiDay ? "border-brand-yellow bg-brand-yellow/10 text-brand-yellow" : "border-line bg-field text-gray-400 hover:bg-field"}`}
-                    >
-                      2 dias (Suíço + Mata-mata)
-                    </button>
-                  </div>
-                  {isMultiDay && (
-                    <div className="mt-3">
-                      <label className="block text-xs font-medium text-gray-400 mb-1.5">Data do Dia 2 — Mata-mata</label>
-                      <input
-                        type="date"
-                        value={day2Date}
-                        onChange={(e) => setDay2Date(e.target.value)}
-                        disabled={dateTBD}
-                        className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none transition-colors disabled:opacity-50"
-                      />
-                      <p className="text-xs text-gray-500 mt-1.5">
-                        Dia 1 = fase suíça · Dia 2 = mata-mata dos {form.qualifiers} classificados (automático ao fim do suíço). Ajuste as regras de cada dia abaixo.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
@@ -529,8 +487,8 @@ export default function EditTournamentForm({
           {/* Match Rules */}
           <div className="bg-card border border-line rounded-xl p-6">
             <h2 className="text-base font-bold text-white mb-4">Regras da Partida</h2>
-            {isMultiDay && form.format === "ROUND_ROBIN" && (
-              <div className="text-xs font-bold text-brand-yellow mb-2">Dia 1 — Fase Suíça</div>
+            {form.format === "ROUND_ROBIN" && (
+              <div className="text-xs font-bold text-brand-yellow mb-2">Fase suíça</div>
             )}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -566,9 +524,9 @@ export default function EditTournamentForm({
               </div>
             </div>
 
-            {isMultiDay && form.format === "ROUND_ROBIN" && (
+            {form.format === "ROUND_ROBIN" && (
               <div className="mt-5 border-t border-line pt-4">
-                <div className="text-xs font-bold text-brand-yellow mb-2">Dia 2 — Mata-mata</div>
+                <div className="text-xs font-bold text-brand-yellow mb-2">Mata-mata</div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1.5">Sets por partida</label>

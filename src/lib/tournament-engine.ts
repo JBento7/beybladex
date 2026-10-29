@@ -309,7 +309,7 @@ export async function finalizeTournamentRanking(tournamentId: string) {
 // twice. Returns why it didn't generate, if it didn't.
 export async function generatePlayoffBracket(tournamentId: string, qualifiers: number, startRound = 2): Promise<{ status: "created" | "exists" | "invalid"; message?: string }> {
   const [tournament, judges, participants] = await Promise.all([
-    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true, isMultiDay: true, day2SetsToWin: true, day2PointsToWinSet: true } }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { arenas: true, day2SetsToWin: true, day2PointsToWinSet: true } }),
     getTournamentJudgeIds(tournamentId),
     prisma.tournamentParticipant.findMany({
       where: { tournamentId, approved: { not: false } },
@@ -336,9 +336,10 @@ export async function generatePlayoffBracket(tournamentId: string, qualifiers: n
   const top = swissRows.slice(0, qualifiers).map((r) => r.userId);
   if (top.length < 2) return { status: "invalid", message: "Jogadores insuficientes para o mata-mata." };
 
-  // 2-day tournaments can use different match rules on the knockout day.
-  const knockoutSets = tournament?.isMultiDay ? tournament.day2SetsToWin ?? null : null;
-  const knockoutPoints = tournament?.isMultiDay ? tournament.day2PointsToWinSet ?? null : null;
+  // The knockout has its own match rules (lib/matchRules), whatever isMultiDay
+  // says. Null = no specific rules: the match falls back to the main ones.
+  const knockoutSets = tournament?.day2SetsToWin ?? null;
+  const knockoutPoints = tournament?.day2PointsToWinSet ?? null;
   const pairs = seededFirstRound(top);
   const scheduled = scheduleByArena(pairs, tournament?.arenas ?? 1, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
   await insertRoundMatches(tournamentId, "KNOCKOUT", startRound, scheduled.map(({ match, slot, arena, judgeId }) => ({
@@ -915,10 +916,11 @@ async function advanceSingleEliminationUnlocked(
     if (losers.length === 2) pairs.push({ player1Id: losers[0], player2Id: losers[1], bracketPos: 2, isThirdPlace: true });
   }
 
-  // Carry the knockout match rules forward (2-day tournaments may use different
-  // sets/points for the playoff day).
-  const inheritSets = bracketMatches[0]?.setsToWin ?? null;
-  const inheritPoints = bracketMatches[0]?.pointsToWinSet ?? null;
+  // Carry the knockout match rules forward (semifinal, final and 3rd place use
+  // the rules the bracket started with, even if the event is edited later).
+  const ruled = bracketMatches.find((m) => m.setsToWin != null || m.pointsToWinSet != null) ?? bracketMatches[0];
+  const inheritSets = ruled?.setsToWin ?? null;
+  const inheritPoints = ruled?.pointsToWinSet ?? null;
 
   const scheduled = scheduleByArena(pairs, tournament?.arenas ?? 1, (m) => m.player1Id, (m) => m.player2Id, judges, await getTournamentPlayerIds(tournamentId));
   try {

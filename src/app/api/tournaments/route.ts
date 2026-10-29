@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { parseMatchRules } from "@/lib/matchRules";
 import { isSwissFormat } from "@/lib/swiss";
 import { parseDeckType } from "@/lib/deckFormat";
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
       name, description, format, maxParticipants, startDate, deckType, prize, arenas,
       eventType, isTest, setsToWin, pointsToWinSet, qualifiers,
       bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
-      isMultiDay, day2Date, day2SetsToWin, day2PointsToWinSet,
+      day2SetsToWin, day2PointsToWinSet,
       community,
       isPartnership,
     } = await req.json();
@@ -51,6 +52,10 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Match rules of each phase, validated against the form's options.
+    const rules = parseMatchRules({ format, setsToWin, pointsToWinSet, day2SetsToWin, day2PointsToWinSet });
+    if (!rules.ok) return NextResponse.json({ error: rules.error }, { status: 400 });
 
     // Deck format is validated here, not only by the form's options.
     const parsedDeck = deckType === undefined || deckType === null || deckType === "" ? "SOLO" : parseDeckType(deckType);
@@ -81,15 +86,17 @@ export async function POST(req: NextRequest) {
         // A community-scoped admin always creates in their own community.
         communitySlug,
         isPartnership: session.user.role === "ORGANIZER" && !!isPartnership,
-        setsToWin: setsToWin ? Math.min(2, Math.max(1, parseInt(setsToWin))) : 2,
-        pointsToWinSet: pointsToWinSet ? Math.min(7, Math.max(4, parseInt(pointsToWinSet))) : 4,
+        // Swiss phase (or the only phase of other formats).
+        setsToWin: rules.setsToWin,
+        pointsToWinSet: rules.pointsToWinSet,
         // Suíço only: how many top players advance to the knockout (4/8/16).
         qualifiers: isSwissFormat(format) && [4, 8, 16].includes(Number(qualifiers)) ? Number(qualifiers) : null,
-        // 2-day tournament (Suíço only): day 1 Suíço, day 2 knockout.
-        isMultiDay: isSwissFormat(format) && !!isMultiDay,
-        day2Date: isSwissFormat(format) && isMultiDay && day2Date ? new Date(day2Date) : null,
-        day2SetsToWin: isSwissFormat(format) && isMultiDay && day2SetsToWin ? Math.min(2, Math.max(1, parseInt(day2SetsToWin))) : null,
-        day2PointsToWinSet: isSwissFormat(format) && isMultiDay && day2PointsToWinSet ? Math.min(7, Math.max(4, parseInt(day2PointsToWinSet))) : null,
+        // Single-day events only; the "day2" columns hold the knockout rules
+        // (lib/matchRules). Null = the main rules apply.
+        isMultiDay: false,
+        day2Date: null,
+        day2SetsToWin: rules.knockoutSets,
+        day2PointsToWinSet: rules.knockoutPoints,
         bannerUrl: bannerUrl || null,
         location: location || null,
         venueName: venueName || null,

@@ -70,8 +70,6 @@ export async function POST(req: Request) {
 
     const day1 = new Date();
     day1.setHours(10, 0, 0, 0);
-    const day2 = new Date(day1);
-    day2.setDate(day2.getDate() + 1);
 
     const tournament = await prisma.tournament.create({
       data: {
@@ -90,9 +88,10 @@ export async function POST(req: Request) {
         setsToWin: multiDay ? 1 : 2,
         pointsToWinSet: 4,
         qualifiers,
-        isMultiDay: multiDay,
+        // ?multiday=1 now means "different rules per phase" on a single day.
+        isMultiDay: false,
         startDate: day1,
-        day2Date: multiDay ? day2 : null,
+        day2Date: null,
         day2SetsToWin: multiDay ? 2 : null,
         day2PointsToWinSet: multiDay ? 4 : null,
       },

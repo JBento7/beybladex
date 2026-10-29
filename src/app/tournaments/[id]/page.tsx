@@ -35,6 +35,7 @@ import RetryButton from "@/components/RetryButton";
 import type { TournamentFormat, TournamentStatus, MatchStatus } from "@prisma/client";
 import type { Metadata } from "next";
 import { canSeeDraft } from "@/lib/tournamentList";
+import { knockoutRules, setsLabel } from "@/lib/matchRules";
 import { authUrl } from "@/lib/safeRedirect";
 import { testToolsAllowed } from "@/lib/adminAudit";
 import { deckLabel, hasMatchTrio, PLUS_ONE_PARTS_RULE, registeredIds, usesBattleDeck } from "@/lib/deckFormat";
@@ -664,6 +665,8 @@ export default async function TournamentDetailPage(
     !knockoutPlayers.has(r.userId) && swissRows.slice(i + 1).some((x) => knockoutPlayers.has(x.userId))
   );
   const qualifiersCount = tournament.qualifiers ?? 0;
+  // Knockout match rules (own rules, or the main ones on old events).
+  const knockout = knockoutRules(tournament);
 
   // Whole-event tallies for the other formats and the "all matches" stats.
   const battlePointsMap = new Map<string, number>();
@@ -1432,8 +1435,8 @@ export default async function TournamentDetailPage(
             </li>
           )}
           <li>
-            Partidas: {tournament.setsToWin > 1 ? `melhor de ${tournament.setsToWin * 2 - 1} sets` : "set único"}, {tournament.pointsToWinSet} pontos para vencer o set.
-            {tournament.isMultiDay && tournament.day2SetsToWin && ` No mata-mata (dia 2): ${tournament.day2SetsToWin > 1 ? `melhor de ${tournament.day2SetsToWin * 2 - 1}` : "set único"}, ${tournament.day2PointsToWinSet ?? tournament.pointsToWinSet} pontos.`}
+            {isSwiss && qualifiersCount > 0 ? "Fase suíça" : "Partidas"}: {setsLabel(tournament.setsToWin)}, {tournament.pointsToWinSet} pontos para vencer o set.
+            {isSwiss && qualifiersCount > 0 && ` Mata-mata (inclui final e 3º lugar): ${setsLabel(knockout.setsToWin)}, ${knockout.pointsToWinSet} pontos para vencer o set.`}
           </li>
           <li>Pontos de finish: Spin 1 · Over 2 · Burst 2 · Xtreme 3 · Misslaunch do adversário 1.</li>
           {!tournament.isOfficial && <li>BeyEncontro: estatísticas de beyblade são registradas, mas os pontos não contam no ranking da comunidade.</li>}

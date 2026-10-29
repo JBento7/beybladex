@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { isSwissFormat } from "@/lib/swiss";
+import { hasKnockoutPhase, parseMatchRules } from "@/lib/matchRules";
 import { deckLabel, parseDeckType, registrationComplete } from "@/lib/deckFormat";
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -86,7 +87,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       name, description, format, maxParticipants, startDate, deckType, prize, arenas,
       eventType, setsToWin, pointsToWinSet, qualifiers,
       bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
-      isMultiDay, day2Date, day2SetsToWin, day2PointsToWinSet,
+      day2SetsToWin, day2PointsToWinSet,
       community,
       isPartnership,
     } = await req.json();
@@ -94,6 +95,13 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     if (!name || !format) {
       return NextResponse.json({ error: "Nome e formato são obrigatórios" }, { status: 400 });
     }
+
+    // Match rules of each phase (missing field → keep the stored value).
+    const rules = parseMatchRules(
+      { format, setsToWin, pointsToWinSet, day2SetsToWin, day2PointsToWinSet },
+      { setsToWin: tournament.setsToWin, pointsToWinSet: tournament.pointsToWinSet, knockoutSets: tournament.day2SetsToWin, knockoutPoints: tournament.day2PointsToWinSet }
+    );
+    if (!rules.ok) return NextResponse.json({ error: rules.error }, { status: 400 });
 
     // Deck format: validated on the server. Registrations are never converted
     // (3 → 4 Beyblades or back): a change that would leave anyone with an
@@ -124,8 +132,8 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       startDate: startDate ? new Date(startDate) : null,
       prize: prize || null,
       arenas: arenas ? Math.max(1, parseInt(arenas)) : 1,
-      setsToWin: setsToWin ? Math.min(2, Math.max(1, parseInt(setsToWin))) : 2,
-      pointsToWinSet: pointsToWinSet ? Math.min(7, Math.max(4, parseInt(pointsToWinSet))) : 4,
+      setsToWin: rules.setsToWin,
+      pointsToWinSet: rules.pointsToWinSet,
       qualifiers: isSwissFormat(format) && [4, 8, 16].includes(Number(qualifiers)) ? Number(qualifiers) : null,
       bannerUrl: bannerUrl || null,
       location: location || null,
@@ -134,11 +142,14 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       entryFee: entryFee !== undefined && entryFee !== null && entryFee !== "" ? parseFloat(entryFee) : null,
       regulation: regulation || null,
       registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : null,
-      isMultiDay: isSwissFormat(format) && !!isMultiDay,
-      day2Date: isSwissFormat(format) && isMultiDay && day2Date ? new Date(day2Date) : null,
-      day2SetsToWin: isSwissFormat(format) && isMultiDay && day2SetsToWin ? Math.min(2, Math.max(1, parseInt(day2SetsToWin))) : null,
-      day2PointsToWinSet: isSwissFormat(format) && isMultiDay && day2PointsToWinSet ? Math.min(7, Math.max(4, parseInt(day2PointsToWinSet))) : null,
     };
+    // Knockout rules ("day2" columns, see lib/matchRules) only for formats with
+    // a knockout phase. isMultiDay/day2Date are not touched: an old event keeps
+    // its history, and they no longer affect the rules.
+    if (hasKnockoutPhase(format)) {
+      data.day2SetsToWin = rules.knockoutSets;
+      data.day2PointsToWinSet = rules.knockoutPoints;
+    }
 
     // Only admins can change whether a tournament counts as official, which
     // community hosts it, and whether it is a partnership (ranking scope).
