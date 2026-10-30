@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
 import { fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, type Layout, type FontDef } from "@/lib/arenaLayout";
+import { fetchPublished } from "@/lib/client/publishedLayout";
 import FontLoader from "@/components/FontLoader";
 
 // Self-contained "quick match": two players score their own points (no judge).
@@ -148,22 +149,19 @@ export default function QuickMatch() {
   const [customFields, setCustomFields] = useState<CustomFld[]>([]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [fonts, setFonts] = useState<FontDef[]>([]);
+  // Published layouts (docs/EDITOR-LAYOUT.md). Partida rápida has its own
+  // positions, and — as before — uses the Placar's custom fields, visibility
+  // and, when it has no background of its own, the Placar's background.
   useEffect(() => {
-    fetch("/api/arena-layout?key=fonts").then((r) => (r.ok ? r.json() : null)).then((d) => { if (Array.isArray(d?.layout)) setFonts(d.layout as FontDef[]); }).catch(() => {});
-    fetch("/api/arena-layout?key=quickmatch").then((r) => (r.ok ? r.json() : null)).then((d) => d && setLayout(d.layout || {})).catch(() => {});
-    // Custom fields defined in the layout editor (text/int), live-editable here.
-    fetch("/api/arena-layout?key=scoreboard::custom").then((r) => (r.ok ? r.json() : null)).then((d) => {
-      if (Array.isArray(d?.layout)) setCustomFields(d.layout as CustomFld[]);
-    }).catch(() => {});
-    // Disabled fields (hidden from the placar).
-    fetch("/api/arena-layout?key=scoreboard::hidden").then((r) => (r.ok ? r.json() : null)).then((d) => {
-      if (Array.isArray(d?.layout)) setHidden(new Set(d.layout as string[]));
-    }).catch(() => {});
-    // Custom background: use the quick-match one if set, else the scoreboard one.
-    fetch("/api/arena-layout?key=quickmatch::bg").then((r) => (r.ok ? r.json() : null)).then((d) => {
-      if (d?.layout?.url) { setBg(d.layout.url); return; }
-      fetch("/api/arena-layout?key=scoreboard::bg").then((r) => (r.ok ? r.json() : null)).then((s) => { if (s?.layout?.url) setBg(s.layout.url); }).catch(() => {});
-    }).catch(() => {});
+    fetchPublished(["quickmatch", "scoreboard"]).then((pub) => {
+      const qm = pub.quickmatch?.composition, sb = pub.scoreboard?.composition;
+      if (!qm || !sb) return;
+      setLayout(Object.fromEntries(Object.entries(qm.fields).filter(([k]) => !k.startsWith("custom_"))) as Layout);
+      setCustomFields(sb.customs.map((c) => ({ ...c, ...sb.fields[c.key] }) as CustomFld));
+      setHidden(new Set(sb.hidden));
+      setBg(qm.bg || sb.bg || "/scoreboard-bg.png");
+      setFonts([...qm.fonts, ...sb.fonts.filter((f) => !qm.fonts.some((x) => x.family === f.family))]);
+    }).catch(() => { /* defaults stay */ });
   }, []);
 
   // Match state

@@ -8,6 +8,7 @@ import { arenaIdentity, arenaMatchWhere } from "@/lib/arenaIdentity";
 import { withObservability } from "@/lib/observability";
 import { usesBattleDeck } from "@/lib/deckFormat";
 import { matchPhaseLabel } from "@/lib/matchLabel";
+import { latestVersions } from "@/lib/layoutStore";
 
 // The telão polls this several times a minute per display, but between points
 // (and while an arena sits idle) the payload is byte-for-byte identical. Tag
@@ -209,6 +210,8 @@ async function getHandler(req: NextRequest) {
     ]);
     return jsonWithEtag(req, {
       arena: arenaNum,
+      // Published layout versions: the telão reloads its layout when they change.
+      layout: await latestVersions(),
       status: "idle",
       match: null,
       queue,
@@ -529,6 +532,7 @@ async function getHandler(req: NextRequest) {
 
   return jsonWithEtag(req, {
     arena: arenaNum,
+    layout: await latestVersions(),
     status: phase,
     // Identity + version of what is on screen: the telão drops local-link
     // updates for another match and any update older than this version.

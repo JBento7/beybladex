@@ -3,58 +3,46 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { prisma } from "@/lib/prisma";
-import type { Field } from "@/lib/arenaLayout";
+import { getLibrary, getPublished, type Published } from "@/lib/layoutStore";
+import type { Screen } from "@/lib/layoutDoc";
 import LayoutEditor from "./LayoutEditor";
 
 export const dynamic = "force-dynamic";
 
+// Layout editor (docs/EDITOR-LAYOUT.md): Editar → Pré-visualizar → Aplicar no
+// telão. Starts from the PUBLISHED versions; drafts stay on this device until
+// applied. Organizers only (same permission as before).
 export default async function ArenaLayoutPage() {
   const session = await getServerSession(authOptions);
   if (!session || session.user.role !== "ORGANIZER") redirect("/dashboard");
 
-  const initial: Record<string, Record<string, Field>> = { scoreboard: {}, winner: {}, quickmatch: {} };
-  try {
-    const rows = await prisma.arenaLayout.findMany({ where: { key: { in: ["scoreboard", "winner", "quickmatch"] } } });
-    for (const row of rows) {
-      if (row.key === "scoreboard" || row.key === "winner" || row.key === "quickmatch") initial[row.key] = JSON.parse(row.data);
-    }
-  } catch {
-    // table missing (pre-migration) — start from defaults
-  }
+  const screens: Screen[] = ["scoreboard", "winner", "quickmatch"];
+  const published = Object.fromEntries(await Promise.all(screens.map(async (s) => [s, await getPublished(s)] as const))) as Record<Screen, Published>;
+  const library = await getLibrary();
 
-  // The signed-in organizer's profile is used as sample data in the preview.
-  const me = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { name: true, bladerName: true, avatarUrl: true },
-  });
-  // Up to 3 of the organizer's beys (blade images) for the winner deck preview.
+  // The signed-in organizer's photo and beys as defaults for the sample data
+  // (only read; the preview never changes profiles, matches or events).
+  const me = await prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true, bladerName: true, avatarUrl: true } });
   let deck: (string | null)[] = [];
   try {
     const beys = await prisma.beyblade.findMany({ where: { userId: session.user.id }, select: { blade: true }, take: 3 });
-    deck = await Promise.all(
-      beys.map(async (b) => {
-        if (!b.blade) return null;
-        const part = await prisma.beyPart.findFirst({
-          where: { name: b.blade, category: { in: ["BLADE", "MAIN_BLADE"] }, imageUrl: { not: null } },
-          select: { imageUrl: true },
-        });
-        return part?.imageUrl ?? null;
-      })
-    );
-  } catch {
-    /* no beys / tables missing */
-  }
+    deck = await Promise.all(beys.map(async (b) => {
+      if (!b.blade) return null;
+      const part = await prisma.beyPart.findFirst({ where: { name: b.blade, category: { in: ["BLADE", "MAIN_BLADE"] }, imageUrl: { not: null } }, select: { imageUrl: true } });
+      return part?.imageUrl ?? null;
+    }));
+  } catch { /* no beys */ }
   const profile = { name: me?.bladerName || me?.name || "JOGADOR", avatar: me?.avatarUrl ?? null, deck };
 
   return (
     <div className="min-h-screen bg-app">
       <Navbar />
-      <div className="max-w-6xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-6">
         <h1 className="text-2xl font-black text-white mb-1">Editor de layout do placar</h1>
         <p className="text-sm text-gray-400 mb-4">
-          Arraste os elementos para posicionar e use a alça (canto) ou os campos numéricos para dimensionar. Salve para aplicar no telão das arenas.
+          Editar → Pré-visualizar → <b className="text-gray-200">Aplicar no telão</b>. Nada muda nas arenas antes de aplicar; o rascunho fica salvo neste aparelho.
         </p>
-        <LayoutEditor initial={initial} profile={profile} />
+        <LayoutEditor published={published} library={library} profile={profile} />
       </div>
     </div>
   );

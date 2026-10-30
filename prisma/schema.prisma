@@ -19,6 +19,22 @@ model ArenaLayout {
   updatedAt DateTime @default(now()) @updatedAt
 }
 
+// Published layout of an arena screen (docs/EDITOR-LAYOUT.md). Each "Aplicar no
+// telão" inserts the next version with the whole composition (geometry,
+// visibility, custom fields, background, fonts used) — one row, one
+// transaction. The newest version of a screen is what the telões show; drafts
+// never reach the server.
+model LayoutVersion {
+  id            String   @id @default(cuid())
+  screen        String   // "scoreboard" | "winner" | "quickmatch"
+  version       Int
+  composition   Json
+  publishedById String?
+  createdAt     DateTime @default(now())
+
+  @@unique([screen, version])
+}
+
 enum TournamentFormat {
   ROUND_ROBIN
   GROUPS

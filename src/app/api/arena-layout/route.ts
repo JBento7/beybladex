@@ -34,6 +34,11 @@ export async function PUT(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Corpo inválido" }, { status: 400 });
   }
+  // Screen layouts and the font library are only changed by a validated,
+  // versioned publication (POST /api/arena-layout/publish).
+  if (/^(scoreboard|winner|quickmatch)(::(hidden|bg|custom))?$/.test(key) || key === "fonts") {
+    return NextResponse.json({ error: "Use \"Aplicar no telão\" no editor de layout." }, { status: 409 });
+  }
   const data = JSON.stringify(layout);
   try {
     await prisma.arenaLayout.upsert({ where: { key }, create: { key, data }, update: { data } });
