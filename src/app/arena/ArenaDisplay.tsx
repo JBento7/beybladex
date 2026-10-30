@@ -8,6 +8,8 @@ import { startAnswerer } from "@/lib/arenaLink";
 import { startKeepAwake } from "@/lib/keepAwake";
 import { arenaChannel } from "@/lib/arenaIdentity";
 import { communityOf } from "@/lib/communities";
+import { acceptState, createCommandGate, type ArenaMsg, type JudgeMsg } from "@/lib/judgeLink";
+import { setLabel } from "@/lib/matchLabel";
 
 // Fields disabled in the layout editor are hidden from the placar via this ctx.
 const HiddenCtx = createContext<Set<string>>(new Set());
@@ -25,7 +27,27 @@ const fallbackBey = (e: React.SyntheticEvent<HTMLImageElement>) => {
 // Bump on every arena change so we can confirm which build a tablet runs.
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand, Wake Lock API. Use margins, SVG shapes, explicit offsets.
-const ARENA_BUILD = "v50-queue";
+const ARENA_BUILD = "v51-sync";
+
+// Animation preferences of this telão (menu → Animações), kept on the device.
+// "reduced": no finish videos (slow devices); the operational cues (PRONTOS,
+// countdown) always play. prefers-reduced-motion starts in reduced mode.
+type AnimPrefs = { finish: boolean; reduced: boolean; maxSeconds: number };
+const ANIM_KEY = "lbl:telao:animacoes";
+function loadAnimPrefs(): AnimPrefs {
+  const reducedOs = typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const base: AnimPrefs = { finish: true, reduced: reducedOs, maxSeconds: 6 };
+  try {
+    const raw = window.localStorage.getItem(ANIM_KEY);
+    if (!raw) return base;
+    const v = JSON.parse(raw);
+    return {
+      finish: v.finish !== false,
+      reduced: typeof v.reduced === "boolean" ? v.reduced : base.reduced,
+      maxSeconds: [3, 4, 6, 8].includes(v.maxSeconds) ? v.maxSeconds : base.maxSeconds,
+    };
+  } catch { return base; }
+}
 
 // Accent used on the start gate / waiting screen.
 const BLUE = "#00aaff";
@@ -103,9 +125,17 @@ type Match = {
 };
 type DeckSlot = { img: string | null; pieces: BeyPieces };
 
+type QueueItem = { id?: string; round: number; phase?: string; waiting?: string; player1: string; player2: string; p1Avatar: string | null; p2Avatar: string | null };
+
 type ArenaData = {
   arena: number;
   status: "live" | "pending" | "idle" | "finished";
+  /** Identity + version of the match on screen (local-link updates for another
+   *  match, or older than this version, are ignored). */
+  matchId?: string;
+  scoreVersion?: number;
+  phase?: string;
+  sides?: { left: "B" | "X" | null; right: "B" | "X" | null };
   winnerSide?: "p1" | "p2" | null;
   tournamentName?: string;
   location?: string | null;
@@ -114,7 +144,7 @@ type ArenaData = {
   round?: number;
   countdown?: { key: string; elapsedMs: number } | null;
   history?: HistRow[];
-  queue?: { round: number; player1: string; player2: string; p1Avatar: string | null; p2Avatar: string | null }[];
+  queue?: QueueItem[];
   match: Match | null;
   debug?: { inProgressTournaments: number; matchesThisArena: number };
 };
@@ -122,6 +152,9 @@ type ArenaData = {
 export default function ArenaDisplay({ arena, community = "lbl", previewParam }: { arena: number | null; community?: string; previewParam: string | null }) {
   const [data, setData] = useState<ArenaData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // 1 s clock (only to show how old the last server sync is).
+  const [clock, setClock] = useState(() => Date.now());
   const lastOkRef = useRef<number | null>(null); // last successful refresh (stale indicator)
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -165,33 +198,38 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
     setFinishVideo(null);
     setLaunchOn(false);
   };
-  // `sentAt` is when the judge pressed PRONTOS. The same cue reaches us twice
-  // (P2P + server poll); a copy arriving after the countdown already started
-  // must not bring the frozen PRONTOS screen back over the battle. A real new
-  // PRONTOS can't come within seconds of a countdown (a battle takes longer).
-  const playReady = (sentAt: number = Date.now()) => {
-    if (sentAt <= lastCdRef.current || Date.now() - lastCdRef.current < 15000) return;
-    if (Date.now() - lastReadyRef.current < 3000) return;
+  // Commands from the judge (PRONTOS / countdown / launch video) and finish
+  // animations arrive over the local link AND the server poll. Each one carries
+  // an id (commandId, or match+score version for a finish); the gate runs it
+  // once and only for the match on screen (lib/judgeLink). Signals without an
+  // id (older panels) still use the time windows below.
+  const gateRef = useRef(createCommandGate());
+  const onScreenRef = useRef<{ matchId: string | null; version: number }>({ matchId: null, version: -1 });
+  const [anim, setAnim] = useState<AnimPrefs>({ finish: true, reduced: false, maxSeconds: 6 });
+  const animRef = useRef(anim);
+  useEffect(() => { const a = loadAnimPrefs(); setAnim(a); animRef.current = a; }, []);
+  const saveAnim = (a: AnimPrefs) => { setAnim(a); animRef.current = a; try { window.localStorage.setItem(ANIM_KEY, JSON.stringify(a)); } catch { /* ignore */ } };
+
+  // `sentAt` is when the judge pressed PRONTOS: a copy arriving after the
+  // countdown already started must not bring the frozen PRONTOS screen back.
+  const playReady = (sentAt: number = Date.now(), force = false) => {
+    if (sentAt <= lastCdRef.current) return;
+    if (!force && (Date.now() - lastCdRef.current < 15000 || Date.now() - lastReadyRef.current < 3000)) return;
     lastReadyRef.current = Date.now();
     clearBattleOverlays();
     setReadyOn(true);
   };
   // Starting the countdown always clears the ready screen — that's the cue the
-  // players have been waiting on.
-  const playCountdown = () => {
-    if (Date.now() - lastCdRef.current < 8000) return;
+  // players have been waiting on. A recount is a NEW command: it plays again.
+  const playCountdown = (force = false) => {
+    if (!force && Date.now() - lastCdRef.current < 8000) return;
     lastCdRef.current = Date.now();
     clearBattleOverlays();
     setReadyOn(false);
     setCountdownOn(true);
   };
-  // A scored finish may have just ended the match. The server marks the match
-  // FINISHED early — well before it answers the judge (it still has standings,
-  // beyblade stats and round generation to do) — so the quickest way to the
-  // winner screen is for the display to look again, promptly and repeatedly,
-  // instead of waiting for its next scheduled poll. It loads UNDER the finish
-  // video, so when the video ends the winner is already on screen: no gap.
-  // The burst stops as soon as the result lands.
+  // A scored finish may have just ended the match: look again promptly so the
+  // winner screen (confirmed by the server) loads under the finish video.
   const statusRef = useRef<string | null>(null);
   const burstRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const burstRefresh = () => {
@@ -203,18 +241,37 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
       }, ms)
     );
   };
-  // Belt and braces: never restart a clip that is still on screen. The time
-  // window alone isn't enough if a clip runs longer than it.
-  const playFinish = (t: string) => {
-    if (finishOnRef.current || Date.now() - lastFinishRef.current < 6000) return;
+  useEffect(() => () => { burstRef.current.forEach(clearTimeout); }, []);
+  // Finish animation for a CONFIRMED launch (match + score version). Skipped
+  // when animations are off/reduced; never restarted while one is on screen.
+  const finishVersionRef = useRef<{ matchId: string | null; version: number }>({ matchId: null, version: -1 });
+  const playFinish = (t: string, ref?: { matchId: string | null; version: number }) => {
+    burstRefresh();
+    const a = animRef.current;
+    if (!a.finish || a.reduced) return;
+    if (finishOnRef.current || (!ref && Date.now() - lastFinishRef.current < 6000)) return;
     lastFinishRef.current = Date.now();
     finishOnRef.current = true;
+    finishVersionRef.current = ref ?? { matchId: onScreenRef.current.matchId, version: onScreenRef.current.version };
     setFinishVideo(t);
-    burstRefresh();
   };
-  const playLaunch = () => { if (Date.now() - lastLaunchRef.current < 8000) return; lastLaunchRef.current = Date.now(); setLaunchOn(true); };
-  // Live score received over the P2P link (overrides the poll when fresh).
-  const [p2pScore, setP2pScore] = useState<{ byId: Record<string, number>; setsById: Record<string, number>; at: number } | null>(null);
+  const playLaunch = (force = false) => { if (!force && Date.now() - lastLaunchRef.current < 8000) return; lastLaunchRef.current = Date.now(); setLaunchOn(true); };
+  // Live score received over the local link (official, versioned: see Scoreboard).
+  const [p2pScore, setP2pScore] = useState<{ matchId: string; version: number; byId: Record<string, number>; setsById: Record<string, number>; at: number } | null>(null);
+  // The local-link reply channel (acks / pong).
+  const linkRef = useRef<{ send: (m: ArenaMsg) => void } | null>(null);
+  // Runs one command (from either path) through the gate; acks it locally.
+  const runCommand = (kind: "ready" | "countdown" | "launch", commandId: string | null | undefined, matchId: string | null | undefined, sentAt?: number, viaLink = false) => {
+    const decision = gateRef.current.decide({ commandId, matchId }, onScreenRef.current.matchId);
+    // Acknowledge what arrived over the local link (the judge waits for it);
+    // the server-path copy of the same command needs no ack.
+    if (viaLink && commandId && matchId) linkRef.current?.send({ type: "ack", commandId, matchId, status: decision === "run" ? "played" : decision });
+    if (decision !== "run") return;
+    const force = !!commandId;
+    if (kind === "ready") playReady(sentAt ?? Date.now(), force);
+    else if (kind === "countdown") playCountdown(force);
+    else playLaunch(force);
+  };
 
   // Polling-rate governors (to reduce Vercel function invocations):
   //  - liveRef: true while a match is actually live → poll faster; idle → slow.
@@ -296,6 +353,16 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
+  useEffect(() => {
+    if (!started) return;
+    const t = setInterval(() => setClock(Date.now()), 1000);
+    // Back to the tab / back online: sync right away.
+    const back = () => { if (document.visibilityState !== "hidden") loadRef.current?.(); };
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("online", back);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", back); window.removeEventListener("online", back); };
+  }, [started]);
+
   // Saved layout overrides from the admin editor (applied over the coded defaults).
   const [layout, setLayout] = useState<Layout | null>(null);
   const [winnerLayout, setWinnerLayout] = useState<Layout | null>(null);
@@ -349,10 +416,24 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
         if (!idleSinceRef.current) idleSinceRef.current = Date.now();
         else if (Date.now() - idleSinceRef.current > IDLE_SLEEP_MS) sleep(true);
       }
+      // On-screen identity/version: a different match cancels its animations;
+      // a newer official score ends a finish clip that would hide it.
+      const prev = onScreenRef.current;
+      const next = { matchId: d.matchId ?? null, version: d.scoreVersion ?? -1 };
+      if (prev.matchId && next.matchId !== prev.matchId) {
+        clearBattleOverlays();
+        setReadyOn(false);
+        setP2pScore(null);
+      } else if (finishOnRef.current && finishVersionRef.current.matchId === next.matchId && next.version > finishVersionRef.current.version) {
+        finishOnRef.current = false;
+        setFinishVideo(null);
+      }
+      onScreenRef.current = next;
       setData(d);
       if (d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
         playedKeyRef.current = d.countdown.key;
-        playCountdown();
+        const c = d.countdown as { commandId?: string | null; matchId?: string | null };
+        runCommand("countdown", c.commandId, c.matchId ?? d.matchId);
       }
     } catch {
       const t = lastOkRef.current;
@@ -425,33 +506,34 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
         const url = previewParam ? `/api/arena/tick?${previewParam}` : "/api/arena/tick";
         const res = await fetch(url);
         if (res.ok) {
+          type Sig = { key: string; elapsedMs: number; matchId?: string | null; commandId?: string | null };
           const d: {
-            countdown?: { key: string; elapsedMs: number } | null;
-            finish?: { key: string; type: string; elapsedMs: number } | null;
-            launch?: { key: string; elapsedMs: number } | null;
-            ready?: { key: string; elapsedMs: number } | null;
+            countdown?: Sig | null;
+            finish?: (Sig & { type: string; version?: number }) | null;
+            launch?: Sig | null;
+            ready?: Sig | null;
           } = await res.json();
+          // Each signal goes through the same gate as the local link: a command
+          // already run from there is not repeated; another match's is ignored.
           if (active && d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
             playedKeyRef.current = d.countdown.key;
             statsRef.current.signalsViaServer++;
-            playCountdown();
+            runCommand("countdown", d.countdown.commandId, d.countdown.matchId);
           }
           if (active && d.finish && d.finish.key !== playedFinishKeyRef.current && d.finish.elapsedMs < 5000) {
             playedFinishKeyRef.current = d.finish.key;
             statsRef.current.signalsViaServer++;
-            // Already played from the P2P link moments ago — don't replay it.
-            const pf = lastP2pFinishRef.current;
-            if (!(pf && pf.type === d.finish.type && Date.now() - pf.at < 15000)) playFinish(d.finish.type);
+            const f = d.finish;
+            const decision = gateRef.current.decide({ commandId: f.key, matchId: f.matchId }, onScreenRef.current.matchId);
+            if (decision === "run") playFinish(f.type, { matchId: f.matchId ?? null, version: f.version ?? -1 });
           }
           if (active && d.ready && d.ready.key !== playedReadyKeyRef.current && d.ready.elapsedMs < 20000) {
             playedReadyKeyRef.current = d.ready.key;
-            // A PRONTOS signal older than the last countdown is stale: the
-            // countdown already superseded it.
-            playReady(Date.now() - d.ready.elapsedMs);
+            runCommand("ready", d.ready.commandId, d.ready.matchId, Date.now() - d.ready.elapsedMs);
           }
           if (active && d.launch && d.launch.key !== playedLaunchKeyRef.current && d.launch.elapsedMs < 20000) {
             playedLaunchKeyRef.current = d.launch.key;
-            playLaunch();
+            runCommand("launch", d.launch.commandId, d.launch.matchId);
           }
         }
       } catch { /* ignore */ }
@@ -475,20 +557,33 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
   useEffect(() => {
     if (arena == null || !started || previewParam) return;
     const link = startAnswerer(arenaChannel(community, arena), {
-      onMessage: (m: { type?: string; finishType?: string; winnerId?: string; byId?: Record<string, number>; setsById?: Record<string, number>; at?: number }) => {
+      onMessage: (m: JudgeMsg) => {
         p2pFreshRef.current = Date.now();
         statsRef.current.p2pMessages++;
-        if (asleepRef.current && m?.type !== "state") wake();
-        if (m?.type === "finish" && m.finishType) lastP2pFinishRef.current = { type: m.finishType, at: Date.now() };
-        if (m?.type === "matchEnd" && m.winnerId) { setP2pWinner({ winnerId: m.winnerId, at: Date.now(), matchKey: matchKeyRef.current }); burstRefresh(); }
-        else if (m?.type === "ready") playReady();
-        else if (m?.type === "countdown") playCountdown();
-        else if (m?.type === "finish" && m.finishType) playFinish(m.finishType);
-        else if (m?.type === "launch") playLaunch();
-        else if (m?.type === "state" && m.byId) setP2pScore({ byId: m.byId, setsById: m.setsById ?? {}, at: m.at ?? Date.now() });
+        if (!m?.type) return;
+        if (m.type === "ping") { link.send({ type: "pong", id: m.id, matchId: onScreenRef.current.matchId } satisfies ArenaMsg); return; }
+        if (asleepRef.current && m.type !== "state") wake();
+        if (m.type === "cmd") { runCommand(m.kind, m.commandId, m.matchId, undefined, true); return; }
+        // Confirmed results only (the panel sends them after the server answered),
+        // for the match on screen, never older than what is shown.
+        if (m.type === "state") {
+          if (acceptState(onScreenRef.current, m)) setP2pScore({ matchId: m.matchId, version: m.version, byId: m.byId, setsById: m.setsById ?? {}, at: m.at ?? Date.now() });
+          return;
+        }
+        if (m.type === "finish") {
+          const key = `${m.matchId}:v${m.version}`;
+          const decision = gateRef.current.decide({ commandId: key, matchId: m.matchId }, onScreenRef.current.matchId);
+          if (decision === "run") playFinish(m.finishType, { matchId: m.matchId, version: m.version });
+          return;
+        }
+        if (m.type === "matchEnd" && m.winnerId && (!onScreenRef.current.matchId || m.matchId === onScreenRef.current.matchId)) {
+          setP2pWinner({ winnerId: m.winnerId, at: Date.now(), matchKey: matchKeyRef.current });
+          burstRefresh();
+        }
       },
     });
-    return () => link.close();
+    linkRef.current = link;
+    return () => { link.close(); linkRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arena, started, community, previewParam]);
 
@@ -560,7 +655,8 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
     playOverlay(v, () => cancelled);
     const done = () => { finishOnRef.current = false; setFinishVideo(null); };
     v.addEventListener("ended", done);
-    const safety = setTimeout(done, 8000);
+    // Configurable maximum duration (menu → Animações).
+    const safety = setTimeout(done, Math.max(2, animRef.current.maxSeconds) * 1000);
     return () => {
       cancelled = true;
       v.removeEventListener("ended", done);
@@ -663,6 +759,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
   }
 
   const match = data?.match ?? null;
+  const staleSec = lastOkRef.current ? Math.floor((clock - lastOkRef.current) / 1000) : null;
 
   return (
     <div
@@ -778,39 +875,62 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
         </div>
       )}
 
-      {error && <div role="status" style={{ position: "absolute", bottom: 8, left: 12, zIndex: 20, fontSize: "max(12px, 1.1vw)", fontWeight: 700, color: "#fff", background: "rgba(185,28,28,0.85)", borderRadius: 6, padding: "2px 10px" }}>{error}</div>}
+      {/* Server freshness: the last confirmed score stays on screen, but never
+          passes for current data — the age is shown until a sync succeeds. */}
+      {started && (staleSec !== null && staleSec >= 10 ? (
+        <div role="status" style={{ position: "absolute", bottom: 8, left: 12, right: 12, zIndex: 20, textAlign: "center", fontSize: "max(14px, 1.5vw)", fontWeight: 800, color: "#fff", background: "rgba(146,64,14,0.92)", borderRadius: 8, padding: "6px 12px" }}>
+          ⚠ Sem atualização do servidor há {staleSec} segundos — mostrando o último placar confirmado
+          {data?.matchId && p2pScore?.matchId === data.matchId && Date.now() - p2pScore.at < 15000 ? " (pontos chegando pela conexão local do juiz)" : ""}
+        </div>
+      ) : error ? (
+        <div role="status" style={{ position: "absolute", bottom: 8, left: 12, zIndex: 20, fontSize: "max(12px, 1.1vw)", fontWeight: 700, color: "#fff", background: "rgba(185,28,28,0.85)", borderRadius: 6, padding: "2px 10px" }}>{error}</div>
+      ) : null)}
 
-      {/* Fullscreen toggle (works on Android Chrome; hides the URL bar) */}
-      {started && !isFs && (
-        <button
-          onClick={toggleFullscreen}
-          style={{ position: "absolute", top: "0.6vh", right: "12vw", zIndex: 20, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}
-        >
-          ⛶ Tela cheia
-        </button>
-      )}
-
-      {/* Refresh — reloads the page to pick up the latest deploy WITHOUT leaving
-          fullscreen. Stays visible even in fullscreen. */}
+      {/* Operations menu (discreet): refresh, fullscreen, animations, exit. */}
       {started && (
         <button
-          onClick={() => window.location.reload()}
-          style={{ position: "absolute", top: "0.6vh", right: "1.5vw", zIndex: 20, background: "rgba(255,255,255,0.12)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-expanded={menuOpen}
+          aria-label="Menu do telão"
+          style={{ position: "absolute", top: "0.6vh", right: "1vw", zIndex: 31, minWidth: 44, minHeight: 44, background: "rgba(255,255,255,0.10)", color: "#fff", border: "none", borderRadius: 8, fontSize: 20 }}
         >
-          ↻ Atualizar
+          ☰
         </button>
       )}
-
-      {/* Logout — with a confirm so a tablet isn't signed out by accident. */}
-      {started && (
-        <button
-          onClick={() => {
-            if (window.confirm("Sair desta arena?")) logout("/login");
-          }}
-          style={{ position: "absolute", top: "0.6vh", right: "22.5vw", zIndex: 20, background: "rgba(200,16,46,0.35)", color: "#fff", border: "none", borderRadius: 6, fontSize: "1.3vw", padding: "0.4vh 0.8vw" }}
-        >
-          ⎋ Sair
-        </button>
+      {started && menuOpen && (
+        <div role="menu" style={{ position: "absolute", top: 54, right: "1vw", zIndex: 31, width: 300, maxWidth: "90vw", background: "rgba(17,17,17,0.97)", border: "1px solid #374151", borderRadius: 12, padding: 12, color: "#fff", fontSize: 15 }}>
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>Arena {arena} · {communityOf(community).name}</div>
+          <button role="menuitem" style={menuBtn} onClick={() => { toggleFullscreen(); setMenuOpen(false); }}>⛶ {isFs ? "Sair da tela cheia" : "Tela cheia"}</button>
+          <button
+            role="menuitem"
+            style={menuBtn}
+            onClick={() => {
+              // Avoid an accidental reload in the middle of a match.
+              if (liveRef.current && !window.confirm("Há uma partida em andamento neste telão. Atualizar mesmo assim?")) return;
+              window.location.reload();
+            }}
+          >
+            ↻ Atualizar
+          </button>
+          <div style={{ borderTop: "1px solid #374151", margin: "10px 0 8px", paddingTop: 8, fontWeight: 800 }}>Animações</div>
+          <label style={menuRow}>
+            <input type="checkbox" checked={anim.finish} onChange={(e) => saveAnim({ ...anim, finish: e.target.checked })} style={{ width: 22, height: 22, marginRight: 10 }} />
+            Vídeos de finalização
+          </label>
+          <label style={menuRow}>
+            <input type="checkbox" checked={anim.reduced} onChange={(e) => saveAnim({ ...anim, reduced: e.target.checked })} style={{ width: 22, height: 22, marginRight: 10 }} />
+            Modo reduzido (aparelho lento)
+          </label>
+          <label style={menuRow}>
+            <span style={{ marginRight: 10 }}>Duração máxima</span>
+            <select value={anim.maxSeconds} onChange={(e) => saveAnim({ ...anim, maxSeconds: Number(e.target.value) })} style={{ minHeight: 40, background: "#111", color: "#fff", border: "1px solid #374151", borderRadius: 6 }}>
+              {[3, 4, 6, 8].map((n) => <option key={n} value={n}>{n} s</option>)}
+            </select>
+          </label>
+          <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>PRONTOS e a contagem sempre aparecem. Com &quot;movimento reduzido&quot; no aparelho, o modo reduzido começa ligado.</div>
+          <div style={{ borderTop: "1px solid #374151", margin: "10px 0 8px" }} />
+          <button role="menuitem" style={{ ...menuBtn, background: "rgba(200,16,46,0.35)" }} onClick={() => { if (window.confirm("Sair desta arena?")) logout("/login"); }}>⎋ Sair</button>
+        </div>
       )}
 
       {/* Once a match is over the scoreboard must never come back for it: after
@@ -836,7 +956,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={communityOf(community).logo} alt={communityOf(community).name} style={{ height: "16vh", width: "auto", opacity: 0.9, marginBottom: "2vh" }} />
           <div style={{ fontSize: "4vw", fontWeight: 900, color: community === "lbl" ? BLUE : communityOf(community).color }}>ARENA {arena}</div>
-          <div style={{ color: "#6b7280", fontSize: "2vw", marginTop: "1vh" }}>Aguardando partida...</div>
+          <div style={{ color: "#9ca3af", fontSize: "2vw", marginTop: "1vh" }}>{data?.status === "idle" && (data.queue?.length ?? 0) === 0 ? "Sem partidas na fila" : "Aguardando partida…"}</div>
           <div style={{ color: "#374151", fontSize: 10, marginTop: 6 }}>[{ARENA_BUILD}]</div>
           {data?.debug && (
             <div style={{ color: "#374151", fontSize: 12, marginTop: 6, textAlign: "center" }}>
@@ -853,50 +973,56 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
   );
 }
 
-// Shown on the arena between matches: the queue of upcoming matches for this arena.
+const menuBtn: React.CSSProperties = { display: "block", width: "100%", minHeight: 44, marginTop: 6, textAlign: "left", background: "rgba(255,255,255,0.08)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 15, fontWeight: 700 };
+const menuRow: React.CSSProperties = { display: "flex", alignItems: "center", minHeight: 44, cursor: "pointer" };
+
+// Shown on the arena between matches: the next pair stands out (names large,
+// phase, whether a judge is assigned); the following ones are listed smaller.
 function NextMatches({ arena, queue, build, logo = "/lbl-logo.png" }: {
   logo?: string;
   arena: number;
-  queue: { round: number; player1: string; player2: string; p1Avatar: string | null; p2Avatar: string | null }[];
+  queue: QueueItem[];
   build: string;
 }) {
   const RED = "#c8102e";
   const GOLD = "#ffd400";
+  const [next, ...rest] = queue;
+  const nameFs = (len: number) => `${Math.max(3.4, Math.min(6, 90 / Math.max(len, 12)))}vh`;
   return (
     <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at top, #17110d 0%, #070605 100%)", display: "flex", flexDirection: "column", alignItems: "center", padding: "3vh 4vw", boxSizing: "border-box", overflow: "hidden" }}>
       <div style={{ position: "absolute", bottom: "0.5vh", right: "1vw", color: "#3a2a1a", fontSize: "0.9vw" }}>[{build}]</div>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={logo} alt="" style={{ height: "11vh", width: "auto", marginBottom: "1vh" }} />
-      <div style={{ fontSize: "3.4vh", fontWeight: 900, color: GOLD, letterSpacing: "0.1em" }}>ARENA {arena} · PRÓXIMAS PARTIDAS</div>
+      <img src={logo} alt="" style={{ height: "8vh", width: "auto", marginBottom: "1vh" }} />
+      <div style={{ fontSize: "2.6vh", fontWeight: 900, color: "#cbb98a", letterSpacing: "0.1em" }}>ARENA {arena}</div>
 
-      <div style={{ marginTop: "2.5vh", width: "100%", maxWidth: "70vw", flex: 1, display: "flex", flexDirection: "column", gap: "1.2vh", overflow: "hidden" }}>
-        {queue.slice(0, 7).map((q, i) => (
-          <div
-            key={i}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "1.5vw",
-              background: i === 0 ? "rgba(240,212,0,0.12)" : "rgba(255,255,255,0.04)",
-              border: i === 0 ? `2px solid ${GOLD}` : "1px solid #2a2320",
-              borderRadius: 12,
-              padding: "1.4vh 2vw",
-            }}
-          >
-            <div style={{ width: "5vh", height: "5vh", borderRadius: "50%", background: i === 0 ? GOLD : RED, color: "#000", fontWeight: 900, fontSize: "2.4vh", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {i + 1}
-            </div>
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1vw", minWidth: 0 }}>
-              <span style={{ flex: 1, textAlign: "right", fontWeight: 900, fontSize: "2.6vh", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.player1}</span>
-              <span style={{ color: GOLD, fontWeight: 900, fontSize: "2.2vh", flexShrink: 0 }}>×</span>
-              <span style={{ flex: 1, textAlign: "left", fontWeight: 900, fontSize: "2.6vh", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.player2}</span>
-            </div>
-            <div style={{ flexShrink: 0, fontSize: "1.6vh", fontWeight: 700, color: "#9a8", background: "rgba(0,0,0,0.35)", borderRadius: 8, padding: "0.5vh 1vw" }}>
-              {i === 0 ? "A SEGUIR" : `Rodada ${q.round}`}
-            </div>
+      {next && (
+        <div style={{ marginTop: "2vh", width: "100%", maxWidth: "80vw", background: "rgba(240,212,0,0.12)", border: `3px solid ${GOLD}`, borderRadius: 16, padding: "2.4vh 3vw", boxSizing: "border-box", textAlign: "center" }}>
+          <div style={{ fontSize: "2.6vh", fontWeight: 900, color: GOLD, letterSpacing: "0.12em" }}>PRÓXIMA PARTIDA</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginTop: "1.2vh" }}>
+            <span style={{ flex: 1, textAlign: "right", fontWeight: 900, fontSize: nameFs(next.player1.length), color: "#fff", lineHeight: 1.1, wordBreak: "break-word" }}>{next.player1}</span>
+            <span style={{ color: GOLD, fontWeight: 900, fontSize: "3.6vh", margin: "0 2vw", flexShrink: 0 }}>×</span>
+            <span style={{ flex: 1, textAlign: "left", fontWeight: 900, fontSize: nameFs(next.player2.length), color: "#fff", lineHeight: 1.1, wordBreak: "break-word" }}>{next.player2}</span>
           </div>
-        ))}
-      </div>
+          <div style={{ marginTop: "1.2vh", fontSize: "2.2vh", fontWeight: 700, color: "#e5d9b6" }}>
+            {next.phase ?? `Rodada ${next.round}`} · {next.waiting ?? "Aguardando chamada"}
+          </div>
+        </div>
+      )}
+
+      {rest.length > 0 && (
+        <div style={{ marginTop: "2.5vh", width: "100%", maxWidth: "64vw", flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ fontSize: "1.8vh", fontWeight: 800, color: "#9a8f7a", letterSpacing: "0.1em", marginBottom: "0.8vh" }}>DEPOIS</div>
+          {rest.slice(0, 5).map((q, i) => (
+            <div key={q.id ?? i} style={{ display: "flex", alignItems: "center", background: "rgba(255,255,255,0.04)", border: "1px solid #2a2320", borderRadius: 10, padding: "1vh 1.6vw", marginBottom: "0.9vh" }}>
+              <div style={{ width: "3.6vh", height: "3.6vh", borderRadius: "50%", background: RED, color: "#000", fontWeight: 900, fontSize: "1.8vh", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginRight: "1.2vw" }}>{i + 2}</div>
+              <span style={{ flex: 1, textAlign: "right", fontWeight: 800, fontSize: "2.2vh", color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.player1}</span>
+              <span style={{ color: GOLD, fontWeight: 900, fontSize: "1.8vh", margin: "0 1vw", flexShrink: 0 }}>×</span>
+              <span style={{ flex: 1, textAlign: "left", fontWeight: 800, fontSize: "2.2vh", color: "#e5e5e5", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.player2}</span>
+              <span style={{ flexShrink: 0, marginLeft: "1vw", fontSize: "1.5vh", fontWeight: 700, color: "#9a8f7a" }}>{q.phase ?? `Rodada ${q.round}`}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1026,7 +1152,9 @@ function Cell({ cx, cy, w, fs, color, ff, children }: {
         textOverflow: "ellipsis",
       }}
     >
-      {children}
+      {/* Inner span: a too-long text keeps its START and ends with "…"
+          (a centred flex box alone would clip both ends). */}
+      <span style={{ display: "block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{children}</span>
     </div>
   );
 }
@@ -1135,11 +1263,15 @@ function Pips({ layout, k, count, dir }: { layout: Layout | null; k: string; cou
 
 // Layout-driven text/image elements: read position/size from the saved layout
 // (admin editor), falling back to the coded defaults.
-function LText({ layout, k, color, children }: { layout: Layout | null; k: string; color?: string; children: React.ReactNode }) {
+// `fit` = text length: long texts shrink down to 50% of the configured size
+// (still legible) before the ellipsis is needed.
+function LText({ layout, k, color, fit, children }: { layout: Layout | null; k: string; color?: string; fit?: number; children: React.ReactNode }) {
   const hidden = useContext(HiddenCtx);
   const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
   if (hidden.has(k)) return null;
-  return <Cell cx={f.x} cy={f.y} w={f.w} fs={f.fs ?? 1.5} color={color} ff={f.ff}>{children}</Cell>;
+  const base = f.fs ?? 1.5;
+  const fs = fit && fit > 14 ? base * Math.max(0.5, 14 / fit) : base;
+  return <Cell cx={f.x} cy={f.y} w={f.w} fs={fs} color={color} ff={f.ff}>{children}</Cell>;
 }
 function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src: string | null; cover?: boolean }) {
   const hidden = useContext(HiddenCtx);
@@ -1170,12 +1302,13 @@ function BeyArt({ layout, side, img, pieces }: { layout: Layout | null; side: "L
   return <LImg layout={layout} k={`beyImg${side}`} src={img} />;
 }
 
-function Scoreboard({ data, match, build, layout, bg, customFields, p2p, onTest }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; customFields: CustomFld[]; p2p?: { byId: Record<string, number>; setsById: Record<string, number>; at: number } | null; onTest: () => void }) {
+function Scoreboard({ arena, data, match, build, layout, bg, customFields, p2p, onTest }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; customFields: CustomFld[]; p2p?: { matchId: string; version: number; byId: Record<string, number>; setsById: Record<string, number>; at: number } | null; onTest: () => void }) {
   const hidden = useContext(HiddenCtx);
-  // When a fresh P2P (LAN) score from the judge's panel is available, prefer it
-  // over the server-polled values so the telão stays live even if the internet
-  // drops. Falls back to the server values as soon as the P2P signal goes stale.
-  const p2pFresh = !!p2p && Date.now() - p2p.at < 8000;
+  // The judge panel relays the CONFIRMED score over the local link (keeps the
+  // telão live if the internet drops). It is used only for the same match and
+  // when it is at least as new as the server's version; otherwise the server
+  // value wins — a late message never rolls the score back.
+  const p2pFresh = !!p2p && p2p.matchId === data.matchId && p2p.version >= (data.scoreVersion ?? 0) && Date.now() - p2p.at < 60000;
   const pick = (id: string | undefined, src: Record<string, number> | undefined, fallback: number) =>
     p2pFresh && id && src && src[id] != null ? src[id] : fallback;
   const p1Points = pick(match.p1Id, p2p?.byId, match.p1Points);
@@ -1186,7 +1319,10 @@ function Scoreboard({ data, match, build, layout, bg, customFields, p2p, onTest 
   const partida = data.matchNumber
     ? `${pad2(data.matchNumber)}${data.matchesTotal ? ` / ${pad2(data.matchesTotal)}` : ""}`
     : "—";
-  const fase = `Rodada ${data.round ?? match.currentSetNum}`;
+  const fase = data.phase || `Rodada ${data.round ?? match.currentSetNum}`;
+  // Side tag next to each name (B / X), so the players can tell where they are.
+  const tagL = data.sides?.left ? ` · ${data.sides.left}` : "";
+  const tagR = data.sides?.right ? ` · ${data.sides.right}` : "";
 
   return (
     <div style={{ position: "absolute", inset: 0, background: "#000", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1227,9 +1363,9 @@ function Scoreboard({ data, match, build, layout, bg, customFields, p2p, onTest 
         <BeyArt layout={layout} side="L" img={match.p1BeyImg} pieces={match.p1BeyPieces} />
         <BeyArt layout={layout} side="R" img={match.p2BeyImg} pieces={match.p2BeyPieces} />
 
-        {/* Names */}
-        <LText layout={layout} k="nameL">{match.player1}</LText>
-        <LText layout={layout} k="nameR">{match.player2}</LText>
+        {/* Names: shrink long names (within a legible limit) instead of cutting them */}
+        <LText layout={layout} k="nameL" fit={(match.player1 + tagL).length}>{match.player1}{tagL}</LText>
+        <LText layout={layout} k="nameR" fit={(match.player2 + tagR).length}>{match.player2}{tagR}</LText>
 
         {/* Bey names */}
         <LText layout={layout} k="beyNameL">{match.p1ActiveBey || ""}</LText>
@@ -1256,7 +1392,7 @@ function Scoreboard({ data, match, build, layout, bg, customFields, p2p, onTest 
         <LText layout={layout} k="evento">{data.tournamentName || "—"}</LText>
         <LText layout={layout} k="fase">{fase}</LText>
         <LText layout={layout} k="local">{data.location || "—"}</LText>
-        <LText layout={layout} k="obs">—</LText>
+        <LText layout={layout} k="obs">{`ARENA ${arena} · ${setLabel(match.currentSetNum, match.setsToWin).toUpperCase()}`}</LText>
       </div>
     </div>
   );

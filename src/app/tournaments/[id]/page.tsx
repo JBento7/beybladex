@@ -145,6 +145,8 @@ type MatchCardProps = {
   byeText?: string;
   /** Integrity problem involving this match (shown with its id to admins). */
   flagged?: Map<string, string>;
+  /** ?placar=<matchId> (judge navigation): open that match's scoreboard. */
+  openScoreFor?: string | null;
 };
 
 // One match. Works in a single phone-width column: names wrap instead of being
@@ -164,6 +166,7 @@ function MatchCard({
   roundLabel,
   byeText = "Avança sem jogar (bye).",
   flagged,
+  openScoreFor = null,
 }: MatchCardProps) {
   const problem = flagged?.get(match.id);
   const flagBox = problem ? (
@@ -259,6 +262,7 @@ function MatchCard({
                 player1Beyblades={participantBeyblades.find(p => p.userId === match.player1.id)?.beyblades ?? []}
                 player2Beyblades={participantBeyblades.find(p => p.userId === match.player2.id)?.beyblades ?? []}
                 deckType={deckType}
+                autoOpen={openScoreFor === match.id}
               />
               <WOButton matchId={match.id} player1={match.player1} player2={match.player2} />
             </>
@@ -343,7 +347,7 @@ function BracketView({
 export default async function TournamentDetailPage(
   props: {
     params: Promise<{ id: string }>;
-    searchParams?: Promise<{ aba?: string }>;
+    searchParams?: Promise<{ aba?: string; placar?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -885,6 +889,9 @@ export default async function TournamentDetailPage(
   );
 
   const matchCardProps = {
+    // Judge navigation (/juiz → "Arbitrar"): opens that match's scoreboard,
+    // only where this viewer may score it (same rule as the API).
+    openScoreFor: searchParams?.placar ?? null,
     isOrganizer: canJudge,
     isAdmin: isAdminUser,
     tournamentId: tournament.id,

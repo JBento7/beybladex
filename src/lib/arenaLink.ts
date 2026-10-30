@@ -52,17 +52,20 @@ export function startOfferer(arena: number | string, h: Handlers) {
 
 // Telão side (answerer): polls for offers on its arena and answers them,
 // receiving messages. Re-answers when a new offer id appears (new judge/match).
+// send() replies on the same channel (acknowledgements, pong).
 export function startAnswerer(arena: number | string, h: Handlers) {
   let closed = false;
   let handledId: string | null = null;
   let pc: RTCPeerConnection | null = null;
   let connected = false;
+  let channel: RTCDataChannel | null = null;
 
   async function handleOffer(id: string, sdp: RTCSessionDescriptionInit) {
     try { pc?.close(); } catch { /* ignore */ }
     pc = new RTCPeerConnection({ iceServers: ICE });
     pc.ondatachannel = (ev) => {
       const dc = ev.channel;
+      channel = dc;
       dc.onopen = () => { connected = true; h.onOpen?.(); };
       dc.onclose = () => { connected = false; h.onClose?.(); };
       dc.onmessage = (e) => { try { h.onMessage?.(JSON.parse(e.data)); } catch { /* ignore */ } };
@@ -96,5 +99,8 @@ export function startAnswerer(arena: number | string, h: Handlers) {
     }
   })();
 
-  return { close: () => { closed = true; try { pc?.close(); } catch { /* ignore */ } } };
+  return {
+    send: (msg: unknown) => { try { if (channel?.readyState === "open") channel.send(JSON.stringify(msg)); } catch { /* ignore */ } },
+    close: () => { closed = true; try { pc?.close(); } catch { /* ignore */ } },
+  };
 }

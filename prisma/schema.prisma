@@ -305,6 +305,9 @@ model Match {
   xSidePlayerId String?  // which player chose the X side of the stadium (other = B side)
   setsToWin      Int?    // per-match override (e.g. 2-day: knockout uses different rules)
   pointsToWinSet Int?    // per-match override
+  // Bumped by every change of the score (point, undo, W.O.) in the same
+  // transaction: judge panel and telão use it to drop out-of-order updates.
+  scoreVersion Int         @default(0)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @default(now()) @updatedAt
 

@@ -7,6 +7,7 @@ import { createHash } from "crypto";
 import { arenaIdentity, arenaMatchWhere } from "@/lib/arenaIdentity";
 import { withObservability } from "@/lib/observability";
 import { usesBattleDeck } from "@/lib/deckFormat";
+import { matchPhaseLabel } from "@/lib/matchLabel";
 
 // The telão polls this several times a minute per display, but between points
 // (and while an arena sits idle) the payload is byte-for-byte identical. Tag
@@ -82,7 +83,7 @@ async function getHandler(req: NextRequest) {
   const include = {
     player1: { select: { id: true, name: true, bladerName: true, avatarUrl: true } },
     player2: { select: { id: true, name: true, bladerName: true, avatarUrl: true } },
-    tournament: { select: { name: true, setsToWin: true, pointsToWinSet: true, deckType: true, location: true, venueName: true, isTest: true } },
+    tournament: { select: { name: true, setsToWin: true, pointsToWinSet: true, deckType: true, location: true, venueName: true, isTest: true, format: true, swissRounds: true } },
     sets: { orderBy: { setNumber: "asc" as const }, include: { points: { select: { id: true } } } },
   };
 
@@ -105,9 +106,13 @@ async function getHandler(req: NextRequest) {
         orderBy: [{ round: "asc" }, { slot: "asc" }, { bracketPos: "asc" }, { createdAt: "asc" }],
         take: 12,
         select: {
+          id: true,
           player1Id: true,
           player2Id: true,
           round: true,
+          judgeId: true,
+          isThirdPlace: true,
+          tournament: { select: { format: true, swissRounds: true } },
           player1: { select: { name: true, bladerName: true, avatarUrl: true } },
           player2: { select: { name: true, bladerName: true, avatarUrl: true } },
         },
@@ -115,7 +120,12 @@ async function getHandler(req: NextRequest) {
       return ups
         .filter((m) => m.player1Id !== m.player2Id)
         .map((m) => ({
+          id: m.id,
           round: m.round,
+          phase: matchPhaseLabel({ format: m.tournament.format, round: m.round, swissRounds: m.tournament.swissRounds, isThirdPlace: m.isThirdPlace }),
+          // What the telão can honestly say about it: a judge is assigned
+          // (waiting to be called) or not yet.
+          waiting: m.judgeId ? "Aguardando chamada" : "Aguardando juiz",
           player1: m.player1.bladerName || m.player1.name,
           player2: m.player2.bladerName || m.player2.name,
           p1Avatar: m.player1.avatarUrl ?? null,
@@ -400,14 +410,14 @@ async function getHandler(req: NextRequest) {
       const roundMatchesRaw = await prisma.match.findMany({
         where: { tournamentId: match.tournamentId, round: match.round },
         orderBy: [{ bracketPos: "asc" }, { slot: "asc" }, { arena: "asc" }, { createdAt: "asc" }],
-        select: { id: true, player1Id: true, player2Id: true },
+        select: { id: true, player1Id: true, player2Id: true, isThirdPlace: true },
       });
       // Byes (self-matches) aren't played, so they don't count in "PARTIDA x/y".
       const roundMatches = roundMatchesRaw.filter((m) => m.player1Id !== m.player2Id);
       const idx = roundMatches.findIndex((m) => m.id === match.id);
-      return { matchNumber: idx >= 0 ? idx + 1 : 0, matchesTotal: roundMatches.length };
+      return { matchNumber: idx >= 0 ? idx + 1 : 0, matchesTotal: roundMatches.length, roundSize: roundMatches.filter((m) => !m.isThirdPlace).length };
     } catch {
-      return { matchNumber: 0, matchesTotal: 0 };
+      return { matchNumber: 0, matchesTotal: 0, roundSize: 0 };
     }
   }
 
@@ -423,7 +433,7 @@ async function getHandler(req: NextRequest) {
   ]);
   const { p1ActiveBey, p2ActiveBey, p1Combo, p2Combo, p1BeyImg, p2BeyImg, p1BeyPieces, p2BeyPieces } = beyR;
   const { p1Finishes, p2Finishes, p1FinishesBySet, p2FinishesBySet, history } = ptsR;
-  const { matchNumber, matchesTotal } = mnR;
+  const { matchNumber, matchesTotal, roundSize } = mnR;
 
   // Winner screen deck: each player's beyblades. Each slot carries either a
   // single blade image or the 3 stacked CX pieces. In 3-on-3 that's the 3 beys
@@ -497,6 +507,8 @@ async function getHandler(req: NextRequest) {
   }
 
   const leftId = leftIsP1 ? match.player1Id : match.player2Id;
+  // Stadium side shown on each half (null until the judge picks sides).
+  const sideOf = (id: string): "B" | "X" | null => (xId ? (id === xId ? "X" : "B") : null);
   const winnerSide: "p1" | "p2" | null =
     phase === "finished" ? (match.winnerId === leftId ? "p1" : "p2") : null;
 
@@ -518,6 +530,12 @@ async function getHandler(req: NextRequest) {
   return jsonWithEtag(req, {
     arena: arenaNum,
     status: phase,
+    // Identity + version of what is on screen: the telão drops local-link
+    // updates for another match and any update older than this version.
+    matchId: match.id,
+    scoreVersion: match.scoreVersion,
+    phase: matchPhaseLabel({ format: match.tournament.format, round: match.round, swissRounds: match.tournament.swissRounds, isThirdPlace: match.isThirdPlace, roundSize }),
+    sides: { left: sideOf(leftId), right: sideOf(leftId === match.player1Id ? match.player2Id : match.player1Id) },
     queue: queueAfter,
     winnerSide,
     tournamentName: match.tournament.name,

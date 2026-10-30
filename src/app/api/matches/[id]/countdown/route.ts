@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { assignFreeJudge } from "@/lib/tournament-engine";
 import { lockTrios } from "@/lib/matchTrio";
 import { errorResponse } from "@/lib/observability";
+import { parseCommandId } from "@/lib/arenaCommands";
 
 // The judge presses "Iniciar" → stamp the match so the arena display starts the
 // 3-2-1-GO-SHOOT countdown video. Authorized for the judge/organizer, or anyone
@@ -24,6 +25,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       where: { id: params.id },
       select: {
         judgeId: true,
+        countdownAt: true,
+        countdownKey: true,
         tournament: { select: { organizerId: true, _count: { select: { judges: true } } } },
       },
     });
@@ -41,10 +44,18 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   if (!access.ok) return access.response;
 
   let key = "";
+  let commandId: string | null = null;
   try {
-    key = String((await req.json())?.key ?? "");
+    const body = await req.json();
+    key = String(body?.key ?? "");
+    commandId = parseCommandId(body?.commandId);
   } catch {
     /* body optional */
+  }
+  // A resend of the same press (same commandId) is acknowledged without a new
+  // stamp, so the telão never restarts a countdown that already played.
+  if (commandId && match.countdownKey === commandId && match.countdownAt) {
+    return NextResponse.json({ ok: true, commandId, at: match.countdownAt.getTime(), replay: true });
   }
 
   // 3on3 + 1 reserva: "Iniciar" is the official start of the confrontation —
@@ -59,11 +70,12 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   try {
     await prisma.match.update({
       where: { id: params.id },
-      data: { countdownAt: new Date(), countdownKey: key },
+      // countdownKey = the command id (telão dedupes local + server copies by it).
+      data: { countdownAt: new Date(), countdownKey: commandId ?? key },
     });
   } catch {
     return NextResponse.json({ error: "Colunas de contagem ausentes — rode /api/migrate" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, commandId, at: Date.now(), replay: false });
 }

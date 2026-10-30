@@ -46,14 +46,19 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     /* body optional */
   }
 
+  let scoreVersion: number | null = null;
   try {
-    await prisma.match.update({
+    const m = await prisma.match.update({
       where: { id: params.id },
       data: { onAirAt: clear ? null : new Date() },
+      select: { scoreVersion: true },
     });
+    scoreVersion = m.scoreVersion;
   } catch {
     return NextResponse.json({ error: "Coluna onAirAt ausente — rode /api/migrate" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  // The judge panel compares this with the version on screen: a change made
+  // elsewhere (another device, an admin) triggers one state refresh — no extra poll.
+  return NextResponse.json({ ok: true, scoreVersion });
 }
