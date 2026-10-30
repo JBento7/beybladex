@@ -10,6 +10,7 @@ import { isJudgeAccount, judgeCommunity } from "@/lib/judgeAccount";
 import { actorOf } from "@/lib/matchAccess";
 import { decideMatchOp } from "@/lib/matchPolicy";
 import { matchPhaseLabel } from "@/lib/matchLabel";
+import { groupByArena } from "@/lib/judgeArenas";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Juiz" };
@@ -29,7 +30,7 @@ export const metadata: Metadata = { title: "Juiz" };
 // "not started yet" from "missing".
 type Tab = "oficial" | "beyencontro" | "teste";
 
-export default async function JudgeHome(props: { searchParams: Promise<{ aba?: string }> }) {
+export default async function JudgeHome(props: { searchParams: Promise<{ aba?: string; arena?: string }> }) {
   const searchParams = await props.searchParams;
   const tab: Tab = searchParams.aba === "teste" ? "teste" : searchParams.aba === "beyencontro" ? "beyencontro" : "oficial";
   const session = await getServerSession(authOptions);
@@ -73,9 +74,20 @@ export default async function JudgeHome(props: { searchParams: Promise<{ aba?: s
     decideMatchOp(actor, { judgeId: m.judgeId, player1Id: m.player1Id, player2Id: m.player2Id, tournament: m.tournament, actorIsParticipant: amParticipant.has(m.tournamentId) }, "score").allowed;
   const playable = matchRows.filter((m) => m.player1Id !== m.player2Id && canScore(m));
   const onAir = (m: { onAirAt: Date | null }) => !!m.onAirAt && Date.now() - m.onAirAt.getTime() < 25000;
-  const myLive = playable.filter((m) => m.judgeId === me && m.status === "IN_PROGRESS");
-  const myNext = playable.filter((m) => m.judgeId === me && m.status === "PENDING");
-  const others = playable.filter((m) => m.judgeId !== me).sort((a, b) => (a.status === b.status ? 0 : a.status === "IN_PROGRESS" ? -1 : 1));
+  // Organized by arena (tournament + arena; lib/judgeArenas). Only matches this
+  // judge may already judge (`playable`): grouping never widens access. The
+  // chosen arena lives in the URL (?arena=), so the auto refresh and the way
+  // back from the scoreboard keep it.
+  const groups = groupByArena(playable.map((m) => ({ ...m, tournamentName: m.tournament.name })), me);
+  const selectedKey = typeof searchParams.arena === "string" ? searchParams.arena : null;
+  const selected = selectedKey ? groups.find((g) => g.key === selectedKey) ?? null : null;
+  const [selTournamentId, selArenaRaw] = selectedKey?.split("~") ?? [];
+  const selTitle = selected
+    ? { tournament: selected.tournamentName, arena: selected.arena }
+    : selectedKey
+      ? { tournament: all.find((t) => t.id === selTournamentId)?.name ?? "Torneio", arena: selArenaRaw && selArenaRaw !== "sem" ? Number(selArenaRaw) : null }
+      : null;
+  const keepTab = searchParams.aba ? `aba=${encodeURIComponent(searchParams.aba)}&` : "";
 
   const tabOf = (t: (typeof all)[number]): Tab | null =>
     t.isTest ? "teste" : !t.isOfficial ? "beyencontro" : t.communitySlug === community || t.isPartnership ? "oficial" : null;
@@ -115,15 +127,55 @@ export default async function JudgeHome(props: { searchParams: Promise<{ aba?: s
         </nav>
 
         <section id="minhas-partidas" aria-labelledby="minhas-titulo" className="mb-8 scroll-mt-20">
-          <h1 id="minhas-titulo" className="text-xl font-bold text-white mb-1">Minhas partidas</h1>
-          <p className="text-gray-500 text-sm mb-3">O placar só abre quando você tocar em Arbitrar. Nada começa sozinho.</p>
-          {myLive.length + myNext.length === 0 && others.length === 0 ? (
-            <div className="text-center text-gray-500 py-8 border border-line rounded-2xl">Nenhuma partida para você arbitrar agora.</div>
+          {!selTitle ? (
+            <>
+              <h1 id="minhas-titulo" className="text-xl font-bold text-white mb-1">Minhas partidas</h1>
+              <p className="text-gray-500 text-sm mb-3">Escolha a arena. O placar só abre quando você tocar em Arbitrar — nada começa sozinho.</p>
+              {groups.length === 0 ? (
+                <div className="text-center text-gray-500 py-8 border border-line rounded-2xl">Nenhuma partida para você arbitrar agora.</div>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {groups.map((g) => (
+                    <li key={g.key} className="rounded-2xl border border-line bg-card p-4">
+                      <div className="text-2xl font-black text-white">{g.arena != null ? `Arena ${g.arena}` : "Sem arena definida"}</div>
+                      <div className="text-sm text-gray-300 mt-0.5 break-words">{g.tournamentName}</div>
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm font-bold">
+                        <span className={g.live > 0 ? "text-green-300" : "text-gray-500"}>{g.live > 0 ? "● " : "○ "}{g.live} em andamento</span>
+                        <span className="text-gray-500" aria-hidden="true">·</span>
+                        <span className={g.waiting > 0 ? "text-amber-200" : "text-gray-500"}>{g.waiting > 0 ? "◐ " : "○ "}{g.waiting} aguardando</span>
+                      </div>
+                      {g.mine.length > 0 && <div className="mt-1 text-xs text-gray-400">{g.mine.length} atribuída{g.mine.length === 1 ? "" : "s"} a você</div>}
+                      <Link
+                        href={`/juiz?${keepTab}arena=${encodeURIComponent(g.key)}#minhas-partidas`}
+                        className="mt-3 w-full min-h-[48px] inline-flex items-center justify-center rounded-xl bg-brand-red text-white font-bold"
+                      >
+                        Ver partidas<span className="sr-only"> da {g.arena != null ? `arena ${g.arena}` : "partida sem arena"} · {g.tournamentName}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           ) : (
             <>
-              {myLive.length > 0 && <MatchGroup title="Minha partida em andamento" rows={myLive} me={me} onAir={onAir} highlight />}
-              {myNext.length > 0 && <MatchGroup title="Próximas partidas atribuídas a mim" rows={myNext.slice(0, 10)} me={me} onAir={onAir} />}
-              {others.length > 0 && <MatchGroup title="Outras partidas que posso arbitrar" rows={others.slice(0, 20)} me={me} onAir={onAir} />}
+              <Link href={`/juiz${keepTab ? `?${keepTab.slice(0, -1)}` : ""}#minhas-partidas`} className="inline-flex items-center min-h-[44px] px-4 mb-3 rounded-xl border border-line bg-card text-gray-200 font-bold text-sm">
+                ← Voltar às arenas
+              </Link>
+              <h1 id="minhas-titulo" className="text-2xl font-black text-white">{selTitle.arena != null ? `Arena ${selTitle.arena}` : "Sem arena definida"}</h1>
+              <p className="text-sm text-gray-300 mb-1 break-words">{selTitle.tournament}</p>
+              {selected && (
+                <p className="text-sm font-bold mb-3">
+                  <span className="text-green-300">● {selected.live} em andamento</span> <span className="text-gray-500">·</span> <span className="text-amber-200">◐ {selected.waiting} aguardando</span>
+                </p>
+              )}
+              {!selected ? (
+                <div className="text-center text-gray-400 py-8 border border-line rounded-2xl">Nenhuma partida disponível nesta arena</div>
+              ) : (
+                <>
+                  {selected.mine.length > 0 && <MatchGroup title="Minhas partidas atribuídas" rows={selected.mine} me={me} onAir={onAir} highlight />}
+                  {selected.others.length > 0 && <MatchGroup title="Outras partidas que posso arbitrar" rows={selected.others} me={me} onAir={onAir} />}
+                </>
+              )}
             </>
           )}
         </section>
@@ -208,7 +260,7 @@ function MatchGroup({ title, rows, me, onAir, highlight = false }: { title: stri
           return (
             <li key={m.id} className={`rounded-2xl border p-3 ${highlight ? "border-[var(--accent)] bg-card" : "border-line bg-card"}`}>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-400">
-                <span className="font-bold text-gray-200">Arena {m.arena ?? 1}</span>
+                <span className="font-bold text-gray-200">{m.arena != null ? `Arena ${m.arena}` : "Sem arena definida"}</span>
                 <span>·</span>
                 <span>{matchPhaseLabel({ format: m.tournament.format, round: m.round, swissRounds: m.tournament.swissRounds, isThirdPlace: m.isThirdPlace })}</span>
                 <span>·</span>

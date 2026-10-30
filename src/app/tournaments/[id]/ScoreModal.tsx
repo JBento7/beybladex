@@ -9,6 +9,7 @@ import { arenaChannel } from "@/lib/arenaIdentity";
 import { linkStatus, newId, serverStatus, type ArenaMsg, type CmdKind, type JudgeMsg } from "@/lib/judgeLink";
 import { clearPending, loadPending, savePending, type PendingLaunch } from "@/lib/pendingLaunch";
 import { judgeHeader, launchText, setLabel } from "@/lib/matchLabel";
+import { arenaKey } from "@/lib/judgeArenas";
 import type { FinishType } from "@prisma/client";
 import DeckOrderPicker, { type BeybladeInfo, comboParts } from "./DeckOrderPicker";
 import TrioPicker from "@/components/deck/TrioPicker";
@@ -56,6 +57,7 @@ type MatchState = {
   round?: number;
   lastLaunch?: LastLaunch | null;
   isWalkover?: boolean;
+  arenaRaw?: number | null;
   sets: SetData[];
   currentSet: SetData | null;
   player1Sets: number;
@@ -142,6 +144,7 @@ export default function ScoreModal({
   player2Beyblades = [],
   deckType = "SOLO",
   autoOpen = false,
+  tournamentId,
 }: {
   matchId: string;
   player1: Player;
@@ -797,12 +800,14 @@ export default function ScoreModal({
       <span aria-hidden="true">{icon[t]}</span>{label}: <b className="font-bold">{text}</b>
     </span>
   );
+  // Back to /juiz on THIS match's arena (the judge's arena view is kept).
+  const myMatchesHref = `/juiz?arena=${encodeURIComponent(arenaKey(tournamentId, state ? (state.arenaRaw ?? null) : null))}#minhas-partidas`;
   const header = (
     <div className="shrink-0 px-3 sm:px-5 pt-2 pb-2 border-b border-line bg-app">
       <div className="flex items-center gap-2">
         <p className="flex-1 min-w-0 text-sm sm:text-base font-bold text-white leading-tight break-words">{headerLine}</p>
         <button
-          onClick={() => { if (handleClose()) router.push("/juiz#minhas-partidas"); }}
+          onClick={() => { if (handleClose()) router.push(myMatchesHref); }}
           aria-label="Voltar às minhas partidas"
           title="Voltar às minhas partidas"
           className="shrink-0 h-11 min-w-[44px] px-3 flex items-center justify-center rounded-full bg-card border border-line text-gray-300 hover:text-white text-sm font-bold"
@@ -932,7 +937,7 @@ export default function ScoreModal({
                 {state.isWalkover && <div className="text-gray-400 text-sm mb-1">Vitória por W.O.</div>}
                 {lastLaunch && <div className="text-gray-400 text-sm mb-5">Último lançamento: {launchText({ playerName: nameOf(lastLaunch.userId), finishType: lastLaunch.finishType, points: lastLaunch.points, setNumber: lastLaunch.setNumber })}</div>}
                 <div className="grid gap-2">
-                  <Link href="/juiz#minhas-partidas" className="block w-full bg-brand-red hover:bg-brand-red-hover text-white text-lg font-bold px-6 py-4 rounded-xl transition-colors">
+                  <Link href={myMatchesHref} className="block w-full bg-brand-red hover:bg-brand-red-hover text-white text-lg font-bold px-6 py-4 rounded-xl transition-colors">
                     Ver próxima partida
                   </Link>
                   <Link href="/juiz#torneios" className="block w-full text-base font-bold text-gray-200 bg-card border border-line rounded-xl px-6 py-3.5">Voltar aos torneios</Link>

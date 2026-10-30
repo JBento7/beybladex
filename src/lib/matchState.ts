@@ -83,6 +83,9 @@ export async function loadMatchState(matchId: string, session: Session | null) {
     // Which player is on the X side (other = B side); null until the judge sets it.
     xSidePlayerId: match.xSidePlayerId ?? null,
     arena: match.arena ?? 1,
+    /** As stored (null = no arena defined): the judge's way back to /juiz. */
+    arenaRaw: match.arena,
+    tournamentId: match.tournamentId,
     community: match.tournament.communitySlug,
     phase: matchPhaseLabel({ format: match.tournament.format, round: match.round, swissRounds: match.tournament.swissRounds, isThirdPlace: match.isThirdPlace, roundSize }),
     round: match.round,

@@ -68,9 +68,16 @@ Não há fila de lançamentos offline: é uma ação pendente por vez.
 
 ## 5. Navegação do juiz (`/juiz`)
 
-- **Seções:** "Minha partida em andamento", "Próximas partidas atribuídas a mim" e "Outras partidas que posso arbitrar".
-- **Permissão:** é a mesma regra da API (`lib/matchPolicy`). O card não concede nada: o servidor confere.
-- **Cards:** cada um mostra arena, fase, jogadores e situação. "Arbitrar" ou "Continuar arbitragem" abre o placar daquela partida (`?placar=<id>`). Nada abre nem começa sozinho.
+- **Arenas primeiro:** "Minhas partidas" mostra um card por **torneio + arena** (`lib/judgeArenas`), com o número da arena, o torneio, quantas partidas estão em andamento e quantas aguardam, e o botão "Ver partidas".
+  - Os cards seguem a ordem numérica das arenas.
+  - Partidas sem arena ficam em "Sem arena definida", no fim.
+  - Dois torneios com o mesmo número de arena nunca se misturam.
+- **Partidas da arena:** mostram "Minhas partidas atribuídas" e "Outras partidas que posso arbitrar". Em cada grupo vêm primeiro as partidas em andamento, depois as pendentes, na ordem de chamada.
+  - Há o botão "← Voltar às arenas".
+  - Quando a arena fica sem partidas: "Nenhuma partida disponível nesta arena".
+- **Arena escolhida na URL:** fica em `/juiz?arena=<torneio>~<arena>`. Por isso a atualização automática e a volta do placar ("Minhas partidas", "Ver próxima partida") mantêm a mesma arena.
+- **Permissão:** só entram partidas que o usuário já pode arbitrar, pela mesma regra da API (`lib/matchPolicy`). O card não concede nada: o servidor confere cada operação.
+- **Nada automático:** escolher uma arena não abre placar nem inicia partida. "Arbitrar" ou "Continuar arbitragem" abre o placar daquela partida (`?placar=<id>`).
 - **Partida finalizada:** o painel mostra o resultado confirmado e oferece "Ver próxima partida" e "Voltar aos torneios".
 
 ## 6. Telão
