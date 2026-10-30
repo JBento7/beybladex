@@ -8,11 +8,12 @@ import Navbar from "@/components/Navbar";
 import PageHeader, { SectionTitle } from "@/components/ui/PageHeader";
 import { ErrorState } from "@/components/ui/States";
 import RetryButton from "@/components/RetryButton";
-import FeaturedTournament from "@/components/home/FeaturedTournament";
+import FeaturedCarousel from "@/components/home/FeaturedCarousel";
+import { NoActiveTournament } from "@/components/home/FeaturedTournament";
 import QuickAction from "@/components/home/QuickAction";
 import RankingPreview from "@/components/home/RankingPreview";
 import PodiumSummary from "@/components/home/PodiumSummary";
-import { getHomeData, homeLeagueForUser, isRegistered, type HomeData } from "@/lib/homeData";
+import { getHomeData, homeLeagueForUser, registeredIn, type HomeData } from "@/lib/homeData";
 import { getLeagueStats } from "@/lib/leagueStats";
 import { rankingPreview } from "@/lib/rankingMath";
 import { monthLabel } from "@/lib/monthlyRules";
@@ -39,7 +40,8 @@ export default async function HomePage() {
     console.error("[home]", e);
   }
   const [registered, stats] = await Promise.all([
-    data?.featured ? isRegistered(data.featured.id, session?.user.id).catch(() => false) : Promise.resolve(false),
+    // One query for the signed-in player's registrations in every featured event.
+    data?.featured.length ? registeredIn(data.featured.map((e) => e.id), session?.user.id).catch(() => [] as string[]) : Promise.resolve([] as string[]),
     getLeagueStats("lbl"),
   ]);
   const preview = data ? rankingPreview(data.ranking, session?.user.id) : null;
@@ -61,8 +63,12 @@ export default async function HomePage() {
           </ErrorState>
         ) : (
           <>
-            {/* B. Next event / live event */}
-            <FeaturedTournament event={data.featured} registered={registered} channelUrl={CHANNEL_URL} hasDraft={data.hasDraft} />
+            {/* B. Active events: carousel (static card for one, notice for none) */}
+            {data.featured.length > 0 ? (
+              <FeaturedCarousel events={data.featured} registeredIds={registered} />
+            ) : (
+              <NoActiveTournament channelUrl={CHANNEL_URL} />
+            )}
 
             {/* C. Quick actions */}
             <section aria-labelledby="atalhos-titulo">

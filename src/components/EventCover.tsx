@@ -16,11 +16,14 @@ export default function EventCover({
   communitySlug,
   isPartnership = false,
   className = "",
+  priority = false,
 }: {
   bannerUrl?: string | null;
   communitySlug?: string | null;
   isPartnership?: boolean;
   className?: string;
+  /** Above-the-fold image (e.g. the first slide): load right away, high priority. */
+  priority?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   if (bannerUrl && !failed) {
@@ -29,7 +32,8 @@ export default function EventCover({
       <img
         src={bannerUrl}
         alt=""
-        loading="lazy"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : undefined}
         decoding="async"
         width={1600}
         height={900}

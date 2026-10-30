@@ -11,6 +11,7 @@ import { swissRoundCount } from "./tournament-engine";
 import { isSwissFormat } from "./swiss";
 import { getMonthlyRanking } from "./monthlyRanking";
 import { currentMonth } from "./monthlyRules";
+import { sortFeatured } from "./featuredOrder";
 import { formatLabel } from "./format";
 import { registrationState } from "./registration";
 import type { RankingEntry } from "./rankingMath";
@@ -36,7 +37,8 @@ export async function homeLeagueForUser(userId: string | null | undefined, sessi
   }
 }
 
-// Featured event block (unchanged): LBL events or partnerships; never tests.
+// Featured events (carousel): LBL events or partnerships; never tests. Only
+// REGISTRATION / IN_PROGRESS are loaded, so drafts and finished events never appear.
 const featuredWhere = { isTest: false, OR: [{ communitySlug: DEFAULT_HOME_LEAGUE }, { isPartnership: true }] };
 // "Último torneio": only events of that league — partnerships are not pulled
 // in, and the other league is never used as a substitute.
@@ -77,37 +79,32 @@ export type LastEvent = {
   third?: PodiumPerson;
 };
 
-async function loadFeatured(): Promise<FeaturedEvent | null> {
-  const select = {
-    id: true, name: true, status: true, isOfficial: true, isPartnership: true, doubleRankingPoints: true, communitySlug: true, bannerUrl: true, startDate: true,
-    venueName: true, location: true, address: true, format: true, deckType: true, qualifiers: true, entryFee: true,
-    maxParticipants: true, registrationDeadline: true, _count: { select: { participants: true } },
-  } as const;
-  // 1) An event happening now (official first). 2) Otherwise the next one
-  // taking sign-ups, soonest date first (undated last). Finished events and
-  // drafts are never presented as "next".
-  const live = await prisma.tournament.findFirst({
-    where: { ...featuredWhere, status: "IN_PROGRESS" },
-    orderBy: [{ isOfficial: "desc" }, { startDate: { sort: "desc", nulls: "last" } }],
-    select,
+/** Every active featured event (in progress or taking sign-ups), in carousel
+ *  order (lib/featuredOrder). One query; only the fields the card shows. */
+async function loadFeatured(): Promise<FeaturedEvent[]> {
+  const rows = await prisma.tournament.findMany({
+    where: { ...featuredWhere, status: { in: ["IN_PROGRESS", "REGISTRATION"] } },
+    select: {
+      id: true, name: true, status: true, isOfficial: true, isPartnership: true, doubleRankingPoints: true, communitySlug: true, bannerUrl: true, startDate: true,
+      venueName: true, location: true, address: true, format: true, deckType: true, qualifiers: true, entryFee: true,
+      maxParticipants: true, registrationDeadline: true, createdAt: true, _count: { select: { participants: true } },
+    },
   });
-  const t = live ?? (await prisma.tournament.findFirst({
-    where: { ...featuredWhere, status: "REGISTRATION" },
-    orderBy: [{ startDate: { sort: "asc", nulls: "last" } }, { createdAt: "desc" }],
-    select,
-  }));
-  if (!t) return null;
-  const d = t.startDate ? new Date(t.startDate) : null;
-  const reg = registrationState({ status: t.status, registrationDeadline: t.registrationDeadline, maxParticipants: t.maxParticipants, participantCount: t._count.participants });
-  return {
-    id: t.id, name: t.name, status: t.status, isOfficial: t.isOfficial, isPartnership: t.isPartnership, doubleRankingPoints: t.isOfficial && t.doubleRankingPoints, communitySlug: t.communitySlug,
-    bannerUrl: t.bannerUrl, startDate: d ? d.toISOString() : null,
-    hasTime: !!d && (d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0),
-    venue: t.venueName ?? t.location, address: t.address, format: t.format, deckType: t.deckType,
-    qualifiers: t.qualifiers, entryFee: t.entryFee, maxParticipants: t.maxParticipants,
-    participantCount: t._count.participants,
-    registrationOpen: reg.open,
-  };
+  const keyed = rows.map((t) => {
+    const d = t.startDate ? new Date(t.startDate) : null;
+    const reg = registrationState({ status: t.status, registrationDeadline: t.registrationDeadline, maxParticipants: t.maxParticipants, participantCount: t._count.participants });
+    const event: FeaturedEvent = {
+      id: t.id, name: t.name, status: t.status, isOfficial: t.isOfficial, isPartnership: t.isPartnership, doubleRankingPoints: t.isOfficial && t.doubleRankingPoints, communitySlug: t.communitySlug,
+      bannerUrl: t.bannerUrl, startDate: d ? d.toISOString() : null,
+      hasTime: !!d && (d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0),
+      venue: t.venueName ?? t.location, address: t.address, format: t.format, deckType: t.deckType,
+      qualifiers: t.qualifiers, entryFee: t.entryFee, maxParticipants: t.maxParticipants,
+      participantCount: t._count.participants,
+      registrationOpen: reg.open,
+    };
+    return { id: t.id, status: t.status, isOfficial: t.isOfficial, startDate: event.startDate, createdAt: t.createdAt.toISOString(), event };
+  });
+  return sortFeatured(keyed).map((k) => k.event);
 }
 
 async function loadLastEvent(league: HomeLeague): Promise<LastEvent | null> {
@@ -155,9 +152,8 @@ export type HomeData = {
   league: HomeLeague;
   /** Month ("AAAA-MM", São Paulo) of the monthly ranking card. */
   month: string;
-  featured: FeaturedEvent | null;
-  /** A league event exists as a draft (being set up, not announced yet). */
-  hasDraft: boolean;
+  /** Active featured events, in carousel order (empty = none). */
+  featured: FeaturedEvent[];
   last: LastEvent | null;
   ranking: RankingEntry[];
 };
@@ -174,13 +170,7 @@ function cached<T>(fn: () => Promise<T>, key: string[], tags: string[]): Promise
     throw e;
   }
 }
-const loadShared = async () => {
-  const [featured, drafts] = await Promise.all([
-    loadFeatured(),
-    prisma.tournament.count({ where: { ...featuredWhere, status: "DRAFT" } }),
-  ]);
-  return { featured, hasDraft: drafts > 0 };
-};
+const loadShared = async () => ({ featured: await loadFeatured() });
 
 /** Shared home data (no per-user bits) for one league. Keyed by the public
  *  tournaments version, so it refreshes on the first request after any
@@ -190,7 +180,7 @@ export async function getHomeData(league: HomeLeague = DEFAULT_HOME_LEAGUE): Pro
   const version = await tournamentsVersion().catch(() => `t${Math.floor(Date.now() / 60_000)}`);
   const month = currentMonth();
   const [shared, last, monthly] = await Promise.all([
-    cached(loadShared, ["home-shared-v7", version], ["home"]),
+    cached(loadShared, ["home-shared-v8", version], ["home"]),
     cached(() => loadLastEvent(league), ["home-last-event-v1", league, version], ["home", "ranking"]),
     // The same classification as /rankings (lib/monthlyRanking).
     getMonthlyRanking(league, month),
@@ -198,12 +188,12 @@ export async function getHomeData(league: HomeLeague = DEFAULT_HOME_LEAGUE): Pro
   return { league, month, ...shared, last, ranking: monthly.entries };
 }
 
-/** Per-user: is this player registered in the featured event? */
-export async function isRegistered(tournamentId: string, userId: string | undefined | null): Promise<boolean> {
-  if (!userId) return false;
-  const p = await prisma.tournamentParticipant.findUnique({
-    where: { tournamentId_userId: { tournamentId, userId } },
-    select: { id: true },
+/** Per-user: which of these events this player is registered in (one query). */
+export async function registeredIn(tournamentIds: string[], userId: string | undefined | null): Promise<string[]> {
+  if (!userId || tournamentIds.length === 0) return [];
+  const rows = await prisma.tournamentParticipant.findMany({
+    where: { userId, tournamentId: { in: tournamentIds } },
+    select: { tournamentId: true },
   });
-  return !!p;
+  return rows.map((r) => r.tournamentId);
 }

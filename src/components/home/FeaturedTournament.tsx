@@ -5,49 +5,28 @@ import EventCover from "@/components/EventCover";
 import { formatEventDate, formatLabel, formatMoney } from "@/lib/format";
 import type { FeaturedEvent } from "@/lib/homeData";
 
-// Main card: the event happening now, or the next one taking sign-ups.
+// Card of one active event (a slide of the home carousel, or the only one).
 // Desktop: image ~45% | info ~55%. Phone: 16:9 image above the info.
 // Only real data: no capacity bar without a configured limit, no made-up date.
+// No hooks: rendered by the server page or by the carousel (client).
 export default function FeaturedTournament({
   event,
   registered,
-  channelUrl,
-  hasDraft = false,
+  headingId = "destaque-titulo",
+  cover = "lazy",
+  className = "",
+  prefetch,
 }: {
-  event: FeaturedEvent | null;
+  event: FeaturedEvent;
   registered: boolean;
-  channelUrl?: string;
-  hasDraft?: boolean;
+  /** Unique per card (several slides on the page). */
+  headingId?: string;
+  /** "priority": first/only card · "lazy": normal · "none": slide not reached yet (placeholder, nothing downloaded). */
+  cover?: "priority" | "lazy" | "none";
+  className?: string;
+  /** false in the carousel: showing a slide must not render other pages on the server. */
+  prefetch?: boolean;
 }) {
-  if (!event) {
-    // Compact notice: the absence of an event must not dominate the page.
-    // "Em preparação" only when a league event really exists as a draft.
-    return (
-      <section
-        aria-labelledby="sem-evento-titulo"
-        className="rounded-card border border-line bg-card p-5 md:p-6 flex flex-col gap-4 md:flex-row md:items-center md:gap-5"
-      >
-        <div className="flex items-start gap-4 md:gap-5 md:flex-1 min-w-0">
-          <CalendarDays aria-hidden="true" className="w-8 h-8 shrink-0 text-fg-3" />
-          <div className="min-w-0">
-            <h2 id="sem-evento-titulo" className="font-display text-title-4 text-fg">
-              {hasDraft ? "Próximo encontro em preparação" : "Nenhum próximo encontro anunciado"}
-            </h2>
-            <p className="mt-1 text-small text-fg-2">Confira os resultados dos últimos encontros.</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-3 md:shrink-0">
-          <ButtonLink href="/tournaments?status=anteriores" variant="secondary" className="w-full sm:w-auto">Ver últimos resultados</ButtonLink>
-          {channelUrl && (
-            <a href={channelUrl} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "md", "w-full sm:w-auto")}>
-              Acompanhar o canal oficial
-            </a>
-          )}
-        </div>
-      </section>
-    );
-  }
-
   const date = formatEventDate(event.startDate, event.hasTime);
   const fee = formatMoney(event.entryFee);
   const href = `/tournaments/${event.id}`;
@@ -66,11 +45,13 @@ export default function FeaturedTournament({
   const pct = event.maxParticipants ? Math.min(100, Math.round((event.participantCount / event.maxParticipants) * 100)) : null;
 
   return (
-    <article aria-labelledby="destaque-titulo" className="rounded-card border border-line bg-card shadow-card overflow-hidden md:grid md:grid-cols-[45fr_55fr]">
+    <article aria-labelledby={headingId} className={`rounded-card border border-line bg-card shadow-card overflow-hidden md:grid md:grid-cols-[45fr_55fr] ${className}`}>
       <div className="relative aspect-video md:aspect-auto md:min-h-[320px] bg-field">
-        <div className="absolute inset-0">
-          <EventCover bannerUrl={event.bannerUrl} communitySlug={event.communitySlug} isPartnership={event.isPartnership} />
-        </div>
+        {cover !== "none" && (
+          <div className="absolute inset-0">
+            <EventCover bannerUrl={event.bannerUrl} communitySlug={event.communitySlug} isPartnership={event.isPartnership} priority={cover === "priority"} />
+          </div>
+        )}
       </div>
       <div className="p-5 md:p-8 flex flex-col gap-4 min-w-0">
         <div className="flex flex-wrap gap-2">
@@ -87,7 +68,7 @@ export default function FeaturedTournament({
         </div>
         <div>
           <p className="text-small font-semibold text-fg-2">{event.status === "IN_PROGRESS" ? "Acontecendo agora" : "Próximo encontro"}</p>
-          <h2 id="destaque-titulo" className="font-display text-title-1 desk:text-title-1-lg text-fg break-anywhere">{event.name}</h2>
+          <h2 id={headingId} className="font-display text-title-1 desk:text-title-1-lg text-fg break-anywhere">{event.name}</h2>
         </div>
         <dl className="grid gap-3 sm:grid-cols-2 text-small">
           <Info Icon={CalendarDays} label="Data">{date ?? "Data a definir"}</Info>
@@ -106,8 +87,8 @@ export default function FeaturedTournament({
           )}
         </dl>
         <div className="mt-auto flex flex-wrap gap-3 pt-2">
-          {primary && <ButtonLink href={primary.href} variant="primary">{primary.label}</ButtonLink>}
-          <ButtonLink href={href} variant="secondary">Ver detalhes<span className="sr-only"> de {event.name}</span></ButtonLink>
+          {primary && <ButtonLink href={primary.href} variant="primary" prefetch={prefetch}>{primary.label}</ButtonLink>}
+          <ButtonLink href={href} variant="secondary" prefetch={prefetch}>Ver detalhes<span className="sr-only"> de {event.name}</span></ButtonLink>
         </div>
       </div>
     </article>
@@ -123,5 +104,31 @@ function Info({ Icon, label, children }: { Icon: typeof CalendarDays; label: str
         <span className="min-w-0">{children}</span>
       </dd>
     </div>
+  );
+}
+
+/** No active event: compact notice that must not dominate the page. */
+export function NoActiveTournament({ channelUrl }: { channelUrl?: string }) {
+  return (
+    <section
+      aria-labelledby="sem-evento-titulo"
+      className="rounded-card border border-line bg-card p-5 md:p-6 flex flex-col gap-4 md:flex-row md:items-center md:gap-5"
+    >
+      <div className="flex items-start gap-4 md:gap-5 md:flex-1 min-w-0">
+        <CalendarDays aria-hidden="true" className="w-8 h-8 shrink-0 text-fg-3" />
+        <div className="min-w-0">
+          <h2 id="sem-evento-titulo" className="font-display text-title-4 text-fg">Nenhum torneio ativo no momento</h2>
+          <p className="mt-1 text-small text-fg-2">Veja os próximos encontros e os resultados dos últimos na página de torneios.</p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-3 md:shrink-0">
+        <ButtonLink href="/tournaments" variant="secondary" className="w-full sm:w-auto">Ver torneios</ButtonLink>
+        {channelUrl && (
+          <a href={channelUrl} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "md", "w-full sm:w-auto")}>
+            Acompanhar o canal oficial
+          </a>
+        )}
+      </div>
+    </section>
   );
 }
