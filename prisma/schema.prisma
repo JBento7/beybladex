@@ -213,6 +213,11 @@ model Tournament {
   // admins, the BeyEncontro organizer, judges. "OPEN_PARTICIPANTS": also the
   // event's approved participants — explicit opt-in, never for official events.
   judgingMode     String  @default("RESTRICTED")
+  // How matches are followed (lib/displayMode): "ARENA" = judge panel drives
+  // the arena telões (default: every event before this setting behaves so);
+  // "JUDGE_ONLY" = scoring on the judge's device only, nothing broadcast and
+  // no deck order required. Chosen when the event starts; fixed once battles begin.
+  displayMode     String  @default("ARENA")
   // Monotonic version of everything a live page shows (sign-ups, matches,
   // points, status…). Bumped in the same transaction as each change, so the
   // polling endpoint reads one integer instead of hashing the history.

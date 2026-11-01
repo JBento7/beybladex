@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
 import { SWISS_RULES_VERSION, isSwissFormat, validateCut } from "@/lib/swiss";
+import { parseDisplayMode } from "@/lib/displayMode";
 import {
   generateGroups,
   generateSingleElimination,
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    let body: { arenas?: number; judgeIds?: string[] } = {};
+    let body: { arenas?: number; judgeIds?: string[]; displayMode?: unknown } = {};
     try { body = await req.json(); } catch { /* empty body */ }
 
     const tournament = await prisma.tournament.findUnique({
@@ -71,6 +72,13 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       );
     }
 
+    // "Como as partidas serão acompanhadas?" — an explicit choice is required
+    // (lib/displayMode). It changes neither arenas, judges, sets nor points.
+    const displayMode = parseDisplayMode(body.displayMode);
+    if (!displayMode) {
+      return NextResponse.json({ error: "Escolha como as partidas serão acompanhadas: “Com telão Arena” ou “Somente placar do juiz”." }, { status: 400 });
+    }
+
     // Validate the confirmed arena count, if provided.
     // Suíço: the knockout cut must fit the field BEFORE starting (top 4/8/16,
     // equal to the field = everyone advances; larger = rejected).
@@ -78,8 +86,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       const cut = validateCut(tournament.qualifiers ?? null, approvedCount);
       if (cut.mode === "error") return NextResponse.json({ error: cut.message }, { status: 400 });
     }
-    const data: { status: "IN_PROGRESS"; arenas?: number; rulesVersion?: string } = {
+    const data: { status: "IN_PROGRESS"; arenas?: number; rulesVersion?: string; displayMode: string } = {
       status: "IN_PROGRESS",
+      displayMode,
       // Record the rule set this event is played under.
       ...(isSwissFormat(tournament.format) ? { rulesVersion: SWISS_RULES_VERSION } : {}),
     };

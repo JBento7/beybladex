@@ -14,6 +14,7 @@ import { actionStatus, recordPoint, type PointContext } from "@/lib/match-scorin
 import { loadMatchState } from "@/lib/matchState";
 import { errorResponse, logEvent, withObservability } from "@/lib/observability";
 import type { FinishType } from "@prisma/client";
+import { broadcasts } from "@/lib/displayMode";
 
 async function postHandler(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -67,7 +68,8 @@ async function postHandler(req: NextRequest, props: { params: Promise<{ id: stri
     // Signal the telão to play this finish's video (SPIN/OVER/BURST/EXTREME).
     // Stamped right after the point is committed — not after the post-match
     // pipeline below, which can take seconds and would make the telão replay it.
-    if (["SPIN_FINISH", "OVER_FINISH", "BURST_FINISH", "EXTREME_FINISH"].includes(finishType)) {
+    // "Somente placar do juiz": nothing is sent to the telões.
+    if (broadcasts(match.tournament.displayMode) && ["SPIN_FINISH", "OVER_FINISH", "BURST_FINISH", "EXTREME_FINISH"].includes(finishType)) {
       try {
         await prisma.match.update({
           where: { id: params.id },

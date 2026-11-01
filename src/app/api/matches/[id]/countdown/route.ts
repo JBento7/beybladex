@@ -6,7 +6,7 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 import { assignFreeJudge } from "@/lib/tournament-engine";
-import { lockTrios } from "@/lib/matchTrio";
+import { startBattleGate, telaoOnlyGate } from "@/lib/matchGate";
 import { errorResponse } from "@/lib/observability";
 import { parseCommandId } from "@/lib/arenaCommands";
 
@@ -42,6 +42,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   // means "anyone logged in"; open judging is an explicit event setting.
   const access = await authorizeMatchOp(session, params.id, "countdown");
   if (!access.ok) return access.response;
+  // Judge-only events start battles with /battle-start (no countdown on a telão).
+  { const off = await telaoOnlyGate(params.id); if (off) return NextResponse.json({ error: off.error, code: off.code }, { status: off.status }); }
 
   let key = "";
   let commandId: string | null = null;
@@ -58,11 +60,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     return NextResponse.json({ ok: true, commandId, at: match.countdownAt.getTime(), replay: true });
   }
 
-  // 3on3 + 1 reserva: "Iniciar" is the official start of the confrontation —
-  // both trios are validated and locked here (lib/matchTrio). Without both
-  // confirmed trios the match can't start.
-  const lock = await lockTrios(params.id);
-  if (lock && !lock.ok) return NextResponse.json({ error: lock.error, code: lock.code }, { status: lock.status });
+  // "Iniciar" is the official start of the battle (lib/matchGate): 3on3 + 1
+  // reserva locks both trios here, and a format with an ordered deck needs
+  // both players' order for this battle (set/cycle) — checked on the server.
+  const gate = await startBattleGate(params.id);
+  if (!gate.ok) return NextResponse.json({ error: gate.error, code: gate.code, missing: gate.missing ?? null }, { status: gate.status });
 
   // If this match has no judge yet, try to grab one who's free right now.
   if (!match.judgeId) await assignFreeJudge(params.id);

@@ -30,7 +30,10 @@ export function arenaMatchWhere(arena: number, community: string) {
   return {
     AND: [
       arena === 1 ? { OR: [{ arena: 1 }, { arena: null }] } : { arena },
-      { tournament: { communitySlug: community } },
+      // Only events followed on the telões ("Com telão Arena"): a "Somente
+      // placar do juiz" event never shows, queues or signals here, and never
+      // blocks another event using the same arena number.
+      { tournament: { communitySlug: community, displayMode: "ARENA" } },
     ],
   };
 }

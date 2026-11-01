@@ -14,6 +14,7 @@ import type { FinishType } from "@prisma/client";
 import DeckOrderPicker, { type BeybladeInfo, comboParts } from "./DeckOrderPicker";
 import TrioPicker from "@/components/deck/TrioPicker";
 import { hasMatchTrio, usesBattleDeck, type DeckBey } from "@/lib/deckFormat";
+import { DISPLAY_MODE_LABEL, effectiveDisplayMode } from "@/lib/displayMode";
 
 // Finish buttons in the Beyblade X scoreboard order.
 const FINISH_BTNS: { type: FinishType; label: string }[] = [
@@ -67,6 +68,11 @@ type MatchState = {
   setsToWin: number;
   pointsToWinSet: number;
   isDeckThreeOnThree: boolean;
+  /** "ARENA" (telão) | "JUDGE_ONLY" (lib/displayMode). */
+  displayMode?: string;
+  /** ARENA + ordered deck: who still owes the order of the current battle. */
+  orderRequired?: boolean;
+  orderPending?: { userId: string; name: string }[];
   deckOrders: DeckOrderRow[];
   currentSetBattleCount: number;
   xSidePlayerId: string | null;
@@ -143,6 +149,7 @@ export default function ScoreModal({
   player1Beyblades = [],
   player2Beyblades = [],
   deckType = "SOLO",
+  displayMode: displayModeProp = "ARENA",
   autoOpen = false,
   tournamentId,
 }: {
@@ -153,6 +160,8 @@ export default function ScoreModal({
   player1Beyblades?: BeybladeInfo[];
   player2Beyblades?: BeybladeInfo[];
   deckType?: string;
+  /** How the event is followed (lib/displayMode); the server state wins once loaded. */
+  displayMode?: string;
   /** Open right away (judge navigation: /tournaments/[id]?placar=<matchId>). */
   autoOpen?: boolean;
 }) {
@@ -166,8 +175,6 @@ export default function ScoreModal({
 
   // Judge manual-order fallback toggle
   const [showManual, setShowManual] = useState(false);
-  // Judge override: start a 3on3 match even without deck orders (player forgot).
-  const [forceStart, setForceStart] = useState(false);
   // Brief visual pulse on the scored side (mobile tap feedback).
   const [flash, setFlash] = useState<"left" | "right" | null>(null);
 
@@ -178,6 +185,10 @@ export default function ScoreModal({
 
   const router = useRouter();
   const isDeck = usesBattleDeck(deckType);
+  // "Somente placar do juiz": no link to the telão, no on-air heartbeat, no
+  // PRONTOS/countdown/videos, no stadium sides, no deck order (docs/MODO-ARBITRAGEM.md).
+  const [modeFromState, setModeFromState] = useState<string | null>(null);
+  const judgeOnly = effectiveDisplayMode(modeFromState ?? displayModeProp) === "JUDGE_ONLY";
 
   // ── Official state (server is the only source of the score) ──
   // Every state carries scoreVersion; an older one never replaces a newer one,
@@ -190,6 +201,7 @@ export default function ScoreModal({
     if (v < versionRef.current) return;
     versionRef.current = v;
     setState(st);
+    if (st.displayMode) setModeFromState(st.displayMode);
   }, []);
   const fetchState = useCallback(async () => {
     const seq = ++fetchSeqRef.current;
@@ -213,7 +225,7 @@ export default function ScoreModal({
   const [cmd, setCmd] = useState<CmdState | null>(null);
   const linkSend = (msg: JudgeMsg) => { try { linkRef.current?.send(msg); } catch { /* ignore */ } };
   useEffect(() => {
-    if (!open || !arena) return;
+    if (!open || !arena || judgeOnly) return;
     // Same arena number exists in every community: scope the channel.
     const link = startOfferer(arenaChannel(community, arena), {
       onMessage: (m: ArenaMsg) => {
@@ -229,7 +241,7 @@ export default function ScoreModal({
     // Liveness: the telão answers each ping; "Conectado" only with a recent answer.
     const ping = setInterval(() => link.send({ type: "ping", id: newId(), matchId } satisfies JudgeMsg), 4000);
     return () => { clearInterval(ping); link.close(); linkRef.current = null; };
-  }, [open, arena, community, matchId]);
+  }, [open, arena, community, matchId, judgeOnly]);
 
   // Judging happens on a phone held in one hand: go real fullscreen (hides the
   // browser bars, which is most of the wasted space) and keep the screen awake.
@@ -284,7 +296,10 @@ export default function ScoreModal({
     let alive = true;
     const beat = async () => {
       try {
-        const res = await timedFetch(`/api/matches/${matchId}/onair`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }, 6000);
+        // Without the telão only the score version is read (nothing goes on air).
+        const res = judgeOnly
+          ? await timedFetch(`/api/matches/${matchId}/version`, { cache: "no-store" }, 6000)
+          : await timedFetch(`/api/matches/${matchId}/onair`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }, 6000);
         if (!alive) return;
         if (res.ok) {
           const d = await res.json().catch(() => ({}));
@@ -306,14 +321,14 @@ export default function ScoreModal({
       alive = false;
       clearInterval(id);
       clearInterval(clock);
-      fetch(`/api/matches/${matchId}/onair`, {
+      if (!judgeOnly) fetch(`/api/matches/${matchId}/onair`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ clear: true }),
         keepalive: true,
       }).catch(() => {});
     };
-  }, [open, matchId, fetchState]);
+  }, [open, matchId, fetchState, judgeOnly]);
 
   useEffect(() => {
     if (!p1BeybladeId && player1Beyblades.length > 0) setP1BeybladeId(player1Beyblades[0].id);
@@ -355,13 +370,17 @@ export default function ScoreModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.scoreVersion, state?.matchId, p1Pts, p2Pts, p1Sets, p2Sets, lastPongAt === null]);
 
-  const bothOrders = !isDeck || (!!p1Order && !!p2Order);
+  // Server rule (lib/displayMode + lib/matchGate): who still owes the order of
+  // THIS battle. Never asked in "Somente placar do juiz" or in SOLO.
+  const orderPending = state?.orderRequired ? (state.orderPending ?? []) : [];
+  const bothOrders = orderPending.length === 0;
   // 3on3 + 1 reserva: before anything else both trios must be confirmed (the
   // first "Iniciar" locks them on the server). No "start without deck" here:
   // every point must name one of the 3 active Beyblades.
   const plusOne = hasMatchTrio(deckType);
   const trio = state?.trio ?? null;
-  const trioReady = !plusOne || !!(trio && (trio.locked || trio.bothConfirmed));
+  // Judge-only: declaring the trio is optional (locked at the start if both did).
+  const trioReady = !plusOne || judgeOnly || !!(trio && (trio.locked || trio.bothConfirmed));
   const trioOf = (uid: string) => trio?.players.find((x) => x.userId === uid) ?? null;
   const activeBeys = (uid: string, all: BeybladeInfo[]) => {
     const act = trioOf(uid)?.active;
@@ -379,27 +398,31 @@ export default function ScoreModal({
       await fetchState();
     } catch { setErr("Sem conexão — o trio não foi salvo."); } finally { setTrioBusy(false); }
   }
-  // 3on3 normally needs both deck orders first — but the judge can override and
-  // start anyway if a player forgot to register/pick their deck.
-  const gateReady = trioReady && (!isDeck || bothOrders || forceStart);
+  // With the telão, an ordered deck needs both orders first (the judge can
+  // register them for the players). The server checks the same rule.
+  const gateReady = trioReady && bothOrders;
   // Every battle (point) gets its own countdown — in 3-on-3 the active beyblade
   // switches each battle, and in solo the countdown must also play before each
   // point. A battle is identified by set + points already scored in it.
   const battleKey = `${currentSetNum}:${currentSetBattleCount}`;
   const startKey = battleKey;
   // Before the very first battle the judge assigns the stadium sides (X / B).
-  const needSides = currentSetNum === 1 && currentSetBattleCount === 0 && !state?.xSidePlayerId;
+  // (Telão only: the sides are what the arena display shows left/right.)
+  const needSides = !judgeOnly && currentSetNum === 1 && currentSetBattleCount === 0 && !state?.xSidePlayerId;
   const revealScoring = gateReady && startedKey === startKey;
   const showStart = gateReady && startedKey !== startKey && !needSides;
-  const waitingOrders = isDeck && trioReady && !bothOrders && !forceStart;
+  const waitingOrders = isDeck && trioReady && !bothOrders;
   const waitingTrio = plusOne && !trioReady;
+  // Judge-only, deck formats: optional identification of the Beyblade of this
+  // battle per player ("" = not identified → credited to no Beyblade).
+  const [optBey, setOptBey] = useState<Record<string, string>>({});
 
   // Poll while waiting for players to submit their deck orders.
   useEffect(() => {
-    if (!open || !isDeck || revealScoring || state?.matchFinished) return;
+    if (!open || !isDeck || judgeOnly || revealScoring || state?.matchFinished) return;
     const id = setInterval(fetchState, 3000);
     return () => clearInterval(id);
-  }, [open, isDeck, revealScoring, state?.matchFinished, fetchState]);
+  }, [open, isDeck, judgeOnly, revealScoring, state?.matchFinished, fetchState]);
 
   async function saveDeckOrder(userId: string, order: string[]) {
     const res = await fetch(`/api/matches/${matchId}/deck-order`, {
@@ -443,6 +466,7 @@ export default function ScoreModal({
   const confirmed = (p: PendingLaunch, data: { state?: MatchState; matchFinished?: boolean; winnerId?: string | null; replay?: boolean }) => {
     applyState(data.state);
     finishLaunch(p);
+    setOptBey({}); // next battle: identify again (optional)
     setPhase("confirmed");
     setLastResult("saved");
     setErr(null);
@@ -574,8 +598,11 @@ export default function ScoreModal({
 
     let beybladeId: string | null = null;
     if (isDeck) {
+      // The declared order says which Beyblade is up; without one (judge-only)
+      // only an explicit identification counts — never a guess.
       const order = deckOrders.find((d) => d.userId === scorerId && d.setNumber === currentSetNum && d.cycleIndex === cycleIndex);
       if (order) beybladeId = [order.bey1Id, order.bey2Id, order.bey3Id][posInCycle] || null;
+      else if (judgeOnly) beybladeId = optBey[scorerId] || null;
     } else {
       beybladeId = (scorerId === player1.id ? p1BeybladeId : p2BeybladeId) || null;
     }
@@ -674,6 +701,33 @@ export default function ScoreModal({
       if (kind === "countdown") setStarting(false);
       // Brief cooldown so a double-tap can't fire two presses.
       setTimeout(() => { if (cmdBusyRef.current[kind] === keyAtPress) cmdBusyRef.current[kind] = null; }, 1200);
+    }
+  }
+  // Judge-only "Iniciar batalha": the official start on the server (trios when
+  // declared, judge assignment) — nothing is sent to a telão. The battle is
+  // never started automatically: one press per battle, like "Iniciar".
+  const [startErr, setStartErr] = useState<string | null>(null);
+  async function startJudgeOnly() {
+    const keyAtPress = startKey;
+    if (cmdBusyRef.current.countdown === keyAtPress) return;
+    cmdBusyRef.current.countdown = keyAtPress;
+    setStarting(true);
+    setStartErr(null);
+    try {
+      const res = await timedFetch(`/api/matches/${matchId}/battle-start`, { method: "POST" }, 8000);
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setStartedKey(keyAtPress);
+        if (plusOne && !trio?.locked) fetchState(); // declared trios were just locked
+      } else {
+        setStartErr(d.error || "Não foi possível iniciar a batalha.");
+        fetchState();
+      }
+    } catch {
+      setStartErr("Sem conexão com o servidor. Toque de novo em “Iniciar batalha”.");
+    } finally {
+      setStarting(false);
+      setTimeout(() => { if (cmdBusyRef.current.countdown === keyAtPress) cmdBusyRef.current.countdown = null; }, 1200);
     }
   }
   const sendReady = () => sendCommand("ready");
@@ -818,7 +872,10 @@ export default function ScoreModal({
       </div>
       <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] sm:text-xs" aria-label="Situação da conexão">
         <Ind label="Servidor" t={srv === "connected" ? "ok" : srv === "reconnecting" ? "wait" : "bad"} text={srv === "connected" ? "Conectado" : srv === "reconnecting" ? "Reconectando" : "Sem conexão"} />
-        {arena ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-gray-200">
+          <span aria-hidden="true">{judgeOnly ? "📱" : "📺"}</span>{judgeOnly ? DISPLAY_MODE_LABEL.JUDGE_ONLY : DISPLAY_MODE_LABEL.ARENA}
+        </span>
+        {arena && !judgeOnly ? (
           <Ind label="Telão" t={tel === "connected" && (!telaoMatch || telaoMatch === matchId) ? "ok" : "wait"}
             text={tel !== "connected" ? "Sem confirmação" : telaoMatch && telaoMatch !== matchId ? "Mostrando outra partida" : "Conectado"} />
         ) : null}
@@ -847,7 +904,7 @@ export default function ScoreModal({
           <span aria-hidden="true">{cmd.phase === "ok" ? "● " : cmd.phase === "sending" ? "◐ " : "✕ "}</span>
           {cmd.phase === "ok" ? "Confirmado pelo servidor" : cmd.phase === "sending" ? "Enviando comando…" : cmd.phase === "refused" ? (cmd.error ?? "Recusado") : "Falha de comunicação"}
         </span>
-        {arena ? (
+        {arena && !judgeOnly ? (
           <span className={cmd.telao === "played" || cmd.telao === "duplicate" ? "text-green-300" : "text-amber-200"}>
             <span aria-hidden="true">{cmd.telao === "played" || cmd.telao === "duplicate" ? "● " : "◐ "}</span>
             {cmd.telao === "played" ? "Recebido pelo telão" : cmd.telao === "duplicate" ? "Telão já tinha recebido" : cmd.telao === "other_match" ? "Telão mostrando outra partida" : tel === "connected" ? "Aguardando o telão…" : "Telão sem conexão local (usa o servidor)"}
@@ -870,13 +927,13 @@ export default function ScoreModal({
         {lastLaunch ? <>Último lançamento: <b className="text-white">{launchText({ playerName: nameOf(lastLaunch.userId), finishType: lastLaunch.finishType, points: lastLaunch.points, setNumber: lastLaunch.setNumber })}</b></> : "Nenhum lançamento nesta partida ainda."}
       </p>
       <div className="flex items-stretch gap-2">
-        <button
+        {!judgeOnly && <button
           onClick={startBattle}
           disabled={starting || !!pending}
           className="flex-1 min-h-[52px] text-base font-bold text-blue-300 hover:text-white bg-card hover:bg-field border border-blue-500/40 hover:border-blue-400 px-3 py-3 rounded-xl transition-colors disabled:opacity-40"
         >
           {starting ? "Enviando…" : "🔄 Recontagem"}
-        </button>
+        </button>}
         <button
           onClick={undoPoint}
           disabled={!lastLaunch || !!pending || undoBusy}
@@ -956,7 +1013,7 @@ export default function ScoreModal({
                     <div className="text-base sm:text-lg font-black text-white leading-tight break-words line-clamp-2">
                       <span aria-hidden="true" className="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-middle" style={{ background: L.color }} />{L.name}
                     </div>
-                    {bSideId ? <div className={`text-xs font-black tracking-widest ${L.player.id === bSideId ? "text-[#00aaff]" : "text-brand-yellow"}`}>{L.player.id === bSideId ? "B SIDE" : "X SIDE"}</div> : <div className="text-xs text-gray-500">lado a definir</div>}
+                    {bSideId ? <div className={`text-xs font-black tracking-widest ${L.player.id === bSideId ? "text-[#00aaff]" : "text-brand-yellow"}`}>{L.player.id === bSideId ? "B SIDE" : "X SIDE"}</div> : judgeOnly ? null : <div className="text-xs text-gray-500">lado a definir</div>}
                   </div>
                   <div className="text-center px-1">
                     <div className="text-2xl sm:text-3xl font-black text-white leading-none whitespace-nowrap">SET {currentSetNum}</div>
@@ -971,7 +1028,7 @@ export default function ScoreModal({
                     <div className="text-base sm:text-lg font-black text-white leading-tight break-words line-clamp-2">
                       {R.name}<span aria-hidden="true" className="inline-block w-2.5 h-2.5 rounded-full ml-1.5 align-middle" style={{ background: R.color }} />
                     </div>
-                    {bSideId ? <div className={`text-xs font-black tracking-widest ${R.player.id === bSideId ? "text-[#00aaff]" : "text-brand-yellow"}`}>{R.player.id === bSideId ? "B SIDE" : "X SIDE"}</div> : <div className="text-xs text-gray-500">lado a definir</div>}
+                    {bSideId ? <div className={`text-xs font-black tracking-widest ${R.player.id === bSideId ? "text-[#00aaff]" : "text-brand-yellow"}`}>{R.player.id === bSideId ? "B SIDE" : "X SIDE"}</div> : judgeOnly ? null : <div className="text-xs text-gray-500">lado a definir</div>}
                   </div>
                 </div>
 
@@ -1019,7 +1076,7 @@ export default function ScoreModal({
                 {statusLine}
 
                 {/* Preview: play the launch/countdown video on this arena's telão */}
-                {!revealScoring && (
+                {!revealScoring && !judgeOnly && (
                   <button
                     onClick={playLaunchVideo}
                     className="w-full mb-3 font-bold px-3 rounded-xl border transition-colors text-base py-4 min-h-[44px] bg-card text-brand-yellow border-brand-yellow/40 hover:bg-field"
@@ -1054,6 +1111,11 @@ export default function ScoreModal({
                 {/* 3on3 + 1 reserva: trios of this match */}
                 {plusOne && trio && !trio.locked && (
                   <div className="mb-3">
+                    {judgeOnly && (
+                      <p className="mb-2 rounded-lg border border-line bg-card px-3 py-2 text-xs text-gray-300">
+                        Sem o telão, declarar o trio é opcional e não impede o início. Se os dois jogadores declararem, o trio é bloqueado ao iniciar e a reserva segue as regras do torneio.
+                      </p>
+                    )}
                     {waitingTrio && (
                       <div className="bg-brand-yellow/10 border border-brand-yellow/30 rounded-xl px-4 py-4 text-center mb-3">
                         <div className="text-xl font-black text-brand-yellow mb-1">Aguardando trio dos jogadores</div>
@@ -1101,10 +1163,14 @@ export default function ScoreModal({
                   <div className="mb-3">
                     <div className="bg-brand-yellow/10 border border-brand-yellow/30 rounded-xl px-4 py-5 text-center mb-3">
                       <div className="text-xl font-black text-brand-yellow mb-1">Aguardando ordem dos decks</div>
-                      <div className="text-base text-gray-300">Os jogadores escolhem a ordem no próprio celular.</div>
+                      <div className="text-base text-gray-300">
+                        Falta definir a ordem: <b className="text-white">{orderPending.map((x) => x.name).join(" e ")}</b>
+                        {currentSetBattleCount > 0 || currentSetNum > 1 ? ` (set ${currentSetNum}, ciclo ${cycleIndex + 1})` : ""}.
+                      </div>
+                      <div className="text-sm text-gray-400 mt-1">Os jogadores escolhem a ordem no próprio celular, ou o juiz registra abaixo.</div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-3">
-                      {[{ p: player1, has: !!p1Order, c: P1_COLOR, n: p1Name }, { p: player2, has: !!p2Order, c: P2_COLOR, n: p2Name }].map(({ has, c, n }) => (
+                      {[player1, player2].map((pl) => ({ p: pl, has: !orderPending.some((x) => x.userId === pl.id), n: pl.id === player1.id ? p1Name : p2Name })).map(({ has, n }) => (
                         <div key={n} className="rounded-xl border-2 px-3 py-4 text-center" style={{ borderColor: has ? "#22c55e" : "#333" }}>
                           <div className="text-base font-bold text-white truncate">{n}</div>
                           <div className="text-sm font-bold mt-1" style={{ color: has ? "#22c55e" : "#777" }}>
@@ -1120,10 +1186,10 @@ export default function ScoreModal({
                     </button>
                     {showManual && (
                       <div className="mt-2 space-y-2">
-                        {!p1Order && activeBeys(player1.id, player1Beyblades).length >= 3 && (
+                        {orderPending.some((x) => x.userId === player1.id) && activeBeys(player1.id, player1Beyblades).length >= 3 && (
                           <DeckOrderPicker title={`${p1Name} — ordem`} beyblades={activeBeys(player1.id, player1Beyblades)} color={P1_COLOR} onConfirm={(o) => saveDeckOrder(player1.id, o)} />
                         )}
-                        {!p2Order && activeBeys(player2.id, player2Beyblades).length >= 3 && (
+                        {orderPending.some((x) => x.userId === player2.id) && activeBeys(player2.id, player2Beyblades).length >= 3 && (
                           <DeckOrderPicker title={`${p2Name} — ordem`} beyblades={activeBeys(player2.id, player2Beyblades)} color={P2_COLOR} onConfirm={(o) => saveDeckOrder(player2.id, o)} />
                         )}
                         {(player1Beyblades.length < 3 || player2Beyblades.length < 3) && (
@@ -1134,19 +1200,6 @@ export default function ScoreModal({
                       </div>
                     )}
 
-                    {/* Judge override: start without a deck (player forgot to register).
-                        Not in 3on3 + 1 reserva: every point needs an active Beyblade. */}
-                    {!plusOne && <div className="mt-3 border-t border-line pt-3">
-                      <button
-                        onClick={() => setForceStart(true)}
-                        className="w-full bg-brand-red/80 hover:bg-brand-red text-white text-lg font-bold py-4 rounded-xl transition-colors"
-                      >
-                        ▶ Iniciar sem deck
-                      </button>
-                      <div className="text-sm text-gray-500 mt-2 text-center">
-                        Use se um jogador esqueceu de cadastrar/enviar o deck. A partida inicia normalmente; a bey ativa não será exibida.
-                      </div>
-                    </div>}
                   </div>
                 )}
 
@@ -1191,7 +1244,23 @@ export default function ScoreModal({
                 {/* Start button: fires the countdown on the arena display */}
                 {/* Two steps: PRONTOS holds the players on the ready screen,
                     then Iniciar fires the countdown and the battle begins. */}
-                {showStart && readyKey !== startKey && (
+                {/* Judge-only: one button, no telão commands. */}
+                {showStart && judgeOnly && (
+                  <>
+                    <button
+                      onClick={startJudgeOnly}
+                      disabled={starting}
+                      className="w-full mb-2 bg-[#22c55e] hover:bg-[#1ea34d] disabled:opacity-60 text-black font-black text-2xl py-6 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
+                    >
+                      {starting ? "Iniciando…" : "▶ Iniciar batalha"}
+                    </button>
+                    <div className="text-center text-sm text-gray-500 mb-3">
+                      {currentSetBattleCount === 0 && currentSetNum === 1 ? "Partida sem telão: nada é exibido nas telas das arenas." : `Set ${currentSetNum} · batalha ${currentSetBattleCount + 1}`}
+                    </div>
+                    {startErr && <div role="alert" className="mb-3 rounded-lg border border-red-700 bg-red-900/30 px-3 py-2 text-sm text-red-300">{startErr}</div>}
+                  </>
+                )}
+                {showStart && !judgeOnly && readyKey !== startKey && (
                   <>
                     <button
                       onClick={sendReady}
@@ -1205,7 +1274,7 @@ export default function ScoreModal({
                     {cmdStatus}
                   </>
                 )}
-                {showStart && readyKey === startKey && (
+                {showStart && !judgeOnly && readyKey === startKey && (
                   <>
                     <button
                       onClick={startBattle}
@@ -1235,6 +1304,30 @@ export default function ScoreModal({
                       <div className="grid grid-cols-2 gap-2 mb-2">
                         <SoloSelector beyblades={L.beyblades} value={L.beybladeId} onChange={L.setBeybladeId} color={L.color} />
                         <SoloSelector beyblades={R.beyblades} value={R.beybladeId} onChange={R.setBeybladeId} color={R.color} />
+                      </div>
+                    )}
+
+                    {/* Judge-only with a deck and no declared order: optional
+                        identification (never required, never guessed). */}
+                    {judgeOnly && isDeck && !(L.orderArr && R.orderArr) && (
+                      <div className="grid grid-cols-2 gap-2 mb-2">
+                        {[L, R].map((side) => {
+                          const choices = plusOne && trio?.locked ? activeBeys(side.player.id, side.beyblades) : side.beyblades;
+                          return (
+                            <label key={side.player.id} className="block text-xs text-gray-400">
+                              Beyblade de {side.name} (opcional)
+                              <select
+                                value={optBey[side.player.id] ?? ""}
+                                onChange={(e) => setOptBey((o) => ({ ...o, [side.player.id]: e.target.value }))}
+                                className="mt-1 w-full bg-card border-2 rounded-xl px-3 py-3 text-base text-white outline-none min-h-[44px]"
+                                style={{ borderColor: side.color }}
+                              >
+                                <option value="">Não identificada</option>
+                                {choices.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                              </select>
+                            </label>
+                          );
+                        })}
                       </div>
                     )}
 

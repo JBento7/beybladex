@@ -8,6 +8,8 @@ import { hasMatchTrio, usesBattleDeck } from "./deckFormat";
 import { trioView } from "./matchTrio";
 import { isMatchStaff } from "./matchAccess";
 import { matchPhaseLabel } from "./matchLabel";
+import { effectiveDisplayMode, requiresDeckOrder } from "./displayMode";
+import { deckOrderGateTx } from "./matchGate";
 
 export type LastLaunch = {
   pointId: string;
@@ -24,7 +26,7 @@ export async function loadMatchState(matchId: string, session: Session | null) {
     where: { id: matchId },
     include: {
       sets: { orderBy: { setNumber: "asc" }, include: { points: { select: { id: true } } } },
-      tournament: { select: { setsToWin: true, pointsToWinSet: true, deckType: true, communitySlug: true, format: true, swissRounds: true } },
+      tournament: { select: { setsToWin: true, pointsToWinSet: true, deckType: true, communitySlug: true, format: true, swissRounds: true, displayMode: true } },
     },
   });
   if (!match) return null;
@@ -59,6 +61,12 @@ export async function loadMatchState(matchId: string, session: Session | null) {
     }
   }
 
+  // Who still owes the deck order of the current battle (ARENA + ordered deck;
+  // same rule the server applies to the start and to every point).
+  const displayMode = effectiveDisplayMode(match.tournament.displayMode);
+  const orderRequired = requiresDeckOrder(displayMode, match.tournament.deckType);
+  const orderPending = orderRequired && match.status !== "FINISHED" ? (await deckOrderGateTx(prisma, matchId))?.missing ?? [] : [];
+
   const lastLaunch: LastLaunch | null = last
     ? { pointId: last.id, userId: last.userId, finishType: last.finishType, points: last.points, setNumber: last.set?.setNumber ?? null, actionId: last.actionId, at: last.createdAt.toISOString() }
     : null;
@@ -77,6 +85,10 @@ export async function loadMatchState(matchId: string, session: Session | null) {
     setsToWin: match.setsToWin ?? match.tournament.setsToWin,
     pointsToWinSet: match.pointsToWinSet ?? match.tournament.pointsToWinSet,
     isDeckThreeOnThree: usesBattleDeck(match.tournament.deckType),
+    /** "ARENA" (telão) or "JUDGE_ONLY" (lib/displayMode). */
+    displayMode,
+    orderRequired,
+    orderPending,
     deckOrders,
     trio,
     currentSetBattleCount,

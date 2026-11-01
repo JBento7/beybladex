@@ -88,13 +88,17 @@ Não há fila de lançamentos offline: é uma ação pendente por vez.
   - "movimento reduzido" do aparelho já começa no modo reduzido;
   - PRONTOS e a contagem sempre aparecem.
 - **Cancelamento:** um placar oficial mais novo, ou outra partida na tela, cancela a animação em curso.
-- **Espera:** a próxima dupla aparece em destaque, com fase e "Aguardando juiz" ou "Aguardando chamada". As seguintes aparecem menores. Sem fila: "Sem partidas na fila".
+- **Espera:** a próxima dupla aparece em destaque, com fase e "Aguardando juiz" ou "Aguardando chamada". As seguintes aparecem menores. Sem partida elegível: "Nenhuma partida com transmissão para esta arena".
 
 ## 7. Publicação
 
 A migração `20261101000000_match_score_version` só acrescenta `Match.scoreVersion` (padrão 0). Roda sozinha no build de produção (`docs/OPERACAO.md` §1).
 
-## 8. Limitações conhecidas
+## 8. Torneios sem telão
+
+Tudo o que está acima vale para torneios **"Com telão Arena"**. Torneios **"Somente placar do juiz"** não usam telão, conexão local nem comandos: ver `docs/MODO-ARBITRAGEM.md`.
+
+## 9. Limitações conhecidas
 
 - **Recebimento pelo telão:** só é confirmado pela conexão local (WebRTC). Sem ela, o comando segue pelo servidor e o painel mostra "Telão sem conexão local (usa o servidor)".
 - **Arte do placar:** é a do editor de layout. Lados, fase e "Arena · Set" entram em campos que já existem (nomes, "Fase", "Observações"). O campo "RODADA" da arte continua mostrando o número do set.

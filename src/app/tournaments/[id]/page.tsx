@@ -41,6 +41,9 @@ import { DoubleRankingBadge, DOUBLE_POINTS_DESC } from "@/components/tournament/
 import { authUrl } from "@/lib/safeRedirect";
 import { testToolsAllowed } from "@/lib/adminAudit";
 import { deckLabel, hasMatchTrio, PLUS_ONE_PARTS_RULE, registeredIds, usesBattleDeck } from "@/lib/deckFormat";
+import { displayModeLock, effectiveDisplayMode, requiresDeckOrder } from "@/lib/displayMode";
+import DisplayModeCard from "./DisplayModeCard";
+import { battlesStarted } from "@/lib/displayModeStore";
 
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const params = await props.params;
@@ -132,6 +135,8 @@ type MatchCardProps = {
   isOrganizer: boolean;
   isAdmin?: boolean;
   deckType?: string;
+  /** "ARENA" | "JUDGE_ONLY" (lib/displayMode). */
+  displayMode?: string;
   openJudging?: boolean;
   /** Same rule as the API (lib/matchPolicy) — decides whether to show "Placar"/W.O. */
   canOperate?: (m: MatchWithRelations) => boolean;
@@ -161,6 +166,7 @@ function MatchCard({
   arenaCount = 1,
   currentUserId,
   deckType = "SOLO",
+  displayMode = "ARENA",
   openJudging = false,
   canOperate,
   roundLabel,
@@ -262,6 +268,7 @@ function MatchCard({
                 player1Beyblades={participantBeyblades.find(p => p.userId === match.player1.id)?.beyblades ?? []}
                 player2Beyblades={participantBeyblades.find(p => p.userId === match.player2.id)?.beyblades ?? []}
                 deckType={deckType}
+                displayMode={displayMode}
                 autoOpen={openScoreFor === match.id}
               />
               <WOButton matchId={match.id} player1={match.player1} player2={match.player2} />
@@ -272,8 +279,9 @@ function MatchCard({
             (currentUserId === match.player1.id || currentUserId === match.player2.id) && (
               <PlayerTrioPanel matchId={match.id} userId={currentUserId} color={currentUserId === match.player1.id ? "#f0a500" : "#c8102e"} />
             )}
-          {/* Player picks their own deck order on their phone (3-on-3 only) */}
-          {usesBattleDeck(deckType) && !isFinished && currentUserId &&
+          {/* Player picks their own deck order on their phone (3-on-3 with the
+              telão only — "Somente placar do juiz" requires no order). */}
+          {requiresDeckOrder(displayMode, deckType) && !isFinished && currentUserId &&
             (currentUserId === match.player1.id || currentUserId === match.player2.id) && (
               <PlayerDeckOrder
                 matchId={match.id}
@@ -457,6 +465,15 @@ export default async function TournamentDetailPage(
       tournament: { organizerId: tournament.organizerId, isOfficial: tournament.isOfficial, isTest: tournament.isTest, communitySlug: tournament.communitySlug, isPartnership: tournament.isPartnership, judgingMode: tournament.judgingMode },
       actorIsParticipant,
     }, "score").allowed;
+
+  // "Modo de arbitragem" (lib/displayMode): shown to judges/admins once the
+  // event started; correctable by its organizer or an admin until battles begin.
+  const displayMode = effectiveDisplayMode(tournament.displayMode);
+  const showDisplayMode = tournament.status !== "REGISTRATION" && tournament.status !== "DRAFT" && (canJudge || isOrganizerOfThis);
+  let displayModeLocked: string | null = null;
+  if (showDisplayMode && (isAdminUser || isOrganizerOfThis)) {
+    displayModeLocked = displayModeLock({ status: tournament.status, battlesStarted: await battlesStarted(tournament.id) });
+  }
 
   // Editing (name, format, deck type, arenas, etc.) is only allowed before
   // the event starts. Official tournaments: admins only. BeyEncontros: the
@@ -899,6 +916,7 @@ export default async function TournamentDetailPage(
     arenaCount: tournament.arenas ?? 1,
     currentUserId: session?.user.id,
     deckType: tournament.deckType,
+    displayMode: tournament.displayMode,
     openJudging,
     canOperate,
     byeText,
@@ -1023,6 +1041,9 @@ export default async function TournamentDetailPage(
               totalRounds={totalRounds}
               labelOf={roundLabel}
               {...matchCardProps}
+              // The list above already opens ?placar=: a second (hidden) panel
+              // here would run its own heartbeat and pending-launch recovery.
+              openScoreFor={null}
             />
           </div>
         </details>
@@ -1654,7 +1675,10 @@ export default async function TournamentDetailPage(
                   {canJudge && tournament.status === "IN_PROGRESS" && (
                     <FinishTournamentButton tournamentId={tournament.id} isOfficial={tournament.isOfficial} />
                   )}
-                  {isAdminUser && <LaunchVideoButton arenas={tournament.arenas ?? 1} community={tournament.communitySlug} />}
+                  {showDisplayMode && (
+                    <DisplayModeCard tournamentId={tournament.id} mode={displayMode} canChange={isAdminUser || isOrganizerOfThis} lockedReason={displayModeLocked} />
+                  )}
+                  {isAdminUser && displayMode === "ARENA" && <LaunchVideoButton arenas={tournament.arenas ?? 1} community={tournament.communitySlug} />}
                   {!tournament.isOfficial && tournament.status !== "FINISHED" && (isAdminUser || isOrganizerOfThis) && (
                     <JudgingModeToggle tournamentId={tournament.id} mode={tournament.judgingMode} />
                   )}

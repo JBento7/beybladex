@@ -6,6 +6,7 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 import { parseCommandId, stampArenaSignal } from "@/lib/arenaCommands";
+import { telaoOnlyGate } from "@/lib/matchGate";
 
 // The judge plays the launch/countdown video on THIS match's arena telão (e.g.
 // to show players the countdown before the match). Same permission as scoring.
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   // means "anyone logged in"; open judging is an explicit event setting.
   const access = await authorizeMatchOp(session, params.id, "launch");
   if (!access.ok) return access.response;
+  { const off = await telaoOnlyGate(params.id); if (off) return NextResponse.json({ error: off.error, code: off.code }, { status: off.status }); }
 
   const arena = match.arena ?? 1;
   const commandId = parseCommandId((await req.json().catch(() => ({})))?.commandId);

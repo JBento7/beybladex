@@ -31,6 +31,13 @@ async function player(tId: string, official = true) {
   return { u, beys: beys.map((b) => b.id) };
 }
 const staff = (id: string) => ({ id, role: "admin" });
+// "Com telão Arena" (the default mode) requires each battle's deck order
+// (lib/displayMode): every set/cycle these tests reach gets one, for both.
+async function orders(matchId: string, ...players: { u: { id: string }; beys: string[] }[]) {
+  for (const p of players) for (let setNumber = 1; setNumber <= 3; setNumber++) for (let cycleIndex = 0; cycleIndex < 3; cycleIndex++) {
+    await prisma.matchDeckOrder.create({ data: { matchId, userId: p.u.id, setNumber, cycleIndex, bey1Id: p.beys[0], bey2Id: p.beys[1], bey3Id: p.beys[2] } });
+  }
+}
 const pt = (matchId: string, scorerId: string, beybladeId: string | null, actionId: string) =>
   recordPoint(matchId, { scorerId, finishType: "SPIN_FINISH", points: 1, beybladeId, actionId, setsToWin: 2, pointsToWinSet: 2 });
 
@@ -104,6 +111,7 @@ test("start: both trios required; lock blocks changes; reserve can't score; next
   // A point can't be recorded before both trios exist either.
   assert.equal((await pt(m.id, a.u.id, a.beys[0], `${stamp}-x0`)).kind, "error");
   await setTrio({ matchId: m.id, userId: b.u.id, beybladeIds: b.beys.slice(1, 4), actor: { id: b.u.id, role: "player" } });
+  await orders(m.id, a, b);
   const lock = await lockTrios(m.id);
   assert.ok(lock && lock.ok);
   assert.equal((await setTrio({ matchId: m.id, userId: a.u.id, beybladeIds: a.beys.slice(1, 4), actor: { id: a.u.id, role: "player" } })).ok, false, "locked");
@@ -132,6 +140,7 @@ test("race: trio change vs first point — never a point under a different trio"
     const m = await prisma.match.create({ data: { tournamentId: t.id, round: 1, player1Id: a.u.id, player2Id: b.u.id } });
     await setTrio({ matchId: m.id, userId: a.u.id, beybladeIds: a.beys.slice(0, 3), actor: { id: a.u.id, role: "player" } });
     await setTrio({ matchId: m.id, userId: b.u.id, beybladeIds: b.beys.slice(0, 3), actor: { id: b.u.id, role: "player" } });
+    await orders(m.id, a, b);
     // Concurrently: A swaps bey[0] for the reserve while the judge scores with bey[0].
     const [chg, point] = await Promise.all([
       setTrio({ matchId: m.id, userId: a.u.id, beybladeIds: a.beys.slice(1, 4), actor: { id: a.u.id, role: "player" } }),
@@ -187,6 +196,7 @@ test("stats: only active Beyblades; reserve gets nothing; W.O. without battles r
   const m = await prisma.match.create({ data: { tournamentId: t.id, round: 1, player1Id: a.u.id, player2Id: b.u.id } });
   await setTrio({ matchId: m.id, userId: a.u.id, beybladeIds: a.beys.slice(0, 3), actor: { id: a.u.id, role: "player" } });
   await setTrio({ matchId: m.id, userId: b.u.id, beybladeIds: b.beys.slice(1, 4), actor: { id: b.u.id, role: "player" } });
+  await orders(m.id, a, b);
   await pt(m.id, a.u.id, a.beys[1], `${stamp}-s1`);
   await pt(m.id, a.u.id, a.beys[1], `${stamp}-s2`);
   await pt(m.id, a.u.id, a.beys[1], `${stamp}-s3`);
@@ -208,6 +218,7 @@ test("admin correction after the lock: reason required, audited, points keep the
   const m = await prisma.match.create({ data: { tournamentId: t.id, round: 1, player1Id: a.u.id, player2Id: b.u.id } });
   await setTrio({ matchId: m.id, userId: a.u.id, beybladeIds: a.beys.slice(0, 3), actor: { id: a.u.id, role: "player" } });
   await setTrio({ matchId: m.id, userId: b.u.id, beybladeIds: b.beys.slice(0, 3), actor: { id: b.u.id, role: "player" } });
+  await orders(m.id, a, b);
   await pt(m.id, a.u.id, a.beys[0], `${stamp}-c1`);
   assert.equal((await correctLockedTrio({ matchId: m.id, userId: a.u.id, beybladeIds: a.beys.slice(1, 4), reason: "", actor: staff("adm") })).ok, false);
   const c = await correctLockedTrio({ matchId: m.id, userId: a.u.id, beybladeIds: a.beys.slice(1, 4), reason: "Juiz registrou a Beyblade errada", actor: staff("adm") });

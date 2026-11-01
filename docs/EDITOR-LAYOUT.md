@@ -106,4 +106,4 @@ A rota antiga `PUT /api/arena-layout` agora recusa (409) as chaves de composiç�
 - **Fontes:** a biblioteca é compartilhada entre as telas. Uma fonte só sai da biblioteca quando nenhuma outra tela publicada a usa.
 - **Google Fonts:** carregadas em melhor esforço; se não carregarem a tempo, o telão aplica o layout com a fonte de reserva.
 - **Confirmações:** só aparecem telões com a página nova abertos. A atualização leva até um ciclo do poll (alguns segundos) mais o cache de 5 s.
-- **Arte do placar:** o rótulo "RODADA" da arte continua o mesmo (ver `docs/JUIZ-TELAO.md` §8).
+- **Arte do placar:** o rótulo "RODADA" da arte continua o mesmo (ver `docs/JUIZ-TELAO.md` §9).

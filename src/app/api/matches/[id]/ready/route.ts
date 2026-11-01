@@ -6,6 +6,7 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 import { parseCommandId, stampArenaSignal } from "@/lib/arenaCommands";
+import { telaoOnlyGate } from "@/lib/matchGate";
 
 // "PRONTOS": the judge asks the players to get ready. The arena telão plays the
 // PRONTOS clip and then HOLDS on its last frame until the countdown starts, so
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   // means "anyone logged in"; open judging is an explicit event setting.
   const access = await authorizeMatchOp(session, params.id, "ready");
   if (!access.ok) return access.response;
+  { const off = await telaoOnlyGate(params.id); if (off) return NextResponse.json({ error: off.error, code: off.code }, { status: off.status }); }
 
   const arena = match.arena ?? 1;
   const commandId = parseCommandId((await req.json().catch(() => ({})))?.commandId);

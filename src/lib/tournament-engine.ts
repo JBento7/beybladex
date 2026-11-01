@@ -11,6 +11,8 @@ import { logEvent } from "./observability";
 import { RANKING_POINTS_BY_PLACE, rankingMultiplier } from "./rankingPoints";
 import { DEFAULT_POINTS_TABLE, pointsForPlacement, storedTable, type MonthlyLeague } from "./monthlyRules";
 import { effectiveRules, isMonthClosed, lockMonth, monthlyScopeOf } from "./monthlyRanking";
+import { effectiveDisplayMode } from "./displayMode";
+import { usesBattleDeck } from "./deckFormat";
 
 // Returns the userIds of every registered judge for a tournament. Used by the
 // match schedulers so judges never get a parallel match while arbitrating.
@@ -1088,6 +1090,12 @@ async function resolveMatchBeyblade(
   // Deterministic tie-break by id so re-runs are stable.
   if (entries.length > 0) return entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
 
+  // "Somente placar do juiz" with a deck: no identified Beyblade means no
+  // Beyblade credit — never the first registered/active one by assumption.
+  // (SOLO has a single registered Beyblade, so it is not a guess.)
+  const t = await prisma.tournament.findUnique({ where: { id: tournamentId }, select: { displayMode: true, deckType: true } });
+  if (t && effectiveDisplayMode(t.displayMode) === "JUDGE_ONLY" && usesBattleDeck(t.deckType)) return null;
+
   // 3on3 + 1 reserva: without a scoring Beyblade, credit the first ACTIVE one
   // of this match's trio — never the reserve (registered ≠ used). A W.O.
   // with no battle records the player's result but no Beyblade usage.
@@ -1284,7 +1292,10 @@ export async function recalculateAllBeybladeStats() {
   const trioFirst = new Map(trioRows.map((t) => [`${t.matchId}:${t.userId}`, t.bey1Id]));
   const walkoverMatches = new Set(matches.filter((m) => m.isWalkover).map((m) => m.id));
   const plusOneTournaments = new Set((await prisma.tournament.findMany({ where: { deckType: "THREE_ON_THREE_PLUS_ONE" }, select: { id: true } })).map((t) => t.id));
+  const judgeOnlyDeck = new Set((await prisma.tournament.findMany({ where: { displayMode: "JUDGE_ONLY", deckType: { in: ["THREE_ON_THREE", "THREE_ON_THREE_PLUS_ONE"] } }, select: { id: true } })).map((t) => t.id));
   async function fallbackBeyblade(tournamentId: string, userId: string, matchId?: string): Promise<string | null> {
+    // Judge-only events with a deck: unidentified = no Beyblade credit.
+    if (judgeOnlyDeck.has(tournamentId)) return null;
     if (plusOneTournaments.has(tournamentId)) return (matchId && !walkoverMatches.has(matchId) && trioFirst.get(`${matchId}:${userId}`)) || null;
     if (!participantCache[tournamentId]) {
       const parts = await prisma.tournamentParticipant.findMany({

@@ -6,6 +6,7 @@ import { denyOutsideCommunity } from "@/lib/communityScope";
 import { authorizeMatchOp } from "@/lib/matchAccess";
 import { prisma } from "@/lib/prisma";
 import { errorResponse } from "@/lib/observability";
+import { telaoOnlyGate } from "@/lib/matchGate";
 
 // Heartbeat: while a judge keeps the scoreboard ("Placar") open, this is POSTed
 // periodically to stamp Match.onAirAt = now. The arena display only shows a
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   // means "anyone logged in"; open judging is an explicit event setting.
   const access = await authorizeMatchOp(session, params.id, "onair");
   if (!access.ok) return access.response;
+  { const off = await telaoOnlyGate(params.id); if (off) return NextResponse.json({ error: off.error, code: off.code }, { status: off.status }); }
 
   let clear = false;
   try {

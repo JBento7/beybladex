@@ -906,7 +906,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={communityOf(community).logo} alt={communityOf(community).name} style={{ height: "16vh", width: "auto", opacity: 0.9, marginBottom: "2vh" }} />
           <div style={{ fontSize: "4vw", fontWeight: 900, color: community === "lbl" ? BLUE : communityOf(community).color }}>ARENA {arena}</div>
-          <div style={{ color: "#9ca3af", fontSize: "2vw", marginTop: "1vh" }}>{data?.status === "idle" && (data.queue?.length ?? 0) === 0 ? "Sem partidas na fila" : "Aguardando partida…"}</div>
+          <div style={{ color: "#9ca3af", fontSize: "2vw", marginTop: "1vh" }}>{data?.status === "idle" && (data.queue?.length ?? 0) === 0 ? "Nenhuma partida com transmissão para esta arena" : "Aguardando partida…"}</div>
           <div style={{ color: "#374151", fontSize: 10, marginTop: 6 }}>[{ARENA_BUILD}]</div>
           {data?.debug && (
             <div style={{ color: "#374151", fontSize: 12, marginTop: 6, textAlign: "center" }}>

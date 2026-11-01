@@ -3,6 +3,7 @@ import type { FinishType } from "@prisma/client";
 import { prisma } from "./prisma";
 import { applyPoint } from "./swiss";
 import { checkPointBeyTx } from "./matchTrio";
+import { deckOrderGateTx } from "./matchGate";
 
 export type PointOutcome =
   | { kind: "error"; status: number; error: string; code?: string }
@@ -53,9 +54,9 @@ export async function recordPoint(
       points: p.points,
     });
     if ("error" in decision) return { kind: "error", status: fresh.status === "FINISHED" ? 409 : 400, error: decision.error, code: fresh.status === "FINISHED" ? "MATCH_FINISHED" : "INVALID" } as const;
+    const current = fresh.sets.find((x) => x.status === "IN_PROGRESS");
+    const battle = decision.newSet || !current ? 0 : await tx.matchPoint.count({ where: { setId: current.id } });
     if (p.context) {
-      const current = fresh.sets.find((x) => x.status === "IN_PROGRESS");
-      const battle = decision.newSet || !current ? 0 : await tx.matchPoint.count({ where: { setId: current.id } });
       if (p.context.setNumber !== decision.setNumber || p.context.battle !== battle) {
         return {
           kind: "error", status: 409, code: "CONTEXT_CHANGED",
@@ -63,12 +64,19 @@ export async function recordPoint(
         } as const;
       }
     }
+    // "Com telão Arena" + ordered deck: this battle's order must exist for both
+    // players — also when a new set or cycle begins (lib/displayMode). The
+    // judge-only mode never asks for it.
+    {
+      const orderErr = await deckOrderGateTx(tx, matchId, { setNumber: decision.setNumber, battle });
+      if (orderErr) return { kind: "error", status: orderErr.status, error: orderErr.error, code: orderErr.code } as const;
+    }
     // 3on3 + 1 reserva: the first point locks both trios (same row lock, so a
     // trio change can't race it) and every point must come from one of the
     // scorer's 3 ACTIVE Beyblades — never the reserve (lib/matchTrio).
     {
       const trioErr = await checkPointBeyTx(tx, matchId, p.scorerId, p.beybladeId);
-      if (trioErr) return { kind: "error", status: trioErr.status, error: trioErr.error } as const;
+      if (trioErr) return { kind: "error", status: trioErr.status, error: trioErr.error, code: trioErr.code } as const;
     }
 
     let setId: string;

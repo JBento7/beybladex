@@ -13,7 +13,8 @@
 // Byes need no trio. W.O. needs no trio (it records no Beyblade usage).
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma";
-import { checkTrio, hasMatchTrio, type DeckBey } from "./deckFormat";
+import { checkTrio, hasMatchTrio, usesBattleDeck, type DeckBey } from "./deckFormat";
+import { effectiveDisplayMode, requiresTrioToStart } from "./displayMode";
 import { registeredDeck } from "./deckRegistration";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
@@ -28,7 +29,7 @@ async function matchContext(tx: Tx, matchId: string) {
     where: { id: matchId },
     select: {
       id: true, status: true, player1Id: true, player2Id: true, tournamentId: true,
-      tournament: { select: { deckType: true, isOfficial: true } },
+      tournament: { select: { deckType: true, isOfficial: true, displayMode: true } },
       _count: { select: { points: true } },
       trioSelections: true,
     },
@@ -105,6 +106,10 @@ export async function lockTriosTx(tx: Tx, matchId: string): Promise<null | TrioE
   if (isLocked(m.trioSelections)) return { ok: true, lockedNow: false };
   const sel1 = m.trioSelections.find((s) => s.userId === m.player1Id);
   const sel2 = m.trioSelections.find((s) => s.userId === m.player2Id);
+  // "Somente placar do juiz": declaring the trio is optional. Declared by both
+  // → locked as usual (the reserve rules still apply); otherwise the match
+  // starts without a trio and no Beyblade is assumed (lib/displayMode).
+  if ((!sel1 || !sel2) && !requiresTrioToStart(m.tournament.displayMode, m.tournament.deckType)) return null;
   if (!sel1 || !sel2) {
     return { ok: false, status: 409, error: "Os dois jogadores precisam confirmar o trio desta partida antes do início.", code: "TRIO_MISSING" };
   }
@@ -140,11 +145,25 @@ export async function lockTrios(matchId: string) {
  */
 export async function checkPointBeyTx(tx: Tx, matchId: string, scorerId: string, beybladeId: string | null | undefined): Promise<null | TrioError> {
   const locked = await lockTriosTx(tx, matchId);
-  if (locked === null) return null;
-  if (!locked.ok) return locked;
+  if (locked && !locked.ok) return locked;
+  const m = await matchContext(tx, matchId);
+  const judgeOnly = effectiveDisplayMode(m?.tournament.displayMode) === "JUDGE_ONLY";
+  if (locked === null) {
+    // Judge-only identification is optional, but never a Beyblade outside the
+    // player's registered deck.
+    if (m && beybladeId && judgeOnly && usesBattleDeck(m.tournament.deckType)) {
+      const deck = await participantDeck(tx, m.tournamentId, scorerId);
+      if (deck.length > 0 && !deck.some((b) => b.id === beybladeId)) {
+        return { ok: false, status: 400, error: "Esta Beyblade não está no deck inscrito do jogador.", code: "BEY_NOT_REGISTERED" };
+      }
+    }
+    return null;
+  }
   const sel = await tx.matchTrioSelection.findUnique({ where: { matchId_userId: { matchId, userId: scorerId } } });
   if (!sel) return { ok: false, status: 409, error: "Trio do jogador não definido.", code: "TRIO_MISSING" };
-  if (!beybladeId) return { ok: false, status: 400, error: "Informe qual Beyblade ativa marcou o ponto (defina a ordem do deck).", code: "BEY_REQUIRED" };
+  // Without the telão the Beyblade is optional: the point is the player's,
+  // credited to no Beyblade (never guessed).
+  if (!beybladeId) return judgeOnly ? null : { ok: false, status: 400, error: "Informe qual Beyblade ativa marcou o ponto (defina a ordem do deck).", code: "BEY_REQUIRED" };
   if (!trioIds(sel).includes(beybladeId)) {
     return { ok: false, status: 400, error: beybladeId === sel.reserveId ? "A reserva desta partida não pode pontuar." : "Esta Beyblade não está no trio ativo do jogador.", code: "BEY_NOT_ACTIVE" };
   }

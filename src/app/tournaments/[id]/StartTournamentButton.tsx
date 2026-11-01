@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { DISPLAY_MODES, DISPLAY_MODE_DESCRIPTION, DISPLAY_MODE_LABEL, DISPLAY_MODE_QUESTION, type DisplayMode } from "@/lib/displayMode";
 
 export type JudgeCandidate = {
   id: string;
@@ -26,6 +27,8 @@ export default function StartTournamentButton({
   const [arenas, setArenas] = useState(defaultArenas);
   const [judgeCount, setJudgeCount] = useState(0);
   const [selectedJudges, setSelectedJudges] = useState<string[]>([]);
+  // No default: the organizer must pick how matches are followed.
+  const [displayMode, setDisplayMode] = useState<DisplayMode | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const router = useRouter();
 
@@ -37,6 +40,10 @@ export default function StartTournamentButton({
 
   async function handleConfirm() {
     setErr(null);
+    if (!displayMode) {
+      setErr("Escolha como as partidas serão acompanhadas.");
+      return;
+    }
     if (allowJudges && judgeCount > 0 && selectedJudges.length !== judgeCount) {
       setErr(`Selecione exatamente ${judgeCount} juiz(es). Selecionados: ${selectedJudges.length}.`);
       return;
@@ -48,6 +55,7 @@ export default function StartTournamentButton({
       body: JSON.stringify({
         arenas,
         judgeIds: allowJudges ? selectedJudges : [],
+        displayMode,
       }),
     });
     setLoading(false);
@@ -99,6 +107,34 @@ export default function StartTournamentButton({
               onChange={(e) => setArenas(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
               className="w-full bg-field border border-line focus:border-brand-yellow rounded-lg px-4 py-2.5 text-white outline-none transition-colors mb-4"
             />
+
+            <fieldset className="mb-4">
+              <legend className="block text-sm font-medium text-gray-300 mb-1.5">{DISPLAY_MODE_QUESTION}</legend>
+              <div className="grid gap-2">
+                {DISPLAY_MODES.map((m) => (
+                  <label
+                    key={m}
+                    className={`flex items-start gap-3 rounded-lg border px-3 py-3 cursor-pointer transition-colors ${
+                      displayMode === m ? "border-brand-yellow bg-brand-yellow/10" : "border-line hover:bg-field"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="displayMode"
+                      value={m}
+                      checked={displayMode === m}
+                      onChange={() => setDisplayMode(m)}
+                      className="mt-1 w-4 h-4 accent-brand-yellow shrink-0"
+                    />
+                    <span>
+                      <span className="block text-sm font-bold text-white">{DISPLAY_MODE_LABEL[m]}</span>
+                      <span className="block text-xs text-gray-400 mt-0.5">{DISPLAY_MODE_DESCRIPTION[m]}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {!displayMode && <p className="text-xs text-gray-500 mt-1.5">Escolha uma opção para confirmar o início.</p>}
+            </fieldset>
 
             {allowJudges && (
               <>
@@ -199,7 +235,7 @@ export default function StartTournamentButton({
               </button>
               <button
                 onClick={handleConfirm}
-                disabled={loading}
+                disabled={loading || !displayMode}
                 className="flex-1 bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white font-bold py-2.5 rounded-xl transition-colors"
               >
                 {loading ? "Iniciando..." : "Confirmar e iniciar"}

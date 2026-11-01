@@ -11,6 +11,7 @@ import { actorOf } from "@/lib/matchAccess";
 import { decideMatchOp } from "@/lib/matchPolicy";
 import { matchPhaseLabel } from "@/lib/matchLabel";
 import { groupByArena } from "@/lib/judgeArenas";
+import { DISPLAY_MODE_LABEL, effectiveDisplayMode } from "@/lib/displayMode";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Juiz" };
@@ -44,7 +45,7 @@ export default async function JudgeHome(props: { searchParams: Promise<{ aba?: s
       status: { in: ["IN_PROGRESS", "REGISTRATION"] },
       OR: [{ communitySlug: community }, { isPartnership: true }, { isTest: true }, { isOfficial: false }],
     },
-    select: { id: true, name: true, status: true, isTest: true, isOfficial: true, isPartnership: true, communitySlug: true, _count: { select: { participants: true } } },
+    select: { id: true, name: true, status: true, isTest: true, isOfficial: true, isPartnership: true, communitySlug: true, displayMode: true, _count: { select: { participants: true } } },
     orderBy: { createdAt: "desc" },
   });
   // ── Matches I can judge in the events of this tab (in progress only) ──
@@ -107,6 +108,16 @@ export default async function JudgeHome(props: { searchParams: Promise<{ aba?: s
     `flex-1 text-center py-2.5 px-1 rounded-xl text-sm font-bold transition-colors ${
       on ? "bg-[var(--accent)] text-black" : "bg-card text-gray-400 border border-line"
     }`;
+  // How the event is followed (lib/displayMode), on every card of the judge area.
+  const modeOf = (tournamentId: string) => effectiveDisplayMode(all.find((t) => t.id === tournamentId)?.displayMode);
+  const modeChip = (tournamentId: string) => {
+    const m = modeOf(tournamentId);
+    return (
+      <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${m === "ARENA" ? "border-sky-500/40 text-sky-200" : "border-emerald-500/40 text-emerald-200"}`}>
+        <span aria-hidden="true">{m === "ARENA" ? "📺" : "📱"}</span>{DISPLAY_MODE_LABEL[m]}
+      </span>
+    );
+  };
   const tag = (t: (typeof all)[number]) => (
     <>
       {t.communitySlug && t.communitySlug !== community && (
@@ -139,6 +150,7 @@ export default async function JudgeHome(props: { searchParams: Promise<{ aba?: s
                     <li key={g.key} className="rounded-2xl border border-line bg-card p-4">
                       <div className="text-2xl font-black text-white">{g.arena != null ? `Arena ${g.arena}` : "Sem arena definida"}</div>
                       <div className="text-sm text-gray-300 mt-0.5 break-words">{g.tournamentName}</div>
+                      <div className="mt-1">{modeChip(g.tournamentId)}</div>
                       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm font-bold">
                         <span className={g.live > 0 ? "text-green-300" : "text-gray-500"}>{g.live > 0 ? "● " : "○ "}{g.live} em andamento</span>
                         <span className="text-gray-500" aria-hidden="true">·</span>
@@ -163,6 +175,7 @@ export default async function JudgeHome(props: { searchParams: Promise<{ aba?: s
               </Link>
               <h1 id="minhas-titulo" className="text-2xl font-black text-white">{selTitle.arena != null ? `Arena ${selTitle.arena}` : "Sem arena definida"}</h1>
               <p className="text-sm text-gray-300 mb-1 break-words">{selTitle.tournament}</p>
+              {selTournamentId && <div className="mb-2">{modeChip(selTournamentId)}</div>}
               {selected && (
                 <p className="text-sm font-bold mb-3">
                   <span className="text-green-300">● {selected.live} em andamento</span> <span className="text-gray-500">·</span> <span className="text-amber-200">◐ {selected.waiting} aguardando</span>
@@ -209,6 +222,7 @@ export default async function JudgeHome(props: { searchParams: Promise<{ aba?: s
                   <div className="min-w-0">
                     <div className="text-white font-bold truncate">{t.name}</div>
                     <div className="text-gray-500 text-xs mt-0.5">{t._count.participants} jogadores</div>
+                    {t.status === "IN_PROGRESS" && <div className="mt-1">{modeChip(t.id)}</div>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {tag(t)}
