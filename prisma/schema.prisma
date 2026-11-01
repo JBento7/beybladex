@@ -15,7 +15,7 @@ enum Role {
 model ArenaLayout {
   id        String   @id @default(cuid())
   key       String   @unique // "scoreboard" | "winner"
-  data      String   // JSON of Record<fieldKey, {x,y,w?,h?,fs?}>
+  data      String // JSON of Record<fieldKey, {x,y,w?,h?,fs?}>
   updatedAt DateTime @default(now()) @updatedAt
 }
 
@@ -26,7 +26,7 @@ model ArenaLayout {
 // never reach the server.
 model LayoutVersion {
   id            String   @id @default(cuid())
-  screen        String   // "scoreboard" | "winner" | "quickmatch"
+  screen        String // "scoreboard" | "winner" | "quickmatch"
   version       Int
   composition   Json
   publishedById String?
@@ -118,41 +118,41 @@ model Community {
 }
 
 model User {
-  id            String   @id @default(cuid())
-  name          String
-  email         String   @unique
-  password      String
-  role          Role     @default(PARTICIPANT)
-  beyblade      String?
-  avatarUrl     String?
-  deleted       Boolean  @default(false)
-  isGuest       Boolean  @default(false)
-  bladerName    String?
-  canJudge      Boolean  @default(false)
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
+  password       String
+  role           Role     @default(PARTICIPANT)
+  beyblade       String?
+  avatarUrl      String?
+  deleted        Boolean  @default(false)
+  isGuest        Boolean  @default(false)
+  bladerName     String?
+  canJudge       Boolean  @default(false)
   // Admin scope: null = every community (original LBL organizers); "lbm" = only LBM.
   adminCommunity String?
   // Community the player belongs to (badge/filter only — rankings follow the tournament).
-  homeCommunity  String? @default("lbl")
-  featuredBey1  String?
-  featuredBey2  String?
-  featuredBey3  String?
-  createdAt     DateTime @default(now())
+  homeCommunity  String?  @default("lbl")
+  featuredBey1   String?
+  featuredBey2   String?
+  featuredBey3   String?
+  createdAt      DateTime @default(now())
 
-  organizedTournaments Tournament[]           @relation("OrganizerTournaments")
+  organizedTournaments Tournament[]            @relation("OrganizerTournaments")
   participations       TournamentParticipant[]
-  matchesAsPlayer1     Match[]                @relation("Player1Matches")
-  matchesAsPlayer2     Match[]                @relation("Player2Matches")
-  wonMatches           Match[]                @relation("WinnerMatches")
-  judgedMatches        Match[]                @relation("JudgeMatches")
+  matchesAsPlayer1     Match[]                 @relation("Player1Matches")
+  matchesAsPlayer2     Match[]                 @relation("Player2Matches")
+  wonMatches           Match[]                 @relation("WinnerMatches")
+  judgedMatches        Match[]                 @relation("JudgeMatches")
   judgingTournaments   TournamentJudge[]
   matchPoints          MatchPoint[]
-  createdInvites       OrganizerInvite[]      @relation("InviteCreator")
+  createdInvites       OrganizerInvite[]       @relation("InviteCreator")
   beyblades            Beyblade[]
-  wonSets              MatchSet[]             @relation("SetWinner")
+  wonSets              MatchSet[]              @relation("SetWinner")
   resetTokens          PasswordResetToken[]
   emailVerifyTokens    EmailVerifyToken[]
-  emailVerified        Boolean  @default(false)
-  announcements        Announcement[]   @relation("AnnouncementCreator")
+  emailVerified        Boolean                 @default(false)
+  announcements        Announcement[]          @relation("AnnouncementCreator")
   pollResponses        PollResponse[]
 }
 
@@ -180,65 +180,65 @@ model OrganizerInvite {
 }
 
 model Tournament {
-  id              String           @id @default(cuid())
-  name            String
-  description     String?
-  format          TournamentFormat
-  status          TournamentStatus @default(DRAFT)
-  organizerId     String
-  maxParticipants Int?
-  startDate       DateTime?
-  deckType        DeckType         @default(SOLO)
-  prize           String?
-  arenas          Int?    @default(1)
-  isOfficial      Boolean @default(true)
-  isTest          Boolean @default(false)
+  id                   String           @id @default(cuid())
+  name                 String
+  description          String?
+  format               TournamentFormat
+  status               TournamentStatus @default(DRAFT)
+  organizerId          String
+  maxParticipants      Int?
+  startDate            DateTime?
+  deckType             DeckType         @default(SOLO)
+  prize                String?
+  arenas               Int?             @default(1)
+  isOfficial           Boolean          @default(true)
+  isTest               Boolean          @default(false)
   // Host community (Community.slug). Decides which community ranking it feeds.
-  communitySlug   String  @default("lbl")
+  communitySlug        String           @default("lbl")
   // Partnership event between communities: counts ONLY in the shared ranking.
-  isPartnership   Boolean @default(false)
+  isPartnership        Boolean          @default(false)
   // "Pontuação dobrada" (official events only): placement points × 2.
-  doubleRankingPoints Boolean @default(false)
+  doubleRankingPoints  Boolean          @default(false)
   // Points per placement (base, before "Pontuação dobrada") frozen at the first
   // finalization, so later recalculations never use newer rules. Null = not
   // finalized yet (or finalized before this existed: the default table).
-  rankingPointsTable Json?
+  rankingPointsTable   Json?
   // Suíço: number of Swiss rounds, frozen when first needed so approving or
   // removing a player mid-event can't move the Swiss/knockout boundary.
-  swissRounds     Int?
+  swissRounds          Int?
   // Swiss rules version used by this event (set when it starts). A later rule
   // change never silently reorders a finished event.
-  rulesVersion    String?
+  rulesVersion         String?
   // Who may score matches when no judge is assigned. "RESTRICTED" (default):
   // admins, the BeyEncontro organizer, judges. "OPEN_PARTICIPANTS": also the
   // event's approved participants — explicit opt-in, never for official events.
-  judgingMode     String  @default("RESTRICTED")
+  judgingMode          String           @default("RESTRICTED")
   // How matches are followed (lib/displayMode): "ARENA" = judge panel drives
   // the arena telões (default: every event before this setting behaves so);
   // "JUDGE_ONLY" = scoring on the judge's device only, nothing broadcast and
   // no deck order required. Chosen when the event starts; fixed once battles begin.
-  displayMode     String  @default("ARENA")
+  displayMode          String           @default("ARENA")
   // Monotonic version of everything a live page shows (sign-ups, matches,
   // points, status…). Bumped in the same transaction as each change, so the
   // polling endpoint reads one integer instead of hashing the history.
-  stateVersion    Int     @default(0)
-  setsToWin       Int     @default(2)
-  pointsToWinSet  Int     @default(4)
-  qualifiers      Int?    // Suíço: how many top players advance to the knockout (16/8/4)
-  isMultiDay      Boolean @default(false) // 2-day tournament: day 1 Suíço, day 2 mata-mata
-  day2Date        DateTime? // date of the knockout day (day 2)
-  day2SetsToWin   Int?    // 2-day: match rules for the knockout day (day 1 uses setsToWin)
-  day2PointsToWinSet Int? // 2-day: points per set for the knockout day
-  bannerUrl       String?
-  location        String?
-  venueName       String?
-  address         String?
-  entryFee        Float?
-  regulation      String?
+  stateVersion         Int              @default(0)
+  setsToWin            Int              @default(2)
+  pointsToWinSet       Int              @default(4)
+  qualifiers           Int? // Suíço: how many top players advance to the knockout (16/8/4)
+  isMultiDay           Boolean          @default(false) // 2-day tournament: day 1 Suíço, day 2 mata-mata
+  day2Date             DateTime? // date of the knockout day (day 2)
+  day2SetsToWin        Int? // 2-day: match rules for the knockout day (day 1 uses setsToWin)
+  day2PointsToWinSet   Int? // 2-day: points per set for the knockout day
+  bannerUrl            String?
+  location             String?
+  venueName            String?
+  address              String?
+  entryFee             Float?
+  regulation           String?
   registrationDeadline DateTime?
-  createdAt       DateTime         @default(now())
+  createdAt            DateTime         @default(now())
 
-  organizer       User                   @relation("OrganizerTournaments", fields: [organizerId], references: [id])
+  organizer       User                    @relation("OrganizerTournaments", fields: [organizerId], references: [id])
   participants    TournamentParticipant[]
   groups          Group[]
   matches         Match[]
@@ -246,6 +246,7 @@ model Tournament {
   beybladeRecords BeybladeMatchRecord[]
   roundLogs       SwissRoundLog[]
   adminActions    TournamentAdminAction[]
+  images          TournamentImage[]
 
   @@index([communitySlug]) // created by /api/migrate since the leagues split; declared so migrations and schema agree
 }
@@ -262,28 +263,28 @@ model TournamentJudge {
 }
 
 model TournamentParticipant {
-  id           String   @id @default(cuid())
-  tournamentId String
-  userId       String
-  groupId      String?
-  totalPoints  Int      @default(0)
-  rankingPoints Int     @default(0)
-  wins         Int      @default(0)
-  losses       Int      @default(0)
-  placement    Int?
-  beyblade1    String?
-  beyblade2    String?
-  beyblade3    String?
-  beyblade4    String?  // 3on3 + 1 reserva only
+  id                String    @id @default(cuid())
+  tournamentId      String
+  userId            String
+  groupId           String?
+  totalPoints       Int       @default(0)
+  rankingPoints     Int       @default(0)
+  wins              Int       @default(0)
+  losses            Int       @default(0)
+  placement         Int?
+  beyblade1         String?
+  beyblade2         String?
+  beyblade3         String?
+  beyblade4         String? // 3on3 + 1 reserva only
   // Composition of the registered deck AS REGISTERED (name + parts per bey,
   // with the original id for stats). Later profile edits don't change it.
-  deckSnapshot   Json?
-  deckSnapshotAt DateTime?
-  hasPaid            Boolean  @default(false)
-  beybladeInspected  Boolean  @default(false)
-  approved           Boolean  @default(true) // paid tournaments start false (awaiting admin approval)
-  finalsSwapUsed     Boolean  @default(false) // Suíço: used their 1 deck change for the knockout
-  createdAt    DateTime @default(now())
+  deckSnapshot      Json?
+  deckSnapshotAt    DateTime?
+  hasPaid           Boolean   @default(false)
+  beybladeInspected Boolean   @default(false)
+  approved          Boolean   @default(true) // paid tournaments start false (awaiting admin approval)
+  finalsSwapUsed    Boolean   @default(false) // Suíço: used their 1 deck change for the knockout
+  createdAt         DateTime  @default(now())
 
   tournament Tournament @relation(fields: [tournamentId], references: [id])
   user       User       @relation(fields: [userId], references: [id])
@@ -298,52 +299,52 @@ model Group {
   tournamentId String
   name         String
 
-  tournament   Tournament             @relation(fields: [tournamentId], references: [id])
+  tournament   Tournament              @relation(fields: [tournamentId], references: [id])
   participants TournamentParticipant[]
   matches      Match[]
 }
 
 model Match {
-  id           String      @id @default(cuid())
-  tournamentId String
-  player1Id    String
-  player2Id    String
-  winnerId     String?
-  groupId      String?
-  judgeId      String?
-  round        Int
-  bracketPos   Int?
-  arena        Int?
-  slot         Int?
-  status       MatchStatus @default(PENDING)
-  isWalkover   Boolean     @default(false)
-  isThirdPlace Boolean     @default(false)
-  countdownAt  DateTime?
-  countdownKey String?
+  id              String      @id @default(cuid())
+  tournamentId    String
+  player1Id       String
+  player2Id       String
+  winnerId        String?
+  groupId         String?
+  judgeId         String?
+  round           Int
+  bracketPos      Int?
+  arena           Int?
+  slot            Int?
+  status          MatchStatus @default(PENDING)
+  isWalkover      Boolean     @default(false)
+  isThirdPlace    Boolean     @default(false)
+  countdownAt     DateTime?
+  countdownKey    String?
   finishVideoAt   DateTime? // signals the telão to play a finish-type video
   finishVideoType String?
-  onAirAt      DateTime?
-  xSidePlayerId String?  // which player chose the X side of the stadium (other = B side)
-  setsToWin      Int?    // per-match override (e.g. 2-day: knockout uses different rules)
-  pointsToWinSet Int?    // per-match override
+  onAirAt         DateTime?
+  xSidePlayerId   String? // which player chose the X side of the stadium (other = B side)
+  setsToWin       Int? // per-match override (e.g. 2-day: knockout uses different rules)
+  pointsToWinSet  Int? // per-match override
   // Bumped by every change of the score (point, undo, W.O.) in the same
   // transaction: judge panel and telão use it to drop out-of-order updates.
-  scoreVersion Int         @default(0)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @default(now()) @updatedAt
+  scoreVersion    Int         @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @default(now()) @updatedAt
 
-  tournament     Tournament            @relation(fields: [tournamentId], references: [id])
-  player1        User                  @relation("Player1Matches", fields: [player1Id], references: [id])
-  player2        User                  @relation("Player2Matches", fields: [player2Id], references: [id])
-  winner         User?                 @relation("WinnerMatches", fields: [winnerId], references: [id])
-  judge          User?                 @relation("JudgeMatches", fields: [judgeId], references: [id])
-  group          Group?                @relation(fields: [groupId], references: [id])
-  points         MatchPoint[]
-  sets           MatchSet[]
+  tournament      Tournament            @relation(fields: [tournamentId], references: [id])
+  player1         User                  @relation("Player1Matches", fields: [player1Id], references: [id])
+  player2         User                  @relation("Player2Matches", fields: [player2Id], references: [id])
+  winner          User?                 @relation("WinnerMatches", fields: [winnerId], references: [id])
+  judge           User?                 @relation("JudgeMatches", fields: [judgeId], references: [id])
+  group           Group?                @relation(fields: [groupId], references: [id])
+  points          MatchPoint[]
+  sets            MatchSet[]
   beybladeRecords BeybladeMatchRecord[]
-  deckOrders     MatchDeckOrder[]
-  trioSelections MatchTrioSelection[]
-  participations RoundParticipation[]
+  deckOrders      MatchDeckOrder[]
+  trioSelections  MatchTrioSelection[]
+  participations  RoundParticipation[]
 
   @@index([tournamentId, round])
   @@index([tournamentId, status, arena])
@@ -362,9 +363,9 @@ model MatchSet {
   status        SetStatus @default(IN_PROGRESS)
   createdAt     DateTime  @default(now())
 
-  match   Match        @relation(fields: [matchId], references: [id])
-  winner  User?        @relation("SetWinner", fields: [winnerId], references: [id])
-  points  MatchPoint[]
+  match  Match        @relation(fields: [matchId], references: [id])
+  winner User?        @relation("SetWinner", fields: [winnerId], references: [id])
+  points MatchPoint[]
 
   @@index([matchId])
 }
@@ -383,10 +384,10 @@ model MatchPoint {
   actionId     String?
   createdAt    DateTime   @default(now())
 
-  match     Match     @relation(fields: [matchId], references: [id])
-  user      User      @relation(fields: [userId], references: [id])
-  beyblade  Beyblade? @relation(fields: [beybladeId], references: [id])
-  set       MatchSet? @relation(fields: [setId], references: [id])
+  match    Match     @relation(fields: [matchId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+  beyblade Beyblade? @relation(fields: [beybladeId], references: [id])
+  set      MatchSet? @relation(fields: [setId], references: [id])
 
   @@unique([matchId, actionId])
   @@index([matchId])
@@ -439,22 +440,22 @@ model MatchDeckOrder {
 }
 
 model Beyblade {
-  id          String   @id @default(cuid())
-  userId      String
-  name        String
-  beyLine     String?
-  blade       String?
-  ratchet     String?
-  bit         String?
-  lockChip    String?
-  metalBlade  String?
-  assistBlade String?
-  overBlade   String?
-  model       String?
-  wins        Int      @default(0)
-  losses      Int      @default(0)
-  hiddenFromCommunity Boolean @default(false)
-  createdAt   DateTime @default(now())
+  id                  String   @id @default(cuid())
+  userId              String
+  name                String
+  beyLine             String?
+  blade               String?
+  ratchet             String?
+  bit                 String?
+  lockChip            String?
+  metalBlade          String?
+  assistBlade         String?
+  overBlade           String?
+  model               String?
+  wins                Int      @default(0)
+  losses              Int      @default(0)
+  hiddenFromCommunity Boolean  @default(false)
+  createdAt           DateTime @default(now())
 
   user         User                  @relation(fields: [userId], references: [id])
   matchPoints  MatchPoint[]
@@ -510,7 +511,7 @@ model PollResponse {
 
 // One answer to one question within a PollResponse.
 model PollAnswer {
-  id              String  @id @default(cuid())
+  id              String   @id @default(cuid())
   responseId      String
   questionId      String
   answerText      String?
@@ -533,21 +534,21 @@ model EmailVerifyToken {
 }
 
 model BeybladeMatchRecord {
-  id                 String     @id @default(cuid())
+  id                 String   @id @default(cuid())
   beybladeId         String
   matchId            String
   tournamentId       String
   userId             String
   won                Boolean
-  pointsScored       Int        @default(0)
-  pointsConceded     Int        @default(0)
+  pointsScored       Int      @default(0)
+  pointsConceded     Int      @default(0)
   opponentBeybladeId String?
-  burstCount         Int        @default(0)
-  koCount            Int        @default(0)
-  spinFinishCount    Int        @default(0)
-  overFinishCount    Int        @default(0)
-  extremeFinishCount Int        @default(0)
-  createdAt          DateTime   @default(now())
+  burstCount         Int      @default(0)
+  koCount            Int      @default(0)
+  spinFinishCount    Int      @default(0)
+  overFinishCount    Int      @default(0)
+  extremeFinishCount Int      @default(0)
+  createdAt          DateTime @default(now())
 
   beyblade   Beyblade   @relation(fields: [beybladeId], references: [id], onDelete: Cascade)
   match      Match      @relation(fields: [matchId], references: [id], onDelete: Cascade)
@@ -560,10 +561,10 @@ model BeybladeMatchRecord {
 }
 
 model BeyPart {
-  id        String           @id @default(cuid())
-  line      BeyPartLine
-  category  BeyPartCategory
-  name      String
+  id          String          @id @default(cuid())
+  line        BeyPartLine
+  category    BeyPartCategory
+  name        String
   fullName    String?
   imageUrl    String?
   partType    String?
@@ -574,7 +575,7 @@ model BeyPart {
   statHeight  Int?
   statDash    Int?
   statBurst   Int?
-  createdAt   DateTime         @default(now())
+  createdAt   DateTime        @default(now())
 
   @@unique([line, category, name])
 }
@@ -585,11 +586,11 @@ model BeyPart {
 model RoundParticipation {
   id           String   @id @default(cuid())
   tournamentId String
-  phase        String   // "SWISS" | "KNOCKOUT"
+  phase        String // "SWISS" | "KNOCKOUT"
   round        Int
   userId       String
   matchId      String
-  kind         String   // "MATCH" | "BYE"
+  kind         String // "MATCH" | "BYE"
   createdAt    DateTime @default(now())
 
   match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
@@ -601,18 +602,18 @@ model RoundParticipation {
 // One row per generated Swiss round: seed, rules version, bye choice and the
 // pairing diagnostics. The unique key also stops a round being generated twice.
 model SwissRoundLog {
-  id             String   @id @default(cuid())
-  tournamentId   String
-  round          Int
-  rulesVersion   String
-  seed           Int?
-  byeUserId      String?
-  crossings      Int      @default(0)
-  optimal        Boolean  @default(true)
-  notes          String   @default("")
+  id              String   @id @default(cuid())
+  tournamentId    String
+  round           Int
+  rulesVersion    String
+  seed            Int?
+  byeUserId       String?
+  crossings       Int      @default(0)
+  optimal         Boolean  @default(true)
+  notes           String   @default("")
   exceptionReason String?
-  createdById    String?
-  createdAt      DateTime @default(now())
+  createdById     String?
+  createdAt       DateTime @default(now())
 
   tournament Tournament @relation(fields: [tournamentId], references: [id])
 
@@ -622,15 +623,15 @@ model SwissRoundLog {
 // Audit trail of administrative interventions (repairs, rule exceptions,
 // de-duplication): who, why, and a copy of the data before/after.
 model TournamentAdminAction {
-  id           String   @id @default(cuid())
-  tournamentId String
-  kind         String
-  reason       String
-  actorId      String?
-  idempotencyKey String? @unique
-  before       Json?
-  after        Json?
-  createdAt    DateTime @default(now())
+  id             String   @id @default(cuid())
+  tournamentId   String
+  kind           String
+  reason         String
+  actorId        String?
+  idempotencyKey String?  @unique
+  before         Json?
+  after          Json?
+  createdAt      DateTime @default(now())
 
   tournament Tournament @relation(fields: [tournamentId], references: [id])
 
@@ -691,7 +692,7 @@ model RankingOperation {
   periodId       String
   requestId      String
   idempotencyKey String   @unique
-  kind           String   // ADD | REMOVE | RESET_PLAYER | RESET_MONTH | RULES | CLOSE
+  kind           String // ADD | REMOVE | RESET_PLAYER | RESET_MONTH | RULES | CLOSE
   userId         String?
   points         Int      @default(0) // signed: + added, - removed
   reason         String
@@ -704,4 +705,45 @@ model RankingOperation {
 
   @@index([periodId, userId])
   @@index([requestId])
+}
+
+// Uploaded image (docs/GALERIA.md). Content-addressed: the id is the SHA-256 of
+// the uploaded bytes, so the same file uploaded twice is stored once and can be
+// shared by several references. `data` is the re-encoded full image (auto
+// rotated, metadata stripped, at most 2400 px); `card` (960 px) and `thumb`
+// (320 px) are WebP versions for cards and miniatures. Deleted only when no
+// reference uses it any more.
+model StoredImage {
+  id           String   @id
+  mime         String
+  width        Int
+  height       Int
+  size         Int
+  data         Bytes
+  card         Bytes
+  thumb        Bytes
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  usages TournamentImage[]
+}
+
+// One image of a tournament gallery, in the organizer's order. `isCover` marks
+// the cover (also mirrored to Tournament.bannerUrl for the cards). `url` keeps a
+// pre-gallery cover (external link) as it was; new images always use `imageId`.
+model TournamentImage {
+  id           String   @id @default(cuid())
+  tournamentId String
+  imageId      String?
+  url          String?
+  alt          String   @default("")
+  position     Int
+  isCover      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  tournament Tournament   @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  image      StoredImage? @relation(fields: [imageId], references: [id], onDelete: Restrict)
+
+  @@index([tournamentId, position])
+  @@index([imageId])
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import CommunityPicker from "@/components/CommunityPicker";
 import DeckTypePicker from "@/components/deck/DeckTypePicker";
 import { DoubleRankingOption } from "@/components/tournament/DoubleRankingPoints";
+import GalleryEditor, { type GalleryPayload } from "@/components/tournament/GalleryEditor";
 
 const FORMATS = [
   {
@@ -46,7 +47,8 @@ type Initial = {
   setsToWin: number;
   pointsToWinSet: number;
   qualifiers: number | null;
-  bannerUrl: string | null;
+  /** Current gallery, carousel order (cover first). */
+  gallery: { imageId: string | null; url: string | null; thumb: string; alt: string; isCover: boolean }[];
   location: string | null;
   venueName: string | null;
   address: string | null;
@@ -81,7 +83,6 @@ export default function EditTournamentForm({
     setsToWin: String(tournament.setsToWin),
     pointsToWinSet: String(tournament.pointsToWinSet),
     qualifiers: String(tournament.qualifiers ?? 8),
-    bannerUrl: tournament.bannerUrl ?? "",
     location: tournament.location ?? "",
     venueName: tournament.venueName ?? "",
     address: tournament.address ?? "",
@@ -96,6 +97,10 @@ export default function EditTournamentForm({
   const [day2PointsToWinSet, setDay2PointsToWinSet] = useState(String(tournament.day2PointsToWinSet ?? tournament.pointsToWinSet ?? 4));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // "Imagens do campeonato": saved with the other fields, in one transaction.
+  const [gallery, setGallery] = useState<GalleryPayload>([]);
+  const [galleryState, setGalleryState] = useState({ pending: 0, failed: 0 });
+  const onGallery = useCallback((p: GalleryPayload, st: { pending: number; failed: number }) => { setGallery(p); setGalleryState(st); }, []);
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -106,6 +111,8 @@ export default function EditTournamentForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (galleryState.pending > 0) { setError("Aguarde o envio das imagens terminar antes de salvar."); return; }
+    if (galleryState.failed > 0) { setError("Uma imagem não foi enviada. Toque em “Tentar de novo” ou remova-a antes de salvar."); return; }
     setLoading(true);
 
     const res = await fetch(`/api/tournaments/${tournament.id}`, {
@@ -129,7 +136,7 @@ export default function EditTournamentForm({
         setsToWin: form.setsToWin,
         pointsToWinSet: form.pointsToWinSet,
         qualifiers: form.format === "ROUND_ROBIN" ? parseInt(form.qualifiers) : null,
-        bannerUrl: form.bannerUrl || undefined,
+        gallery,
         location: form.location || undefined,
         venueName: form.venueName || undefined,
         address: form.address || undefined,
@@ -339,24 +346,16 @@ export default function EditTournamentForm({
             </div>
           </div>
 
+          {/* Gallery: cover (cards) + extra images (details page) */}
+          <div className="bg-card border border-line rounded-xl p-6">
+            <h2 className="text-base font-bold text-white mb-3">Imagens do campeonato</h2>
+            <GalleryEditor initial={tournament.gallery} onChange={onGallery} />
+          </div>
+
           {/* Location & Registration */}
           <div className="bg-card border border-line rounded-xl p-6">
             <h2 className="text-base font-bold text-white mb-4">Local & Inscrição</h2>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Imagem/Banner <span className="text-gray-500 font-normal">(URL, opcional)</span>
-                </label>
-                <input
-                  name="bannerUrl"
-                  type="text"
-                  value={form.bannerUrl}
-                  onChange={handleChange}
-                  placeholder="https://..."
-                  className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
-                />
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1.5">
@@ -576,10 +575,10 @@ export default function EditTournamentForm({
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || galleryState.pending > 0}
               className="flex-1 bg-brand-red hover:bg-brand-red-hover disabled:opacity-60 text-white font-black text-lg py-3.5 rounded-xl transition-colors"
             >
-              {loading ? "Salvando..." : "Salvar Alterações"}
+              {loading ? "Salvando..." : galleryState.pending > 0 ? "Aguardando o envio das imagens…" : "Salvar Alterações"}
             </button>
           </div>
         </form>

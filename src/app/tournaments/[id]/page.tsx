@@ -43,6 +43,8 @@ import { testToolsAllowed } from "@/lib/adminAudit";
 import { deckLabel, hasMatchTrio, PLUS_ONE_PARTS_RULE, registeredIds, usesBattleDeck } from "@/lib/deckFormat";
 import { displayModeLock, effectiveDisplayMode, requiresDeckOrder } from "@/lib/displayMode";
 import DisplayModeCard from "./DisplayModeCard";
+import TournamentGallery from "@/components/tournament/TournamentGallery";
+import { galleryView, loadGallery } from "@/lib/galleryStore";
 import { battlesStarted } from "@/lib/displayModeStore";
 
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
@@ -465,6 +467,8 @@ export default async function TournamentDetailPage(
       tournament: { organizerId: tournament.organizerId, isOfficial: tournament.isOfficial, isTest: tournament.isTest, communitySlug: tournament.communitySlug, isPartnership: tournament.isPartnership, judgingMode: tournament.judgingMode },
       actorIsParticipant,
     }, "score").allowed;
+
+  const gallery = kioskViewer ? [] : galleryView(await loadGallery(tournament.id, tournament.bannerUrl)).map((g) => ({ src: g.src, thumb: g.thumb, alt: g.alt, width: g.width, height: g.height }));
 
   // "Modo de arbitragem" (lib/displayMode): shown to judges/admins once the
   // event started; correctable by its organizer or an admin until battles begin.
@@ -1631,9 +1635,9 @@ export default async function TournamentDetailPage(
           </h1>
         ) : (
           <header className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden mb-4">
-            {tournament.bannerUrl && (
-              <img src={tournament.bannerUrl} alt="" className="w-full h-32 sm:h-52 object-cover" />
-            )}
+            {/* Gallery: cover first, then the organizer's order; nothing when
+                the event has no image (docs/GALERIA.md). */}
+            {gallery.length > 0 && <TournamentGallery images={gallery} name={tournament.name} />}
             <div className="p-4 sm:p-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">

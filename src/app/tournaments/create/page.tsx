@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Navbar from "@/components/Navbar";
@@ -8,6 +8,7 @@ import CommunityPicker from "@/components/CommunityPicker";
 import { useHomeCommunity } from "@/components/CommunityTheme";
 import DeckTypePicker from "@/components/deck/DeckTypePicker";
 import { DoubleRankingOption } from "@/components/tournament/DoubleRankingPoints";
+import GalleryEditor, { type GalleryPayload } from "@/components/tournament/GalleryEditor";
 
 const FORMATS = [
   {
@@ -51,7 +52,6 @@ export default function CreateTournamentPage() {
     setsToWin: "2",
     pointsToWinSet: "4",
     qualifiers: "8",
-    bannerUrl: "",
     location: "",
     venueName: "",
     address: "",
@@ -67,6 +67,10 @@ export default function CreateTournamentPage() {
   const [day2PointsToWinSet, setDay2PointsToWinSet] = useState("4");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // "Imagens do campeonato": saved with the tournament, never before uploads end.
+  const [gallery, setGallery] = useState<GalleryPayload>([]);
+  const [galleryState, setGalleryState] = useState({ pending: 0, failed: 0 });
+  const onGallery = useCallback((p: GalleryPayload, st: { pending: number; failed: number }) => { setGallery(p); setGalleryState(st); }, []);
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -77,6 +81,8 @@ export default function CreateTournamentPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (galleryState.pending > 0) { setError("Aguarde o envio das imagens terminar antes de salvar."); return; }
+    if (galleryState.failed > 0) { setError("Uma imagem não foi enviada. Toque em “Tentar de novo” ou remova-a antes de salvar."); return; }
     setLoading(true);
 
     const res = await fetch("/api/tournaments", {
@@ -104,7 +110,7 @@ export default function CreateTournamentPage() {
         qualifiers: form.format === "ROUND_ROBIN" ? parseInt(form.qualifiers) : undefined,
         day2SetsToWin: form.format === "ROUND_ROBIN" ? day2SetsToWin : undefined,
         day2PointsToWinSet: form.format === "ROUND_ROBIN" ? day2PointsToWinSet : undefined,
-        bannerUrl: form.bannerUrl || undefined,
+        gallery,
         location: form.location || undefined,
         venueName: form.venueName || undefined,
         address: form.address || undefined,
@@ -339,24 +345,16 @@ export default function CreateTournamentPage() {
             </div>
           </div>
 
+          {/* Gallery: cover (cards) + extra images (details page) */}
+          <div className="bg-card border border-line rounded-xl p-6">
+            <h2 className="text-base font-bold text-white mb-3">Imagens do campeonato</h2>
+            <GalleryEditor initial={[]} onChange={onGallery} />
+          </div>
+
           {/* Location & Registration */}
           <div className="bg-card border border-line rounded-xl p-6">
             <h2 className="text-base font-bold text-white mb-4">Local & Inscrição</h2>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                  Imagem/Banner <span className="text-gray-500 font-normal">(URL, opcional)</span>
-                </label>
-                <input
-                  name="bannerUrl"
-                  type="text"
-                  value={form.bannerUrl}
-                  onChange={handleChange}
-                  placeholder="https://..."
-                  className="w-full bg-field border border-line focus:border-brand-yellow focus:ring-1 focus:ring-brand-yellow rounded-lg px-4 py-2.5 text-white placeholder-gray-500 outline-none transition-colors"
-                />
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1.5">
@@ -572,10 +570,10 @@ export default function CreateTournamentPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || galleryState.pending > 0}
             className="w-full bg-brand-red hover:bg-brand-red-hover disabled:opacity-60 text-white font-black text-lg py-3.5 rounded-xl transition-colors"
           >
-            {loading ? "Criando..." : "🏆 Criar Torneio"}
+            {loading ? "Criando..." : galleryState.pending > 0 ? "Aguardando o envio das imagens…" : "🏆 Criar Torneio"}
           </button>
         </form>
       </main>

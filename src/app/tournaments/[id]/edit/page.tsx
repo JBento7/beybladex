@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { authUrl } from "@/lib/safeRedirect";
 import EditTournamentForm from "./EditTournamentForm";
+import { galleryView, loadGallery } from "@/lib/galleryStore";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,7 @@ export default async function EditTournamentPage(
   if (!canEdit) {
     redirect(`/tournaments/${tournament.id}`);
   }
+  const gallery = galleryView(await loadGallery(tournament.id, tournament.bannerUrl)).map((g) => ({ imageId: g.imageId, url: g.url, thumb: g.thumb, alt: g.alt, isCover: g.isCover }));
 
   return (
     <EditTournamentForm
@@ -84,7 +86,7 @@ export default async function EditTournamentPage(
         setsToWin: tournament.setsToWin,
         pointsToWinSet: tournament.pointsToWinSet,
         qualifiers: tournament.qualifiers,
-        bannerUrl: tournament.bannerUrl,
+        gallery,
         location: tournament.location,
         venueName: tournament.venueName,
         address: tournament.address,

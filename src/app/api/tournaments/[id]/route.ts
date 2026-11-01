@@ -9,6 +9,7 @@ import { hasKnockoutPhase, parseMatchRules } from "@/lib/matchRules";
 import { resolveDoubleRankingPoints } from "@/lib/rankingPoints";
 import { closedMonthError } from "@/lib/monthlyRanking";
 import { deckLabel, parseDeckType, registrationComplete } from "@/lib/deckFormat";
+import { deleteIfUnused, saveGalleryTx } from "@/lib/galleryStore";
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -88,7 +89,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     const {
       name, description, format, maxParticipants, startDate, deckType, prize, arenas,
       eventType, setsToWin, pointsToWinSet, qualifiers,
-      bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
+      gallery, location, venueName, address, entryFee, regulation, registrationDeadline,
       day2SetsToWin, day2PointsToWinSet,
       community,
       isPartnership,
@@ -138,7 +139,6 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       setsToWin: rules.setsToWin,
       pointsToWinSet: rules.pointsToWinSet,
       qualifiers: isSwissFormat(format) && [4, 8, 16].includes(Number(qualifiers)) ? Number(qualifiers) : null,
-      bannerUrl: bannerUrl || null,
       location: location || null,
       venueName: venueName || null,
       address: address || null,
@@ -180,10 +180,27 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     });
     if (closedMsg) return NextResponse.json({ error: closedMsg }, { status: 400 });
 
-    const updated = await prisma.tournament.update({
-      where: { id: params.id },
-      data,
-    });
+    // Fields and gallery in ONE transaction: if the gallery is refused, nothing
+    // changes and the previous gallery/cover stay (lib/galleryStore). The cover
+    // (bannerUrl) is only written by the gallery.
+    class GalleryError extends Error {}
+    let removed: string[] = [];
+    let updated;
+    try {
+      updated = await prisma.$transaction(async (tx) => {
+        const u = await tx.tournament.update({ where: { id: params.id }, data });
+        if (gallery === undefined) return u;
+        const g = await saveGalleryTx(tx, params.id, gallery, tournament.bannerUrl);
+        if (!g.ok) throw new GalleryError(g.error);
+        removed = g.removed;
+        return tx.tournament.findUniqueOrThrow({ where: { id: params.id } });
+      }, { maxWait: 15000, timeout: 30000 });
+    } catch (e) {
+      if (e instanceof GalleryError) return NextResponse.json({ error: e.message }, { status: 400 });
+      throw e;
+    }
+    // Files that left the gallery go only if no other reference uses them.
+    if (removed.length) await deleteIfUnused(removed).catch(() => {});
 
     return NextResponse.json(updated);
   } catch (err) {

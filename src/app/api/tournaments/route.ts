@@ -8,6 +8,7 @@ import { resolveDoubleRankingPoints } from "@/lib/rankingPoints";
 import { closedMonthError } from "@/lib/monthlyRanking";
 import { isSwissFormat } from "@/lib/swiss";
 import { parseDeckType } from "@/lib/deckFormat";
+import { saveGalleryTx } from "@/lib/galleryStore";
 
 // Public summary (no regulation, no drafts, bounded). The paginated list with
 // filters is /api/tournaments/list.
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
     const {
       name, description, format, maxParticipants, startDate, deckType, prize, arenas,
       eventType, isTest, setsToWin, pointsToWinSet, qualifiers,
-      bannerUrl, location, venueName, address, entryFee, regulation, registrationDeadline,
+      gallery, location, venueName, address, entryFee, regulation, registrationDeadline,
       day2SetsToWin, day2PointsToWinSet,
       community,
       isPartnership,
@@ -88,7 +89,13 @@ export async function POST(req: NextRequest) {
     });
     if (closedMsg) return NextResponse.json({ error: closedMsg }, { status: 400 });
 
-    const tournament = await prisma.tournament.create({
+    // The tournament and its gallery are created together: a gallery error
+    // creates nothing (lib/galleryStore).
+    class GalleryError extends Error {}
+    let tournament;
+    try {
+      tournament = await prisma.$transaction(async (tx) => {
+    const created = await tx.tournament.create({
       data: {
         name,
         description: description || null,
@@ -117,7 +124,6 @@ export async function POST(req: NextRequest) {
         day2Date: null,
         day2SetsToWin: rules.knockoutSets,
         day2PointsToWinSet: rules.knockoutPoints,
-        bannerUrl: bannerUrl || null,
         location: location || null,
         venueName: venueName || null,
         address: address || null,
@@ -126,6 +132,16 @@ export async function POST(req: NextRequest) {
         registrationDeadline: registrationDeadline ? new Date(registrationDeadline) : null,
       },
     });
+        if (gallery !== undefined) {
+          const g = await saveGalleryTx(tx, created.id, gallery, null);
+          if (!g.ok) throw new GalleryError(g.error);
+        }
+        return created;
+      }, { maxWait: 15000, timeout: 30000 });
+    } catch (e) {
+      if (e instanceof GalleryError) return NextResponse.json({ error: e.message }, { status: 400 });
+      throw e;
+    }
 
     return NextResponse.json(tournament, { status: 201 });
   } catch (err) {

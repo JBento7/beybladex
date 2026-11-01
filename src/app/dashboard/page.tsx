@@ -17,6 +17,7 @@ import { tierFor } from "@/lib/tiers";
 import { myRegistrationState } from "@/lib/registration";
 import RetryButton from "@/components/RetryButton";
 import type { FinishType } from "@prisma/client";
+import EventCover from "@/components/EventCover";
 
 
 const STATUS_LABELS: Record<string, string> = {
@@ -49,7 +50,7 @@ export default async function DashboardPage() {
           approved: true,
           placement: true,
           createdAt: true,
-          tournament: { select: { id: true, name: true, status: true, isOfficial: true, startDate: true } },
+          tournament: { select: { id: true, name: true, status: true, isOfficial: true, startDate: true, bannerUrl: true, communitySlug: true, isPartnership: true } },
         },
         orderBy: { createdAt: "desc" },
       }),
@@ -266,14 +267,20 @@ export default async function DashboardPage() {
             ) : (
               <ul className="space-y-2">
                 {myRegistrations.slice(0, 4).map((r) => (
-                  <li key={r.id} className="rounded-xl bg-field p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-white">{r.tournament.name}</span>
-                      <span className="text-[11px] text-gray-400">{STATUS_LABELS[r.tournament.status]}</span>
+                  <li key={r.id} className="rounded-xl bg-field p-3 flex gap-3">
+                    {/* Same cover as the tournament cards (16:9, default when none). */}
+                    <div className="w-24 shrink-0 aspect-video rounded-lg overflow-hidden">
+                      <EventCover bannerUrl={r.tournament.bannerUrl} communitySlug={r.tournament.communitySlug} isPartnership={r.tournament.isPartnership} />
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <span className={r.pending ? "text-amber-400 font-semibold" : "text-green-400 font-semibold"}>{r.approval}</span>
-                      <Link href={r.next.href} className="text-brand-yellow hover:underline">{r.next.label} →</Link>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-white">{r.tournament.name}</span>
+                        <span className="text-[11px] text-gray-400">{STATUS_LABELS[r.tournament.status]}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className={r.pending ? "text-amber-400 font-semibold" : "text-green-400 font-semibold"}>{r.approval}</span>
+                        <Link href={r.next.href} className="text-brand-yellow hover:underline">{r.next.label} →</Link>
+                      </div>
                     </div>
                   </li>
                 ))}
