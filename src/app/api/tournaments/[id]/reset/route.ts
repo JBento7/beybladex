@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { resetTestTournament } from "@/lib/testTournamentReset";
 import { auditAdminAction } from "@/lib/adminAudit";
 
 // POST — wipe all matches/results from a test tournament and reopen
@@ -25,31 +25,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json({ error: "Apenas torneios de teste podem ser reiniciados" }, { status: 400 });
     }
 
-    const matches = await prisma.match.findMany({
-      where: { tournamentId: params.id },
-      select: { id: true },
-    });
-    const matchIds = matches.map((m) => m.id);
+    const { matches } = await resetTestTournament(params.id);
 
-    await prisma.$transaction([
-      prisma.matchPoint.deleteMany({ where: { matchId: { in: matchIds } } }),
-      prisma.matchSet.deleteMany({ where: { matchId: { in: matchIds } } }),
-      prisma.match.deleteMany({ where: { tournamentId: params.id } }),
-      prisma.group.deleteMany({ where: { tournamentId: params.id } }),
-      prisma.tournamentJudge.deleteMany({ where: { tournamentId: params.id } }),
-      prisma.tournamentParticipant.updateMany({
-        where: { tournamentId: params.id },
-        data: { totalPoints: 0, wins: 0, losses: 0, rankingPoints: 0, placement: null, groupId: null, finalsSwapUsed: false },
-      }),
-      prisma.tournament.update({
-        where: { id: params.id },
-        // Un-freeze the Swiss round count: the next start re-derives it.
-        // Same for the frozen ranking table: the next finalization freezes it again.
-        data: { status: "REGISTRATION", swissRounds: null, rankingPointsTable: Prisma.DbNull },
-      }),
-    ]);
-
-    await auditAdminAction({ kind: "TEST_TOURNAMENT_RESET", session, tournamentId: params.id, before: { status: tournament.status, matches: matchIds.length } });
+    await auditAdminAction({ kind: "TEST_TOURNAMENT_RESET", session, tournamentId: params.id, before: { status: tournament.status, matches } });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error(err);

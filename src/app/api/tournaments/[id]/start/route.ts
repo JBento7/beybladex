@@ -156,12 +156,17 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           await generateSingleElimination(params.id);
           break;
       }
+      // Never leave an event "Em andamento" without matches (e.g. a stale
+      // round record): treat it as a failed generation and reopen it.
+      const generated = await prisma.match.count({ where: { tournamentId: params.id } });
+      if (generated === 0) throw new Error("Nenhuma partida foi gerada.");
     } catch (genErr) {
       await prisma.tournament.update({
         where: { id: params.id },
         data: { status: "REGISTRATION" },
       });
-      throw genErr;
+      console.error("[start] geração de partidas falhou", genErr);
+      return NextResponse.json({ error: "Não foi possível gerar as partidas. O torneio voltou para inscrições — tente iniciar de novo." }, { status: 500 });
     }
 
     const updated = await prisma.tournament.findUnique({ where: { id: params.id } });
