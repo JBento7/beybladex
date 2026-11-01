@@ -10,6 +10,7 @@ import { usesBattleDeck } from "@/lib/deckFormat";
 import { matchPhaseLabel } from "@/lib/matchLabel";
 import { latestVersions } from "@/lib/layoutStore";
 import { beyPiecesOf, mainBladeName, type BeyLike, type PiecesData } from "@/lib/beyArt";
+import { scoreboardSideOf } from "@/lib/matchSides";
 
 // The telão polls this several times a minute per display, but between points
 // (and while an arena sits idle) the payload is byte-for-byte identical. Tag
@@ -500,6 +501,11 @@ async function getHandler(req: NextRequest) {
   const sideOf = (id: string): "B" | "X" | null => (xId ? (id === xId ? "X" : "B") : null);
   const winnerSide: "p1" | "p2" | null =
     phase === "finished" ? (match.winnerId === leftId ? "p1" : "p2") : null;
+  // Side the WINNER was shown on in the last set played (by player id and the
+  // real side mapping): the winner screen's CX reuses that side's sizes.
+  const winnerScoreboardSide: "L" | "R" | null = phase === "finished" && match.winnerId
+    ? scoreboardSideOf({ player1Id: match.player1Id, player2Id: match.player2Id, xSidePlayerId: xId, maxSets }, match.winnerId, match.sets)
+    : null;
 
   const [player1, player2] = lr(match.player1.bladerName || match.player1.name, match.player2.bladerName || match.player2.name);
   const [p1Avatar, p2Avatar] = lr(match.player1.avatarUrl ?? null, match.player2.avatarUrl ?? null);
@@ -528,6 +534,7 @@ async function getHandler(req: NextRequest) {
     sides: { left: sideOf(leftId), right: sideOf(leftId === match.player1Id ? match.player2Id : match.player1Id) },
     queue: queueAfter,
     winnerSide,
+    winnerScoreboardSide,
     tournamentName: match.tournament.name,
     location: match.tournament.venueName || match.tournament.location || null,
     matchNumber,

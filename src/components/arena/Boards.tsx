@@ -6,7 +6,7 @@
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand in new code here.
 import { createContext, useContext, useState } from "react";
-import { beyFieldKeys, fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type FieldDef, type Layout } from "@/lib/arenaLayout";
+import { beyFieldKeys, cxBoxes, fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type FieldDef, type Layout } from "@/lib/arenaLayout";
 import { setLabel } from "@/lib/matchLabel";
 
 // Fields disabled in the layout editor are hidden from the placar via this ctx.
@@ -83,6 +83,8 @@ export type ArenaData = {
   phase?: string;
   sides?: { left: "B" | "X" | null; right: "B" | "X" | null };
   winnerSide?: "p1" | "p2" | null;
+  /** Side ("L"/"R") the winner was shown on in the last set (CX reference). */
+  winnerScoreboardSide?: "L" | "R" | null;
   tournamentName?: string;
   location?: string | null;
   matchNumber?: number;
@@ -107,7 +109,12 @@ const outerStyle = (frame: Frame): React.CSSProperties =>
     : { position: "relative", width: "100%", background: "#000" };
 const boardWidth = (frame: Frame) => (frame === "viewport" ? "min(100vw, calc(100vh * 1672 / 941))" : "100%");
 
-export function WinnerScreen({ match, winnerSide, layout, bg, frame = "viewport" }: { match: Match; winnerSide: "p1" | "p2"; layout: Layout | null; bg: string; frame?: Frame }) {
+export function WinnerScreen({ match, winnerSide, layout, bg, frame = "viewport", sbLayout = null, cxSide }: {
+  match: Match; winnerSide: "p1" | "p2"; layout: Layout | null; bg: string; frame?: Frame;
+  /** Scoreboard layout (CX sizes/assembly) and the side the winner was shown
+   *  on there; defaults to the side of `winnerSide` on the left/right board. */
+  sbLayout?: Layout | null; cxSide?: "L" | "R";
+}) {
   // Elements switched off in the editor (eye) are not drawn.
   const hiddenW = useContext(HiddenCtx);
   const isP1 = winnerSide === "p1";
@@ -160,7 +167,7 @@ export function WinnerScreen({ match, winnerSide, layout, bg, frame = "viewport"
             each in its own box (editor "Vencedor" → Beyblade 1/2/3). */}
         {deckKeys.map((k, i) => {
           const slot = deck[i];
-          return slot ? <BeyComposite key={k} defs={WINNER_DEFAULTS} layout={layout} spot={k} img={slot.img} pieces={slot.pieces} /> : null;
+          return slot ? <BeyComposite key={k} defs={WINNER_DEFAULTS} layout={layout} spot={k} img={slot.img} pieces={slot.pieces} cx={{ sbLayout, side: cxSide ?? (isP1 ? "L" : "R") }} /> : null;
         })}
 
         {/* Finishes made by the winner (per set) — inside the box */}
@@ -361,7 +368,12 @@ function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src
  * contain, never stretched), drawn back to front. Telão and editor preview
  * use this same component.
  */
-export function BeyComposite({ defs, layout, spot, img, pieces }: { defs: Record<string, FieldDef>; layout: Layout | null; spot: string; img: string | null; pieces: BeyPieces }) {
+export function BeyComposite({ defs, layout, spot, img, pieces, cx }: {
+  defs: Record<string, FieldDef>; layout: Layout | null; spot: string; img: string | null; pieces: BeyPieces;
+  /** Winner screen: the scoreboard layout and the side the player was shown
+   *  on there — a CX reuses that side's piece sizes and assembly (cxBoxes). */
+  cx?: { sbLayout: Layout | null; side: "L" | "R" };
+}) {
   const hidden = useContext(HiddenCtx);
   const keys = beyFieldKeys(spot);
   // Drawn back to front in DOM order (no z-index: the rest of the board keeps
@@ -377,10 +389,24 @@ export function BeyComposite({ defs, layout, spot, img, pieces }: { defs: Record
       const [a, m, o, l] = keys.CX_EXPAND;
       return <>{piece(a, pieces.assist)}{piece(m, pieces.metal)}{piece(o, pieces.over)}{piece(l, pieces.lock)}</>;
     }
-    const [a, m, l] = keys.CX;
-    return <>{piece(a, pieces.assist)}{piece(m, pieces.metal)}{piece(l, pieces.lock)}</>;
+    // CX: the SAME assembly on both screens (lib/arenaLayout cxBoxes) —
+    // scoreboard: as configured; winner: same sizes/offsets, moved as one set.
+    const src = { assist: pieces.assist, metal: pieces.metal, lock: pieces.lock };
+    if (/^deck[123]$/.test(spot)) {
+      const group = keys.CX[0];
+      if (hidden.has(group)) return null;
+      const c = fieldStyle(defs, group, layout);
+      return <>{cxBoxes(cx?.sbLayout ?? null, cx?.side ?? "L", { x: c.x, y: c.y }).map((b) => <CxPieceImg key={b.piece} box={b} src={src[b.piece]} />)}</>;
+    }
+    return <>{cxBoxes(layout, spot as "L" | "R").map((b) => (hidden.has(b.key) ? null : <CxPieceImg key={b.piece} box={b} src={src[b.piece]} />))}</>;
   }
   return piece(keys.BXUX[0], img);
+}
+
+function CxPieceImg({ box, src }: { box: { x: number; y: number; w: number; h: number }; src: string | null }) {
+  if (!src) return null;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" onError={fallbackBey} style={{ position: "absolute", left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, objectFit: "contain" }} />;
 }
 
 export function Scoreboard({ arena, data, match, build, layout, bg, customFields, p2p, onTest, frame = "viewport" }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; customFields: CustomFld[]; p2p?: { matchId: string; version: number; byId: Record<string, number>; setsById: Record<string, number>; at: number } | null; onTest: () => void; frame?: Frame }) {

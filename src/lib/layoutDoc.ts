@@ -6,7 +6,7 @@
 
 export type Field = { x: number; y: number; w?: number; h?: number; fs?: number; ff?: string };
 export type FieldKind = "text" | "img" | "pipsV" | "pipsH";
-export type FieldDefLike = Field & { kind: FieldKind; label: string; inherit?: string };
+export type FieldDefLike = Field & { kind: FieldKind; label: string; inherit?: string; inheritMode?: "center"; group?: "cx" };
 export type Defs = Record<string, FieldDefLike>;
 export type FontDef = { family: string; kind: "upload" | "google"; src?: string };
 export type CustomMeta = { key: string; label: string; type: "text" | "int"; value: string };
@@ -182,7 +182,7 @@ export function fromLegacy(screen: Screen, legacy: { layout?: unknown; hidden?: 
   const own: Record<string, Field> = {};
   for (const k of Object.keys(defs)) {
     if (!saved[k] || typeof saved[k] !== "object") continue;
-    const { kind: _k, label: _l, inherit: _i, ...def } = defs[k];
+    const { kind: _k, label: _l, inherit: _i, inheritMode: _m, group: _g, ...def } = defs[k];
     const merged = normalizeField({ ...def, ...(saved[k] as object) });
     if (merged) own[k] = merged;
   }
@@ -216,8 +216,12 @@ export function completeFields(fields: Record<string, Field>, defs: Defs): Recor
   const out: Record<string, Field> = { ...fields };
   const resolve = (k: string, depth: number): Field => {
     if (out[k]) return out[k];
-    const { kind: _k, label: _l, inherit, ...def } = defs[k];
-    const v = inherit && defs[inherit] && depth < 4 ? { ...resolve(inherit, depth + 1) } : { ...(def as Field) };
+    const { kind: _k, label: _l, inherit, inheritMode, group: _g, ...def } = defs[k];
+    let v: Field;
+    if (inherit && defs[inherit] && depth < 4) {
+      const p = resolve(inherit, depth + 1);
+      v = inheritMode === "center" ? { x: r2(p.x + (p.w ?? 0) / 2), y: r2(p.y + (p.h ?? 0) / 2) } : { ...p };
+    } else v = { ...(def as Field) };
     out[k] = v;
     return v;
   };
@@ -229,8 +233,11 @@ export function completeFields(fields: Record<string, Field>, defs: Defs): Recor
  *  value by inheritance is also hidden when the element it inherits from is
  *  (a hidden "Beyblade 1" keeps all its pieces hidden). */
 export function completeComposition(comp: Composition, defs: Defs): Composition {
-  const fields = completeFields(comp.fields ?? {}, defs);
-  const hidden = [...(comp.hidden ?? [])];
+  // Elements that no longer exist (e.g. the per-piece CX boxes of the winner,
+  // replaced by one CX assembly) are dropped, so a publish never fails on them.
+  const known = (k: string) => !!defs[k] || isCustomKey(k);
+  const fields = completeFields(Object.fromEntries(Object.entries(comp.fields ?? {}).filter(([k]) => known(k))), defs);
+  const hidden = (comp.hidden ?? []).filter(known);
   const rootHidden = (k: string, depth = 0): boolean => {
     if (hidden.includes(k)) return true;
     const p = defs[k]?.inherit;
@@ -239,7 +246,7 @@ export function completeComposition(comp: Composition, defs: Defs): Composition 
   for (const k of Object.keys(defs)) {
     if (!(comp.fields ?? {})[k] && defs[k].inherit && !hidden.includes(k) && rootHidden(k)) hidden.push(k);
   }
-  return { ...comp, fields, hidden };
+  return { ...comp, fields, hidden, locked: (comp.locked ?? []).filter(known), keepRatio: (comp.keepRatio ?? []).filter(known) };
 }
 
 /** Elements whose geometry/font/visibility differ, plus meta changes. */
@@ -341,7 +348,7 @@ export function resizeKeepRatio(orig: Field, newW: number): { w: number; h: numb
 export function restoreDefaults(comp: Composition, defs: Defs): Composition {
   const fields = { ...comp.fields };
   for (const k of Object.keys(defs)) {
-    const { kind: _k, label: _l, inherit: _i, ...def } = defs[k];
+    const { kind: _k, label: _l, inherit: _i, inheritMode: _m, group: _g, ...def } = defs[k];
     fields[k] = { ...(def as Field) };
   }
   return { ...comp, fields, hidden: comp.hidden.filter(isCustomKey), locked: comp.locked.filter(isCustomKey) };

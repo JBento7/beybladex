@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TARGETS, beyFormatOf, pipDots, fontStack, type BeyFormat } from "@/lib/arenaLayout";
+import { TARGETS, beyFormatOf, cxAssembly, cxBoxes, pipDots, fontStack, type BeyFormat } from "@/lib/arenaLayout";
 import { BEY_KINDS, BEY_KIND_LABEL, type BeyExample, type BeyKind } from "@/lib/beyExamples";
 import {
   GROUP_LABEL, SCREEN_LABEL, centered, completeComposition, diffCompositions, emptyHistory, fontsUsed, groupOf, isCustomKey, mirrorField,
@@ -206,7 +206,7 @@ export default function LayoutEditor({
     if (grid) for (let v = 0; v <= 100; v += 5) { xs.push(v); ys.push(v); }
     for (const k of keys) {
       if (k === except || !draft.fields[k]) continue;
-      const f = draft.fields[k], kind = defs[k].kind;
+      const f = draft.fields[k], kind = geomKind(k);
       if (kind === "text") { xs.push(f.x); ys.push(f.y); }
       else { xs.push(f.x, f.x + (f.w ?? 0) / 2, f.x + (f.w ?? 0)); ys.push(f.y, f.y + (f.h ?? 0) / 2, f.y + (f.h ?? 0)); }
     }
@@ -231,7 +231,7 @@ export default function LayoutEditor({
       if (d.mode === "move") {
         let f: Field = { ...d.orig, x: r2(d.orig.x + dx), y: r2(d.orig.y + dy) };
         if (snap) {
-          const s = snapMove(def.kind, f, snapTargets(d.key));
+          const s = snapMove(geomKind(d.key), f, snapTargets(d.key));
           f = { ...f, x: s.x, y: s.y };
           setGuides(s.guides);
         }
@@ -329,6 +329,14 @@ export default function LayoutEditor({
     if (f && spot && f !== formatOfKind(exampleAt(spot))) setExampleAt(spot, f === "CX" ? "CX" : f === "CX_EXPAND" ? "CX_EXPAND" : "BX");
     setSel(k);
   };
+  // CX assembly of the winner screen ("Beyblade N · CX (conjunto)"): only its
+  // CENTRE is edited here; sizes and the piece offsets come from the Placar
+  // (its current draft — what the telão shows once the Placar is applied),
+  // from the side chosen as "Vencedor estava no lado".
+  const isGroup = (k: string) => defs[k]?.group === "cx";
+  const geomKind = (k: string) => (isGroup(k) ? "text" as const : defs[k].kind);
+  const sbFields = docs.scoreboard.draft.fields;
+  const groupAsm = () => cxAssembly(sbFields, sample.winSide);
   const spots: { spot: string; label: string }[] = screen === "winner"
     ? [{ spot: "deck1", label: "Beyblade 1" }, { spot: "deck2", label: "Beyblade 2" }, { spot: "deck3", label: "Beyblade 3" }]
     : [{ spot: "L", label: "Jogador esquerdo" }, { spot: "R", label: "Jogador direito" }];
@@ -698,12 +706,20 @@ export default function LayoutEditor({
                 </select>
               </label>
             ))}
+            {screen === "winner" && (
+              <label className="text-xs text-gray-400">Vencedor estava no lado
+                <select value={sample.winSide} onChange={(e) => setSample((s) => ({ ...s, winSide: e.target.value as "L" | "R" }))} aria-label="Lado do vencedor no placar" className="ml-1 min-h-[44px] bg-field border border-line rounded px-2 text-white text-sm">
+                  <option value="L">Esquerdo</option>
+                  <option value="R">Direito</option>
+                </select>
+              </label>
+            )}
             {screen === "winner" && sample.deck === "solo" && <span className="text-xs text-amber-200">Cenário Solo: só a Beyblade 2 aparece (como no telão).</span>}
           </fieldset>
           {preview && (
             <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
               <label className="text-gray-300">Cenário
-                <select value={scenario} onChange={(e) => { const sc = SCENARIOS.find((x) => x.key === e.target.value); setScenario(e.target.value); setSample((cur) => ({ ...BASE_SAMPLE, name1: profile.name, ...(sc?.patch ?? {}), exL: cur.exL, exR: cur.exR, exDeck: cur.exDeck })); }} className="ml-1 min-h-[44px] bg-field border border-line rounded px-2 text-white">
+                <select value={scenario} onChange={(e) => { const sc = SCENARIOS.find((x) => x.key === e.target.value); setScenario(e.target.value); setSample((cur) => ({ ...BASE_SAMPLE, name1: profile.name, ...(sc?.patch ?? {}), exL: cur.exL, exR: cur.exR, exDeck: cur.exDeck, winSide: cur.winSide })); }} className="ml-1 min-h-[44px] bg-field border border-line rounded px-2 text-white">
                   <option value="">Padrão</option>
                   {SCENARIOS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                 </select>
@@ -718,7 +734,7 @@ export default function LayoutEditor({
           <div className="overflow-auto rounded-lg border border-line bg-black" style={{ maxHeight: fs ? "calc(100vh - 220px)" : "75vh" }}>
             <div style={{ width: `${zoom}%`, minWidth: zoom > 100 ? `${zoom}%` : undefined }}>
               {preview || view.kind !== "draft" ? (
-                <PreviewBoard screen={screen} comp={shown} sbComp={sbComp} bg={bgOf(shown)} customs={previewCustoms} data={pv.data} match={pv.match} />
+                <PreviewBoard screen={screen} comp={shown} sbComp={sbComp} sbFields={sbFields} winSide={sample.winSide} bg={bgOf(shown)} customs={previewCustoms} data={pv.data} match={pv.match} />
               ) : (
                 <div
                   ref={boardRef}
@@ -747,6 +763,24 @@ export default function LayoutEditor({
                           <span style={{ display: "block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{sampleText(k)}</span>
                           {isLocked && <span style={{ position: "absolute", left: -2, top: -14, fontSize: 11 }}>🔒</span>}
                           {handle}
+                        </div>
+                      );
+                    }
+                    if (isGroup(k)) {
+                      // Assembled example CX, same sizes/offsets as the Placar; moves as one.
+                      const a = groupAsm();
+                      const left = f.x - a.w / 2, top = f.y - a.h / 2;
+                      const ex = examples.CX.pieces;
+                      return (
+                        <div key={k} onPointerDown={(e) => startDrag(e, k, "move")} title="Tamanho e montagem herdados do placar principal"
+                          style={{ ...common, left: `${left}%`, top: `${top}%`, width: `${a.w}%`, height: `${a.h}%` }}>
+                          {cxBoxes(sbFields, sample.winSide, { x: f.x, y: f.y }).map((b) => {
+                            const src = ex?.[b.piece];
+                            // eslint-disable-next-line @next/next/no-img-element
+                            return src ? <img key={b.piece} src={src} alt="" draggable={false} style={{ position: "absolute", left: `${((b.x - left) / a.w) * 100}%`, top: `${((b.y - top) / a.h) * 100}%`, width: `${(b.w / a.w) * 100}%`, height: `${(b.h / a.h) * 100}%`, objectFit: "contain", pointerEvents: "none" }} /> : null;
+                          })}
+                          {isSel && <span style={{ position: "absolute", left: 0, bottom: "100%", whiteSpace: "nowrap", fontSize: "0.9cqw", background: "rgba(0,0,0,0.75)", color: "#ffd400", padding: "0 0.3cqw" }}>{def.label} · tamanho herdado do placar</span>}
+                          {isLocked && <span style={{ position: "absolute", left: 2, top: 2, fontSize: 11 }}>🔒</span>}
                         </div>
                       );
                     }
@@ -791,7 +825,15 @@ export default function LayoutEditor({
                 <fieldset disabled={locked(sel!) || preview} className="space-y-2 disabled:opacity-60">
                   <SliderNum label="Posição horizontal (%)" value={selField.x} min={-20} max={120} step={0.1} onLive={(v) => { beginGesture(); liveField(sel!, { x: v }); }} onEnd={endGesture} onCommit={(v) => setField(sel!, { x: v })} />
                   <SliderNum label="Posição vertical (%)" value={selField.y} min={-20} max={120} step={0.1} onLive={(v) => { beginGesture(); liveField(sel!, { y: v }); }} onEnd={endGesture} onCommit={(v) => setField(sel!, { y: v })} />
-                  {selDef.kind !== "text" ? (
+                  {isGroup(sel!) ? (
+                    <>
+                      <p className="rounded border border-brand-yellow/40 bg-brand-yellow/10 px-2 py-1.5 text-xs text-amber-100">
+                        <b>Tamanho e montagem herdados do placar principal</b> (peças CX do lado {sample.winSide === "L" ? "esquerdo" : "direito"}). Aqui só a posição do conjunto (centro) é ajustada; mude os tamanhos no Placar.
+                      </p>
+                      <SliderNum label="Largura (%)" value={Math.round(groupAsm().w * 100) / 100} min={0.5} max={100} step={0.1} disabled onLive={() => {}} onEnd={() => {}} onCommit={() => {}} />
+                      <SliderNum label="Altura (%)" value={Math.round(groupAsm().h * 100) / 100} min={0.5} max={100} step={0.1} disabled onLive={() => {}} onEnd={() => {}} onCommit={() => {}} />
+                    </>
+                  ) : selDef.kind !== "text" ? (
                     <>
                       <SliderNum label="Largura (%)" value={selField.w ?? 10} min={0.5} max={100} step={0.1}
                         onLive={(v) => { beginGesture(); liveField(sel!, selDef.kind === "img" && draft.keepRatio.includes(sel!) ? resizeKeepRatio(selField, v) : { w: v }); }} onEnd={endGesture}
@@ -821,8 +863,8 @@ export default function LayoutEditor({
                     </>
                   )}
                   <div className="grid grid-cols-2 gap-2">
-                    <button className={btnGhost} onClick={() => setField(sel!, centered(selDef.kind, selField, "h"))}>Centralizar horizontalmente</button>
-                    <button className={btnGhost} onClick={() => setField(sel!, centered(selDef.kind, selField, "v"))}>Centralizar verticalmente</button>
+                    <button className={btnGhost} onClick={() => setField(sel!, centered(geomKind(sel!), selField, "h"))}>Centralizar horizontalmente</button>
+                    <button className={btnGhost} onClick={() => setField(sel!, centered(geomKind(sel!), selField, "v"))}>Centralizar verticalmente</button>
                     <button className={btnGhost} disabled={!hasPair} onClick={() => commit((c) => ({ ...c, fields: { ...c.fields, [pair!]: { ...c.fields[sel!], ...mirrorField(selDef.kind, c.fields[sel!]) } } }))}>⇄ Espelhar para o outro lado</button>
                     <button className={btnGhost} disabled={!hasPair} onClick={() => setField(sel!, { y: draft.fields[pair!].y })}>Alinhar altura com o par</button>
                   </div>
@@ -913,14 +955,14 @@ export default function LayoutEditor({
 }
 
 /** Preview with the SAME renderer as the telão (components/arena/Boards). */
-function PreviewBoard({ screen, comp, sbComp, bg, customs, data, match }: {
-  screen: Screen; comp: Composition; sbComp: Composition; bg: string; customs: CustomFld[];
+function PreviewBoard({ screen, comp, sbComp, sbFields, winSide, bg, customs, data, match }: {
+  screen: Screen; comp: Composition; sbComp: Composition; sbFields: Composition["fields"]; winSide: "L" | "R"; bg: string; customs: CustomFld[];
   data: ReturnType<typeof buildPreview>["data"]; match: ReturnType<typeof buildPreview>["match"];
 }) {
   if (screen === "winner") {
     return (
       <HiddenCtx.Provider value={new Set(comp.hidden)}>
-        <WinnerScreen match={match} winnerSide="p1" layout={comp.fields} bg={bg} frame="container" />
+        <WinnerScreen match={match} winnerSide={winSide === "L" ? "p1" : "p2"} layout={comp.fields} bg={bg} frame="container" sbLayout={sbFields} cxSide={winSide} />
       </HiddenCtx.Provider>
     );
   }

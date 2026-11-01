@@ -22,7 +22,14 @@ export function fontStack(ff?: string | null): string {
  *  (saved) position of that other element — new elements added later (e.g.
  *  the CX Expand pieces) start exactly where an existing layout already put
  *  the matching element, so old layouts look the same. */
-export type FieldDef = Field & { kind: FieldKind; label: string; inherit?: string };
+export type FieldDef = Field & {
+  kind: FieldKind; label: string; inherit?: string;
+  /** "center": x/y are the inherited element's CENTER (not its top-left). */
+  inheritMode?: "center";
+  /** "cx": a CX assembly — only its centre is positioned here; sizes and
+   *  piece offsets come from the scoreboard (cxAssembly). */
+  group?: "cx";
+};
 export type Layout = Record<string, Field>;
 
 export const BOARD_W = 1672;
@@ -86,21 +93,24 @@ export const WINNER_DEFAULTS: Record<string, FieldDef> = {
   finishes: { kind: "img", label: "Finishes (caixa)", x: 9.5, y: 72.5, w: 25.5, h: 16.5 },
 };
 
-/** One deck position of the winner screen: the BX/UX image (`deckN`, the key
- *  layouts already use) plus the CX and CX Expand pieces, which start in the
- *  same box (inherit) until positioned on their own. */
+/** One deck position of the winner screen:
+ *  - `deckN`: the BX/UX image (the key layouts already use);
+ *  - `deckNCx`: the CX assembly as ONE element — only its centre is set here
+ *    (default: centre of the `deckN` box); sizes, proportions and the offsets
+ *    between the pieces are the scoreboard's (cxAssembly), so it is never
+ *    configured twice;
+ *  - CX Expand: its own 4 pieces (its structure differs), starting in the
+ *    `deckN` box until positioned. */
 function deckSlotDefs(n: 1 | 2 | 3, x: number): Record<string, FieldDef> {
   const box = { x, y: 56.6, w: 15, h: 26.7 };
   const d = `deck${n}`, L = `Beyblade ${n}`;
   return {
     [d]: { kind: "img", label: `${L} · BX/UX`, ...box },
-    [`${d}CxAssist`]: { kind: "img", label: `${L} · CX · Assist Blade`, ...box, inherit: d },
-    [`${d}CxMetal`]: { kind: "img", label: `${L} · CX · Main Blade`, ...box, inherit: d },
-    [`${d}CxLock`]: { kind: "img", label: `${L} · CX · Lock Chip`, ...box, inherit: d },
-    [`${d}CxeAssist`]: { kind: "img", label: `${L} · CX Expand · Assist Blade`, ...box, inherit: `${d}CxAssist` },
-    [`${d}CxeMetal`]: { kind: "img", label: `${L} · CX Expand · Main Blade`, ...box, inherit: `${d}CxMetal` },
-    [`${d}CxeOver`]: { kind: "img", label: `${L} · CX Expand · Over Blade`, ...box, inherit: `${d}CxMetal` },
-    [`${d}CxeLock`]: { kind: "img", label: `${L} · CX Expand · Lock Chip`, ...box, inherit: `${d}CxLock` },
+    [`${d}Cx`]: { kind: "img", label: `${L} · CX (conjunto)`, x: x + box.w / 2, y: box.y + box.h / 2, inherit: d, inheritMode: "center", group: "cx" },
+    [`${d}CxeAssist`]: { kind: "img", label: `${L} · CX Expand · Assist Blade`, ...box, inherit: d },
+    [`${d}CxeMetal`]: { kind: "img", label: `${L} · CX Expand · Main Blade`, ...box, inherit: d },
+    [`${d}CxeOver`]: { kind: "img", label: `${L} · CX Expand · Over Blade`, ...box, inherit: d },
+    [`${d}CxeLock`]: { kind: "img", label: `${L} · CX Expand · Lock Chip`, ...box, inherit: d },
   };
 }
 
@@ -112,7 +122,7 @@ export function beyFieldKeys(spot: string): Record<BeyFormat, string[]> {
   if (/^deck[123]$/.test(spot)) {
     return {
       BXUX: [spot],
-      CX: [`${spot}CxAssist`, `${spot}CxMetal`, `${spot}CxLock`],
+      CX: [`${spot}Cx`],
       CX_EXPAND: [`${spot}CxeAssist`, `${spot}CxeMetal`, `${spot}CxeOver`, `${spot}CxeLock`],
     };
   }
@@ -126,7 +136,7 @@ export function beyFieldKeys(spot: string): Record<BeyFormat, string[]> {
 export function beyFormatOf(key: string): BeyFormat | null {
   if (/^(beyImg[LR]|deck[123])$/.test(key)) return "BXUX";
   if (/^(cxe(Assist|Metal|Over|Lock)[LR]|deck[123]Cxe(Assist|Metal|Over|Lock))$/.test(key)) return "CX_EXPAND";
-  if (/^(cx(Assist|Metal|Lock)[LR]|deck[123]Cx(Assist|Metal|Lock))$/.test(key)) return "CX";
+  if (/^(cx(Assist|Metal|Lock)[LR]|deck[123]Cx)$/.test(key)) return "CX";
   return null;
 }
 
@@ -156,8 +166,42 @@ export function fieldStyle(defs: Record<string, FieldDef>, key: string, saved: L
   const ov = saved?.[key];
   if (ov) return { ...def, ...ov };
   if (def?.inherit && depth < 4 && defs[def.inherit]) {
-    const { kind: _k, label: _l, inherit: _i, ...parent } = fieldStyle(defs, def.inherit, saved, depth + 1);
+    const { kind: _k, label: _l, inherit: _i, inheritMode: _m, group: _g, ...parent } = fieldStyle(defs, def.inherit, saved, depth + 1);
+    if (def.inheritMode === "center") return { ...def, x: parent.x + (parent.w ?? 0) / 2, y: parent.y + (parent.h ?? 0) / 2 };
     return { ...def, ...parent };
   }
   return def;
+}
+
+// ── CX assembly (shared by the scoreboard and the winner screen) ──
+// Both boards are 1672×941, so sizes in % mean the same on both.
+export const CX_PIECES = ["assist", "metal", "lock"] as const; // back → front
+export type CxPiece = (typeof CX_PIECES)[number];
+const CX_KEY: Record<CxPiece, string> = { assist: "cxAssist", metal: "cxMetal", lock: "cxLock" };
+export type PieceBox = { piece: CxPiece; key: string; x: number; y: number; w: number; h: number };
+
+/** The CX pieces of one scoreboard side as configured there (saved or
+ *  default): absolute boxes, the bounding box and its centre. */
+export function cxAssembly(sbLayout: Layout | null | undefined, side: "L" | "R") {
+  const boxes: PieceBox[] = CX_PIECES.map((piece) => {
+    const key = `${CX_KEY[piece]}${side}`;
+    const f = fieldStyle(SCOREBOARD_DEFAULTS, key, sbLayout);
+    return { piece, key, x: f.x, y: f.y, w: f.w ?? 12.5, h: f.h ?? 22.2 };
+  });
+  const minX = Math.min(...boxes.map((b) => b.x)), minY = Math.min(...boxes.map((b) => b.y));
+  const maxX = Math.max(...boxes.map((b) => b.x + b.w)), maxY = Math.max(...boxes.map((b) => b.y + b.h));
+  return { boxes, w: maxX - minX, h: maxY - minY, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+}
+
+/**
+ * Boxes of the CX pieces to draw. Without `center`: exactly where the
+ * scoreboard puts them. With `center` (winner screen): the SAME sizes and
+ * the same offsets between the pieces, the whole assembly moved so that its
+ * centre lands on `center` — never the scoreboard's absolute coordinates.
+ */
+export function cxBoxes(sbLayout: Layout | null | undefined, side: "L" | "R", center?: { x: number; y: number }): PieceBox[] {
+  const a = cxAssembly(sbLayout, side);
+  if (!center) return a.boxes;
+  const dx = center.x - a.cx, dy = center.y - a.cy;
+  return a.boxes.map((b) => ({ ...b, x: b.x + dx, y: b.y + dy }));
 }

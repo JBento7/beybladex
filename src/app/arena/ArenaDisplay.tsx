@@ -897,6 +897,11 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
           }
           layout={winnerLayout}
           bg={winnerBg}
+          // CX on the winner screen: sizes/assembly of the published scoreboard,
+          // from the side the winner was shown on (by id; local-link wins
+          // without server data fall back to the winner's current side).
+          sbLayout={layout}
+          cxSide={data?.status === "finished" && data.winnerScoreboardSide ? data.winnerScoreboardSide : undefined}
         />
         </HiddenCtx.Provider>
       ) : data?.queue && data.queue.length > 0 && (!match || matchOver) ? (

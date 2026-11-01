@@ -23,12 +23,14 @@ export type Sample = {
   exL: BeyKind;
   exR: BeyKind;
   exDeck: [BeyKind, BeyKind, BeyKind];
+  /** Side the winner was shown on in the Placar (its CX sizes are reused). */
+  winSide: "L" | "R";
 };
 
 export const BASE_SAMPLE: Sample = {
   name1: "JOGADOR", name2: "ADVERSÁRIO", photos: true, score1: 3, score2: 1, sets1: 1, sets2: 0, setsToWin: 2,
   deck: "3on3", finishes: "variados", bey1: "", bey2: "", event: "Campeonato LBL", phase: "Suíço — Rodada 1",
-  exL: "BX", exR: "CX", exDeck: ["BX", "CX", "CX_EXPAND"],
+  exL: "BX", exR: "CX", exDeck: ["BX", "CX", "CX_EXPAND"], winSide: "L",
 };
 
 export const SCENARIOS: { key: string; label: string; patch: Partial<Sample> }[] = [

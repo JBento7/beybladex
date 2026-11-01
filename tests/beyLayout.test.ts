@@ -4,7 +4,8 @@
 // pieces of a player's bey (telão).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, beyFieldKeys, beyFormatOf, fieldStyle } from "../src/lib/arenaLayout.ts";
+import { SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, beyFieldKeys, beyFormatOf, cxAssembly, cxBoxes, fieldStyle } from "../src/lib/arenaLayout.ts";
+import { leftPlayerId, scoreboardSideOf } from "../src/lib/matchSides.ts";
 import { completeComposition, fromLegacy, validateComposition } from "../src/lib/layoutDoc.ts";
 import { buildExamples, pieceMarker } from "../src/lib/beyExamples.ts";
 import { beyPiecesOf, mainBladeName } from "../src/lib/beyArt.ts";
@@ -17,7 +18,8 @@ test("each format has its own elements per spot (CX ≠ CX Expand)", () => {
   for (const spot of ["deck1", "deck2", "deck3"]) for (const k of Object.values(beyFieldKeys(spot)).flat()) assert.ok(WINNER_DEFAULTS[k], k);
   for (const spot of ["L", "R"]) for (const k of Object.values(beyFieldKeys(spot)).flat()) assert.ok(SCOREBOARD_DEFAULTS[k], k);
   assert.equal(beyFormatOf("deck1"), "BXUX");
-  assert.equal(beyFormatOf("deck1CxLock"), "CX");
+  assert.equal(beyFormatOf("deck1Cx"), "CX");
+  assert.deepEqual(beyFieldKeys("deck1").CX, ["deck1Cx"], "winner CX = one assembly element");
   assert.equal(beyFormatOf("deck1CxeLock"), "CX_EXPAND");
   assert.equal(beyFormatOf("cxeOverL"), "CX_EXPAND");
   assert.equal(beyFormatOf("photo"), null);
@@ -27,14 +29,15 @@ test("each format has its own elements per spot (CX ≠ CX Expand)", () => {
 test("old layouts: new pieces start where the existing element already is (telão and editor)", () => {
   // A winner layout from before: Beyblade 1 moved, Beyblade 2 hidden.
   const saved = { deck1: { x: 30, y: 50, w: 20, h: 30 } };
-  assert.deepEqual(
-    [fieldStyle(WINNER_DEFAULTS, "deck1CxLock", saved).x, fieldStyle(WINNER_DEFAULTS, "deck1CxeOver", saved).w],
-    [30, 20], "telão: CX and CX Expand pieces follow the saved Beyblade 1 box");
+  const g = fieldStyle(WINNER_DEFAULTS, "deck1Cx", saved);
+  assert.deepEqual([g.x, g.y], [40, 65], "CX assembly centred in the saved Beyblade 1 box");
+  assert.equal(fieldStyle(WINNER_DEFAULTS, "deck1CxeOver", saved).w, 20, "CX Expand pieces follow the box");
   assert.equal(fieldStyle(WINNER_DEFAULTS, "deck1", saved).x, 30, "BX/UX position untouched");
   const c = fromLegacy("winner", { layout: saved, hidden: ["deck2"] }, WINNER_DEFAULTS);
-  assert.deepEqual(c.fields.deck1CxeLock, { x: 30, y: 50, w: 20, h: 30 }, "editor gets the same inherited values");
-  assert.ok(c.hidden.includes("deck2CxLock") && c.hidden.includes("deck2CxeOver"), "a hidden position keeps its pieces hidden");
-  assert.ok(!c.hidden.includes("deck1CxLock"));
+  assert.deepEqual(c.fields.deck1Cx, { x: 40, y: 65 }, "editor gets the same inherited centre");
+  assert.deepEqual(c.fields.deck1CxeLock, { x: 30, y: 50, w: 20, h: 30 });
+  assert.ok(c.hidden.includes("deck2Cx") && c.hidden.includes("deck2CxeOver"), "a hidden position keeps its pieces hidden");
+  assert.ok(!c.hidden.includes("deck1Cx"));
   assert.equal(validateComposition("winner", c, WINNER_DEFAULTS).ok, true, "new elements persist in the winner layout");
   // Scoreboard: CX Expand follows the CX pieces (over blade follows the main blade).
   const sb = { cxMetalL: { x: 5, y: 60, w: 10, h: 18 } };
@@ -43,8 +46,12 @@ test("old layouts: new pieces start where the existing element already is (telã
   const old = { fields: { deck1: { x: 30, y: 50, w: 20, h: 30 } }, hidden: [], customs: [], bg: null, fonts: [], locked: [], keepRatio: [] };
   const done = completeComposition(old, WINNER_DEFAULTS);
   assert.deepEqual(done.fields.deck1CxeAssist, { x: 30, y: 50, w: 20, h: 30 });
-  // Once edited on its own, a piece keeps its own value.
-  assert.equal(fieldStyle(WINNER_DEFAULTS, "deck1CxLock", { ...saved, deck1CxLock: { x: 33, y: 52, w: 8, h: 8 } }).w, 8);
+  // Elements that no longer exist (per-piece CX boxes of the previous editor) are dropped.
+  const stale = completeComposition({ ...old, fields: { ...old.fields, deck1CxLock: { x: 1, y: 1, w: 1, h: 1 } }, hidden: ["deck1CxLock"], keepRatio: ["deck1CxLock"] }, WINNER_DEFAULTS);
+  assert.ok(!stale.fields.deck1CxLock && !stale.hidden.includes("deck1CxLock") && !stale.keepRatio.includes("deck1CxLock"));
+  assert.equal(validateComposition("winner", stale, WINNER_DEFAULTS).ok, true, "publishable");
+  // Once moved on its own, the assembly keeps its own centre.
+  assert.equal(fieldStyle(WINNER_DEFAULTS, "deck1Cx", { ...saved, deck1Cx: { x: 55, y: 70 } }).x, 55);
 });
 
 const cat = (line: string, category: string, name: string, imageUrl: string | null = `https://img/${line}-${category}-${name}.png`) => ({ line, category, name, imageUrl });
@@ -95,4 +102,41 @@ test("telão (real beys): format decides the pieces; only the player's parts are
   assert.equal(await beyPiecesOf({ beyLine: "CX" }, async () => null), null, "no real image → absence handling, no demo image");
   assert.equal(mainBladeName({ beyLine: "CX_EXPAND", overBlade: "Might", metalBlade: "Arc" }), "Might");
   assert.equal(mainBladeName({ beyLine: "UX", blade: "Wizard Rod" }), "Wizard Rod");
+});
+
+test("CX on the winner reuses the scoreboard sizes and assembly, moved as one set", () => {
+  const sb = { cxAssistR: { x: 70, y: 50, w: 20, h: 30 }, cxMetalR: { x: 72, y: 52, w: 16, h: 24 }, cxLockR: { x: 78, y: 61, w: 4, h: 6 } };
+  const board = cxBoxes(sb, "R");
+  assert.deepEqual(board.map((b) => [b.piece, b.x, b.y, b.w, b.h]), [["assist", 70, 50, 20, 30], ["metal", 72, 52, 16, 24], ["lock", 78, 61, 4, 6]], "scoreboard: as configured, back → front");
+  const a = cxAssembly(sb, "R");
+  assert.deepEqual([a.w, a.h, a.cx, a.cy], [20, 30, 80, 65]);
+  const win = cxBoxes(sb, "R", { x: 40, y: 70 });
+  for (let i = 0; i < 3; i++) {
+    assert.equal(win[i].w, board[i].w, "same width");
+    assert.equal(win[i].h, board[i].h, "same height (same proportion)");
+    assert.ok(Math.abs((win[i].x - win[0].x) - (board[i].x - board[0].x)) < 1e-9, "same horizontal offset between pieces");
+    assert.ok(Math.abs((win[i].y - win[0].y) - (board[i].y - board[0].y)) < 1e-9, "same vertical offset");
+  }
+  assert.deepEqual([win[0].x, win[0].y], [30, 55], "assembly centred where the winner layout says — not the scoreboard coordinates");
+  // Two CX positions: same sizes, independent positions.
+  const p2 = cxBoxes(sb, "R", { x: 65, y: 70 });
+  assert.equal(p2[1].w, win[1].w);
+  assert.equal(p2[0].x - win[0].x, 25);
+  // The LEFT side's config is a different reference.
+  assert.notDeepEqual(cxBoxes(sb, "L", { x: 40, y: 70 }).map((b) => b.w), win.map((b) => b.w));
+  // No custom config: scoreboard defaults.
+  assert.equal(cxBoxes(null, "L", { x: 50, y: 50 })[0].w, SCOREBOARD_DEFAULTS.cxAssistL.w);
+  // A new scoreboard size is reflected (nothing copied into the winner layout).
+  assert.equal(cxBoxes({ ...sb, cxMetalR: { ...sb.cxMetalR, w: 18 } }, "R", { x: 40, y: 70 })[1].w, 18);
+});
+
+test("reference side: by player id and the real side mapping (sides swap every set)", () => {
+  const m = { player1Id: "p1", player2Id: "p2", xSidePlayerId: "p1", maxSets: 3 };
+  assert.equal(leftPlayerId(m, 1), "p2", "B side (p2) on the left in set 1");
+  assert.equal(leftPlayerId(m, 2), "p1", "swapped in set 2");
+  assert.equal(scoreboardSideOf(m, "p1", [{ setNumber: 1 }]), "R", "winner p1 was on the right");
+  assert.equal(scoreboardSideOf(m, "p1", [{ setNumber: 1 }, { setNumber: 2 }]), "L", "last set played decides (set 2: swapped)");
+  assert.equal(scoreboardSideOf(m, "p2", [{ setNumber: 1 }, { setNumber: 2 }, { setNumber: 3 }]), "L");
+  assert.equal(scoreboardSideOf({ ...m, maxSets: 1 }, "p1", [{ setNumber: 1 }]), "R", "single set: no swap");
+  assert.equal(scoreboardSideOf({ ...m, xSidePlayerId: null }, "p2", []), "R", "no sides chosen: player 1 left");
 });
