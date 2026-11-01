@@ -152,7 +152,8 @@ export default function GalleryEditor({
   return (
     <div className="space-y-3">
       <ul className="text-xs text-gray-400 space-y-1">
-        <li><b className="text-gray-200">Capa:</b> aparece nos cards do torneio. Nos cards o formato é fixo (16:9), então as bordas da capa podem ser cortadas.</li>
+        <li><b className="text-gray-200">Capa:</b> aparece nos cards do torneio.</li>
+        <li><b className="text-gray-200">Tamanho recomendado: 1500 × 900 px</b> (proporção 5:3). A área do banner é sempre 5:3: a imagem aparece inteira, sem cortes; se tiver outra proporção, o espaço que sobra fica com a cor do card.</li>
         <li><b className="text-gray-200">Imagens adicionais:</b> aparecem na página de detalhes, inteiras e na ordem abaixo (a capa vem primeiro).</li>
         <li>JPEG, PNG ou WebP, até 5 MB cada, no máximo {GALLERY_MAX_IMAGES} imagens. Informações como data, local e valor continuam nos campos de texto.</li>
       </ul>
@@ -161,7 +162,7 @@ export default function GalleryEditor({
         <div>
           <p className="text-xs text-gray-400 mb-1">Como a capa aparece nos cards:</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={coverEntry.thumb} alt="" className="w-full max-w-xs aspect-video object-cover rounded-lg border border-line bg-field" />
+          <img src={coverEntry.thumb} alt="" className="w-full max-w-xs aspect-[5/3] object-contain rounded-lg border border-line bg-card" />
         </div>
       )}
 

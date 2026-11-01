@@ -6,7 +6,8 @@ import { formatEventDate, formatLabel, formatMoney } from "@/lib/format";
 import type { FeaturedEvent } from "@/lib/homeData";
 
 // Card of one active event (a slide of the home carousel, or the only one).
-// Desktop: image ~45% | info ~55%. Phone: 16:9 image above the info.
+// Desktop: image ~45% | info ~55%. Phone: image above the info. The banner is
+// always 5:3 with the whole image (contain) on the card's background.
 // Only real data: no capacity bar without a configured limit, no made-up date.
 // No hooks: rendered by the server page or by the carousel (client).
 export default function FeaturedTournament({
@@ -46,7 +47,7 @@ export default function FeaturedTournament({
 
   return (
     <article aria-labelledby={headingId} className={`rounded-card border border-line bg-card shadow-card overflow-hidden md:grid md:grid-cols-[45fr_55fr] ${className}`}>
-      <div className="relative aspect-video md:aspect-auto md:min-h-[320px] bg-field">
+      <div className="relative aspect-[5/3] md:self-center">
         {cover !== "none" && (
           <div className="absolute inset-0">
             <EventCover bannerUrl={event.bannerUrl} communitySlug={event.communitySlug} isPartnership={event.isPartnership} priority={cover === "priority"} />

@@ -280,7 +280,8 @@ function TournamentCard({ t, onOpen }: { t: Tournament; onOpen: () => void }) {
       : null;
   return (
     <li className="flex flex-col rounded-card border border-line bg-card shadow-card overflow-hidden min-w-0">
-      <div className="relative aspect-video bg-field">
+      {/* Banner 5:3, whole image on the card background (EventCover). */}
+      <div className="relative aspect-[5/3]">
         <div className="absolute inset-0">
           <EventCover bannerUrl={t.bannerUrl} communitySlug={t.communitySlug} isPartnership={t.isPartnership} />
         </div>

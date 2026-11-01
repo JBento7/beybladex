@@ -20,7 +20,8 @@ A seção **"Imagens do campeonato"** aparece nos formulários de criação e de
   - substituir;
   - remover;
   - descrição para leitores de tela.
-- **Prévia da capa** no formato dos cards (16:9). O formulário avisa que as bordas podem ser cortadas nesse formato.
+- **Prévia da capa** na área do banner (5:3). O formulário informa "Tamanho recomendado: 1500 × 900 px".
+- **Área do banner:** sempre 5:3 (`aspect-ratio: 5 / 3`), no desktop e no celular, nos cards e na página de detalhes. A imagem aparece inteira (`object-fit: contain`), sem cortes nem distorção, e o espaço que sobra fica com a cor de fundo do card.
 - **Quando é gravada:** a galeria é salva junto com o torneio, na mesma transação. Se o salvamento falhar, a galeria e a capa anteriores ficam como estavam.
 - **Fora do formulário:** um envio sozinho não altera nenhum torneio.
 
@@ -29,7 +30,7 @@ A seção **"Imagens do campeonato"** aparece nos formulários de criação e de
 ## 2. Página de detalhes (`components/tournament/TournamentGallery.tsx`)
 
 - **Ordem:** a capa primeiro, depois as demais na ordem do organizador.
-- **Leitura:** quadro fixo com fundo neutro. Cada imagem aparece **inteira** (`object-contain`), na proporção original, sem cortar textos.
+- **Leitura:** quadro fixo 5:3 com a cor de fundo do card. Cada imagem aparece **inteira** (`object-contain`), na proporção original, sem cortar textos.
   - O conteúdo abaixo não se move ao trocar de imagem.
   - Data, local, valor e inscrição continuam em texto na página.
 - **Navegação:**
@@ -95,5 +96,4 @@ O projeto não usa Supabase Storage. Os envios existentes guardavam a imagem no 
 ## 6. Limitações
 
 - **Só antes do início:** a galeria é editada no formulário de edição, como os demais campos.
-- **Corte da capa nos cards:** os cards usam formato 16:9 com corte. O formulário mostra a prévia.
 - **Imagens dentro do banco:** as imagens ficam no banco (como antes). Uma galeria cheia ocupa cerca de 3 MB a 25 MB no banco.

@@ -5,7 +5,9 @@ import { Trophy } from "lucide-react";
 import { findCommunity } from "@/lib/communities";
 
 // Cover of an event card, in this order of preference:
-//   1. the event's own image (as uploaded — never altered),
+//   1. the event's own image (as uploaded — never altered), shown WHOLE
+//      (object-fit: contain) in the 5:3 banner frame; leftover space shows
+//      the card's background (the frame has none of its own),
 //   2. the default cover of the league the event belongs to,
 //   3. a neutral platform cover (partnerships / unknown league).
 // The generated covers carry only identity (logo + graphic): name, date and
@@ -35,10 +37,10 @@ export default function EventCover({
         loading={priority ? "eager" : "lazy"}
         fetchPriority={priority ? "high" : undefined}
         decoding="async"
-        width={1600}
+        width={1500}
         height={900}
         onError={() => setFailed(true)}
-        className={`w-full h-full object-cover bg-field ${className}`}
+        className={`w-full h-full object-contain ${className}`}
       />
     );
   }

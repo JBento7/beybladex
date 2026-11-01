@@ -42,11 +42,12 @@ export default function TournamentGallery({ images, name }: { images: GalleryIma
       role={many ? "region" : undefined}
       aria-roledescription={many ? "carrossel" : undefined}
       aria-label={many ? `Imagens do ${name}` : undefined}
-      className="relative bg-[#141414]"
+      className="relative"
       onKeyDown={(e) => { if (!many) return; if (e.key === "ArrowLeft") { e.preventDefault(); go(-1); } else if (e.key === "ArrowRight") { e.preventDefault(); go(1); } }}
     >
-      {/* Fixed frame: switching slides never moves the content below. */}
-      <div className="relative w-full aspect-[4/3] sm:aspect-[16/9] max-h-[70vh]" onPointerDown={onDown} onPointerUp={onUp} style={{ touchAction: "pan-y" }}>
+      {/* Fixed 5:3 frame (desktop and phone): switching slides never moves the
+          content below; each image is whole (contain) on the card's background. */}
+      <div className="relative w-full aspect-[5/3]" onPointerDown={onDown} onPointerUp={onUp} style={{ touchAction: "pan-y" }}>
         {images.map((img, i) => {
           // Only the current slide and its neighbors are mounted (others load on demand).
           const near = i === index || i === wrapIndex(index + 1, n) || i === wrapIndex(index - 1, n);
