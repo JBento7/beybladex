@@ -1,7 +1,8 @@
 // Sample data for the layout preview (docs/EDITOR-LAYOUT.md §6). Builds the
 // same objects the telão receives from /api/arena, from editable values —
 // nothing here reads or writes real profiles, matches or events.
-import type { ArenaData, FinishCounts, Match } from "@/components/arena/Boards";
+import type { ArenaData, DeckSlot, FinishCounts, Match } from "@/components/arena/Boards";
+import type { BeyExample, BeyKind } from "@/lib/beyExamples";
 
 export type Sample = {
   name1: string;
@@ -18,11 +19,16 @@ export type Sample = {
   bey2: string;
   event: string;
   phase: string;
+  /** "Exemplo de Beyblade" of each side (placar) and deck position (vencedor). */
+  exL: BeyKind;
+  exR: BeyKind;
+  exDeck: [BeyKind, BeyKind, BeyKind];
 };
 
 export const BASE_SAMPLE: Sample = {
   name1: "JOGADOR", name2: "ADVERSÁRIO", photos: true, score1: 3, score2: 1, sets1: 1, sets2: 0, setsToWin: 2,
-  deck: "solo", finishes: "variados", bey1: "Dranzer", bey2: "Pegasus", event: "Campeonato LBL", phase: "Suíço — Rodada 1",
+  deck: "3on3", finishes: "variados", bey1: "", bey2: "", event: "Campeonato LBL", phase: "Suíço — Rodada 1",
+  exL: "BX", exR: "CX", exDeck: ["BX", "CX", "CX_EXPAND"],
 };
 
 export const SCENARIOS: { key: string; label: string; patch: Partial<Sample> }[] = [
@@ -49,22 +55,26 @@ function finishesFor(kind: Sample["finishes"], sets: number) {
   return { bySet, flat };
 }
 
-/** ArenaData + Match for the shared boards, from the sample values. */
-export function buildPreview(s: Sample, profile: { avatar: string | null; deck: (string | null)[] }): { data: ArenaData; match: Match } {
+/** ArenaData + Match for the shared boards, from the sample values. The
+ *  Beyblades are the demonstration examples of the chosen formats (catalog,
+ *  lib/beyExamples) — never the admin's own beys. */
+export function buildPreview(s: Sample, profile: { avatar: string | null }, examples: Record<BeyKind, BeyExample>): { data: ArenaData; match: Match } {
   const maxSets = s.setsToWin * 2 - 1;
   const currentSetNum = Math.min(maxSets, s.sets1 + s.sets2 + 1);
   const f1 = finishesFor(s.finishes, currentSetNum);
   const f2 = finishesFor(s.finishes === "variados" ? "spin" : s.finishes, Math.max(1, currentSetNum - 1));
-  const bey = profile.deck.find(Boolean) ?? "/bey-removebg-preview.png";
-  const slot = (i: number) => ({ img: profile.deck[i] || bey, pieces: null });
-  const deckSlots = s.deck === "solo" ? [{ img: null, pieces: null }, slot(0), { img: null, pieces: null }] : [slot(0), slot(1), slot(2)];
+  const ex = (k: BeyKind): DeckSlot => ({ img: examples[k].img, pieces: examples[k].pieces });
+  const empty: DeckSlot = { img: null, pieces: null };
+  // Solo: the single bey sits in the middle position (as on the telão).
+  const deckSlots = s.deck === "solo" ? [empty, ex(s.exDeck[1]), empty] : [ex(s.exDeck[0]), ex(s.exDeck[1]), ex(s.exDeck[2])];
+  const L = examples[s.exL], R = examples[s.exR];
   const match: Match = {
     player1: s.name1, player2: s.name2, p1Id: "amostra-1", p2Id: "amostra-2",
     p1Avatar: s.photos ? profile.avatar : null, p2Avatar: s.photos ? profile.avatar : null,
     p1Sets: s.sets1, p2Sets: s.sets2, setsToWin: s.setsToWin, pointsToWinSet: 4, maxSets, currentSetNum,
     p1Points: s.score1, p2Points: s.score2, isDeck: s.deck !== "solo", currentSetBattleCount: 2,
-    p1ActiveBey: s.bey1, p2ActiveBey: s.bey2, p1Combo: null, p2Combo: null,
-    p1BeyImg: bey, p2BeyImg: bey, p1BeyPieces: null, p2BeyPieces: null,
+    p1ActiveBey: s.bey1 || L.name, p2ActiveBey: s.bey2 || R.name, p1Combo: null, p2Combo: null,
+    p1BeyImg: L.img, p2BeyImg: R.img, p1BeyPieces: L.pieces, p2BeyPieces: R.pieces,
     p1Finishes: f1.flat, p2Finishes: f2.flat, p1FinishesBySet: f1.bySet, p2FinishesBySet: f2.bySet,
     p1TotalPoints: s.score1 + 4 * s.sets1, p2TotalPoints: s.score2 + 4 * s.sets2, p1Deck: deckSlots, p2Deck: deckSlots,
   };

@@ -9,6 +9,7 @@ import { withObservability } from "@/lib/observability";
 import { usesBattleDeck } from "@/lib/deckFormat";
 import { matchPhaseLabel } from "@/lib/matchLabel";
 import { latestVersions } from "@/lib/layoutStore";
+import { beyPiecesOf, mainBladeName, type BeyLike, type PiecesData } from "@/lib/beyArt";
 
 // The telão polls this several times a minute per display, but between points
 // (and while an arena sits idle) the payload is byte-for-byte identical. Tag
@@ -252,25 +253,10 @@ async function getHandler(req: NextRequest) {
   // Image of any BeyPart by category + name (lenient match).
   const partImage = (category: string, name: string | null) =>
     lookupPartImage([category], name);
-  // CX/CX_EXPAND keep the main blade in metal/over blade, not `blade`.
-  type BeyLike = { beyLine?: string | null; blade?: string | null; lockChip?: string | null; metalBlade?: string | null; assistBlade?: string | null; overBlade?: string | null };
-  const isCXBey = (b: BeyLike | null) => !!b && (b.beyLine === "CX" || b.beyLine === "CX_EXPAND");
-  const mainBladeName = (b: BeyLike | null): string | null => {
-    if (!b) return null;
-    return (isCXBey(b) ? b.overBlade || b.metalBlade : b.blade) ?? null;
-  };
-  // CX beys expose 3 stacked pieces (lock chip / metal blade / assist blade).
-  type BeyPieces = { lock: string | null; metal: string | null; assist: string | null } | null;
-  async function beyPieces(b: BeyLike | null): Promise<BeyPieces> {
-    if (!isCXBey(b) || !b) return null;
-    const [lock, metal, assist] = await Promise.all([
-      partImage("LOCK_CHIP", b.lockChip ?? null),
-      partImage("MAIN_BLADE", b.metalBlade ?? null),
-      partImage("ASSIST_BLADE", b.assistBlade ?? null),
-    ]);
-    if (!lock && !metal && !assist) return null;
-    return { lock, metal, assist };
-  }
+  // The player's REAL pieces, by format (lib/beyArt): CX 3 pieces, CX Expand
+  // 4 (+ over blade), BX/UX the blade art. Never demonstration images.
+  type BeyPieces = PiecesData | null;
+  const beyPieces = (b: BeyLike | null): Promise<BeyPieces> => beyPiecesOf(b, partImage);
 
   // Shared types/helpers for the parallel resolvers below.
   type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME: number };
@@ -457,7 +443,7 @@ async function getHandler(req: NextRequest) {
       return Promise.all(ids.map(async (id) => {
         const b = beys.find((x) => x.id === id) ?? null;
         const [img, pieces] = await Promise.all([bladeImage(mainBladeName(b)), beyPieces(b)]);
-        const hasPieces = !!(pieces && (pieces.lock || pieces.metal || pieces.assist));
+        const hasPieces = !!(pieces && (pieces.lock || pieces.metal || pieces.assist || pieces.over));
         // Every deck bey shows something: real art, CX pieces, or a fallback.
         return { img: hasPieces ? null : (img || (b ? BEY_FALLBACK : null)), pieces };
       }));
@@ -474,7 +460,7 @@ async function getHandler(req: NextRequest) {
     } else {
       // Solo: the single bey goes in the middle deck slot (centered).
       const soloSlot = (img: string | null, pieces: BeyPieces): DeckSlot => {
-        const hasPieces = !!(pieces && (pieces.lock || pieces.metal || pieces.assist));
+        const hasPieces = !!(pieces && (pieces.lock || pieces.metal || pieces.assist || pieces.over));
         return { img: hasPieces ? null : (img || BEY_FALLBACK), pieces };
       };
       p1Deck = [emptySlot, soloSlot(p1BeyImg, p1BeyPieces), emptySlot];

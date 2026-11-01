@@ -19,7 +19,7 @@ const legacy = {
 test("legacy layouts migrate with exactly the same geometry, visibility, customs, bg and fonts", () => {
   const c = fromLegacy("scoreboard", legacy, SCOREBOARD_DEFAULTS);
   for (const k of Object.keys(SCOREBOARD_DEFAULTS)) {
-    const { kind: _k, label: _l, ...expected } = fieldStyle(SCOREBOARD_DEFAULTS, k, legacy.layout as never);
+    const { kind: _k, label: _l, inherit: _i, ...expected } = fieldStyle(SCOREBOARD_DEFAULTS, k, legacy.layout as never);
     assert.deepEqual(c.fields[k], expected, k);
   }
   assert.deepEqual(c.hidden, ["obs"]);
@@ -87,7 +87,9 @@ test("restore defaults keeps customs, bg and fonts; diff names changed elements"
   assert.equal(groupOf("scoreboard", "nameL"), "left");
   assert.equal(groupOf("scoreboard", "scoreR"), "score");
   assert.equal(groupOf("scoreboard", "custom_1"), "custom");
-  assert.equal(groupOf("winner", "deck1"), "winner");
+  assert.equal(groupOf("winner", "deck1"), "deck1");
+  assert.equal(groupOf("winner", "deck3CxeOver"), "deck3");
+  assert.equal(groupOf("winner", "photo"), "winner");
 });
 
 test("compositions compare by value, not by key order (the database reorders JSON keys)", () => {

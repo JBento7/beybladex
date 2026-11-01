@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TARGETS, pipDots, fontStack } from "@/lib/arenaLayout";
+import { TARGETS, beyFormatOf, pipDots, fontStack, type BeyFormat } from "@/lib/arenaLayout";
+import { BEY_KINDS, BEY_KIND_LABEL, type BeyExample, type BeyKind } from "@/lib/beyExamples";
 import {
-  GROUP_LABEL, SCREEN_LABEL, centered, diffCompositions, emptyHistory, fontsUsed, groupOf, isCustomKey, mirrorField,
+  GROUP_LABEL, SCREEN_LABEL, centered, completeComposition, diffCompositions, emptyHistory, fontsUsed, groupOf, isCustomKey, mirrorField,
   pairKey, record, redo as redoH, resizeKeepRatio, restoreDefaults, sameComposition, snapMove, undo as undoH,
   type Composition, type CustomMeta, type Defs, type Field, type FieldDefLike, type FontDef, type History, type LayerGroup, type Screen,
 } from "@/lib/layoutDoc";
@@ -37,10 +38,13 @@ export default function LayoutEditor({
   published,
   library: libraryInitial,
   profile,
+  examples,
 }: {
   published: Record<Screen, Published>;
   library: FontDef[];
-  profile: { name: string; avatar: string | null; deck: (string | null)[] };
+  profile: { name: string; avatar: string | null };
+  /** Demonstration Beyblades per format (catalog; editor only). */
+  examples: Record<BeyKind, BeyExample>;
 }) {
   // ── Documents (one per screen) ──
   const [docs, setDocs] = useState<Record<Screen, Doc>>(() => {
@@ -112,7 +116,7 @@ export default function LayoutEditor({
         const raw = st.getItem(DRAFT_KEY(s));
         if (!raw) continue;
         const d = JSON.parse(raw);
-        if (d?.draft && !sameComposition(d.draft, published[s].composition)) found[s] = { savedAt: d.savedAt, baseVersion: d.baseVersion };
+        if (d?.draft && !sameComposition(completeComposition(d.draft, TARGETS[s].defaults as Defs), published[s].composition)) found[s] = { savedAt: d.savedAt, baseVersion: d.baseVersion };
         else st.removeItem(DRAFT_KEY(s));
       } catch { st.removeItem(DRAFT_KEY(s)); }
     }
@@ -141,7 +145,9 @@ export default function LayoutEditor({
       const lib = JSON.parse(ls()?.getItem(LIB_KEY) ?? "null");
       if (lib?.library) setLibrary((cur) => [...cur, ...(lib.library as FontDef[]).filter((f) => !cur.some((x) => x.family === f.family))]);
       if (d?.draft) {
-        setDocs((all) => ({ ...all, [s]: { ...all[s], draft: d.draft, history: record(all[s].history, all[s].draft) } }));
+        // A draft saved before new elements existed gets them (inherited position).
+        const recovered = completeComposition(d.draft, TARGETS[s].defaults as Defs);
+        setDocs((all) => ({ ...all, [s]: { ...all[s], draft: recovered, history: record(all[s].history, all[s].draft) } }));
         if (d.baseVersion !== docs[s].base.version) setMsg({ tone: "warn", text: `Rascunho recuperado. Ele foi feito sobre a versão ${d.baseVersion}; a publicada agora é a ${docs[s].base.version}. Revise antes de aplicar.` });
       }
     } catch { /* ignore */ }
@@ -284,7 +290,48 @@ export default function LayoutEditor({
   // ── Preview data ──
   const [sample, setSample] = useState<Sample>({ ...BASE_SAMPLE, name1: profile.name });
   const [scenario, setScenario] = useState("");
-  const pv = useMemo(() => buildPreview(sample, profile), [sample, profile]);
+  const pv = useMemo(() => buildPreview(sample, profile, examples), [sample, profile, examples]);
+  // "Exemplo de Beyblade" per spot (placar: side L/R; vencedor: deck1..3).
+  // Sample data only: never part of the layout, never marks it as modified.
+  const spotOf = (k: string): string | null => {
+    const d = /^deck([123])/.exec(k);
+    if (d) return `deck${d[1]}`;
+    return beyFormatOf(k) ? k.slice(-1) : null;
+  };
+  const exampleAt = (spot: string): BeyKind =>
+    spot === "L" ? sample.exL : spot === "R" ? sample.exR : sample.exDeck[Number(spot.slice(4)) - 1];
+  const setExampleAt = (spot: string, kind: BeyKind) => setSample((s) => {
+    if (spot === "L") return { ...s, exL: kind };
+    if (spot === "R") return { ...s, exR: kind };
+    const deck = [...s.exDeck] as Sample["exDeck"];
+    deck[Number(spot.slice(4)) - 1] = kind;
+    return { ...s, exDeck: deck };
+  });
+  const formatOfKind = (k: BeyKind): BeyFormat => (k === "CX" ? "CX" : k === "CX_EXPAND" ? "CX_EXPAND" : "BXUX");
+  /** Beyblade elements of formats other than the spot's example are not drawn
+   *  (as on the telão, one format at a time). */
+  const shownOnBoard = (k: string) => {
+    const f = beyFormatOf(k), spot = spotOf(k);
+    return !f || !spot || f === formatOfKind(exampleAt(spot));
+  };
+  /** Example image of an element (edit mode shows the assembled example). */
+  const exampleSrc = (k: string): string | null => {
+    const f = beyFormatOf(k), spot = spotOf(k);
+    if (!f || !spot) return null;
+    const e = examples[exampleAt(spot)];
+    if (f === "BXUX") return e.img;
+    const role = /Over/.test(k) ? "over" : /Lock/.test(k) ? "lock" : /Assist/.test(k) ? "assist" : "metal";
+    return e.pieces?.[role] ?? null;
+  };
+  /** Selecting an element of another format switches that spot's example. */
+  const selectKey = (k: string) => {
+    const f = beyFormatOf(k), spot = spotOf(k);
+    if (f && spot && f !== formatOfKind(exampleAt(spot))) setExampleAt(spot, f === "CX" ? "CX" : f === "CX_EXPAND" ? "CX_EXPAND" : "BX");
+    setSel(k);
+  };
+  const spots: { spot: string; label: string }[] = screen === "winner"
+    ? [{ spot: "deck1", label: "Beyblade 1" }, { spot: "deck2", label: "Beyblade 2" }, { spot: "deck3", label: "Beyblade 3" }]
+    : [{ spot: "L", label: "Jogador esquerdo" }, { spot: "R", label: "Jogador direito" }];
 
   // ── Background (draft only: applied with the layout) ──
   const bgInputRef = useRef<HTMLInputElement>(null);
@@ -639,10 +686,24 @@ export default function LayoutEditor({
       <div className={`flex gap-4 ${propsOpen ? "flex-col lg:flex-row" : "flex-col"}`}>
         {/* Board area: scrolls/pans when zoomed; dragging happens only on elements */}
         <div className="flex-1 min-w-0">
+          {/* Demonstration Beyblades (editor only): one format per spot, as on
+              the telão. Switching never changes the layout or any real data. */}
+          <fieldset className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+            <legend className="sr-only">Exemplo de Beyblade</legend>
+            <span className="text-gray-300 font-bold">Exemplo de Beyblade:</span>
+            {spots.map(({ spot, label }) => (
+              <label key={spot} className="text-xs text-gray-400">{label}
+                <select value={exampleAt(spot)} onChange={(e) => setExampleAt(spot, e.target.value as BeyKind)} aria-label={`Exemplo de Beyblade — ${label}`} className="ml-1 min-h-[44px] bg-field border border-line rounded px-2 text-white text-sm">
+                  {BEY_KINDS.map((k) => <option key={k} value={k}>{BEY_KIND_LABEL[k]}</option>)}
+                </select>
+              </label>
+            ))}
+            {screen === "winner" && sample.deck === "solo" && <span className="text-xs text-amber-200">Cenário Solo: só a Beyblade 2 aparece (como no telão).</span>}
+          </fieldset>
           {preview && (
             <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
               <label className="text-gray-300">Cenário
-                <select value={scenario} onChange={(e) => { const sc = SCENARIOS.find((x) => x.key === e.target.value); setScenario(e.target.value); setSample({ ...BASE_SAMPLE, name1: profile.name, ...(sc?.patch ?? {}) }); }} className="ml-1 min-h-[44px] bg-field border border-line rounded px-2 text-white">
+                <select value={scenario} onChange={(e) => { const sc = SCENARIOS.find((x) => x.key === e.target.value); setScenario(e.target.value); setSample((cur) => ({ ...BASE_SAMPLE, name1: profile.name, ...(sc?.patch ?? {}), exL: cur.exL, exR: cur.exR, exDeck: cur.exDeck })); }} className="ml-1 min-h-[44px] bg-field border border-line rounded px-2 text-white">
                   <option value="">Padrão</option>
                   {SCENARIOS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                 </select>
@@ -672,7 +733,7 @@ export default function LayoutEditor({
                   {keys.map((k) => {
                     const f = draft.fields[k];
                     const def = defs[k];
-                    if (!f || (isolate && sel && sel !== k)) return null;
+                    if (!f || (isolate && sel && sel !== k) || !shownOnBoard(k)) return null;
                     const isSel = sel === k, isHidden = draft.hidden.includes(k), isLocked = locked(k);
                     const outline = isSel ? "2px solid #f0a500" : isHidden ? "1px dashed rgba(255,80,80,0.6)" : "1px dashed rgba(255,255,255,0.35)";
                     const common: React.CSSProperties = { position: "absolute", outline, opacity: isHidden ? 0.35 : 1, cursor: isLocked ? "default" : "move", zIndex: isSel ? 20 : 10, touchAction: "none" };
@@ -690,9 +751,18 @@ export default function LayoutEditor({
                       );
                     }
                     const isPip = def.kind === "pipsV" || def.kind === "pipsH";
+                    const exImg = exampleSrc(k);
                     return (
-                      <div key={k} onPointerDown={(e) => startDrag(e, k, "move")} style={{ ...common, left: `${f.x}%`, top: `${f.y}%`, width: `${f.w ?? 10}%`, height: `${f.h ?? 10}%`, background: isPip ? "rgba(240,165,0,0.06)" : "rgba(240,165,0,0.14)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1cqw", fontWeight: 800, color: "#ffd400" }}>
-                        {isPip
+                      <div key={k} onPointerDown={(e) => startDrag(e, k, "move")} style={{ ...common, left: `${f.x}%`, top: `${f.y}%`, width: `${f.w ?? 10}%`, height: `${f.h ?? 10}%`, background: isPip ? "rgba(240,165,0,0.06)" : exImg ? "transparent" : "rgba(240,165,0,0.14)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1cqw", fontWeight: 800, color: "#ffd400" }}>
+                        {exImg ? (
+                          // Assembled example while editing: each piece whole in its own box
+                          // (same fit as the telão); the box stays selectable on its own.
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={exImg} alt="" draggable={false} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none" }} />
+                            {isSel && <span style={{ position: "absolute", left: 0, bottom: "100%", whiteSpace: "nowrap", fontSize: "0.9cqw", background: "rgba(0,0,0,0.75)", padding: "0 0.3cqw" }}>{def.label}</span>}
+                          </>
+                        ) : isPip
                           ? pipDots(f, def.kind === "pipsV" ? "v" : "h").map((d, i) => (
                               <span key={i} style={{ position: "absolute", left: `${((d.cx - f.x) / (f.w || 1)) * 100}%`, top: `${((d.cy - f.y) / (f.h || 1)) * 100}%`, transform: "translate(-50%, -50%)", width: `${f.fs ?? 1.5}cqw`, height: `${f.fs ?? 1.5}cqw`, borderRadius: "50%", background: "#ffd400" }} />
                             ))
@@ -798,15 +868,19 @@ export default function LayoutEditor({
                     <button className="min-h-[36px] px-2 text-[11px] text-gray-300 border border-line rounded" onClick={() => lockGroup(ks, false)} disabled={!editing}>Desbloquear</button>
                   </div>
                   <ul className="space-y-1">
-                    {ks.map((k) => {
+                    {ks.map((k, i) => {
                       const isHidden = draft.hidden.includes(k);
-                      return (
+                      // Beyblade elements are listed per format (BX/UX, CX, CX Expand).
+                      const fmt = beyFormatOf(k);
+                      const head = fmt && fmt !== beyFormatOf(ks[i - 1] ?? "") ? (
+                        <li key={`h-${k}`} className="pt-1 text-[11px] font-bold text-gray-400">{fmt === "BXUX" ? "BX / UX" : fmt === "CX" ? "CX" : "CX Expand"}{spotOf(k) && formatOfKind(exampleAt(spotOf(k)!)) === fmt ? " · no exemplo atual" : ""}</li>
+                      ) : null;
+                      return [head,
                         <li key={k} className={`flex items-center rounded ${sel === k ? "bg-brand-yellow/20 ring-1 ring-brand-yellow" : "bg-field"}`}>
-                          <button onClick={() => setSel(k)} aria-current={sel === k ? "true" : undefined} className={`flex-1 min-w-0 min-h-[44px] px-2 text-left text-sm truncate ${isHidden ? "text-gray-500 line-through" : "text-white"}`}>{defs[k].label}</button>
+                          <button onClick={() => selectKey(k)} aria-current={sel === k ? "true" : undefined} className={`flex-1 min-w-0 min-h-[44px] px-2 text-left text-sm truncate ${isHidden ? "text-gray-500 line-through" : "text-white"}`}>{defs[k].label}</button>
                           <button onClick={() => toggleIn("hidden", k)} disabled={!hiddenEditable || !editing} aria-pressed={!isHidden} aria-label={`${isHidden ? "Mostrar" : "Ocultar"} ${defs[k].label} no telão`} title={hiddenEditable ? (isHidden ? "Oculto no telão" : "Visível no telão") : "Visibilidade vem do Placar"} className="min-w-[44px] min-h-[44px] text-lg disabled:opacity-40">{isHidden ? "🙈" : "👁"}</button>
                           <button onClick={() => toggleIn("locked", k)} disabled={!editing} aria-pressed={locked(k)} aria-label={`${locked(k) ? "Desbloquear" : "Bloquear"} ${defs[k].label}`} title={locked(k) ? "Bloqueado: não move nem redimensiona" : "Livre"} className="min-w-[44px] min-h-[44px] text-lg disabled:opacity-40">{locked(k) ? "🔒" : "🔓"}</button>
-                        </li>
-                      );
+                        </li>];
                     })}
                   </ul>
                 </div>

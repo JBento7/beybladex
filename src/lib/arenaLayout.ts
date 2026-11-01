@@ -18,7 +18,11 @@ export type FontDef = { family: string; kind: "upload" | "google"; src?: string 
 export function fontStack(ff?: string | null): string {
   return ff ? `'${ff}', 'Arial Black', system-ui, sans-serif` : "'Arial Black', system-ui, sans-serif";
 }
-export type FieldDef = Field & { kind: FieldKind; label: string };
+/** `inherit`: until this element is positioned on its own, it uses the
+ *  (saved) position of that other element — new elements added later (e.g.
+ *  the CX Expand pieces) start exactly where an existing layout already put
+ *  the matching element, so old layouts look the same. */
+export type FieldDef = Field & { kind: FieldKind; label: string; inherit?: string };
 export type Layout = Record<string, Field>;
 
 export const BOARD_W = 1672;
@@ -33,16 +37,27 @@ export const SCOREBOARD_DEFAULTS: Record<string, FieldDef> = {
   photoR: { kind: "img", label: "Foto (dir)", x: 78.35, y: 16.4, w: 18, h: 28 },
   beyNameL: { kind: "text", label: "Bey nome (esq)", x: 13.2, y: 50.9, w: 20, fs: 1.3 },
   beyNameR: { kind: "text", label: "Bey nome (dir)", x: 86.2, y: 50.9, w: 20, fs: 1.3 },
-  beyImgL: { kind: "img", label: "Bey foto (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2 },
-  beyImgR: { kind: "img", label: "Bey foto (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
-  // CX beys stack 3 transparent PNGs: assist blade (back), metal blade (middle),
+  // BX / UX: one image (the blade art).
+  beyImgL: { kind: "img", label: "BX/UX · Beyblade (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2 },
+  beyImgR: { kind: "img", label: "BX/UX · Beyblade (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
+  // CX: 3 stacked transparent PNGs — assist blade (back), main/metal blade,
   // lock chip (front). Each piece is positionable on its own.
-  cxAssistL: { kind: "img", label: "CX Assist Blade (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2 },
-  cxMetalL: { kind: "img", label: "CX Metal Blade (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2 },
-  cxLockL: { kind: "img", label: "CX Lock Chip (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2 },
-  cxAssistR: { kind: "img", label: "CX Assist Blade (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
-  cxMetalR: { kind: "img", label: "CX Metal Blade (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
-  cxLockR: { kind: "img", label: "CX Lock Chip (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
+  cxAssistL: { kind: "img", label: "CX · Assist Blade (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2 },
+  cxMetalL: { kind: "img", label: "CX · Main Blade (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2 },
+  cxLockL: { kind: "img", label: "CX · Lock Chip (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2 },
+  cxAssistR: { kind: "img", label: "CX · Assist Blade (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
+  cxMetalR: { kind: "img", label: "CX · Main Blade (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
+  cxLockR: { kind: "img", label: "CX · Lock Chip (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
+  // CX Expand: 4 pieces (lib/combo-lines) — assist (back), main blade, over
+  // blade, lock chip (front). Until edited they follow the CX pieces.
+  cxeAssistL: { kind: "img", label: "CX Expand · Assist Blade (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2, inherit: "cxAssistL" },
+  cxeMetalL: { kind: "img", label: "CX Expand · Main Blade (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2, inherit: "cxMetalL" },
+  cxeOverL: { kind: "img", label: "CX Expand · Over Blade (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2, inherit: "cxMetalL" },
+  cxeLockL: { kind: "img", label: "CX Expand · Lock Chip (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2, inherit: "cxLockL" },
+  cxeAssistR: { kind: "img", label: "CX Expand · Assist Blade (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2, inherit: "cxAssistR" },
+  cxeMetalR: { kind: "img", label: "CX Expand · Main Blade (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2, inherit: "cxMetalR" },
+  cxeOverR: { kind: "img", label: "CX Expand · Over Blade (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2, inherit: "cxMetalR" },
+  cxeLockR: { kind: "img", label: "CX Expand · Lock Chip (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2, inherit: "cxLockR" },
   // Finishes boxes (SET N + badges), grouped per player.
   finishesL: { kind: "img", label: "Finishes (esq)", x: 31.3, y: 11.5, w: 15.4, h: 34 },
   finishesR: { kind: "img", label: "Finishes (dir)", x: 53.3, y: 11.5, w: 15.4, h: 34 },
@@ -67,11 +82,53 @@ export const WINNER_DEFAULTS: Record<string, FieldDef> = {
   name: { kind: "text", label: "Nome", x: 22.4, y: 66.4, w: 22.8, fs: 2 },
   scoreWin: { kind: "text", label: "Placar (vencedor)", x: 52.3, y: 39, w: 12, fs: 5.5 },
   scoreLose: { kind: "text", label: "Placar (perdedor)", x: 82.5, y: 39, w: 12, fs: 5.5 },
-  deck1: { kind: "img", label: "Bey 1", x: 40.7, y: 56.6, w: 15, h: 26.7 },
-  deck2: { kind: "img", label: "Bey 2", x: 57.5, y: 56.6, w: 15, h: 26.7 },
-  deck3: { kind: "img", label: "Bey 3", x: 73.7, y: 56.6, w: 15, h: 26.7 },
+  ...deckSlotDefs(1, 40.7), ...deckSlotDefs(2, 57.5), ...deckSlotDefs(3, 73.7),
   finishes: { kind: "img", label: "Finishes (caixa)", x: 9.5, y: 72.5, w: 25.5, h: 16.5 },
 };
+
+/** One deck position of the winner screen: the BX/UX image (`deckN`, the key
+ *  layouts already use) plus the CX and CX Expand pieces, which start in the
+ *  same box (inherit) until positioned on their own. */
+function deckSlotDefs(n: 1 | 2 | 3, x: number): Record<string, FieldDef> {
+  const box = { x, y: 56.6, w: 15, h: 26.7 };
+  const d = `deck${n}`, L = `Beyblade ${n}`;
+  return {
+    [d]: { kind: "img", label: `${L} · BX/UX`, ...box },
+    [`${d}CxAssist`]: { kind: "img", label: `${L} · CX · Assist Blade`, ...box, inherit: d },
+    [`${d}CxMetal`]: { kind: "img", label: `${L} · CX · Main Blade`, ...box, inherit: d },
+    [`${d}CxLock`]: { kind: "img", label: `${L} · CX · Lock Chip`, ...box, inherit: d },
+    [`${d}CxeAssist`]: { kind: "img", label: `${L} · CX Expand · Assist Blade`, ...box, inherit: `${d}CxAssist` },
+    [`${d}CxeMetal`]: { kind: "img", label: `${L} · CX Expand · Main Blade`, ...box, inherit: `${d}CxMetal` },
+    [`${d}CxeOver`]: { kind: "img", label: `${L} · CX Expand · Over Blade`, ...box, inherit: `${d}CxMetal` },
+    [`${d}CxeLock`]: { kind: "img", label: `${L} · CX Expand · Lock Chip`, ...box, inherit: `${d}CxLock` },
+  };
+}
+
+/** Elements of each Beyblade format, per board spot (scoreboard side "L"/"R"
+ *  or winner deck position "deck1".."deck3"), in drawing order (back → front).
+ *  BX/UX is one image; CX 3 pieces; CX Expand 4 pieces (lib/combo-lines). */
+export type BeyFormat = "BXUX" | "CX" | "CX_EXPAND";
+export function beyFieldKeys(spot: string): Record<BeyFormat, string[]> {
+  if (/^deck[123]$/.test(spot)) {
+    return {
+      BXUX: [spot],
+      CX: [`${spot}CxAssist`, `${spot}CxMetal`, `${spot}CxLock`],
+      CX_EXPAND: [`${spot}CxeAssist`, `${spot}CxeMetal`, `${spot}CxeOver`, `${spot}CxeLock`],
+    };
+  }
+  return {
+    BXUX: [`beyImg${spot}`],
+    CX: [`cxAssist${spot}`, `cxMetal${spot}`, `cxLock${spot}`],
+    CX_EXPAND: [`cxeAssist${spot}`, `cxeMetal${spot}`, `cxeOver${spot}`, `cxeLock${spot}`],
+  };
+}
+/** Format an element belongs to (null = not a Beyblade element). */
+export function beyFormatOf(key: string): BeyFormat | null {
+  if (/^(beyImg[LR]|deck[123])$/.test(key)) return "BXUX";
+  if (/^(cxe(Assist|Metal|Over|Lock)[LR]|deck[123]Cxe(Assist|Metal|Over|Lock))$/.test(key)) return "CX_EXPAND";
+  if (/^(cx(Assist|Metal|Lock)[LR]|deck[123]Cx(Assist|Metal|Lock))$/.test(key)) return "CX";
+  return null;
+}
 
 // Editor targets.
 export const TARGETS: Record<string, { label: string; bg: string; defaults: Record<string, FieldDef> }> = {
@@ -92,9 +149,15 @@ export function pipDots(f: Field, dir: "v" | "h"): { cx: number; cy: number }[] 
   return out;
 }
 
-// Merge saved overrides on top of the defaults for one field.
-export function fieldStyle(defs: Record<string, FieldDef>, key: string, saved: Layout | null | undefined): FieldDef {
+// Merge saved overrides on top of the defaults for one field. An element never
+// saved on its own follows the element it inherits from (see FieldDef.inherit).
+export function fieldStyle(defs: Record<string, FieldDef>, key: string, saved: Layout | null | undefined, depth = 0): FieldDef {
   const def = defs[key];
   const ov = saved?.[key];
-  return ov ? { ...def, ...ov } : def;
+  if (ov) return { ...def, ...ov };
+  if (def?.inherit && depth < 4 && defs[def.inherit]) {
+    const { kind: _k, label: _l, inherit: _i, ...parent } = fieldStyle(defs, def.inherit, saved, depth + 1);
+    return { ...def, ...parent };
+  }
+  return def;
 }

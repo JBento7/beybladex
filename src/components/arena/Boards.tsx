@@ -6,7 +6,7 @@
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand in new code here.
 import { createContext, useContext, useState } from "react";
-import { fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type Layout } from "@/lib/arenaLayout";
+import { beyFieldKeys, fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type FieldDef, type Layout } from "@/lib/arenaLayout";
 import { setLabel } from "@/lib/matchLabel";
 
 // Fields disabled in the layout editor are hidden from the placar via this ctx.
@@ -27,8 +27,11 @@ export type FinishCounts = { SPIN: number; BURST: number; OVER: number; EXTREME:
 // Custom scoreboard field added in the layout editor (text or integer).
 export type CustomFld = { key: string; label: string; type: "text" | "int"; value: string; x: number; y: number; w?: number; h?: number; fs?: number; ff?: string };
 
-// CX beys expose 3 stacked pieces; non-CX beys are a single blade image.
-export type BeyPieces = { lock: string | null; metal: string | null; assist: string | null } | null;
+// CX beys expose 3 stacked pieces (assist, main/metal, lock chip); CX Expand 4
+// (+ over blade). BX/UX beys are a single blade image. `kind` absent = CX
+// (payloads from before CX Expand had its own pieces).
+export type BeyPieces = { kind?: "CX" | "CX_EXPAND"; lock: string | null; metal: string | null; assist: string | null; over?: string | null } | null;
+export const hasPieces = (p: BeyPieces): p is NonNullable<BeyPieces> => !!p && !!(p.lock || p.metal || p.assist || p.over);
 
 export type HistRow = { side: "p1" | "p2"; finish: "S" | "KO" | "B" | "X"; points: number };
 
@@ -122,7 +125,7 @@ export function WinnerScreen({ match, winnerSide, layout, bg, frame = "viewport"
   const nm = wf("name");
   const sw = wf("scoreWin");
   const fin = wf("finishes");
-  const deckKeys = ["deck1", "deck2", "deck3"];
+  const deckKeys = ["deck1", "deck2", "deck3"] as const;
 
   return (
     <div style={outerStyle(frame)}>
@@ -153,26 +156,11 @@ export function WinnerScreen({ match, winnerSide, layout, bg, frame = "viewport"
         {/* PLACAR — points scored */}
         {!hiddenW.has("scoreWin") && <Cell cx={sw.x} cy={sw.y} fs={sw.fs ?? 5.5} color={GOLD} ff={sw.ff}>{winPts}</Cell>}
 
-        {/* DECK — winner's beys. CX beys stack 3 pieces (assist/metal/lock). */}
+        {/* DECK — winner's beys: BX/UX one image; CX / CX Expand their pieces,
+            each in its own box (editor "Vencedor" → Beyblade 1/2/3). */}
         {deckKeys.map((k, i) => {
-          const d = wf(k);
           const slot = deck[i];
-          if (!slot || hiddenW.has(k)) return null;
-          const box: React.CSSProperties = { position: "absolute", left: `${d.x}%`, top: `${d.y}%`, width: `${d.w}%`, height: `${d.h}%`, objectFit: "contain" };
-          if (slot.pieces && (slot.pieces.lock || slot.pieces.metal || slot.pieces.assist)) {
-            return (
-              <div key={k} style={{ position: "absolute", left: `${d.x}%`, top: `${d.y}%`, width: `${d.w}%`, height: `${d.h}%` }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {slot.pieces.assist && <img src={slot.pieces.assist} alt="" onError={fallbackBey} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 1 }} />}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {slot.pieces.metal && <img src={slot.pieces.metal} alt="" onError={fallbackBey} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 2 }} />}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {slot.pieces.lock && <img src={slot.pieces.lock} alt="" onError={fallbackBey} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "contain", zIndex: 3 }} />}
-              </div>
-            );
-          }
-          // eslint-disable-next-line @next/next/no-img-element
-          return slot.img ? <img key={k} src={slot.img} alt="" onError={fallbackBey} style={box} /> : null;
+          return slot ? <BeyComposite key={k} defs={WINNER_DEFAULTS} layout={layout} spot={k} img={slot.img} pieces={slot.pieces} /> : null;
         })}
 
         {/* Finishes made by the winner (per set) — inside the box */}
@@ -363,19 +351,36 @@ function LImg({ layout, k, src, cover }: { layout: Layout | null; k: string; src
     />
   );
 }
-// Bey art for one side: CX beys stack 3 transparent PNGs (assist behind, metal
-// middle, lock chip front); others use the single blade image.
-function BeyArt({ layout, side, img, pieces }: { layout: Layout | null; side: "L" | "R"; img: string | null; pieces: BeyPieces }) {
-  if (pieces && (pieces.lock || pieces.metal || pieces.assist)) {
-    return (
-      <>
-        <LImg layout={layout} k={`cxAssist${side}`} src={pieces.assist} />
-        <LImg layout={layout} k={`cxMetal${side}`} src={pieces.metal} />
-        <LImg layout={layout} k={`cxLock${side}`} src={pieces.lock} />
-      </>
-    );
+/**
+ * One Beyblade on a board spot (scoreboard side "L"/"R", winner "deck1".."3").
+ * Exactly ONE format is drawn — never pieces of different formats together:
+ *  - BX/UX: the blade image;
+ *  - CX: assist blade (back) → main blade → lock chip (front);
+ *  - CX Expand: assist → main blade → over blade → lock chip.
+ * Each piece is a transparent image in its own box, whole (object-fit:
+ * contain, never stretched), drawn back to front. Telão and editor preview
+ * use this same component.
+ */
+export function BeyComposite({ defs, layout, spot, img, pieces }: { defs: Record<string, FieldDef>; layout: Layout | null; spot: string; img: string | null; pieces: BeyPieces }) {
+  const hidden = useContext(HiddenCtx);
+  const keys = beyFieldKeys(spot);
+  // Drawn back to front in DOM order (no z-index: the rest of the board keeps
+  // its stacking exactly as before).
+  const piece = (k: string, src: string | null | undefined) => {
+    if (!src || hidden.has(k)) return null;
+    const f = fieldStyle(defs, k, layout);
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img key={k} src={src} alt="" onError={fallbackBey} style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w}%`, height: `${f.h}%`, objectFit: "contain" }} />;
+  };
+  if (hasPieces(pieces)) {
+    if (pieces.kind === "CX_EXPAND") {
+      const [a, m, o, l] = keys.CX_EXPAND;
+      return <>{piece(a, pieces.assist)}{piece(m, pieces.metal)}{piece(o, pieces.over)}{piece(l, pieces.lock)}</>;
+    }
+    const [a, m, l] = keys.CX;
+    return <>{piece(a, pieces.assist)}{piece(m, pieces.metal)}{piece(l, pieces.lock)}</>;
   }
-  return <LImg layout={layout} k={`beyImg${side}`} src={img} />;
+  return piece(keys.BXUX[0], img);
 }
 
 export function Scoreboard({ arena, data, match, build, layout, bg, customFields, p2p, onTest, frame = "viewport" }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; customFields: CustomFld[]; p2p?: { matchId: string; version: number; byId: Record<string, number>; setsById: Record<string, number>; at: number } | null; onTest: () => void; frame?: Frame }) {
@@ -436,8 +441,8 @@ export function Scoreboard({ arena, data, match, build, layout, bg, customFields
         <LImg layout={layout} k="photoR" src={match.p2Avatar} cover />
 
         {/* Bey images (centered inside the gold rings) */}
-        <BeyArt layout={layout} side="L" img={match.p1BeyImg} pieces={match.p1BeyPieces} />
-        <BeyArt layout={layout} side="R" img={match.p2BeyImg} pieces={match.p2BeyPieces} />
+        <BeyComposite defs={SCOREBOARD_DEFAULTS} layout={layout} spot="L" img={match.p1BeyImg} pieces={match.p1BeyPieces} />
+        <BeyComposite defs={SCOREBOARD_DEFAULTS} layout={layout} spot="R" img={match.p2BeyImg} pieces={match.p2BeyPieces} />
 
         {/* Names: shrink long names (within a legible limit) instead of cutting them */}
         <LText layout={layout} k="nameL" fit={(match.player1 + tagL).length}>{match.player1}{tagL}</LText>

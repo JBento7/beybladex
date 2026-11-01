@@ -6,7 +6,7 @@
 
 export type Field = { x: number; y: number; w?: number; h?: number; fs?: number; ff?: string };
 export type FieldKind = "text" | "img" | "pipsV" | "pipsH";
-export type FieldDefLike = Field & { kind: FieldKind; label: string };
+export type FieldDefLike = Field & { kind: FieldKind; label: string; inherit?: string };
 export type Defs = Record<string, FieldDefLike>;
 export type FontDef = { family: string; kind: "upload" | "google"; src?: string };
 export type CustomMeta = { key: string; label: string; type: "text" | "int"; value: string };
@@ -179,12 +179,14 @@ export function fontsUsed(fields: Record<string, Field>, library: FontDef[]): Fo
  */
 export function fromLegacy(screen: Screen, legacy: { layout?: unknown; hidden?: unknown; customs?: unknown; bg?: unknown; fonts?: unknown }, defs: Defs): Composition {
   const saved = (legacy.layout && typeof legacy.layout === "object" ? legacy.layout : {}) as Record<string, unknown>;
-  const fields: Record<string, Field> = {};
+  const own: Record<string, Field> = {};
   for (const k of Object.keys(defs)) {
-    const { kind: _k, label: _l, ...def } = defs[k];
-    const merged = normalizeField({ ...def, ...(saved[k] && typeof saved[k] === "object" ? (saved[k] as object) : {}) });
-    fields[k] = merged ?? (def as Field);
+    if (!saved[k] || typeof saved[k] !== "object") continue;
+    const { kind: _k, label: _l, inherit: _i, ...def } = defs[k];
+    const merged = normalizeField({ ...def, ...(saved[k] as object) });
+    if (merged) own[k] = merged;
   }
+  const fields = completeFields(own, defs);
   const customs: CustomMeta[] = [];
   if (screen === "scoreboard" && Array.isArray(legacy.customs)) {
     for (const raw of legacy.customs) {
@@ -195,12 +197,49 @@ export function fromLegacy(screen: Screen, legacy: { layout?: unknown; hidden?: 
     }
   }
   const known = new Set(Object.keys(fields));
-  const hidden = Array.isArray(legacy.hidden) ? (legacy.hidden as unknown[]).filter((k): k is string => typeof k === "string" && known.has(k)) : [];
+  const hiddenIn = Array.isArray(legacy.hidden) ? (legacy.hidden as unknown[]).filter((k): k is string => typeof k === "string" && known.has(k)) : [];
+  const hidden = completeComposition({ fields: own, hidden: hiddenIn, customs: [], bg: null, fonts: [], locked: [], keepRatio: [] }, defs).hidden;
   const bgObj = (legacy.bg && typeof legacy.bg === "object" ? legacy.bg : {}) as Record<string, unknown>;
   const bg = typeof bgObj.url === "string" && bgObj.url ? bgObj.url : null;
   const library = Array.isArray(legacy.fonts) ? (legacy.fonts as FontDef[]).filter((f) => f && validFamily(f.family)) : [];
   // Elements start unlocked; visibility exactly as it was.
   return { fields, hidden, customs, bg, fonts: fontsUsed(fields, library), locked: [], keepRatio: [] };
+}
+
+/**
+ * Every standard element gets a value: its own, else the value of the element
+ * it inherits from (FieldDefLike.inherit — e.g. a CX Expand piece follows the
+ * CX piece already positioned), else its default. Used for legacy layouts and
+ * for versions published before an element existed: they keep their look.
+ */
+export function completeFields(fields: Record<string, Field>, defs: Defs): Record<string, Field> {
+  const out: Record<string, Field> = { ...fields };
+  const resolve = (k: string, depth: number): Field => {
+    if (out[k]) return out[k];
+    const { kind: _k, label: _l, inherit, ...def } = defs[k];
+    const v = inherit && defs[inherit] && depth < 4 ? { ...resolve(inherit, depth + 1) } : { ...(def as Field) };
+    out[k] = v;
+    return v;
+  };
+  for (const k of Object.keys(defs)) resolve(k, 0);
+  return out;
+}
+
+/** completeFields for a whole composition: an element that only now gets a
+ *  value by inheritance is also hidden when the element it inherits from is
+ *  (a hidden "Beyblade 1" keeps all its pieces hidden). */
+export function completeComposition(comp: Composition, defs: Defs): Composition {
+  const fields = completeFields(comp.fields ?? {}, defs);
+  const hidden = [...(comp.hidden ?? [])];
+  const rootHidden = (k: string, depth = 0): boolean => {
+    if (hidden.includes(k)) return true;
+    const p = defs[k]?.inherit;
+    return !!p && depth < 4 && !(comp.fields ?? {})[k] && rootHidden(p, depth + 1);
+  };
+  for (const k of Object.keys(defs)) {
+    if (!(comp.fields ?? {})[k] && defs[k].inherit && !hidden.includes(k) && rootHidden(k)) hidden.push(k);
+  }
+  return { ...comp, fields, hidden };
 }
 
 /** Elements whose geometry/font/visibility differ, plus meta changes. */
@@ -302,20 +341,25 @@ export function resizeKeepRatio(orig: Field, newW: number): { w: number; h: numb
 export function restoreDefaults(comp: Composition, defs: Defs): Composition {
   const fields = { ...comp.fields };
   for (const k of Object.keys(defs)) {
-    const { kind: _k, label: _l, ...def } = defs[k];
+    const { kind: _k, label: _l, inherit: _i, ...def } = defs[k];
     fields[k] = { ...(def as Field) };
   }
   return { ...comp, fields, hidden: comp.hidden.filter(isCustomKey), locked: comp.locked.filter(isCustomKey) };
 }
 
 // ── Layer groups (editor list) ──
-export type LayerGroup = "left" | "right" | "score" | "event" | "custom" | "winner";
+export type LayerGroup = "left" | "right" | "score" | "event" | "custom" | "winner" | "deck1" | "deck2" | "deck3";
 export const GROUP_LABEL: Record<LayerGroup, string> = {
   left: "Jogador esquerdo", right: "Jogador direito", score: "Pontuação e sets", event: "Informações do evento", custom: "Campos personalizados", winner: "Vencedor",
+  deck1: "Beyblade 1", deck2: "Beyblade 2", deck3: "Beyblade 3",
 };
 export function groupOf(screen: Screen, key: string): LayerGroup {
   if (isCustomKey(key)) return "custom";
-  if (screen === "winner") return ["scoreWin", "scoreLose"].includes(key) ? "score" : "winner";
+  if (screen === "winner") {
+    const d = /^deck([123])/.exec(key);
+    if (d) return `deck${d[1]}` as LayerGroup;
+    return ["scoreWin", "scoreLose"].includes(key) ? "score" : "winner";
+  }
   if (/^(score|points|victories)[LR]$/.test(key) || ["rodada", "partida", "status"].includes(key)) return "score";
   if (["evento", "fase", "local", "obs"].includes(key)) return "event";
   return key.endsWith("L") ? "left" : key.endsWith("R") ? "right" : "event";

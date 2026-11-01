@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { TARGETS } from "./arenaLayout";
 import {
-  SCREEN_LABEL, fromLegacy, isCustomKey, validateComposition,
+  SCREEN_LABEL, completeComposition, fromLegacy, isCustomKey, validateComposition,
   type Composition, type Defs, type FontDef, type Screen,
 } from "./layoutDoc";
 
@@ -37,7 +37,11 @@ export async function getPublished(screen: Screen, db: Db = prisma): Promise<Pub
   const row = await db.layoutVersion.findFirst({ where: { screen }, orderBy: { version: "desc" } }).catch(() => null);
   if (row) {
     const by = row.publishedById ? await db.user.findUnique({ where: { id: row.publishedById }, select: { name: true, bladerName: true } }).catch(() => null) : null;
-    return { screen, version: row.version, composition: row.composition as unknown as Composition, publishedAt: row.createdAt.toISOString(), publishedBy: by ? by.bladerName || by.name : null };
+    // A version published before an element existed gets it now (inherited
+    // position or default): same look, and the editor/telão see every element.
+    const stored = row.composition as unknown as Composition;
+    const composition = completeComposition(stored, DEFS[screen]);
+    return { screen, version: row.version, composition, publishedAt: row.createdAt.toISOString(), publishedBy: by ? by.bladerName || by.name : null };
   }
   const r = await legacyRows(db, [screen, `${screen}::hidden`, `${screen}::bg`, "scoreboard::custom", "fonts"]);
   const composition = fromLegacy(screen, { layout: r[screen], hidden: r[`${screen}::hidden`], customs: screen === "scoreboard" ? r["scoreboard::custom"] : undefined, bg: r[`${screen}::bg`], fonts: r.fonts }, DEFS[screen]);
@@ -137,7 +141,9 @@ export async function listVersions(screen: Screen, limit = 30) {
 
 export async function getVersion(screen: Screen, id: string) {
   const r = await prisma.layoutVersion.findFirst({ where: { id, screen } });
-  return r ? { id: r.id, version: r.version, composition: r.composition as unknown as Composition, publishedAt: r.createdAt.toISOString() } : null;
+  if (!r) return null;
+  const stored = r.composition as unknown as Composition;
+  return { id: r.id, version: r.version, composition: completeComposition(stored, DEFS[screen]), publishedAt: r.createdAt.toISOString() };
 }
 
 // ── Load confirmations from the telões (device/session + screen + version) ──

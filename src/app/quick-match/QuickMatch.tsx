@@ -6,6 +6,7 @@ import { FINISH_TYPE_POINTS } from "@/lib/scoring";
 import { fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, type Layout, type FontDef } from "@/lib/arenaLayout";
 import { fetchPublished } from "@/lib/client/publishedLayout";
 import FontLoader from "@/components/FontLoader";
+import { BeyComposite, HiddenCtx, hasPieces, type BeyPieces } from "@/components/arena/Boards";
 
 // Self-contained "quick match": two players score their own points (no judge).
 // Same scoring rules and scoreboard art as the tournament arena. A battle only
@@ -30,7 +31,7 @@ type Snap = { p1Pts: number; p2Pts: number; p1Sets: number; p2Sets: number; setN
 type Bey = {
   name: string; line?: string | null;
   blade?: string | null; ratchet?: string | null; bit?: string | null;
-  lockChip?: string | null; metalBlade?: string | null; assistBlade?: string | null;
+  lockChip?: string | null; metalBlade?: string | null; assistBlade?: string | null; overBlade?: string | null;
 };
 const isCXBey = (b: Bey) => b.line === "CX" || b.line === "CX_EXPAND";
 
@@ -387,16 +388,9 @@ export default function QuickMatch() {
   );
 }
 
-function BeyImg({ layout, k, src, z }: { layout: Layout | null; k: string; src: string; z?: number }) {
-  const f = fieldStyle(SCOREBOARD_DEFAULTS, k, layout);
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w ?? 12}%`, height: `${f.h ?? 22}%`, objectFit: "contain", pointerEvents: "none", zIndex: z }} />
-  );
-}
-
-// Scoreboard bey art for one side. CX beys stack 3 transparent PNGs (assist
-// blade behind, metal blade middle, lock chip on top); others use the blade.
+// Scoreboard bey art for one side — the SAME renderer as the telão
+// (components/arena/Boards BeyComposite): BX/UX one image; CX assist → main
+// blade → lock chip; CX Expand assist → main blade → over blade → lock chip.
 function BeyArt({ layout, side, bey, bladeImg, partImg, hidden }: {
   layout: Layout | null; side: "L" | "R"; bey: Bey | null;
   bladeImg: (n?: string | null) => string | null;
@@ -404,21 +398,15 @@ function BeyArt({ layout, side, bey, bladeImg, partImg, hidden }: {
   hidden?: Set<string>;
 }) {
   if (!bey) return null;
-  if (isCXBey(bey)) {
-    const assist = partImg("ASSIST_BLADE", bey.assistBlade);
-    const metal = partImg("MAIN_BLADE", bey.metalBlade);
-    const lock = partImg("LOCK_CHIP", bey.lockChip);
-    return (
-      <>
-        {assist && !hidden?.has(`cxAssist${side}`) && <BeyImg layout={layout} k={`cxAssist${side}`} src={assist} z={1} />}
-        {metal && !hidden?.has(`cxMetal${side}`) && <BeyImg layout={layout} k={`cxMetal${side}`} src={metal} z={2} />}
-        {lock && !hidden?.has(`cxLock${side}`) && <BeyImg layout={layout} k={`cxLock${side}`} src={lock} z={3} />}
-      </>
-    );
-  }
-  if (hidden?.has(`beyImg${side}`)) return null;
-  const img = bladeImg(bey.blade);
-  return img ? <BeyImg layout={layout} k={`beyImg${side}`} src={img} /> : null;
+  const expand = bey.line === "CX_EXPAND";
+  const pieces: BeyPieces = isCXBey(bey)
+    ? { kind: expand ? "CX_EXPAND" : "CX", assist: partImg("ASSIST_BLADE", bey.assistBlade), metal: partImg("MAIN_BLADE", bey.metalBlade), lock: partImg("LOCK_CHIP", bey.lockChip), over: expand ? partImg("OVER_BLADE", bey.overBlade) : null }
+    : null;
+  return (
+    <HiddenCtx.Provider value={hidden ?? new Set()}>
+      <BeyComposite defs={SCOREBOARD_DEFAULTS} layout={layout} spot={side} img={hasPieces(pieces) ? null : bladeImg(bey.blade)} pieces={pieces} />
+    </HiddenCtx.Provider>
+  );
 }
 
 // ---------- Setup: per-player registered/guest + deck builder ----------
@@ -451,7 +439,7 @@ function PlayerSetup({ title, accent, conf, setConf, deckSize, players, parts, o
       return { ...c, deck: [...c.deck, {
         name: b.name, line: b.beyLine,
         blade: mainBladeOf(b),
-        lockChip: b.lockChip, metalBlade: b.metalBlade, assistBlade: b.assistBlade,
+        lockChip: b.lockChip, metalBlade: b.metalBlade, assistBlade: b.assistBlade, overBlade: b.overBlade,
       }] };
     });
   }
