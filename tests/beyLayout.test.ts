@@ -6,6 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, beyFieldKeys, beyFormatOf, cxAssembly, cxBoxes, fieldStyle } from "../src/lib/arenaLayout.ts";
 import { leftPlayerId, scoreboardSideOf } from "../src/lib/matchSides.ts";
+import { assemblyBoxes, assemblyKeys } from "../src/lib/arenaLayout.ts";
+import { bbox, copyBoxes, mirrorAssembly, moveAssembly, scaleAssembly } from "../src/lib/beyAssembly.ts";
 import { completeComposition, fromLegacy, validateComposition } from "../src/lib/layoutDoc.ts";
 import { buildExamples, pieceMarker } from "../src/lib/beyExamples.ts";
 import { beyPiecesOf, mainBladeName } from "../src/lib/beyArt.ts";
@@ -14,16 +16,18 @@ test("each format has its own elements per spot (CX ≠ CX Expand)", () => {
   assert.deepEqual(beyFieldKeys("L").CX, ["cxAssistL", "cxMetalL", "cxLockL"]);
   assert.deepEqual(beyFieldKeys("R").CX_EXPAND, ["cxeAssistR", "cxeMetalR", "cxeOverR", "cxeLockR"]);
   assert.deepEqual(beyFieldKeys("deck2").BXUX, ["deck2"]);
-  assert.deepEqual(beyFieldKeys("deck2").CX_EXPAND, ["deck2CxeAssist", "deck2CxeMetal", "deck2CxeOver", "deck2CxeLock"]);
+  assert.deepEqual(beyFieldKeys("deck2").CX_EXPAND, ["deck2Cxe"], "winner CX Expand = one assembly element");
   for (const spot of ["deck1", "deck2", "deck3"]) for (const k of Object.values(beyFieldKeys(spot)).flat()) assert.ok(WINNER_DEFAULTS[k], k);
   for (const spot of ["L", "R"]) for (const k of Object.values(beyFieldKeys(spot)).flat()) assert.ok(SCOREBOARD_DEFAULTS[k], k);
   assert.equal(beyFormatOf("deck1"), "BXUX");
   assert.equal(beyFormatOf("deck1Cx"), "CX");
   assert.deepEqual(beyFieldKeys("deck1").CX, ["deck1Cx"], "winner CX = one assembly element");
-  assert.equal(beyFormatOf("deck1CxeLock"), "CX_EXPAND");
+  assert.equal(beyFormatOf("deck1Cxe"), "CX_EXPAND");
   assert.equal(beyFormatOf("cxeOverL"), "CX_EXPAND");
   assert.equal(beyFormatOf("photo"), null);
-  assert.match(WINNER_DEFAULTS.deck3CxeOver.label, /Beyblade 3 · CX Expand · Over Blade/);
+  assert.match(WINNER_DEFAULTS.deck3Cxe.label, /Beyblade 3 · CX Expand \(conjunto\)/);
+  assert.equal(WINNER_DEFAULTS.deck3Cxe.group, "CX_EXPAND");
+  assert.equal(WINNER_DEFAULTS.deck3Cx.group, "CX");
 });
 
 test("old layouts: new pieces start where the existing element already is (telão and editor)", () => {
@@ -31,12 +35,13 @@ test("old layouts: new pieces start where the existing element already is (telã
   const saved = { deck1: { x: 30, y: 50, w: 20, h: 30 } };
   const g = fieldStyle(WINNER_DEFAULTS, "deck1Cx", saved);
   assert.deepEqual([g.x, g.y], [40, 65], "CX assembly centred in the saved Beyblade 1 box");
-  assert.equal(fieldStyle(WINNER_DEFAULTS, "deck1CxeOver", saved).w, 20, "CX Expand pieces follow the box");
+  const ge = fieldStyle(WINNER_DEFAULTS, "deck1Cxe", saved);
+  assert.deepEqual([ge.x, ge.y], [40, 65], "CX Expand assembly centred in the same box");
   assert.equal(fieldStyle(WINNER_DEFAULTS, "deck1", saved).x, 30, "BX/UX position untouched");
   const c = fromLegacy("winner", { layout: saved, hidden: ["deck2"] }, WINNER_DEFAULTS);
   assert.deepEqual(c.fields.deck1Cx, { x: 40, y: 65 }, "editor gets the same inherited centre");
-  assert.deepEqual(c.fields.deck1CxeLock, { x: 30, y: 50, w: 20, h: 30 });
-  assert.ok(c.hidden.includes("deck2Cx") && c.hidden.includes("deck2CxeOver"), "a hidden position keeps its pieces hidden");
+  assert.deepEqual(c.fields.deck1Cxe, { x: 40, y: 65 });
+  assert.ok(c.hidden.includes("deck2Cx") && c.hidden.includes("deck2Cxe"), "a hidden position keeps its assemblies hidden");
   assert.ok(!c.hidden.includes("deck1Cx"));
   assert.equal(validateComposition("winner", c, WINNER_DEFAULTS).ok, true, "new elements persist in the winner layout");
   // Scoreboard: CX Expand follows the CX pieces (over blade follows the main blade).
@@ -45,10 +50,10 @@ test("old layouts: new pieces start where the existing element already is (telã
   // A version published before the new elements existed.
   const old = { fields: { deck1: { x: 30, y: 50, w: 20, h: 30 } }, hidden: [], customs: [], bg: null, fonts: [], locked: [], keepRatio: [] };
   const done = completeComposition(old, WINNER_DEFAULTS);
-  assert.deepEqual(done.fields.deck1CxeAssist, { x: 30, y: 50, w: 20, h: 30 });
+  assert.deepEqual(done.fields.deck1Cxe, { x: 40, y: 65 });
   // Elements that no longer exist (per-piece CX boxes of the previous editor) are dropped.
-  const stale = completeComposition({ ...old, fields: { ...old.fields, deck1CxLock: { x: 1, y: 1, w: 1, h: 1 } }, hidden: ["deck1CxLock"], keepRatio: ["deck1CxLock"] }, WINNER_DEFAULTS);
-  assert.ok(!stale.fields.deck1CxLock && !stale.hidden.includes("deck1CxLock") && !stale.keepRatio.includes("deck1CxLock"));
+  const stale = completeComposition({ ...old, fields: { ...old.fields, deck1CxLock: { x: 1, y: 1, w: 1, h: 1 }, deck1CxeOver: { x: 1, y: 1, w: 1, h: 1 } }, hidden: ["deck1CxLock"], keepRatio: ["deck1CxeOver"] }, WINNER_DEFAULTS);
+  assert.ok(!stale.fields.deck1CxLock && !stale.fields.deck1CxeOver && !stale.hidden.includes("deck1CxLock") && !stale.keepRatio.includes("deck1CxeOver"), "per-piece winner boxes of older editors dropped");
   assert.equal(validateComposition("winner", stale, WINNER_DEFAULTS).ok, true, "publishable");
   // Once moved on its own, the assembly keeps its own centre.
   assert.equal(fieldStyle(WINNER_DEFAULTS, "deck1Cx", { ...saved, deck1Cx: { x: 55, y: 70 } }).x, 55);
@@ -139,4 +144,44 @@ test("reference side: by player id and the real side mapping (sides swap every s
   assert.equal(scoreboardSideOf(m, "p2", [{ setNumber: 1 }, { setNumber: 2 }, { setNumber: 3 }]), "L");
   assert.equal(scoreboardSideOf({ ...m, maxSets: 1 }, "p1", [{ setNumber: 1 }]), "R", "single set: no swap");
   assert.equal(scoreboardSideOf({ ...m, xSidePlayerId: null }, "p2", []), "R", "no sides chosen: player 1 left");
+});
+
+test("CX Expand assembly: its own pieces and config; winner inherits CX Expand, not CX", () => {
+  assert.deepEqual(assemblyKeys("CX_EXPAND", "L"), ["cxeAssistL", "cxeMetalL", "cxeOverL", "cxeLockL"], "draw order assist → main → over → lock");
+  assert.deepEqual(assemblyKeys("CX", "R"), ["cxAssistR", "cxMetalR", "cxLockR"]);
+  const sb = {
+    cxAssistL: { x: 5, y: 55, w: 14, h: 24 }, cxMetalL: { x: 6, y: 56, w: 12, h: 21 }, cxLockL: { x: 10, y: 63, w: 4, h: 7 },
+    cxeAssistL: { x: 4, y: 54, w: 16, h: 28 }, cxeMetalL: { x: 6, y: 57, w: 12, h: 20 }, cxeOverL: { x: 5, y: 56, w: 14, h: 24 }, cxeLockL: { x: 11, y: 64, w: 3, h: 6 },
+  };
+  const ex = assemblyBoxes("CX_EXPAND", sb, "L", { x: 50, y: 70 });
+  assert.deepEqual(ex.map((b) => b.piece), ["assist", "metal", "over", "lock"]);
+  assert.deepEqual(ex.map((b) => b.w), [16, 12, 14, 3], "CX Expand sizes, not the CX ones");
+  assert.deepEqual(assemblyBoxes("CX", sb, "L", { x: 50, y: 70 }).map((b) => b.w), [14, 12, 4]);
+});
+
+test("assembly operations: move/scale keep the montage; copies touch only the target system and side", () => {
+  const f = { a: { x: 10, y: 50, w: 20, h: 30 }, m: { x: 12, y: 52, w: 16, h: 24 }, l: { x: 18, y: 61, w: 4, h: 6 }, other: { x: 70, y: 50, w: 10, h: 10 } };
+  const ks = ["a", "m", "l"];
+  const mv = moveAssembly(f, ks, 5, -2);
+  assert.deepEqual(Object.keys(mv), ks, "only the assembly's keys");
+  assert.deepEqual([mv.a.x - f.a.x, mv.l.x - f.l.x, mv.l.y - f.l.y], [5, 5, -2]);
+  const b0 = bbox(f, ks);
+  const sc = scaleAssembly(f, ks, 1.5);
+  const b1 = bbox(sc, ks);
+  assert.ok(Math.abs(b1.cx - b0.cx) < 0.01 && Math.abs(b1.cy - b0.cy) < 0.01, "common centre kept");
+  assert.ok(Math.abs(b1.w - b0.w * 1.5) < 0.02 && Math.abs(b1.h - b0.h * 1.5) < 0.02);
+  // Offsets between pieces scale by the same factor (no piece comes apart).
+  assert.ok(Math.abs((sc.l.x - sc.a.x) - (f.l.x - f.a.x) * 1.5) < 0.02);
+  assert.ok(Math.abs(sc.m.w / sc.m.h - f.m.w / f.m.h) < 0.01, "piece proportion kept");
+  // Mirror to the other side: mirrored position of the set, same sizes and montage.
+  const mr = mirrorAssembly(f, ks, ["A", "M", "L"]);
+  const bm = bbox(mr, ["A", "M", "L"]);
+  assert.ok(Math.abs(bm.x - (100 - b0.x - b0.w)) < 0.01, "set mirrored");
+  assert.equal(mr.L.x - mr.A.x, f.l.x - f.a.x, "montage NOT mirrored (piece images aren't)");
+  assert.deepEqual([mr.A.w, mr.L.h], [20, 6]);
+  assert.ok(!("other" in mr) && !("a" in mr), "nothing else touched");
+  const cp = copyBoxes(f, [["a", "ea"], ["m", "eo"]]);
+  assert.deepEqual(cp, { ea: f.a, eo: f.m });
+  cp.ea.x = 99;
+  assert.equal(f.a.x, 10, "copies are independent");
 });

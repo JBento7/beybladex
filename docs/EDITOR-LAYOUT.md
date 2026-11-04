@@ -48,45 +48,38 @@
 - **Cenários prontos:** nomes curtos e longos, sem foto, placar com dois dígitos, set único, melhor de três, deck 3on3, 3on3 + reserva e combinações de finalizações.
 - Os valores de exemplo (nomes, placar, sets, evento, fase) são editáveis. A foto vem do perfil do próprio administrador, só para exibição (`admin/layout/previewScenarios.ts`). As Beyblades são exemplos do catálogo (§3.1), nunca as do perfil.
 
-### 3.1 Beyblades BX, UX, CX e CX Expand
+### 3.1 Beyblades: seis sistemas, três grupos de edição
 
-- **Composição de cada formato** (`lib/combo-lines`):
-  - **BX / UX:** uma imagem (a blade);
-  - **CX:** Assist Blade + Main Blade + Lock Chip;
-  - **CX Expand:** Assist Blade + Main Blade + Over Blade + Lock Chip.
-- **Elementos por formato:** cada formato tem seus próprios elementos, em cada lado do placar e em cada posição do deck do vencedor ("Beyblade 1/2/3").
-  - No placar: `beyImgL`, `cxAssistL`/`cxMetalL`/`cxLockL`, `cxeAssistL`/`cxeMetalL`/`cxeOverL`/`cxeLockL` (e o mesmo com `R`).
-  - No vencedor: `deck1` (BX/UX), `deck1Cx` (conjunto CX, ver abaixo), `deck1CxeAssist`…`deck1CxeLock` (CX Expand).
-  - Todos aceitam posição, largura, altura, "Manter proporção", mostrar/ocultar, bloqueio e desfazer/refazer.
-  - A lista de camadas separa por posição e, dentro dela, por formato.
-- **Exemplo de Beyblade:** um seletor BX / UX / CX / CX Expand para cada lado do placar e para cada posição do vencedor.
-  - É só um dado de exemplo: não muda o layout, não marca o rascunho como alterado e não toca em jogadores, inscrições ou torneios.
-  - Como no telão, só aparecem os elementos do formato escolhido em cada lado ou posição.
-  - Selecionar na lista uma peça de outro formato troca o exemplo daquele lado ou posição.
-- **Edição:** o quadro mostra o conjunto montado do exemplo, cada peça na sua caixa e inteira (`object-fit: contain`), sem esticar. A seleção continua sendo por peça. As caixas de seleção não aparecem na prévia.
-- **Mesmo desenho do telão:** prévia e telão usam o mesmo componente (`BeyComposite` em `components/arena/Boards.tsx`): a mesma proporção, transparência, ordem (de trás para a frente: Assist → Main → Over → Lock) e posição.
-- **Exemplos** (`lib/beyExamples`): o catálogo (`BeyPart`) é lido uma vez ao abrir o editor, primeiro a lista sem imagens e depois só as imagens escolhidas.
-  - **Peças compatíveis:** a Main Blade e a Over Blade vêm da própria linha. Lock Chip e Assist Blade, que o sistema compartilha entre CX e CX Expand, preferem a mesma linha.
-  - **Sem imagem no catálogo:** aparece um **marcador** com o nome e a linha da peça, no formato da peça (anel, estrela, disco). O editor nunca usa imagem de outra categoria ou de outro formato.
-- **Telão (beys reais, `lib/beyArt`):**
-  - identifica o formato da Beyblade do jogador e carrega só as peças dela (o CX Expand inclui a Over Blade);
-  - aplica as posições do editor e nunca mistura formatos;
-  - sem imagem real, mantém o tratamento de ausência de antes, nunca uma imagem de demonstração.
-- **CX no vencedor = o mesmo CX do placar** (`cxAssembly`/`cxBoxes` em `lib/arenaLayout`, usados pelas duas telas):
-  - **O que vem do placar:** os tamanhos das peças e os deslocamentos entre elas, do lado em que o vencedor apareceu no último set jogado. O lado é identificado pelo ID do jogador e pela troca real de lados (`lib/matchSides`).
-  - **O que se edita no vencedor:** só o **centro** do conjunto ("Beyblade N · CX (conjunto)"), arrastado como um bloco. As coordenadas absolutas do placar nunca são copiadas.
-  - **No painel:** largura e altura aparecem desabilitadas, com o aviso **"Tamanho e montagem herdados do placar principal"**.
-  - **Mais de um CX no deck:** cada posição usa a mesma montagem, com centro próprio.
-  - **Sincronização:** uma nova versão do Placar muda o vencedor no telão sem republicar o Vencedor.
-  - **Sem configuração própria:** valem os padrões do Placar.
-  - **Na prévia:** o editor usa o rascunho do Placar e o seletor "Vencedor estava no lado: Esquerdo / Direito", com peças CX de exemplo. O telão usa as peças reais do vencedor e o Placar publicado.
-  - **Fora da regra:** BX/UX não mudam, e o CX Expand mantém suas 4 peças próprias.
-  - **Compatibilidade:** as caixas por peça do CX no vencedor (da versão anterior do editor) deixam de existir e são descartadas ao carregar. O conjunto começa centrado na caixa da "Beyblade N".
-- **Layouts antigos:** cada elemento novo **herda** a posição do elemento existente equivalente até ser ajustado:
-  - o conjunto CX do vencedor começa centrado na caixa da "Beyblade N";
-  - peças CX Expand do vencedor herdam a caixa da "Beyblade N"; no placar, herdam as peças CX (a Over Blade herda a Main Blade).
-
-  Uma posição que estava oculta mantém suas peças ocultas. BX/UX e as peças CX já posicionadas não mudam. Versões publicadas antes disso e rascunhos salvos no aparelho recebem os novos elementos da mesma forma (`completeComposition`).
+- **Grupos** (seção "Beyblades" das camadas do Placar e da Partida rápida). Eles organizam só a edição visual; os tipos cadastrados e o regulamento não mudam.
+  - **BX / BX Expand / UX / UX Expand:** uma única imagem da Blade por lado (`beyImgL`/`beyImgR`). Os quatro sistemas compartilham posição, tamanho, visibilidade e proporção. Não há camadas extras.
+  - **CX:** montagem por peças (`cxAssist*`, `cxMetal*`, `cxLock*`), desenhadas Assist Blade → Main Blade → Lock Chip.
+  - **CX Expand:** montagem própria (`cxeAssist*`, `cxeMetal*`, `cxeOver*`, `cxeLock*`), desenhada Assist → Main → Over → Lock. Alterar o CX Expand não muda o CX, e vice-versa.
+  - Trocar de grupo só muda o que o quadro mostra; nenhuma edição se perde.
+- **Dois níveis de seleção (CX e CX Expand):**
+  - **Conjunto** ("Selecionar conjunto"): arrastar move todas as peças, e o canto ou "Largura do conjunto" redimensiona a partir de um centro comum. Posições relativas e tamanhos são multiplicados pelo mesmo fator, então a montagem não se desfaz (`lib/beyAssembly`).
+  - **Peça individual:** pelo quadro ou pela lista, com posição, tamanho, bloqueio e "Restaurar esta peça".
+  - Com uma peça bloqueada, o conjunto não move até ela ser desbloqueada.
+- **Visibilidade:** "Ocultar só na edição" (✎) serve para conferir um encaixe e não vai para o telão. "Ocultar no telão" (👁) faz parte do layout. Também há "Isolar peça na edição" e "Mostrar montagem completa".
+- **Lista:** miniatura do exemplo, nome da peça, seleção, ✎, 👁 e 🔒. A borda de seleção aparece só na edição, nunca na prévia nem no telão.
+- **Ações por sistema e lado** (cada uma é um passo de desfazer):
+  - **"Copiar para o outro lado":** posição espelhada do conjunto, com as mesmas dimensões e a mesma montagem. As peças não são espelhadas, porque as imagens também não são. Só o sistema selecionado muda.
+  - **"Copiar montagem do CX"** (no CX Expand): ponto de partida explícito, em que a Over Blade parte da Main Blade. Depois disso os dois sistemas ficam independentes.
+  - **"Restaurar montagem":** volta as peças daquele sistema e lado ao padrão.
+- **Prévia:** um sistema por jogador (BX, BX Expand, UX, UX Expand, CX, CX Expand) e por posição do vencedor, com exemplos do catálogo da mesma linha.
+  - Só aparece o sistema escolhido; a imagem simples nunca se mistura com as camadas.
+  - Usa o mesmo componente do telão (`BeyComposite`).
+  - Trocar o exemplo não altera o layout.
+- **Peça sem imagem:** no editor aparece um marcador com o nome da peça. No telão, a camada fica vazia, sem colocar a imagem de um Beyblade inteiro dentro dela.
+- **Vencedor:**
+  - "Beyblade N · Imagem simples" é editada normalmente;
+  - "Beyblade N · CX (conjunto)" e "… CX Expand (conjunto)" herdam tamanhos, proporções e deslocamentos do Placar, do mesmo sistema (CX herda CX, CX Expand herda CX Expand) e do lado em que o vencedor apareceu no último set;
+  - no vencedor só o centro de cada conjunto é posicionado, com o aviso "Montagem herdada do placar principal";
+  - no telão vão as imagens reais das peças do vencedor (`lib/beyArt`).
+- **Compatibilidade:**
+  - a imagem simples continua sendo `beyImg*` e `deckN`;
+  - as configurações de CX e CX Expand do Placar são preservadas;
+  - peças CX Expand nunca ajustadas começam onde estão as peças CX;
+  - as caixas por peça do vencedor de versões anteriores do editor são descartadas ao carregar, e os conjuntos começam centrados na caixa da "Beyblade N".
 
 ## 4. Publicação ("Aplicar no telão")
 

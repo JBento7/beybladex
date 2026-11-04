@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TARGETS, beyFormatOf, cxAssembly, cxBoxes, pipDots, fontStack, type BeyFormat } from "@/lib/arenaLayout";
-import { BEY_KINDS, BEY_KIND_LABEL, type BeyExample, type BeyKind } from "@/lib/beyExamples";
+import { PIECE_LABEL, TARGETS, assemblyBoxes, assemblyKeys, assemblyOf, beyFormatOf, fieldStyle, pipDots, fontStack, type AssemblySystem, type BeyFormat, type FieldDef } from "@/lib/arenaLayout";
+import { BEY_KINDS, BEY_KIND_LABEL, kindGroup, type BeyExample, type BeyKind } from "@/lib/beyExamples";
+import { bbox, copyBoxes, mirrorAssembly, moveAssembly, scaleAssembly } from "@/lib/beyAssembly";
 import {
   GROUP_LABEL, SCREEN_LABEL, centered, completeComposition, diffCompositions, emptyHistory, fontsUsed, groupOf, isCustomKey, mirrorField,
   pairKey, record, redo as redoH, resizeKeepRatio, restoreDefaults, sameComposition, snapMove, undo as undoH,
@@ -186,6 +187,16 @@ export default function LayoutEditor({
   const [isolate, setIsolate] = useState(false);
   const [search, setSearch] = useState("");
   useEffect(() => { setSel(null); setView({ kind: "draft" }); }, [screen]);
+  // Beyblades (placar / partida rápida): editing group shown on the board —
+  // the 4 simple systems share one image; CX and CX Expand have their own
+  // pieces. Switching the group never loses edits (it only filters the view).
+  const [beyGroup, setBeyGroup] = useState<"SIMPLE" | "CX" | "CX_EXPAND">("SIMPLE");
+  // Hidden ONLY in the editor (to check a fit); the telão never sees this.
+  const [editHidden, setEditHidden] = useState<string[]>([]);
+  const toggleEditHidden = (k: string) => setEditHidden((l) => (l.includes(k) ? l.filter((x) => x !== k) : [...l, k]));
+  /** Selection of a whole assembly: "@CX:L", "@CX_EXPAND:R". */
+  const groupSel = sel && sel.startsWith("@") ? { system: sel.slice(1).split(":")[0] as AssemblySystem, side: sel.split(":")[1] as "L" | "R" } : null;
+  const groupKeys = (system: AssemblySystem, side: "L" | "R") => assemblyKeys(system, side);
   const selDef: FieldDefLike | null = sel ? defs[sel] ?? null : null;
   const selField: Field | null = sel ? draft.fields[sel] ?? null : null;
   const locked = (k: string) => draft.locked.includes(k);
@@ -212,6 +223,18 @@ export default function LayoutEditor({
     }
     return { x: xs, y: ys };
   };
+  // Dragging a whole assembly: every piece from the same start snapshot.
+  const gdrag = useRef<null | { keys: string[]; mode: "move" | "resize"; start: { x: number; y: number }; orig: Record<string, Field> }>(null);
+  function startGroupDrag(e: React.PointerEvent, system: AssemblySystem, side: "L" | "R", mode: "move" | "resize") {
+    e.stopPropagation();
+    setSel(`@${system}:${side}`);
+    const ks = groupKeys(system, side);
+    if (!editing || ks.some(locked)) return;
+    e.preventDefault();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    beginGesture();
+    gdrag.current = { keys: ks, mode, start: pct(e.clientX, e.clientY), orig: Object.fromEntries(ks.map((k) => [k, { ...draft.fields[k] }])) };
+  }
   function startDrag(e: React.PointerEvent, key: string, mode: "move" | "resize") {
     e.stopPropagation();
     setSel(key);
@@ -223,6 +246,15 @@ export default function LayoutEditor({
   }
   useEffect(() => {
     function onMove(e: PointerEvent) {
+      const g = gdrag.current;
+      if (g) {
+        const p = pct(e.clientX, e.clientY);
+        const dx = p.x - g.start.x, dy = p.y - g.start.y;
+        const b = bbox(g.orig, g.keys);
+        const next = g.mode === "move" ? moveAssembly(g.orig, g.keys, dx, dy) : scaleAssembly(g.orig, g.keys, (b.w + dx) / (b.w || 1), { x: b.cx, y: b.cy });
+        live((c) => ({ ...c, fields: { ...c.fields, ...next } }));
+        return;
+      }
       const d = drag.current;
       if (!d) return;
       const p = pct(e.clientX, e.clientY);
@@ -245,6 +277,7 @@ export default function LayoutEditor({
       }
     }
     function onUp() {
+      if (gdrag.current) { gdrag.current = null; endGesture(); return; }
       if (!drag.current) return;
       drag.current = null;
       setGuides({ x: null, y: null });
@@ -263,9 +296,16 @@ export default function LayoutEditor({
       const mod = e.ctrlKey || e.metaKey;
       if (mod && (e.key === "z" || e.key === "Z")) { e.preventDefault(); if (e.shiftKey) doRedo(); else doUndo(); return; }
       if (mod && (e.key === "y" || e.key === "Y")) { e.preventDefault(); doRedo(); return; }
-      if (!sel || !editing || locked(sel) || !draft.fields[sel]) return;
       const step = e.shiftKey ? 1 : 0.1;
       const d = e.key === "ArrowLeft" ? [-step, 0] : e.key === "ArrowRight" ? [step, 0] : e.key === "ArrowUp" ? [0, -step] : e.key === "ArrowDown" ? [0, step] : null;
+      if (groupSel && editing && d) {
+        const ks = groupKeys(groupSel.system, groupSel.side);
+        if (ks.some(locked)) return;
+        e.preventDefault();
+        commit((c) => ({ ...c, fields: { ...c.fields, ...moveAssembly(c.fields, ks, d[0], d[1]) } }));
+        return;
+      }
+      if (!sel || !editing || locked(sel) || !draft.fields[sel]) return;
       if (!d) return;
       e.preventDefault();
       const f = draft.fields[sel];
@@ -308,35 +348,64 @@ export default function LayoutEditor({
     return { ...s, exDeck: deck };
   });
   const formatOfKind = (k: BeyKind): BeyFormat => (k === "CX" ? "CX" : k === "CX_EXPAND" ? "CX_EXPAND" : "BXUX");
-  /** Beyblade elements of formats other than the spot's example are not drawn
-   *  (as on the telão, one format at a time). */
+  const groupFormat: Record<typeof beyGroup, BeyFormat> = { SIMPLE: "BXUX", CX: "CX", CX_EXPAND: "CX_EXPAND" };
+  /** Board in edit mode. Placar: only the Beyblade elements of the editing
+   *  group (both sides), minus "ocultar só na edição". Vencedor: the format
+   *  of each position's example (as on the telão, one format at a time). */
   const shownOnBoard = (k: string) => {
     const f = beyFormatOf(k), spot = spotOf(k);
-    return !f || !spot || f === formatOfKind(exampleAt(spot));
+    if (!f || !spot) return true;
+    if (editHidden.includes(k)) return false;
+    if (screen === "winner") return f === formatOfKind(exampleAt(spot));
+    return f === groupFormat[beyGroup];
   };
-  /** Example image of an element (edit mode shows the assembled example). */
+  /** Example image of an element (edit mode shows the assembled example):
+   *  simple image = the example chosen for that side when it is a simple
+   *  system (else BX); CX / CX Expand pieces = the example of that system. */
   const exampleSrc = (k: string): string | null => {
     const f = beyFormatOf(k), spot = spotOf(k);
     if (!f || !spot) return null;
-    const e = examples[exampleAt(spot)];
-    if (f === "BXUX") return e.img;
+    if (f === "BXUX") {
+      const kind = exampleAt(spot);
+      return examples[kindGroup(kind) === "SIMPLE" ? kind : "BX"].img;
+    }
+    const e = examples[f === "CX" ? "CX" : "CX_EXPAND"];
     const role = /Over/.test(k) ? "over" : /Lock/.test(k) ? "lock" : /Assist/.test(k) ? "assist" : "metal";
     return e.pieces?.[role] ?? null;
   };
-  /** Selecting an element of another format switches that spot's example. */
+  /** Selecting an element of another format switches that spot's example
+   *  (vencedor) or the editing group (placar). */
   const selectKey = (k: string) => {
     const f = beyFormatOf(k), spot = spotOf(k);
-    if (f && spot && f !== formatOfKind(exampleAt(spot))) setExampleAt(spot, f === "CX" ? "CX" : f === "CX_EXPAND" ? "CX_EXPAND" : "BX");
+    if (f && spot && screen === "winner" && f !== formatOfKind(exampleAt(spot))) setExampleAt(spot, f === "CX" ? "CX" : f === "CX_EXPAND" ? "CX_EXPAND" : "BX");
+    if (f && screen !== "winner") setBeyGroup(f === "BXUX" ? "SIMPLE" : f);
     setSel(k);
   };
-  // CX assembly of the winner screen ("Beyblade N · CX (conjunto)"): only its
-  // CENTRE is edited here; sizes and the piece offsets come from the Placar
-  // (its current draft — what the telão shows once the Placar is applied),
-  // from the side chosen as "Vencedor estava no lado".
-  const isGroup = (k: string) => defs[k]?.group === "cx";
+  // Assemblies of the winner screen ("Beyblade N · CX (conjunto)" / "… CX
+  // Expand (conjunto)"): only the CENTRE is edited here; sizes and offsets
+  // come from the Placar's assembly of the SAME system (its current draft —
+  // what the telão shows once applied), from the side "Vencedor estava no lado".
+  const isGroup = (k: string) => !!defs[k]?.group;
   const geomKind = (k: string) => (isGroup(k) ? "text" as const : defs[k].kind);
   const sbFields = docs.scoreboard.draft.fields;
-  const groupAsm = () => cxAssembly(sbFields, sample.winSide);
+  const groupAsm = (k: string) => assemblyOf(defs[k]?.group ?? "CX", sbFields, sample.winSide);
+
+  // ── Assembly actions (placar / partida rápida), each ONE undoable step ──
+  const sideKeys = (group: typeof beyGroup, side: "L" | "R") => (group === "SIMPLE" ? [`beyImg${side}`] : groupKeys(group, side));
+  /** "Copiar para o outro lado": mirrored position of the set, same sizes and
+   *  montage, ONLY this system on the other side. */
+  const copyToOtherSide = (group: typeof beyGroup, from: "L" | "R") =>
+    commit((c) => ({ ...c, fields: { ...c.fields, ...mirrorAssembly(c.fields, sideKeys(group, from), sideKeys(group, from === "L" ? "R" : "L")) } }));
+  /** "Copiar montagem do CX": CX Expand starts from the CX pieces of the same
+   *  side (the over blade from the main blade). Independent afterwards. */
+  const copyCxIntoExpand = (side: "L" | "R") =>
+    commit((c) => ({ ...c, fields: { ...c.fields, ...copyBoxes(c.fields, [[`cxAssist${side}`, `cxeAssist${side}`], [`cxMetal${side}`, `cxeMetal${side}`], [`cxMetal${side}`, `cxeOver${side}`], [`cxLock${side}`, `cxeLock${side}`]]) } }));
+  const defaultOf = (k: string): Field => {
+    const { kind: _k, label: _l, inherit: _i, inheritMode: _m, group: _g, ...f } = fieldStyle(defs as Record<string, FieldDef>, k, null);
+    return f as Field;
+  };
+  const restorePieces = (ks: string[]) => commit((c) => ({ ...c, fields: { ...c.fields, ...Object.fromEntries(ks.map((k) => [k, defaultOf(k)])) } }));
+  const showFullAssembly = () => { setEditHidden([]); setIsolate(false); };
   const spots: { spot: string; label: string }[] = screen === "winner"
     ? [{ spot: "deck1", label: "Beyblade 1" }, { spot: "deck2", label: "Beyblade 2" }, { spot: "deck3", label: "Beyblade 3" }]
     : [{ spot: "L", label: "Jogador esquerdo" }, { spot: "R", label: "Jogador direito" }];
@@ -421,10 +490,8 @@ export default function LayoutEditor({
   // ── Restore defaults ──
   const [confirmRestore, setConfirmRestore] = useState(false);
   const restoreElement = (k: string) => {
-    const def = baseDefs[k];
-    if (!def) return;
-    const { kind: _k, label: _l, ...g } = def;
-    commit((c) => ({ ...c, fields: { ...c.fields, [k]: { ...(g as Field) } } }));
+    if (!baseDefs[k]) return;
+    commit((c) => ({ ...c, fields: { ...c.fields, [k]: defaultOf(k) } }));
   };
 
   // ── Messages / publication / versions / conflict ──
@@ -507,6 +574,7 @@ export default function LayoutEditor({
   const groupMap = new Map<LayerGroup, string[]>();
   for (const k of keys) {
     if (search && !defs[k].label.toLowerCase().includes(search.toLowerCase())) continue;
+    if (screen !== "winner" && beyFormatOf(k)) continue; // listed in "Beyblades"
     const g = groupOf(screen, k);
     groupMap.set(g, [...(groupMap.get(g) ?? []), k]);
   }
@@ -749,7 +817,8 @@ export default function LayoutEditor({
                   {keys.map((k) => {
                     const f = draft.fields[k];
                     const def = defs[k];
-                    if (!f || (isolate && sel && sel !== k) || !shownOnBoard(k)) return null;
+                    const inSelGroup = !!groupSel && groupKeys(groupSel.system, groupSel.side).includes(k);
+                    if (!f || (isolate && sel && sel !== k && !inSelGroup) || !shownOnBoard(k)) return null;
                     const isSel = sel === k, isHidden = draft.hidden.includes(k), isLocked = locked(k);
                     const outline = isSel ? "2px solid #f0a500" : isHidden ? "1px dashed rgba(255,80,80,0.6)" : "1px dashed rgba(255,255,255,0.35)";
                     const common: React.CSSProperties = { position: "absolute", outline, opacity: isHidden ? 0.35 : 1, cursor: isLocked ? "default" : "move", zIndex: isSel ? 20 : 10, touchAction: "none" };
@@ -767,19 +836,21 @@ export default function LayoutEditor({
                       );
                     }
                     if (isGroup(k)) {
-                      // Assembled example CX, same sizes/offsets as the Placar; moves as one.
-                      const a = groupAsm();
+                      // Assembled example (CX or CX Expand, same system), sizes/offsets
+                      // of the Placar's assembly; moves as one.
+                      const system = def.group!;
+                      const a = groupAsm(k);
                       const left = f.x - a.w / 2, top = f.y - a.h / 2;
-                      const ex = examples.CX.pieces;
+                      const ex = examples[system].pieces;
                       return (
                         <div key={k} onPointerDown={(e) => startDrag(e, k, "move")} title="Tamanho e montagem herdados do placar principal"
                           style={{ ...common, left: `${left}%`, top: `${top}%`, width: `${a.w}%`, height: `${a.h}%` }}>
-                          {cxBoxes(sbFields, sample.winSide, { x: f.x, y: f.y }).map((b) => {
+                          {assemblyBoxes(system, sbFields, sample.winSide, { x: f.x, y: f.y }).map((b) => {
                             const src = ex?.[b.piece];
                             // eslint-disable-next-line @next/next/no-img-element
                             return src ? <img key={b.piece} src={src} alt="" draggable={false} style={{ position: "absolute", left: `${((b.x - left) / a.w) * 100}%`, top: `${((b.y - top) / a.h) * 100}%`, width: `${(b.w / a.w) * 100}%`, height: `${(b.h / a.h) * 100}%`, objectFit: "contain", pointerEvents: "none" }} /> : null;
                           })}
-                          {isSel && <span style={{ position: "absolute", left: 0, bottom: "100%", whiteSpace: "nowrap", fontSize: "0.9cqw", background: "rgba(0,0,0,0.75)", color: "#ffd400", padding: "0 0.3cqw" }}>{def.label} · tamanho herdado do placar</span>}
+                          {isSel && <span style={{ position: "absolute", left: 0, bottom: "100%", whiteSpace: "nowrap", fontSize: "0.9cqw", background: "rgba(0,0,0,0.75)", color: "#ffd400", padding: "0 0.3cqw" }}>{def.label} · montagem herdada do placar principal</span>}
                           {isLocked && <span style={{ position: "absolute", left: 2, top: 2, fontSize: 11 }}>🔒</span>}
                         </div>
                       );
@@ -806,6 +877,20 @@ export default function LayoutEditor({
                       </div>
                     );
                   })}
+                  {groupSel && screen !== "winner" && groupFormat[beyGroup] === groupSel.system && (() => {
+                    // Whole assembly selected: drag moves all pieces; the corner scales
+                    // them around a common centre (montage kept).
+                    const ks = groupKeys(groupSel.system, groupSel.side);
+                    const b = bbox(draft.fields, ks);
+                    return (
+                      <div onPointerDown={(e) => startGroupDrag(e, groupSel.system, groupSel.side, "move")} title="Conjunto: arraste para mover; canto para redimensionar"
+                        style={{ position: "absolute", left: `${b.x}%`, top: `${b.y}%`, width: `${b.w}%`, height: `${b.h}%`, outline: "2px dashed #00e0ff", zIndex: 25, cursor: "move", touchAction: "none" }}>
+                        <span style={{ position: "absolute", left: 0, bottom: "100%", whiteSpace: "nowrap", fontSize: "0.9cqw", background: "rgba(0,0,0,0.75)", color: "#00e0ff", padding: "0 0.3cqw" }}>Conjunto {groupSel.system === "CX" ? "CX" : "CX Expand"}</span>
+                        <span onPointerDown={(e) => startGroupDrag(e, groupSel.system, groupSel.side, "resize")} title="Arraste para redimensionar o conjunto"
+                          style={{ position: "absolute", right: -11, bottom: -11, width: 22, height: 22, background: "#00e0ff", borderRadius: 4, cursor: "nwse-resize", touchAction: "none" }} />
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -819,7 +904,34 @@ export default function LayoutEditor({
         {propsOpen && (
           <aside className="w-full lg:w-80 shrink-0 rounded-xl border border-line bg-card p-3 space-y-4" aria-label="Painel de propriedades">
             {/* Properties */}
-            {selDef && selField && view.kind === "draft" ? (
+            {groupSel && view.kind === "draft" ? (() => {
+              const ks = groupKeys(groupSel.system, groupSel.side);
+              const b = bbox(draft.fields, ks);
+              const anyLocked = ks.some(locked);
+              const name = `Conjunto ${groupSel.system === "CX" ? "CX" : "CX Expand"} (${groupSel.side === "L" ? "esq" : "dir"})`;
+              const move = (dx: number, dy: number) => live((c) => ({ ...c, fields: { ...c.fields, ...moveAssembly(c.fields, ks, dx, dy) } }));
+              return (
+                <section aria-labelledby="props-t" className="space-y-2">
+                  <h2 id="props-t" className="text-sm font-black text-brand-yellow">{name}</h2>
+                  <p className="text-xs text-gray-400">Move e redimensiona as {ks.length} peças juntas, a partir de um centro comum: deslocamentos e proporções entre as peças são mantidos.</p>
+                  {anyLocked && <p className="text-xs text-amber-200">Há peças bloqueadas: desbloqueie-as para mover ou redimensionar o conjunto.</p>}
+                  <fieldset disabled={anyLocked || preview} className="space-y-2 disabled:opacity-60">
+                    <SliderNum label="Posição horizontal do conjunto (centro, %)" value={r2(b.cx)} min={-20} max={120} step={0.1} onLive={(v) => { beginGesture(); move(v - b.cx, 0); }} onEnd={endGesture} onCommit={(v) => commit((c) => ({ ...c, fields: { ...c.fields, ...moveAssembly(c.fields, ks, v - b.cx, 0) } }))} />
+                    <SliderNum label="Posição vertical do conjunto (centro, %)" value={r2(b.cy)} min={-20} max={120} step={0.1} onLive={(v) => { beginGesture(); move(0, v - b.cy); }} onEnd={endGesture} onCommit={(v) => commit((c) => ({ ...c, fields: { ...c.fields, ...moveAssembly(c.fields, ks, 0, v - b.cy) } }))} />
+                    <SliderNum label="Largura do conjunto (%)" value={r2(b.w)} min={1} max={80} step={0.1}
+                      onLive={(v) => { beginGesture(); live((c) => ({ ...c, fields: { ...c.fields, ...scaleAssembly(c.fields, ks, v / (bbox(c.fields, ks).w || 1)) } })); }} onEnd={endGesture}
+                      onCommit={(v) => commit((c) => ({ ...c, fields: { ...c.fields, ...scaleAssembly(c.fields, ks, v / (bbox(c.fields, ks).w || 1)) } }))} />
+                    <p className="text-xs text-gray-400">Altura do conjunto: {r2(b.h)}% (acompanha a largura).</p>
+                  </fieldset>
+                  <div className="grid gap-2">
+                    <button className={btnGhost} onClick={() => copyToOtherSide(groupSel.system, groupSel.side)} disabled={!editing}>⇄ Copiar para o outro lado</button>
+                    {groupSel.system === "CX_EXPAND" && <button className={btnGhost} onClick={() => copyCxIntoExpand(groupSel.side)} disabled={!editing}>Copiar montagem do CX</button>}
+                    <button className={btnGhost} onClick={showFullAssembly}>Mostrar montagem completa</button>
+                    <button className={btnGhost} onClick={() => restorePieces(ks)} disabled={!editing}>Restaurar montagem deste sistema</button>
+                  </div>
+                </section>
+              );
+            })() : selDef && selField && view.kind === "draft" ? (
               <section aria-labelledby="props-t" className="space-y-2">
                 <h2 id="props-t" className="text-sm font-black text-brand-yellow">{selDef.label}{locked(sel!) && <span className="ml-2 text-xs text-gray-400">🔒 bloqueado</span>}</h2>
                 <fieldset disabled={locked(sel!) || preview} className="space-y-2 disabled:opacity-60">
@@ -828,10 +940,10 @@ export default function LayoutEditor({
                   {isGroup(sel!) ? (
                     <>
                       <p className="rounded border border-brand-yellow/40 bg-brand-yellow/10 px-2 py-1.5 text-xs text-amber-100">
-                        <b>Tamanho e montagem herdados do placar principal</b> (peças CX do lado {sample.winSide === "L" ? "esquerdo" : "direito"}). Aqui só a posição do conjunto (centro) é ajustada; mude os tamanhos no Placar.
+                        <b>Montagem herdada do placar principal</b> ({selDef.group === "CX_EXPAND" ? "CX Expand" : "CX"} do lado {sample.winSide === "L" ? "esquerdo" : "direito"}): tamanhos, proporções e deslocamentos das peças vêm do Placar. Aqui só a posição do conjunto (centro) é ajustada.
                       </p>
-                      <SliderNum label="Largura (%)" value={Math.round(groupAsm().w * 100) / 100} min={0.5} max={100} step={0.1} disabled onLive={() => {}} onEnd={() => {}} onCommit={() => {}} />
-                      <SliderNum label="Altura (%)" value={Math.round(groupAsm().h * 100) / 100} min={0.5} max={100} step={0.1} disabled onLive={() => {}} onEnd={() => {}} onCommit={() => {}} />
+                      <SliderNum label="Largura (%)" value={Math.round(groupAsm(sel!).w * 100) / 100} min={0.5} max={100} step={0.1} disabled onLive={() => {}} onEnd={() => {}} onCommit={() => {}} />
+                      <SliderNum label="Altura (%)" value={Math.round(groupAsm(sel!).h * 100) / 100} min={0.5} max={100} step={0.1} disabled onLive={() => {}} onEnd={() => {}} onCommit={() => {}} />
                     </>
                   ) : selDef.kind !== "text" ? (
                     <>
@@ -882,7 +994,16 @@ export default function LayoutEditor({
                     <button className="min-h-[44px] text-sm text-red-300 underline" onClick={() => deleteCustom(sel!)}>Excluir campo</button>
                   </div>
                 )}
-                {!isCustomKey(sel!) && <button className="min-h-[44px] text-sm text-gray-300 underline" onClick={() => restoreElement(sel!)}>Restaurar padrão deste elemento</button>}
+                {screen !== "winner" && beyFormatOf(sel!) && (
+                  // Beyblade piece of the placar: assembly-level shortcuts.
+                  <div className="grid gap-2 border-t border-line pt-2">
+                    {beyFormatOf(sel!) !== "BXUX" && <button className={btnGhost} onClick={() => setSel(`@${beyFormatOf(sel!)}:${sel!.slice(-1)}`)}>Selecionar conjunto</button>}
+                    <button className={isolate ? btnOn : btnGhost} aria-pressed={isolate} onClick={() => setIsolate((v) => !v)}>Isolar peça na edição</button>
+                    <button className={btnGhost} aria-pressed={editHidden.includes(sel!)} onClick={() => toggleEditHidden(sel!)}>{editHidden.includes(sel!) ? "Mostrar na edição" : "Ocultar só na edição"}</button>
+                    {beyFormatOf(sel!) === "BXUX" && <button className={btnGhost} onClick={() => copyToOtherSide("SIMPLE", sel!.slice(-1) as "L" | "R")} disabled={!editing}>⇄ Copiar para o outro lado</button>}
+                  </div>
+                )}
+                {!isCustomKey(sel!) && <button className="min-h-[44px] text-sm text-gray-300 underline" onClick={() => restoreElement(sel!)}>{beyFormatOf(sel!) && screen !== "winner" ? "Restaurar esta peça" : "Restaurar padrão deste elemento"}</button>}
               </section>
             ) : (
               <p className="text-xs text-gray-400">Selecione um elemento na lista ou no quadro para ver as propriedades. Selecionar não muda a visibilidade.</p>
@@ -892,7 +1013,7 @@ export default function LayoutEditor({
             <section aria-labelledby="layers-t">
               <div className="flex items-center gap-2 mb-2">
                 <h2 id="layers-t" className="text-sm font-black text-white">Camadas</h2>
-                <label className="ml-auto flex items-center gap-1 text-xs text-gray-400 min-h-[44px]"><input type="checkbox" className="w-4 h-4" checked={isolate} onChange={(e) => setIsolate(e.target.checked)} /> Isolar seleção</label>
+                <label className="ml-auto flex items-center gap-1 text-xs text-gray-400 min-h-[44px]"><input type="checkbox" className="w-4 h-4" checked={isolate} onChange={(e) => setIsolate(e.target.checked)} /> Isolar seleção na edição</label>
               </div>
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar elemento" aria-label="Buscar elemento" className="w-full min-h-[44px] mb-2 bg-field border border-line rounded px-2 text-white text-sm" />
               {screen === "scoreboard" && (
@@ -901,6 +1022,18 @@ export default function LayoutEditor({
                   <select value={newType} onChange={(e) => setNewType(e.target.value as "text" | "int")} aria-label="Tipo do novo campo" className="min-h-[44px] bg-field border border-line rounded px-1 text-white text-sm"><option value="text">Texto</option><option value="int">Nº</option></select>
                   <button className={btnGhost} onClick={addCustom} disabled={!newLabel.trim() || !editing}>Inserir</button>
                 </div>
+              )}
+              {screen !== "winner" && (
+                <BeybladesSection
+                  group={beyGroup} setGroup={(g) => { setBeyGroup(g); if (sel && (sel.startsWith("@") || beyFormatOf(sel))) setSel(null); }}
+                  sel={sel} editing={editing} hiddenEditable={hiddenEditable}
+                  label={(k) => defs[k]?.label ?? k} thumb={exampleSrc}
+                  isHidden={(k) => draft.hidden.includes(k)} isEditHidden={(k) => editHidden.includes(k)} isLocked={locked}
+                  onSelect={selectKey} onSelectGroup={(system, side) => setSel(`@${system}:${side}`)}
+                  onToggleHidden={(k) => toggleIn("hidden", k)} onToggleEditHidden={toggleEditHidden} onToggleLock={(k) => toggleIn("locked", k)}
+                  onCopySide={(side) => copyToOtherSide(beyGroup, side)} onCopyCx={copyCxIntoExpand}
+                  onRestore={(side) => restorePieces(sideKeys(beyGroup, side))} onShowAll={showFullAssembly}
+                />
               )}
               {groups.map(([g, ks]) => (
                 <div key={g} className="mb-3">
@@ -1030,5 +1163,74 @@ function SampleInput({ label, value, numeric, onChange }: { label: string; value
     <label className="text-xs text-gray-400">{label}
       <input value={value} inputMode={numeric ? "numeric" : "text"} onChange={(e) => onChange(e.target.value)} className={`ml-1 min-h-[44px] bg-field border border-line rounded px-2 text-white text-sm ${numeric ? "w-16" : "w-36"}`} />
     </label>
+  );
+}
+
+/**
+ * "Beyblades" (Placar / Partida rápida): one editing group at a time —
+ * simple image (BX, BX Expand, UX, UX Expand share it), CX, CX Expand — with
+ * each side's pieces: thumbnail, name, selection, "ocultar só na edição",
+ * "ocultar no telão" and lock, plus the assembly actions.
+ */
+function BeybladesSection({ group, setGroup, sel, editing, hiddenEditable, label, thumb, isHidden, isEditHidden, isLocked, onSelect, onSelectGroup, onToggleHidden, onToggleEditHidden, onToggleLock, onCopySide, onCopyCx, onRestore, onShowAll }: {
+  group: "SIMPLE" | "CX" | "CX_EXPAND"; setGroup: (g: "SIMPLE" | "CX" | "CX_EXPAND") => void;
+  sel: string | null; editing: boolean; hiddenEditable: boolean;
+  label: (k: string) => string; thumb: (k: string) => string | null;
+  isHidden: (k: string) => boolean; isEditHidden: (k: string) => boolean; isLocked: (k: string) => boolean;
+  onSelect: (k: string) => void; onSelectGroup: (system: AssemblySystem, side: "L" | "R") => void;
+  onToggleHidden: (k: string) => void; onToggleEditHidden: (k: string) => void; onToggleLock: (k: string) => void;
+  onCopySide: (side: "L" | "R") => void; onCopyCx: (side: "L" | "R") => void; onRestore: (side: "L" | "R") => void; onShowAll: () => void;
+}) {
+  const GROUPS: { g: "SIMPLE" | "CX" | "CX_EXPAND"; label: string; hint: string }[] = [
+    { g: "SIMPLE", label: "BX / BX Expand / UX / UX Expand", hint: "Imagem simples: uma imagem da Blade por lado, a mesma configuração para os quatro sistemas." },
+    { g: "CX", label: "CX", hint: "Montagem por peças: Assist Blade → Main Blade → Lock Chip." },
+    { g: "CX_EXPAND", label: "CX Expand", hint: "Montagem por peças: Assist Blade → Main Blade → Over Blade → Lock Chip. Independente do CX." },
+  ];
+  const small = "min-h-[36px] px-2 text-[11px] text-gray-200 border border-line rounded disabled:opacity-40";
+  const keysOf = (side: "L" | "R") => (group === "SIMPLE" ? [`beyImg${side}`] : assemblyKeys(group, side));
+  const pieceName = (k: string) => (group === "SIMPLE" ? "Imagem simples" : PIECE_LABEL[(/Over/.test(k) ? "over" : /Lock/.test(k) ? "lock" : /Assist/.test(k) ? "assist" : "metal")]);
+  return (
+    <section aria-labelledby="beys-t" className="mb-4 rounded-lg border border-line p-2">
+      <h3 id="beys-t" className="text-xs font-bold uppercase tracking-wide text-gray-300 mb-1">Beyblades</h3>
+      <div role="group" aria-label="Sistema em edição" className="grid gap-1 mb-1">
+        {GROUPS.map((x) => (
+          <button key={x.g} type="button" aria-pressed={group === x.g} onClick={() => setGroup(x.g)}
+            className={`min-h-[40px] px-2 rounded text-left text-sm font-bold border ${group === x.g ? "bg-brand-yellow text-black border-brand-yellow" : "bg-field text-gray-200 border-line"}`}>
+            {x.label}
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] text-gray-400 mb-2">{GROUPS.find((x) => x.g === group)!.hint} Mudar o sistema só troca o que aparece no quadro; nenhuma edição se perde.</p>
+      {(["L", "R"] as const).map((side) => (
+        <div key={side} className="mb-2">
+          <div className="flex flex-wrap items-center gap-1 mb-1">
+            <span className="text-[11px] font-bold text-gray-400 mr-auto">{side === "L" ? "Lado esquerdo" : "Lado direito"}</span>
+            {group !== "SIMPLE" && <button type="button" className={`${small} ${sel === `@${group}:${side}` ? "ring-1 ring-[#00e0ff]" : ""}`} onClick={() => onSelectGroup(group, side)}>Selecionar conjunto</button>}
+            <button type="button" className={small} onClick={() => onCopySide(side)} disabled={!editing} title="Posição espelhada, mesmas dimensões e montagem; só este sistema">Copiar para o outro lado</button>
+            {group === "CX_EXPAND" && <button type="button" className={small} onClick={() => onCopyCx(side)} disabled={!editing}>Copiar montagem do CX</button>}
+            <button type="button" className={small} onClick={() => onRestore(side)} disabled={!editing}>Restaurar montagem</button>
+          </div>
+          <ul className="space-y-1">
+            {keysOf(side).map((k) => {
+              const src = thumb(k);
+              const hid = isHidden(k), ehid = isEditHidden(k), lk = isLocked(k);
+              return (
+                <li key={k} className={`flex items-center gap-1 rounded ${sel === k ? "bg-brand-yellow/20 ring-1 ring-brand-yellow" : "bg-field"}`}>
+                  <button type="button" onClick={() => onSelect(k)} aria-current={sel === k ? "true" : undefined} aria-label={label(k)} className={`flex flex-1 min-w-0 min-h-[44px] items-center gap-2 px-1 text-left text-sm ${hid ? "text-gray-500 line-through" : "text-white"}`}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {src ? <img src={src} alt="" className="w-8 h-8 shrink-0 object-contain bg-black/40 rounded" /> : <span className="w-8 h-8 shrink-0 rounded border border-dashed border-gray-600 text-[9px] text-gray-500 flex items-center justify-center">sem img</span>}
+                    <span className="truncate">{pieceName(k)}</span>
+                  </button>
+                  <button type="button" onClick={() => onToggleEditHidden(k)} aria-pressed={ehid} aria-label={`${ehid ? "Mostrar" : "Ocultar"} ${label(k)} só na edição`} title={ehid ? "Oculta só na edição (o telão continua mostrando)" : "Ocultar só na edição"} className={`min-w-[40px] min-h-[44px] text-[11px] font-bold ${ehid ? "text-amber-300" : "text-gray-400"}`}>{ehid ? "✎ off" : "✎"}</button>
+                  <button type="button" onClick={() => onToggleHidden(k)} disabled={!hiddenEditable || !editing} aria-pressed={!hid} aria-label={`${hid ? "Mostrar" : "Ocultar"} ${label(k)} no telão`} title={hid ? "Oculto no telão" : "Visível no telão"} className="min-w-[40px] min-h-[44px] text-lg disabled:opacity-40">{hid ? "🙈" : "👁"}</button>
+                  <button type="button" onClick={() => onToggleLock(k)} disabled={!editing} aria-pressed={lk} aria-label={`${lk ? "Desbloquear" : "Bloquear"} ${label(k)}`} title={lk ? "Bloqueado: continua visível, mas não move" : "Livre"} className="min-w-[40px] min-h-[44px] text-lg disabled:opacity-40">{lk ? "🔒" : "🔓"}</button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+      <button type="button" className={small} onClick={onShowAll}>Mostrar montagem completa</button>
+    </section>
   );
 }

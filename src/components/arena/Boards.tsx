@@ -6,7 +6,7 @@
 // NOTE: iPad Mini 2 runs iOS 12 Safari — avoid flexbox `gap`, `clip-path`,
 // `inset` shorthand in new code here.
 import { createContext, useContext, useState } from "react";
-import { beyFieldKeys, cxBoxes, fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type FieldDef, type Layout } from "@/lib/arenaLayout";
+import { assemblyBoxes, beyFieldKeys, fieldStyle, pipDots, fontStack, SCOREBOARD_DEFAULTS, WINNER_DEFAULTS, type FieldDef, type Layout } from "@/lib/arenaLayout";
 import { setLabel } from "@/lib/matchLabel";
 
 // Fields disabled in the layout editor are hidden from the placar via this ctx.
@@ -385,28 +385,28 @@ export function BeyComposite({ defs, layout, spot, img, pieces, cx }: {
     return <img key={k} src={src} alt="" onError={fallbackBey} style={{ position: "absolute", left: `${f.x}%`, top: `${f.y}%`, width: `${f.w}%`, height: `${f.h}%`, objectFit: "contain" }} />;
   };
   if (hasPieces(pieces)) {
-    if (pieces.kind === "CX_EXPAND") {
-      const [a, m, o, l] = keys.CX_EXPAND;
-      return <>{piece(a, pieces.assist)}{piece(m, pieces.metal)}{piece(o, pieces.over)}{piece(l, pieces.lock)}</>;
-    }
-    // CX: the SAME assembly on both screens (lib/arenaLayout cxBoxes) —
-    // scoreboard: as configured; winner: same sizes/offsets, moved as one set.
-    const src = { assist: pieces.assist, metal: pieces.metal, lock: pieces.lock };
+    // CX / CX Expand: the SAME assembly on both screens (lib/arenaLayout
+    // assemblyBoxes) — scoreboard: as configured for that system and side;
+    // winner: same sizes/offsets of the same system, moved as one set.
+    const system = pieces.kind === "CX_EXPAND" ? "CX_EXPAND" as const : "CX" as const;
+    const src: Record<string, string | null | undefined> = { assist: pieces.assist, metal: pieces.metal, over: pieces.over, lock: pieces.lock };
     if (/^deck[123]$/.test(spot)) {
-      const group = keys.CX[0];
+      const group = keys[system][0];
       if (hidden.has(group)) return null;
       const c = fieldStyle(defs, group, layout);
-      return <>{cxBoxes(cx?.sbLayout ?? null, cx?.side ?? "L", { x: c.x, y: c.y }).map((b) => <CxPieceImg key={b.piece} box={b} src={src[b.piece]} />)}</>;
+      return <>{assemblyBoxes(system, cx?.sbLayout ?? null, cx?.side ?? "L", { x: c.x, y: c.y }).map((b) => <PieceImg key={b.piece} box={b} src={src[b.piece]} />)}</>;
     }
-    return <>{cxBoxes(layout, spot as "L" | "R").map((b) => (hidden.has(b.key) ? null : <CxPieceImg key={b.piece} box={b} src={src[b.piece]} />))}</>;
+    return <>{assemblyBoxes(system, layout, spot as "L" | "R").map((b) => (hidden.has(b.key) ? null : <PieceImg key={b.piece} box={b} src={src[b.piece]} />))}</>;
   }
   return piece(keys.BXUX[0], img);
 }
 
-function CxPieceImg({ box, src }: { box: { x: number; y: number; w: number; h: number }; src: string | null }) {
+// One piece of an assembly. A broken piece image is HIDDEN — never replaced by
+// a whole-Beyblade image inside a layer of the assembly.
+function PieceImg({ box, src }: { box: { x: number; y: number; w: number; h: number }; src: string | null | undefined }) {
   if (!src) return null;
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt="" onError={fallbackBey} style={{ position: "absolute", left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, objectFit: "contain" }} />;
+  return <img src={src} alt="" onError={hideImg} style={{ position: "absolute", left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, objectFit: "contain" }} />;
 }
 
 export function Scoreboard({ arena, data, match, build, layout, bg, customFields, p2p, onTest, frame = "viewport" }: { arena: number; data: ArenaData; match: Match; build: string; layout: Layout | null; bg: string; customFields: CustomFld[]; p2p?: { matchId: string; version: number; byId: Record<string, number>; setsById: Record<string, number>; at: number } | null; onTest: () => void; frame?: Frame }) {

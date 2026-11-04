@@ -26,9 +26,10 @@ export type FieldDef = Field & {
   kind: FieldKind; label: string; inherit?: string;
   /** "center": x/y are the inherited element's CENTER (not its top-left). */
   inheritMode?: "center";
-  /** "cx": a CX assembly — only its centre is positioned here; sizes and
-   *  piece offsets come from the scoreboard (cxAssembly). */
-  group?: "cx";
+  /** A CX / CX Expand assembly of the winner screen — only its centre is
+   *  positioned here; sizes and piece offsets come from the scoreboard's
+   *  assembly of the SAME system (assemblyOf). */
+  group?: "CX" | "CX_EXPAND";
 };
 export type Layout = Record<string, Field>;
 
@@ -44,9 +45,10 @@ export const SCOREBOARD_DEFAULTS: Record<string, FieldDef> = {
   photoR: { kind: "img", label: "Foto (dir)", x: 78.35, y: 16.4, w: 18, h: 28 },
   beyNameL: { kind: "text", label: "Bey nome (esq)", x: 13.2, y: 50.9, w: 20, fs: 1.3 },
   beyNameR: { kind: "text", label: "Bey nome (dir)", x: 86.2, y: 50.9, w: 20, fs: 1.3 },
-  // BX / UX: one image (the blade art).
-  beyImgL: { kind: "img", label: "BX/UX · Beyblade (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2 },
-  beyImgR: { kind: "img", label: "BX/UX · Beyblade (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
+  // Simple systems (BX, BX Expand, UX, UX Expand): ONE blade image, one
+  // shared configuration for the four.
+  beyImgL: { kind: "img", label: "Imagem simples (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2 },
+  beyImgR: { kind: "img", label: "Imagem simples (dir)", x: 79.84, y: 57.7, w: 12.5, h: 22.2 },
   // CX: 3 stacked transparent PNGs — assist blade (back), main/metal blade,
   // lock chip (front). Each piece is positionable on its own.
   cxAssistL: { kind: "img", label: "CX · Assist Blade (esq)", x: 7.1, y: 57.7, w: 12.5, h: 22.2 },
@@ -94,23 +96,19 @@ export const WINNER_DEFAULTS: Record<string, FieldDef> = {
 };
 
 /** One deck position of the winner screen:
- *  - `deckN`: the BX/UX image (the key layouts already use);
- *  - `deckNCx`: the CX assembly as ONE element — only its centre is set here
- *    (default: centre of the `deckN` box); sizes, proportions and the offsets
- *    between the pieces are the scoreboard's (cxAssembly), so it is never
- *    configured twice;
- *  - CX Expand: its own 4 pieces (its structure differs), starting in the
- *    `deckN` box until positioned. */
+ *  - `deckN`: the simple image (BX, BX Expand, UX, UX Expand);
+ *  - `deckNCx` / `deckNCxe`: the CX / CX Expand assembly as ONE element each —
+ *    only its centre is set here (default: centre of the `deckN` box); sizes,
+ *    proportions and the offsets between the pieces are the scoreboard's
+ *    assembly of the same system, so they are never configured twice. */
 function deckSlotDefs(n: 1 | 2 | 3, x: number): Record<string, FieldDef> {
   const box = { x, y: 56.6, w: 15, h: 26.7 };
   const d = `deck${n}`, L = `Beyblade ${n}`;
+  const center = { x: x + box.w / 2, y: box.y + box.h / 2, inherit: d, inheritMode: "center" as const };
   return {
-    [d]: { kind: "img", label: `${L} · BX/UX`, ...box },
-    [`${d}Cx`]: { kind: "img", label: `${L} · CX (conjunto)`, x: x + box.w / 2, y: box.y + box.h / 2, inherit: d, inheritMode: "center", group: "cx" },
-    [`${d}CxeAssist`]: { kind: "img", label: `${L} · CX Expand · Assist Blade`, ...box, inherit: d },
-    [`${d}CxeMetal`]: { kind: "img", label: `${L} · CX Expand · Main Blade`, ...box, inherit: d },
-    [`${d}CxeOver`]: { kind: "img", label: `${L} · CX Expand · Over Blade`, ...box, inherit: d },
-    [`${d}CxeLock`]: { kind: "img", label: `${L} · CX Expand · Lock Chip`, ...box, inherit: d },
+    [d]: { kind: "img", label: `${L} · Imagem simples`, ...box },
+    [`${d}Cx`]: { kind: "img", label: `${L} · CX (conjunto)`, ...center, group: "CX" },
+    [`${d}Cxe`]: { kind: "img", label: `${L} · CX Expand (conjunto)`, ...center, group: "CX_EXPAND" },
   };
 }
 
@@ -123,7 +121,7 @@ export function beyFieldKeys(spot: string): Record<BeyFormat, string[]> {
     return {
       BXUX: [spot],
       CX: [`${spot}Cx`],
-      CX_EXPAND: [`${spot}CxeAssist`, `${spot}CxeMetal`, `${spot}CxeOver`, `${spot}CxeLock`],
+      CX_EXPAND: [`${spot}Cxe`],
     };
   }
   return {
@@ -135,7 +133,7 @@ export function beyFieldKeys(spot: string): Record<BeyFormat, string[]> {
 /** Format an element belongs to (null = not a Beyblade element). */
 export function beyFormatOf(key: string): BeyFormat | null {
   if (/^(beyImg[LR]|deck[123])$/.test(key)) return "BXUX";
-  if (/^(cxe(Assist|Metal|Over|Lock)[LR]|deck[123]Cxe(Assist|Metal|Over|Lock))$/.test(key)) return "CX_EXPAND";
+  if (/^(cxe(Assist|Metal|Over|Lock)[LR]|deck[123]Cxe)$/.test(key)) return "CX_EXPAND";
   if (/^(cx(Assist|Metal|Lock)[LR]|deck[123]Cx)$/.test(key)) return "CX";
   return null;
 }
@@ -173,18 +171,35 @@ export function fieldStyle(defs: Record<string, FieldDef>, key: string, saved: L
   return def;
 }
 
-// ── CX assembly (shared by the scoreboard and the winner screen) ──
-// Both boards are 1672×941, so sizes in % mean the same on both.
-export const CX_PIECES = ["assist", "metal", "lock"] as const; // back → front
-export type CxPiece = (typeof CX_PIECES)[number];
-const CX_KEY: Record<CxPiece, string> = { assist: "cxAssist", metal: "cxMetal", lock: "cxLock" };
-export type PieceBox = { piece: CxPiece; key: string; x: number; y: number; w: number; h: number };
+// ── CX / CX Expand assemblies (shared by the scoreboard and the winner) ──
+// Both boards are 1672×941, so sizes in % mean the same on both. Drawing
+// order (back → front): CX assist → main → lock; CX Expand assist → main →
+// over → lock (lib/combo-lines). Each system has its OWN pieces and config.
+export type AssemblySystem = "CX" | "CX_EXPAND";
+export type AssemblyPiece = "assist" | "metal" | "over" | "lock";
+export const ASSEMBLY_PIECES: Record<AssemblySystem, AssemblyPiece[]> = {
+  CX: ["assist", "metal", "lock"],
+  CX_EXPAND: ["assist", "metal", "over", "lock"],
+};
+const PIECE_KEY: Record<AssemblySystem, Record<AssemblyPiece, string>> = {
+  CX: { assist: "cxAssist", metal: "cxMetal", over: "", lock: "cxLock" },
+  CX_EXPAND: { assist: "cxeAssist", metal: "cxeMetal", over: "cxeOver", lock: "cxeLock" },
+};
+export const PIECE_LABEL: Record<AssemblyPiece, string> = { assist: "Assist Blade", metal: "Main Blade", over: "Over Blade", lock: "Lock Chip" };
+/** Scoreboard element keys of a system's pieces on one side, back → front. */
+export function assemblyKeys(system: AssemblySystem, side: "L" | "R"): string[] {
+  return ASSEMBLY_PIECES[system].map((p) => `${PIECE_KEY[system][p]}${side}`);
+}
+export type PieceBox = { piece: AssemblyPiece; key: string; x: number; y: number; w: number; h: number };
+/** @deprecated name kept for callers: the CX pieces. */
+export const CX_PIECES = ASSEMBLY_PIECES.CX;
+export type CxPiece = AssemblyPiece;
 
-/** The CX pieces of one scoreboard side as configured there (saved or
- *  default): absolute boxes, the bounding box and its centre. */
-export function cxAssembly(sbLayout: Layout | null | undefined, side: "L" | "R") {
-  const boxes: PieceBox[] = CX_PIECES.map((piece) => {
-    const key = `${CX_KEY[piece]}${side}`;
+/** The pieces of one system on one scoreboard side as configured there
+ *  (saved or default): absolute boxes, the bounding box and its centre. */
+export function assemblyOf(system: AssemblySystem, sbLayout: Layout | null | undefined, side: "L" | "R") {
+  const boxes: PieceBox[] = ASSEMBLY_PIECES[system].map((piece) => {
+    const key = `${PIECE_KEY[system][piece]}${side}`;
     const f = fieldStyle(SCOREBOARD_DEFAULTS, key, sbLayout);
     return { piece, key, x: f.x, y: f.y, w: f.w ?? 12.5, h: f.h ?? 22.2 };
   });
@@ -194,14 +209,16 @@ export function cxAssembly(sbLayout: Layout | null | undefined, side: "L" | "R")
 }
 
 /**
- * Boxes of the CX pieces to draw. Without `center`: exactly where the
+ * Boxes of a system's pieces to draw. Without `center`: exactly where the
  * scoreboard puts them. With `center` (winner screen): the SAME sizes and
  * the same offsets between the pieces, the whole assembly moved so that its
  * centre lands on `center` — never the scoreboard's absolute coordinates.
  */
-export function cxBoxes(sbLayout: Layout | null | undefined, side: "L" | "R", center?: { x: number; y: number }): PieceBox[] {
-  const a = cxAssembly(sbLayout, side);
+export function assemblyBoxes(system: AssemblySystem, sbLayout: Layout | null | undefined, side: "L" | "R", center?: { x: number; y: number }): PieceBox[] {
+  const a = assemblyOf(system, sbLayout, side);
   if (!center) return a.boxes;
   const dx = center.x - a.cx, dy = center.y - a.cy;
   return a.boxes.map((b) => ({ ...b, x: b.x + dx, y: b.y + dy }));
 }
+export const cxAssembly = (sbLayout: Layout | null | undefined, side: "L" | "R") => assemblyOf("CX", sbLayout, side);
+export const cxBoxes = (sbLayout: Layout | null | undefined, side: "L" | "R", center?: { x: number; y: number }) => assemblyBoxes("CX", sbLayout, side, center);

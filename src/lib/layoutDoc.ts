@@ -6,7 +6,7 @@
 
 export type Field = { x: number; y: number; w?: number; h?: number; fs?: number; ff?: string };
 export type FieldKind = "text" | "img" | "pipsV" | "pipsH";
-export type FieldDefLike = Field & { kind: FieldKind; label: string; inherit?: string; inheritMode?: "center"; group?: "cx" };
+export type FieldDefLike = Field & { kind: FieldKind; label: string; inherit?: string; inheritMode?: "center"; group?: "CX" | "CX_EXPAND" };
 export type Defs = Record<string, FieldDefLike>;
 export type FontDef = { family: string; kind: "upload" | "google"; src?: string };
 export type CustomMeta = { key: string; label: string; type: "text" | "int"; value: string };

@@ -4,16 +4,18 @@
 //
 // One coherent example per format, from the catalog (BeyPart), following the
 // composition of each line (lib/combo-lines):
-//   BX / UX     one blade (BLADE of that line) → a single image;
+//   BX, BX Expand, UX, UX Expand   one blade (BLADE of that line) → one image;
 //   CX          lock chip + main blade (CX) + assist blade;
 //   CX Expand   lock chip + over blade + main blade (CX_EXPAND) + assist blade.
 // Catalog images first; a part without image (or a missing part) becomes a
 // marker drawn with the piece's own name and line — never the image of
 // another category or of another format.
 
-export type BeyKind = "BX" | "UX" | "CX" | "CX_EXPAND";
-export const BEY_KINDS: BeyKind[] = ["BX", "UX", "CX", "CX_EXPAND"];
-export const BEY_KIND_LABEL: Record<BeyKind, string> = { BX: "BX", UX: "UX", CX: "CX", CX_EXPAND: "CX Expand" };
+export type BeyKind = "BX" | "BX_EXPAND" | "UX" | "UX_EXPAND" | "CX" | "CX_EXPAND";
+export const BEY_KINDS: BeyKind[] = ["BX", "BX_EXPAND", "UX", "UX_EXPAND", "CX", "CX_EXPAND"];
+export const BEY_KIND_LABEL: Record<BeyKind, string> = { BX: "BX", BX_EXPAND: "BX Expand", UX: "UX", UX_EXPAND: "UX Expand", CX: "CX", CX_EXPAND: "CX Expand" };
+/** Editing group of a system: the 4 simple ones share one image config. */
+export const kindGroup = (k: BeyKind): "SIMPLE" | "CX" | "CX_EXPAND" => (k === "CX" ? "CX" : k === "CX_EXPAND" ? "CX_EXPAND" : "SIMPLE");
 
 export type CatalogPart = { line: string; category: string; name: string; imageUrl: string | null };
 export type ExamplePiece = { role: "blade" | "lock" | "metal" | "assist" | "over"; label: string; name: string; src: string; fromCatalog: boolean };
@@ -27,7 +29,7 @@ export type BeyExample = {
   parts: ExamplePiece[];
 };
 
-const COLOR: Record<BeyKind, string> = { BX: "#00a6d6", UX: "#ff8a00", CX: "#e63946", CX_EXPAND: "#d4148c" };
+const COLOR: Record<BeyKind, string> = { BX: "#00a6d6", BX_EXPAND: "#0077b6", UX: "#ff8a00", UX_EXPAND: "#c65d00", CX: "#e63946", CX_EXPAND: "#d4148c" };
 const ROLE_LABEL: Record<ExamplePiece["role"], string> = { blade: "Blade", lock: "Lock Chip", metal: "Main Blade", assist: "Assist Blade", over: "Over Blade" };
 
 const esc = (t: string) => t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -84,9 +86,11 @@ export function buildExamples(parts: CatalogPart[]): Record<BeyKind, BeyExample>
   const bit = pick(parts, "BIT", ["BIT"])?.name ?? "";
   const combo = (main: string) => [main, `${ratchet}${bit}`].filter(Boolean).join(" ");
 
-  const single = (kind: "BX" | "UX"): BeyExample => {
+  const single = (kind: "BX" | "BX_EXPAND" | "UX" | "UX_EXPAND"): BeyExample => {
     const blade = piece(kind, "blade", "BLADE", [kind]);
-    return { kind, name: combo(blade.name), img: blade.src, pieces: null, parts: [blade] };
+    // UX Expand has no ratchet (lib/combo-lines).
+    const name = kind === "UX_EXPAND" ? [blade.name, bit].filter(Boolean).join(" ") : combo(blade.name);
+    return { kind, name, img: blade.src, pieces: null, parts: [blade] };
   };
   const cx = (expand: boolean): BeyExample => {
     const kind: BeyKind = expand ? "CX_EXPAND" : "CX";
@@ -106,5 +110,5 @@ export function buildExamples(parts: CatalogPart[]): Record<BeyKind, BeyExample>
       parts: list,
     };
   };
-  return { BX: single("BX"), UX: single("UX"), CX: cx(false), CX_EXPAND: cx(true) };
+  return { BX: single("BX"), BX_EXPAND: single("BX_EXPAND"), UX: single("UX"), UX_EXPAND: single("UX_EXPAND"), CX: cx(false), CX_EXPAND: cx(true) };
 }
