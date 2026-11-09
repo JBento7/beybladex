@@ -44,7 +44,7 @@ async function compute(slug: string): Promise<LeagueStats> {
 }
 
 export function getLeagueStats(slug = "lbl"): Promise<LeagueStats | null> {
-  return unstable_cache(() => compute(slug), ["league-stats", slug], { revalidate: 600 })().catch((e) => {
+  return unstable_cache(() => compute(slug), ["league-stats", slug], { revalidate: 600, tags: ["ranking"] })().catch((e) => {
     console.error("[leagueStats]", e);
     return null; // no reliable data → the page omits the figures
   });

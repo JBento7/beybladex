@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
 import { prisma } from "@/lib/prisma";
-import { finalizeTournamentRanking, auditTournament, monthClosedFor } from "@/lib/tournament-engine";
+import { finalizeTournamentRanking, computeTournamentRankingDetailed, auditTournament, monthClosedFor } from "@/lib/tournament-engine";
 import { hasBlocking, isSwissFormat } from "@/lib/swiss";
 
 // POST — manually finish a tournament/BeyEncontro even if not all matches
@@ -68,6 +68,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // A closed monthly ranking is archived: no event can be finalized into it.
     const closed = await monthClosedFor(params.id);
     if (closed) return NextResponse.json({ error: `O ranking mensal deste torneio (${closed.league.toUpperCase()} · ${closed.month}) já foi encerrado. Não é possível encerrar um torneio nesse mês.` }, { status: 409 });
+
+    // Never certify a podium the records don't support (lib/officialResult).
+    const detail = await computeTournamentRankingDetailed(params.id);
+    if (detail.blocked) return NextResponse.json({ error: `Não é possível encerrar: ${detail.blocked} Corrija a final ou registre a correção oficial do resultado.` }, { status: 409 });
 
     // Atomically claim so two concurrent "finish" requests don't both run.
     const claim = await prisma.tournament.updateMany({

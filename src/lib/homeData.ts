@@ -6,7 +6,7 @@
 import { unstable_cache } from "next/cache";
 import { prisma } from "./prisma";
 import { tournamentsVersion } from "./publicVersion";
-import { eventPodium, type StandingsMatch } from "./standings";
+import { resolveOfficialPodium } from "./officialResult";
 import { swissRoundCount } from "./tournament-engine";
 import { isSwissFormat } from "./swiss";
 import { getMonthlyRanking } from "./monthlyRanking";
@@ -112,7 +112,7 @@ async function loadLastEvent(league: HomeLeague): Promise<LastEvent | null> {
     where: { ...lastEventWhere(league), status: "FINISHED" },
     orderBy: [{ startDate: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     select: {
-      id: true, name: true, startDate: true, format: true, status: true, swissRounds: true, qualifiers: true, deckType: true,
+      id: true, name: true, startDate: true, format: true, status: true, swissRounds: true, qualifiers: true, deckType: true, officialResult: true,
       participants: {
         where: { approved: { not: false } },
         select: { userId: true, placement: true, user: { select: { name: true, bladerName: true, avatarUrl: true } } },
@@ -124,12 +124,14 @@ async function loadLastEvent(league: HomeLeague): Promise<LastEvent | null> {
   });
   if (!t) return null;
   const swissRounds = isSwissFormat(t.format) ? t.swissRounds ?? swissRoundCount(t.participants.length) : 0;
-  const podium = eventPodium({
+  // Same official result as the tournament page (lib/officialResult).
+  const podium = resolveOfficialPodium({
     format: t.format,
     status: t.status,
     swissRounds,
-    matches: t.matches as StandingsMatch[],
+    matches: t.matches,
     placements: t.participants.map((p) => ({ userId: p.userId, placement: p.placement })),
+    correction: t.officialResult,
   });
   const person = (id?: string): PodiumPerson | undefined => {
     const p = id ? t.participants.find((x) => x.userId === id) : undefined;

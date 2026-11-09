@@ -89,7 +89,12 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
 
     // 2) Final placement + ranking points (refused if the month closed meanwhile).
     const fin = await finalizeTournamentRanking(params.id);
-    if (!fin.ok) return NextResponse.json({ error: "O ranking mensal deste torneio foi encerrado durante o recálculo. A colocação e os pontos de ranking não foram alterados." }, { status: 409 });
+    if (!fin.ok) {
+      const error = fin.reason === "result_invalid"
+        ? `Recálculo bloqueado: ${fin.message} A colocação e os pontos de ranking não foram alterados — corrija a final ou registre a correção oficial do resultado.`
+        : "O ranking mensal deste torneio foi encerrado durante o recálculo. A colocação e os pontos de ranking não foram alterados.";
+      return NextResponse.json({ error }, { status: 409 });
+    }
     const after = await prisma.tournamentParticipant.findMany({
       where: { tournamentId: params.id, approved: { not: false } },
       select: { userId: true, placement: true, rankingPoints: true },

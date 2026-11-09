@@ -12,6 +12,7 @@ import { RANKING_POINTS_BY_PLACE, rankingMultiplier } from "./rankingPoints";
 import { DEFAULT_POINTS_TABLE, pointsForPlacement, storedTable, type MonthlyLeague } from "./monthlyRules";
 import { effectiveRules, isMonthClosed, lockMonth, monthlyScopeOf } from "./monthlyRanking";
 import { effectiveDisplayMode } from "./displayMode";
+import { activeCorrection, applyCorrectionOrder, resolveOfficialPodium, type OfficialPodium } from "./officialResult";
 import { usesBattleDeck } from "./deckFormat";
 
 // Returns the userIds of every registered judge for a tournament. Used by the
@@ -198,19 +199,24 @@ export async function computeTournamentRanking(tournamentId: string): Promise<Co
   return (await computeTournamentRankingDetailed(tournamentId)).placements;
 }
 
-export async function computeTournamentRankingDetailed(tournamentId: string): Promise<{
+export async function computeTournamentRankingDetailed(tournamentId: string, db: Prisma.TransactionClient | typeof prisma = prisma): Promise<{
   placements: ComputedPlacement[];
   table: number[];
   scope: { league: MonthlyLeague; month: string } | null;
+  /** Why this ranking must NOT be certified (inconsistent final, no correction). */
+  blocked: string | null;
+  /** The official champion it was checked against (lib/officialResult). */
+  official: OfficialPodium;
 }> {
+  // `db`: a transaction sees its own uncommitted correction (lib/officialResultStore).
   const [tournament, participants, allMatchRows] = await Promise.all([
-    prisma.tournament.findUnique({ where: { id: tournamentId }, select: { format: true, qualifiers: true, doubleRankingPoints: true, ...TABLE_SOURCE_SELECT } }),
-    prisma.tournamentParticipant.findMany({
+    db.tournament.findUnique({ where: { id: tournamentId }, select: { format: true, qualifiers: true, doubleRankingPoints: true, officialResult: true, ...TABLE_SOURCE_SELECT } }),
+    db.tournamentParticipant.findMany({
       where: { tournamentId, approved: { not: false } },
       include: { user: { select: { name: true, bladerName: true } } },
       orderBy: { id: "asc" }, // stable input; the ranking itself never relies on it
     }),
-    prisma.match.findMany({
+    db.match.findMany({
       // Every match, not just finished ones: whether the event HAS a knockout is
       // a structural fact (the bracket exists), independent of whether it has
       // been played. Filtering to FINISHED here used to make an unplayed bracket
@@ -218,6 +224,7 @@ export async function computeTournamentRankingDetailed(tournamentId: string): Pr
       // standings to players who never qualified.
       where: { tournamentId },
       select: {
+        id: true,
         round: true,
         status: true,
         winnerId: true,
@@ -226,6 +233,7 @@ export async function computeTournamentRankingDetailed(tournamentId: string): Pr
         isThirdPlace: true,
         isWalkover: true,
         points: { select: { userId: true, points: true } },
+        sets: { select: { winnerId: true }, orderBy: { setNumber: "asc" } },
       },
     }),
   ]);
@@ -306,6 +314,33 @@ export async function computeTournamentRankingDetailed(tournamentId: string): Pr
     });
   }
 
+  // Official result (lib/officialResult): an active correction by the
+  // organization is applied on top (never overwritten by a recalculation);
+  // otherwise the final decides, and an inconsistent final blocks.
+  const userIds = participants.map((p) => p.userId!).filter(Boolean);
+  const correction = activeCorrection(tournament?.officialResult, userIds);
+  const official = resolveOfficialPodium({
+    format: tournament?.format ?? "", status: "FINISHED",
+    swissRounds: isSwissFormat(tournament?.format) ? swissRounds : 0,
+    matches: allMatchRows.map((m) => ({ ...m, setWinners: m.sets.map((x) => x.winnerId) })),
+    placements: participants.map((p) => ({ userId: p.userId!, placement: p.placement })),
+    correction,
+  });
+  if (correction) {
+    const order = applyCorrectionOrder(ranked.map((p) => p.userId!), correction);
+    const byUser = new Map(ranked.map((p) => [p.userId!, p]));
+    ranked = order.map((u) => byUser.get(u)!).filter(Boolean);
+  }
+  // With a knockout (or a correction), 1st place must BE the official champion,
+  // from a concluded, coherent final. Without a knockout the recalculated
+  // classification itself is the result.
+  let blocked: string | null = official.pending;
+  const knockout = isSwissPlayoff || tournament?.format === "SINGLE_ELIMINATION";
+  if (!blocked && !correction && knockout && official.source === "none") blocked = "A final não foi concluída.";
+  if (!blocked && (official.source === "final" || official.source === "admin") && ranked[0]?.userId !== official.first) {
+    blocked = "A 1ª colocação calculada não corresponde ao campeão oficial.";
+  }
+
   // Ranking points are earned in the KNOCKOUT, not in the Swiss standings: when
   // the event has a bracket, only players who actually reached it score. Everyone
   // else still gets a placement (for the final table/certificates) but 0 points.
@@ -317,6 +352,8 @@ export async function computeTournamentRankingDetailed(tournamentId: string): Pr
   const alreadyFinalized = participants.some((p) => p.placement != null);
   const table = tournament ? await pointsTableFor(tournament, alreadyFinalized) : [...DEFAULT_POINTS_TABLE];
   const placements = ranked.map((p, idx) => {
+    // A correction reorders positions; it never grants knockout points to
+    // someone who did not play the knockout (the event's rule still applies).
     const eligible = !isSwissPlayoff || inPlayoff.has(p.userId!);
     return {
       participantId: p.id,
@@ -326,10 +363,13 @@ export async function computeTournamentRankingDetailed(tournamentId: string): Pr
       rankingPoints: pointsForPlacement(table, idx, multiplier, eligible),
     };
   });
-  return { placements, table, scope: tournament ? monthlyScopeOf(tournament) : null };
+  return { placements, table, scope: tournament ? monthlyScopeOf(tournament) : null, blocked, official };
 }
 
-export type FinalizeResult = { ok: true } | { ok: false; reason: "month_closed"; league: MonthlyLeague; month: string };
+export type FinalizeResult =
+  | { ok: true }
+  | { ok: false; reason: "month_closed"; league: MonthlyLeague; month: string }
+  | { ok: false; reason: "result_invalid"; message: string };
 
 /** Refuses when the event's league month is already closed (its ranking is archived). */
 export async function monthClosedFor(tournamentId: string): Promise<{ league: MonthlyLeague; month: string } | null> {
@@ -339,7 +379,13 @@ export async function monthClosedFor(tournamentId: string): Promise<{ league: Mo
 }
 
 export async function finalizeTournamentRanking(tournamentId: string): Promise<FinalizeResult> {
-  const { placements, table, scope } = await computeTournamentRankingDetailed(tournamentId);
+  const { placements, table, scope, blocked } = await computeTournamentRankingDetailed(tournamentId);
+  // Never certify a podium the records don't support (inconsistent final
+  // without an official correction): the organization resolves it first.
+  if (blocked) {
+    logEvent("finalize_blocked", { reason: "result_invalid", tournamentId });
+    return { ok: false, reason: "result_invalid", message: blocked };
+  }
   // Same lock as the monthly adjustments/closing: a finalization can't slip
   // into a month while it is being closed, and never into a closed month.
   const result = await prisma.$transaction(async (tx): Promise<FinalizeResult> => {
@@ -362,7 +408,7 @@ export async function finalizeTournamentRanking(tournamentId: string): Promise<F
     return { ok: true };
   }, { maxWait: 20000, timeout: 30000 });
   if (!result.ok) {
-    logEvent("finalize_blocked", { reason: "month_closed", tournamentId, league: result.league, month: result.month });
+    if (result.reason === "month_closed") logEvent("finalize_blocked", { reason: "month_closed", tournamentId, league: result.league, month: result.month });
     return result;
   }
   revalidateRankings(); // official ranking changed

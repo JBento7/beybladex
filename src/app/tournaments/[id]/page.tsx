@@ -28,7 +28,8 @@ import ShareButton from "@/components/ShareButton";
 import AutoRefresh from "@/components/AutoRefresh";
 import { isJudgeAccount } from "@/lib/judgeAccount";
 import { communityOf } from "@/lib/communities";
-import { computeSwissStandings, computeSwissFinalPlacement, comparePlacements, decidedPodium, type PlacementDivergence, type StandingsMatch } from "@/lib/standings";
+import { computeSwissStandings, computeSwissFinalPlacement, comparePlacements, type PlacementDivergence, type StandingsMatch } from "@/lib/standings";
+import { resolveOfficialPodium, type ResultMatch } from "@/lib/officialResult";
 import RichText, { isLongText } from "@/components/RichText";
 import ExpandableText from "@/components/ExpandableText";
 import RetryButton from "@/components/RetryButton";
@@ -768,8 +769,16 @@ export default async function TournamentDetailPage(
     if (!isKo) continue;
     for (const id of [m.player1.id, m.player2.id]) koDeepest.set(id, Math.max(koDeepest.get(id) ?? 0, m.round));
   }
-  const championId = isSwiss && hasKnockout ? decidedPodium(standingsMatches, swissRounds).first
-    : tournament.format === "SINGLE_ELIMINATION" ? decidedPodium(standingsMatches, 0).first : undefined;
+  // Official result (lib/officialResult): correction by the organization →
+  // valid final → stored classification. The SAME resolution as the home card,
+  // the ranking and the certificates.
+  const official = resolveOfficialPodium({
+    format: tournament.format, status: tournament.status, swissRounds,
+    matches: standingsMatches as ResultMatch[],
+    placements: approvedParticipants.map((p) => ({ userId: p.userId, placement: p.placement })),
+    correction: (tournament as { officialResult?: unknown }).officialResult,
+  });
+  const championId = official.first;
   for (const row of finalPlacement) {
     const deepest = koDeepest.get(row.userId);
     if (deepest != null) {
@@ -784,8 +793,7 @@ export default async function TournamentDetailPage(
 
   // Podium: only positions the results actually decide.
   let podium: { first?: string; second?: string; third?: string } = {};
-  if (isSwiss && hasKnockout) podium = decidedPodium(standingsMatches, swissRounds);
-  else if (tournament.format === "SINGLE_ELIMINATION") podium = decidedPodium(standingsMatches, 0);
+  if (official.source === "admin" || (isSwiss && hasKnockout) || tournament.format === "SINGLE_ELIMINATION") podium = { first: official.first, second: official.second, third: official.third };
   else if (tournament.status === "FINISHED" && finalPlacement.length > 0) {
     podium = { first: finalPlacement[0]?.userId, second: finalPlacement[1]?.userId, third: finalPlacement[2]?.userId };
   } else if (tournament.status === "FINISHED" && isSwiss && swissRows.length > 0) {
@@ -1123,6 +1131,13 @@ export default async function TournamentDetailPage(
       <h3 id="podio-titulo" className="text-lg font-bold text-white mb-4">
         {tournament.status === "FINISHED" ? "Resultado" : "Pódio até agora"}
       </h3>
+      {/* Admin area: where this result comes from (lib/officialResult). */}
+      {isAdminUser && official.source === "admin" && (
+        <p className="mb-3 text-xs text-amber-200">Resultado corrigido pela organização (correção oficial registrada). Os registros originais das partidas foram preservados.</p>
+      )}
+      {isAdminUser && official.pending && (
+        <p role="alert" className="mb-3 text-xs text-red-300">⚠ {official.pending} O campeão não é exibido até a organização resolver (aba Partidas → 🏆 Resultado oficial).</p>
+      )}
       {podium.first ? (
         <ol className="grid gap-3 sm:grid-cols-3">
           {([

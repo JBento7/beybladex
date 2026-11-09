@@ -203,6 +203,11 @@ model Tournament {
   // finalization, so later recalculations never use newer rules. Null = not
   // finalized yet (or finalized before this existed: the default table).
   rankingPointsTable   Json?
+  // Official correction of the result by the organization (lib/officialResult):
+  // { order: userIds from 1st place, reason, actorId, at }. While set, every
+  // screen and every recalculation use it; only an explicit admin action
+  // replaces or removes it. Null = the result comes from the matches.
+  officialResult       Json?
   // Suíço: number of Swiss rounds, frozen when first needed so approving or
   // removing a player mid-event can't move the Swiss/knockout boundary.
   swissRounds          Int?

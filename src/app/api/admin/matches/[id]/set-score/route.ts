@@ -15,6 +15,7 @@ import {
   finalizeTournamentRanking,
 } from "@/lib/tournament-engine";
 import { errorResponse } from "@/lib/observability";
+import { diagnoseResult } from "@/lib/officialResultStore";
 
 // ORGANIZER-only manual score editor. Unlike /reset, this does NOT reset the
 // match — it rewrites the recorded score directly. The admin supplies, per set,
@@ -177,7 +178,16 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     }
   }
 
-  return NextResponse.json({ ok: true, p1SetsWon, p2SetsWon, winnerId: matchWinnerId });
+  // Editing a result of a finished event re-runs its finalization, which can be
+  // refused (closed month, inconsistent final). Say so instead of a silent "ok":
+  // the organization sees whether the classification/ranking followed.
+  let resultWarnings: string[] = [];
+  try {
+    const t = await prisma.tournament.findUnique({ where: { id: match.tournamentId }, select: { status: true } });
+    if (t?.status === "FINISHED") resultWarnings = (await diagnoseResult(match.tournamentId))?.warnings ?? [];
+  } catch { /* diagnosis is informative only */ }
+
+  return NextResponse.json({ ok: true, p1SetsWon, p2SetsWon, winnerId: matchWinnerId, resultWarnings });
   } catch (err) {
     console.error("[set-score]", err);
     return errorResponse("/api/admin/matches/[id]/set-score", err, "Erro ao salvar. Tente novamente.");

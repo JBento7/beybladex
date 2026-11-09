@@ -5,118 +5,46 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { denyOutsideCommunity } from "@/lib/communityScope";
-import { prisma } from "@/lib/prisma";
-import { rankingMultiplier } from "@/lib/rankingPoints";
-import { pointsForPlacement } from "@/lib/monthlyRules";
-import { isMonthClosed, lockMonth, monthlyScopeOf } from "@/lib/monthlyRanking";
-import { pointsTableFor } from "@/lib/tournament-engine";
-import { revalidateRankings } from "@/lib/leagueRanking";
-import { auditAdminAction } from "@/lib/adminAudit";
+import { correctResult, diagnoseResult } from "@/lib/officialResultStore";
+import { errorResponse } from "@/lib/observability";
 
-// ORGANIZER-only manual podium override.
-//
-// finalizeTournamentRanking derives the podium from the recorded matches. When
-// those don't reflect what actually happened (a knockout that was played but
-// never fully registered, or an event ranked under an older, buggy rule), the
-// organizer can state the real podium here. Positions listed get the standard
-// ranking points (100/70/50/30/10, doubled on "Pontuação dobrada"); everyone else keeps a placement below them
-// and 0 ranking points.
-//
-// Body: { order: string[] }  — userIds from 1st place onward.
-export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
+// Official result of an event (docs/RESULTADO-OFICIAL.md), ORGANIZER only and
+// within the admin's league:
+//  GET            diagnosis (final, stored placements, champion shown, correction)
+//  POST           { order: userIds from 1st, reason, dryRun? } official correction
+//  DELETE         { reason, dryRun? } removes the correction (back to the matches)
+// Always simulate first (dryRun) — the real run is one audited transaction.
+async function guard(id: string) {
   const session = await getServerSession(authOptions);
-  { const denied = await denyOutsideCommunity(session, { tournamentId: params.id }); if (denied) return denied; }
-  if (!session || session.user.role !== "ORGANIZER") {
-    return NextResponse.json({ error: "Não autorizado" }, { status: 403 });
-  }
+  const denied = await denyOutsideCommunity(session, { tournamentId: id });
+  if (denied) return { denied };
+  if (!session || session.user.role !== "ORGANIZER") return { denied: NextResponse.json({ error: "Não autorizado" }, { status: 403 }) };
+  return { session };
+}
 
-  const body = await req.json().catch(() => ({}));
-  const order: string[] = Array.isArray(body?.order) ? body.order.filter(Boolean) : [];
-  if (order.length === 0) {
-    return NextResponse.json({ error: "Informe ao menos o 1º colocado." }, { status: 400 });
-  }
-  if (new Set(order).size !== order.length) {
-    return NextResponse.json({ error: "O mesmo jogador aparece em duas posições." }, { status: 400 });
-  }
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
+  const g = await guard(id);
+  if (g.denied) return g.denied;
+  const d = await diagnoseResult(id);
+  return d ? NextResponse.json(d) : NextResponse.json({ error: "Torneio não encontrado." }, { status: 404 });
+}
 
+async function run(req: NextRequest, id: string, remove: boolean) {
+  const g = await guard(id);
+  if (g.denied) return g.denied;
   try {
-    const event = await prisma.tournament.findUnique({
-      where: { id: params.id },
-      select: { isOfficial: true, isTest: true, doubleRankingPoints: true, rankingPointsTable: true, status: true, isPartnership: true, communitySlug: true, startDate: true, createdAt: true },
-    });
-    if (!event) return NextResponse.json({ error: "Torneio não encontrado." }, { status: 404 });
-    const multiplier = rankingMultiplier(event); // from the base table, never from stored points
-    const scope = monthlyScopeOf(event);
-    const closedMsg = "O ranking mensal deste torneio já foi encerrado — o pódio não pode mais ser alterado.";
-    if (scope && (await isMonthClosed(scope.league, scope.month))) return NextResponse.json({ error: closedMsg }, { status: 409 });
-    const participants = await prisma.tournamentParticipant.findMany({
-      where: { tournamentId: params.id, approved: { not: false } },
-      select: { id: true, userId: true, totalPoints: true, placement: true, rankingPoints: true, user: { select: { name: true, bladerName: true } } },
-    });
-    if (!participants.length) {
-      return NextResponse.json({ error: "Torneio sem participantes aprovados." }, { status: 400 });
-    }
-
-    // Base table of this event: frozen at the first finalization, else the
-    // rules of its league/month (docs/RANKING-MENSAL.md).
-    const table = await pointsTableFor(event, participants.some((p) => p.placement != null));
-    const pts = (idx: number) => pointsForPlacement(table, idx, multiplier);
-    const byUser = new Map(participants.map((p) => [p.userId, p]));
-    const unknown = order.filter((u) => !byUser.has(u));
-    if (unknown.length) {
-      return NextResponse.json(
-        { error: `${unknown.length} jogador(es) do pódio não participam deste torneio.` },
-        { status: 400 }
-      );
-    }
-
-    // Everyone not on the podium keeps a placement below it, ordered by their
-    // tournament score, and scores no ranking points.
-    const rest = participants
-      .filter((p) => !order.includes(p.userId))
-      .sort((a, b) => b.totalPoints - a.totalPoints);
-
-    const before = participants.map((p) => ({ userId: p.userId, placement: p.placement, rankingPoints: p.rankingPoints }));
-    // One transaction under the month lock: never writes into a closed month.
-    const done = await prisma.$transaction(async (tx) => {
-      if (scope) {
-        await lockMonth(tx, scope.league, scope.month);
-        if (await isMonthClosed(scope.league, scope.month, tx)) return false;
-      }
-      for (const [idx, userId] of order.entries()) {
-        await tx.tournamentParticipant.update({ where: { id: byUser.get(userId)!.id }, data: { placement: idx + 1, rankingPoints: pts(idx) } });
-      }
-      for (const [i, p] of rest.entries()) {
-        await tx.tournamentParticipant.update({ where: { id: p.id }, data: { placement: order.length + i + 1, rankingPoints: 0 } });
-      }
-      // The podium is the final word on this event — make sure it reads as
-      // closed — and its base table is frozen like a normal finalization.
-      await tx.tournament.update({ where: { id: params.id }, data: { status: "FINISHED", rankingPointsTable: table } });
-      return true;
-    }, { maxWait: 20000, timeout: 30000 });
-    if (!done) return NextResponse.json({ error: closedMsg }, { status: 409 });
-    revalidateRankings();
-    await auditAdminAction({
-      kind: "PODIUM_SET", session, tournamentId: params.id,
-      before: { participants: before },
-      after: { podium: order.map((userId, idx) => ({ userId, placement: idx + 1, rankingPoints: pts(idx) })), others: rest.length },
-    });
-
-    return NextResponse.json({
-      ok: true,
-      podium: order.map((userId, idx) => {
-        const p = byUser.get(userId)!;
-        return {
-          placement: idx + 1,
-          name: p.user?.bladerName || p.user?.name || "—",
-          rankingPoints: pts(idx),
-        };
-      }),
-      others: rest.length,
-    });
-  } catch (err) {
-    console.error("[podium]", err);
-    return NextResponse.json({ error: "Erro ao definir pódio. Tente novamente." }, { status: 500 });
+    const body = await req.json().catch(() => ({}));
+    const r = await correctResult({ tournamentId: id, order: body?.order, reason: body?.reason, actorId: g.session!.user.id, dryRun: body?.dryRun === true, remove });
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
+    return NextResponse.json({ ...r, dryRun: body?.dryRun === true });
+  } catch (e) {
+    return errorResponse("/api/admin/tournaments/[id]/podium", e, "Erro ao corrigir o resultado. Nada foi alterado.");
   }
+}
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  return run(req, (await props.params).id, false);
+}
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  return run(req, (await props.params).id, true);
 }

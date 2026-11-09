@@ -71,6 +71,12 @@ export default async function AdminPage() {
           >
             🎛️ Editor do placar
           </Link>
+          <Link
+            href="/admin/resultado-oficial"
+            className="bg-card border border-amber-400/50 text-amber-300 font-bold text-sm px-4 py-2.5 rounded-lg hover:bg-amber-400/10 transition-colors"
+          >
+            🏆 Resultado oficial
+          </Link>
         </div>
 
         {/* Create Official Tournament */}
