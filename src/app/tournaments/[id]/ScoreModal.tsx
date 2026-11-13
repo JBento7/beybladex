@@ -10,6 +10,7 @@ import { linkStatus, newId, serverStatus, type ArenaMsg, type CmdKind, type Judg
 import { clearPending, loadPending, savePending, type PendingLaunch } from "@/lib/pendingLaunch";
 import { judgeHeader, launchText, setLabel } from "@/lib/matchLabel";
 import { arenaKey } from "@/lib/judgeArenas";
+import { bSidePlayerInSet, judgeLeftPlayerId, sidesSwappedAt } from "@/lib/matchSides";
 import type { FinishType } from "@prisma/client";
 import DeckOrderPicker, { type BeybladeInfo, comboParts } from "./DeckOrderPicker";
 import TrioPicker from "@/components/deck/TrioPicker";
@@ -406,11 +407,17 @@ export default function ScoreModal({
   // point. A battle is identified by set + points already scored in it.
   const battleKey = `${currentSetNum}:${currentSetBattleCount}`;
   const startKey = battleKey;
-  // Before the very first battle the judge assigns the stadium sides (X / B).
-  // (Telão only: the sides are what the arena display shows left/right.)
-  const needSides = !judgeOnly && currentSetNum === 1 && currentSetBattleCount === 0 && !state?.xSidePlayerId;
+  // "Lados dos jogadores" (both modes — physical organization, never a
+  // broadcast). Required before the first battle of a new match; an older
+  // match under way without sides can set them at a safe moment (from the
+  // current set on). The server checks the same rules (lib/matchSides).
+  const battlesPlayed = completedSets > 0 || currentSetBattleCount > 0;
+  const needSides = !!state && !state.matchFinished && !state.xSidePlayerId && !battlesPlayed;
+  const legacyNoSides = !!state && !state.matchFinished && !state.xSidePlayerId && battlesPlayed;
+  const [sidesOpen, setSidesOpen] = useState(false);
+  const sidesChooser = needSides || (sidesOpen && !state?.matchFinished && (!battlesPlayed || legacyNoSides));
   const revealScoring = gateReady && startedKey === startKey;
-  const showStart = gateReady && startedKey !== startKey && !needSides;
+  const showStart = gateReady && startedKey !== startKey && !sidesChooser;
   const waitingOrders = isDeck && trioReady && !bothOrders;
   const waitingTrio = plusOne && !trioReady;
   // Judge-only, deck formats: optional identification of the Beyblade of this
@@ -734,24 +741,33 @@ export default function ScoreModal({
   const startBattle = () => sendCommand("countdown");
   const playLaunchVideo = () => sendCommand("launch");
 
-  // Judge assigns the X side to a player (the other becomes B side). Pass null to
-  // clear and choose again.
-  async function chooseSide(xSidePlayerId: string | null) {
-    setErr(null);
+  // Save "who starts on the B side" for the set on screen. One save at a time
+  // (repeated taps ignored); on failure the choice stays for "Tentar novamente".
+  const [sidesPick, setSidesPick] = useState<string | null>(null);
+  const [sidesBusy, setSidesBusy] = useState(false);
+  const [sidesErr, setSidesErr] = useState<string | null>(null);
+  const sidesBusyRef = useRef(false);
+  async function saveSides() {
+    if (!sidesPick || sidesBusyRef.current) return;
+    sidesBusyRef.current = true;
+    setSidesBusy(true);
+    setSidesErr(null);
     try {
-      const res = await fetch(`/api/matches/${matchId}/sides`, {
+      const res = await timedFetch(`/api/matches/${matchId}/sides`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ xSidePlayerId: xSidePlayerId ?? "" }),
+        body: JSON.stringify({ bSidePlayerId: sidesPick, setNumber: currentSetNum }),
       });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setErr(d.error || "Erro ao definir lados");
-        return;
-      }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setSidesErr(d.error || "Não foi possível salvar os lados."); await fetchState(); return; }
+      setSidesOpen(false);
+      setSidesPick(null);
       await fetchState();
     } catch {
-      setErr("Erro ao definir lados");
+      setSidesErr("Sem conexão com o servidor: os lados não foram salvos. Toque em “Tentar novamente”.");
+    } finally {
+      sidesBusyRef.current = false;
+      setSidesBusy(false);
     }
   }
 
@@ -765,19 +781,16 @@ export default function ScoreModal({
   const p1Name = player1.bladerName || player1.name;
   const p2Name = player2.bladerName || player2.name;
 
-  // Stadium sides. The judge faces the players, so this panel is the MIRROR of
-  // the telão: the telão shows the B side on the LEFT, so the judge shows it on
-  // the RIGHT. Sides swap every set in multi-set matches. Color follows the
-  // side identity (B side = gold, X side = red) so it's consistent everywhere.
+  // Stadium sides (lib/matchSides, shared with the telão). The judge faces
+  // the players, so this panel is the MIRROR of the telão: B side on the
+  // judge's RIGHT, X side on the LEFT. Sides swap every set in multi-set
+  // matches; names, B/X labels, colors and scoring buttons move TOGETHER, and
+  // every point is credited to the player's id, never to a position.
   const xId = state?.xSidePlayerId ?? null;
-  const bSideId = xId ? (xId === player1.id ? player2.id : player1.id) : null;
-  let leftIsP1 = true;
-  if (xId) {
-    const swap = maxSets > 1 && currentSetNum % 2 === 0;
-    const telaoLeftId = swap ? xId : bSideId!; // telão: B side left (set 1)
-    const judgeLeftId = telaoLeftId === player1.id ? player2.id : player1.id; // mirror
-    leftIsP1 = judgeLeftId === player1.id;
-  }
+  const sideInput = { player1Id: player1.id, player2Id: player2.id, xSidePlayerId: xId, maxSets };
+  const bSideId = bSidePlayerInSet(sideInput, currentSetNum);
+  const leftIsP1 = judgeLeftPlayerId(sideInput, currentSetNum) === player1.id;
+  const swappedNow = sidesSwappedAt(sideInput, currentSetNum) && currentSetBattleCount === 0;
   const colorFor = (pid: string, positional: string) =>
     bSideId ? (pid === bSideId ? P1_COLOR : P2_COLOR) : positional;
   const L = {
@@ -1013,7 +1026,7 @@ export default function ScoreModal({
                     <div className="text-base sm:text-lg font-black text-white leading-tight break-words line-clamp-2">
                       <span aria-hidden="true" className="inline-block w-2.5 h-2.5 rounded-full mr-1.5 align-middle" style={{ background: L.color }} />{L.name}
                     </div>
-                    {bSideId ? <div className={`text-xs font-black tracking-widest ${L.player.id === bSideId ? "text-[#00aaff]" : "text-brand-yellow"}`}>{L.player.id === bSideId ? "B SIDE" : "X SIDE"}</div> : judgeOnly ? null : <div className="text-xs text-gray-500">lado a definir</div>}
+                    {bSideId ? <div className={`text-xs font-black tracking-widest ${L.player.id === bSideId ? "text-[#00aaff]" : "text-brand-yellow"}`}>{L.player.id === bSideId ? "B SIDE" : "X SIDE"}</div> : <div className="text-xs text-gray-500">lado a definir</div>}
                   </div>
                   <div className="text-center px-1">
                     <div className="text-2xl sm:text-3xl font-black text-white leading-none whitespace-nowrap">SET {currentSetNum}</div>
@@ -1028,7 +1041,7 @@ export default function ScoreModal({
                     <div className="text-base sm:text-lg font-black text-white leading-tight break-words line-clamp-2">
                       {R.name}<span aria-hidden="true" className="inline-block w-2.5 h-2.5 rounded-full ml-1.5 align-middle" style={{ background: R.color }} />
                     </div>
-                    {bSideId ? <div className={`text-xs font-black tracking-widest ${R.player.id === bSideId ? "text-[#00aaff]" : "text-brand-yellow"}`}>{R.player.id === bSideId ? "B SIDE" : "X SIDE"}</div> : judgeOnly ? null : <div className="text-xs text-gray-500">lado a definir</div>}
+                    {bSideId ? <div className={`text-xs font-black tracking-widest ${R.player.id === bSideId ? "text-[#00aaff]" : "text-brand-yellow"}`}>{R.player.id === bSideId ? "B SIDE" : "X SIDE"}</div> : <div className="text-xs text-gray-500">lado a definir</div>}
                   </div>
                 </div>
 
@@ -1203,41 +1216,77 @@ export default function ScoreModal({
                   </div>
                 )}
 
-                {/* Stadium side selection — before the first battle */}
-                {needSides && gateReady && (
-                  <div className="mb-3 bg-card border border-brand-yellow/40 rounded-xl p-4">
-                    <div className="text-center text-lg font-black text-brand-yellow tracking-wide mb-1">LADO DA ARENA</div>
-                    <div className="text-center text-sm text-gray-300 mb-4">Toque no jogador que vai ficar no <b className="text-[#00aaff]">B side</b> (o outro fica no <b className="text-white">X side</b> automaticamente).</div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Clicking a player puts THEM on B side → the other is X side. */}
-                      <button
-                        onClick={() => chooseSide(player2.id)}
-                        className="rounded-xl border-2 border-[#00aaff] bg-[#00aaff]/10 hover:bg-[#00aaff]/25 transition-colors py-6 px-2 text-center"
-                      >
-                        <div className="text-sm font-black text-[#00aaff] tracking-widest">B SIDE ◀</div>
-                        <div className="text-lg font-black text-white truncate">{p1Name}</div>
-                        <div className="text-xs text-gray-500 truncate">esquerda do telão</div>
-                      </button>
-                      <button
-                        onClick={() => chooseSide(player1.id)}
-                        className="rounded-xl border-2 border-[#00aaff] bg-[#00aaff]/10 hover:bg-[#00aaff]/25 transition-colors py-6 px-2 text-center"
-                      >
-                        <div className="text-sm font-black text-[#00aaff] tracking-widest">B SIDE ◀</div>
-                        <div className="text-lg font-black text-white truncate">{p2Name}</div>
-                        <div className="text-xs text-gray-500 truncate">esquerda do telão</div>
-                      </button>
-                    </div>
+                {/* "Lados dos jogadores" — both modes, before the first battle (or
+                    once for an older match under way without sides). */}
+                {sidesChooser && (() => {
+                  const pick = sidesPick;
+                  const other = pick ? (pick === player1.id ? player2.id : player1.id) : null;
+                  const nm = (id: string | null) => (id === player1.id ? p1Name : id === player2.id ? p2Name : "—");
+                  return (
+                    <section aria-labelledby="lados-t" className="mb-3 bg-card border border-brand-yellow/40 rounded-xl p-4">
+                      <h3 id="lados-t" className="text-center text-lg font-black text-brand-yellow tracking-wide mb-1">Lados dos jogadores</h3>
+                      <p className="text-center text-sm text-gray-300 mb-1">Quem começa no <b className="text-[#00aaff]">B Side</b>? O outro fica no <b className="text-white">X Side</b>.</p>
+                      {battlesPlayed && <p className="text-center text-xs text-amber-200 mb-1">A partida já começou sem lados definidos: a escolha vale a partir do set {currentSetNum}. Pontos e resultados já lançados não mudam.</p>}
+                      <div className="grid grid-cols-2 gap-3 mt-3" role="group" aria-label="Quem começa no B Side">
+                        {[player1, player2].map((pl) => (
+                          <button key={pl.id} type="button" onClick={() => { setSidesPick(pl.id); setSidesErr(null); }} aria-pressed={pick === pl.id} disabled={sidesBusy}
+                            className={`rounded-xl border-2 py-4 px-2 text-center min-h-[64px] transition-colors ${pick === pl.id ? "border-[#00aaff] bg-[#00aaff]/25" : "border-line bg-field hover:bg-hover"}`}>
+                            <div className="text-xs font-black text-[#00aaff] tracking-widest">{pick === pl.id ? "B SIDE ✓" : "B SIDE?"}</div>
+                            <div className="text-lg font-black text-white truncate">{pl.bladerName || pl.name}</div>
+                          </button>
+                        ))}
+                      </div>
+                      {pick && (
+                        // Preview exactly as THIS panel will show them (judge facing the players).
+                        <div className="mt-3 rounded-lg border border-line p-2">
+                          <div className="text-xs text-gray-400 text-center mb-1">Prévia{battlesPlayed ? ` (set ${currentSetNum})` : ""} — como você verá no painel:</div>
+                          <div className="grid grid-cols-2 gap-2 text-center">
+                            <div><div className="text-xs font-black text-brand-yellow">X SIDE</div><div className="font-bold text-white truncate">{nm(other)}</div><div className="text-[11px] text-gray-500">à sua esquerda</div></div>
+                            <div><div className="text-xs font-black text-[#00aaff]">B SIDE</div><div className="font-bold text-white truncate">{nm(pick)}</div><div className="text-[11px] text-gray-500">à sua direita</div></div>
+                          </div>
+                          <p className="mt-1 text-[11px] text-gray-400 text-center">
+                            {judgeOnly
+                              ? "Visto por você, de frente para os jogadores: o B Side fica à sua direita e o X Side à sua esquerda."
+                              : "No telão o B Side aparece à esquerda; no seu painel (de frente para os jogadores), à direita."}
+                            {maxSets > 1 ? " Os lados trocam a cada set." : ""}
+                          </p>
+                        </div>
+                      )}
+                      {sidesErr && <p role="alert" className="mt-2 text-sm text-red-300 text-center">{sidesErr}</p>}
+                      <div className="mt-3 flex gap-2">
+                        {!needSides && <button type="button" onClick={() => { setSidesOpen(false); setSidesPick(null); setSidesErr(null); }} disabled={sidesBusy} className="flex-1 min-h-[48px] rounded-xl border border-line text-gray-200 font-bold">Cancelar</button>}
+                        <button type="button" onClick={saveSides} disabled={!pick || sidesBusy || !!pending}
+                          className="flex-[2] min-h-[48px] rounded-xl bg-brand-yellow text-black font-black disabled:opacity-50">
+                          {sidesBusy ? "Salvando…" : sidesErr ? "Tentar novamente" : "Confirmar lados"}
+                        </button>
+                      </div>
+                    </section>
+                  );
+                })()}
+
+                {/* Sides chosen, before the first battle: summary + correction */}
+                {!sidesChooser && xId && !battlesPlayed && !revealScoring && (
+                  <div className="mb-3 flex items-center justify-center gap-3 text-sm text-gray-300 flex-wrap text-center">
+                    <span>
+                      <b className="text-[#00aaff]">{bSideId === player1.id ? p1Name : p2Name}</b> = B Side (à sua direita) ·{" "}
+                      <b className="text-white">{bSideId === player1.id ? p2Name : p1Name}</b> = X Side (à sua esquerda)
+                    </span>
+                    <button onClick={() => { setSidesPick(bSideId); setSidesOpen(true); }} className="text-sm font-bold text-gray-200 bg-card border border-line rounded-lg px-4 py-2 min-h-[44px]">Corrigir lados</button>
                   </div>
                 )}
 
-                {/* Chosen sides summary (before the first battle only) */}
-                {!needSides && !revealScoring && state?.xSidePlayerId && currentSetNum === 1 && currentSetBattleCount === 0 && (
-                  <div className="mb-3 flex items-center justify-center gap-3 text-sm text-gray-300 flex-wrap text-center">
-                    <span>
-                      <b className="text-[#00aaff]">{state.xSidePlayerId === player1.id ? p2Name : p1Name}</b> = B side (esquerda) ·{" "}
-                      <b className="text-white">{state.xSidePlayerId === player1.id ? p1Name : p2Name}</b> = X side
-                    </span>
-                    <button onClick={() => chooseSide(null)} className="text-sm font-bold text-gray-200 bg-card border border-line rounded-lg px-4 py-2">trocar</button>
+                {/* Older match under way without sides: set them at a safe moment. */}
+                {legacyNoSides && !sidesChooser && !pending && !revealScoring && (
+                  <div className="mb-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100 flex flex-wrap items-center gap-2">
+                    <span className="flex-1 min-w-0">Esta partida começou sem lados definidos.</span>
+                    <button onClick={() => { setSidesPick(null); setSidesOpen(true); }} className="min-h-[44px] px-3 rounded-lg border border-amber-400/60 font-bold">Definir lados</button>
+                  </div>
+                )}
+
+                {/* Swap between sets: said clearly before the set's first battle. */}
+                {swappedNow && bSideId && !revealScoring && !sidesChooser && (
+                  <div role="status" className="mb-3 rounded-xl border border-[#00aaff]/50 bg-[#00aaff]/10 px-3 py-2 text-center text-sm text-gray-100">
+                    🔄 <b>Troca de lados no set {currentSetNum}:</b> {bSideId === player1.id ? p1Name : p2Name} agora no <b className="text-[#00aaff]">B Side</b> (à sua direita) e {bSideId === player1.id ? p2Name : p1Name} no X Side (à sua esquerda).
                   </div>
                 )}
 

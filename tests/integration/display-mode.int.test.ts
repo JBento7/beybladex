@@ -22,7 +22,7 @@ const mkUser = (role: "PARTICIPANT" | "ORGANIZER" = "PARTICIPANT") =>
 const mkBey = (userId: string, i: number) => prisma.beyblade.create({ data: { userId, name: `Bey ${i}`, beyLine: "BX", blade: `B${i}-${userId.slice(-5)}`, ratchet: `${i}-60`, bit: `Bit${i}` } });
 
 type Mode = "ARENA" | "JUDGE_ONLY" | undefined;
-async function setup(deckType: "SOLO" | "THREE_ON_THREE" | "THREE_ON_THREE_PLUS_ONE", displayMode: Mode, opts: { community?: string; arena?: number } = {}) {
+async function setup(deckType: "SOLO" | "THREE_ON_THREE" | "THREE_ON_THREE_PLUS_ONE", displayMode: Mode, opts: { community?: string; arena?: number; noSides?: boolean } = {}) {
   const org = await mkUser();
   const t = await prisma.tournament.create({
     data: { name: `${tag} ${deckType} ${displayMode ?? "legado"}`, format: "SWISS", status: "IN_PROGRESS", organizerId: org.id, deckType, setsToWin: 2, pointsToWinSet: 4, communitySlug: opts.community ?? "lbl", ...(displayMode ? { displayMode } : {}) },
@@ -36,7 +36,7 @@ async function setup(deckType: "SOLO" | "THREE_ON_THREE" | "THREE_ON_THREE_PLUS_
     return { id: u.id, beys };
   };
   const a = await player(), b = await player();
-  const m = await prisma.match.create({ data: { tournamentId: t.id, round: 1, player1Id: a.id, player2Id: b.id, arena: opts.arena ?? 1 } });
+  const m = await prisma.match.create({ data: { tournamentId: t.id, round: 1, player1Id: a.id, player2Id: b.id, arena: opts.arena ?? 1, xSidePlayerId: opts.noSides ? null : b.id } });
   return { t, org, a, b, m };
 }
 const audit = { actorId: "judge", actorRole: "judge" };
@@ -207,4 +207,42 @@ test("mode change: organizer/admin only, before the first battle; locked (with r
   assert.match(locked.body.error!, /já começaram/);
   assert.equal((await prisma.tournament.findUnique({ where: { id: x.t.id } }))!.displayMode, "ARENA", "unchanged");
   assert.equal(await prisma.matchDeckOrder.count({ where: { matchId: x.m.id } }), 2, "orders untouched");
+});
+
+// "Lados dos jogadores" in both modes (docs/MODO-ARBITRAGEM.md §3).
+test("sides: required before the first battle in BOTH modes; judge-only still needs no order and broadcasts nothing", async () => {
+  const { authorizeMatchOp } = await import("../../src/lib/matchAccess");
+  for (const mode of ["ARENA", "JUDGE_ONLY"] as const) {
+    const x = await setup("THREE_ON_THREE", mode, { noSides: true });
+    if (mode === "ARENA") { await order(x.m.id, x.a, 1, 0); await order(x.m.id, x.b, 1, 0); }
+    const g = await startBattleGate(x.m.id);
+    assert.ok(!g.ok && g.code === "SIDES_MISSING", `${mode}: start blocked without sides`);
+    // Choosing sides is the scoring permission (organizer yes, a stranger no) — no telão gate.
+    const orgSession = { user: { id: x.org.id, role: "ORGANIZER" } } as never;
+    const stranger = await mkUser();
+    assert.equal((await authorizeMatchOp(orgSession, x.m.id, "sides")).ok, true);
+    assert.equal((await authorizeMatchOp({ user: { id: stranger.id, role: "PARTICIPANT" } } as never, x.m.id, "sides")).ok, false, "unauthorized user refused");
+    await prisma.match.update({ where: { id: x.m.id }, data: { xSidePlayerId: x.a.id } });
+    assert.ok((await startBattleGate(x.m.id)).ok, `${mode}: start released after the choice`);
+    if (mode === "JUDGE_ONLY") {
+      const tg = await telaoOnlyGate(x.m.id);
+      assert.ok(!tg.ok && tg.code === "BROADCAST_DISABLED", "telão commands stay off");
+      const st = await loadMatchState(x.m.id, null);
+      assert.equal(st!.orderRequired, false, "still no deck order");
+      assert.equal(st!.xSidePlayerId, x.a.id, "sides persist (reload)");
+    }
+  }
+});
+
+test("sides: an older match under way without sides is not interrupted; scoring keeps crediting the player", async () => {
+  const x = await setup("SOLO", "JUDGE_ONLY", { noSides: true });
+  // Points already scored before the feature: the start gate doesn't block it.
+  await prisma.match.update({ where: { id: x.m.id }, data: { xSidePlayerId: x.a.id } });
+  assert.equal((await pt(x.m.id, x.b.id, `${tag}-ls0`)).kind, "ok");
+  await prisma.match.update({ where: { id: x.m.id }, data: { xSidePlayerId: null } });
+  assert.ok((await startBattleGate(x.m.id)).ok, "legacy match with battles: no SIDES_MISSING");
+  assert.equal((await pt(x.m.id, x.b.id, `${tag}-ls1`)).kind, "ok");
+  const st = await loadMatchState(x.m.id, null);
+  const pts = st!.sets.flatMap((s: { points?: { scorerId: string }[] }) => s.points ?? []);
+  assert.ok(pts.every((p) => p.scorerId === x.b.id), "points keep the player id, whatever the sides");
 });

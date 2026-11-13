@@ -74,10 +74,16 @@ export async function startBattleGate(matchId: string): Promise<{ ok: true; mode
   try {
     return await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Match" WHERE id = ${matchId} FOR UPDATE`;
-      const m = await tx.match.findUnique({ where: { id: matchId }, select: { status: true, player1Id: true, player2Id: true, tournament: { select: { displayMode: true } } } });
+      const m = await tx.match.findUnique({ where: { id: matchId }, select: { status: true, player1Id: true, player2Id: true, xSidePlayerId: true, _count: { select: { points: true } }, tournament: { select: { displayMode: true } } } });
       if (!m) throw new Rollback({ ok: false, status: 404, error: "Partida não encontrada", code: "NOT_FOUND" });
       if (m.status === "FINISHED") throw new Rollback({ ok: false, status: 409, error: "Partida finalizada.", code: "MATCH_FINISHED" });
       if (m.player1Id === m.player2Id) throw new Rollback({ ok: false, status: 400, error: "Bye não tem batalha.", code: "BYE" });
+      // "Lados dos jogadores" before the first battle, in BOTH modes (physical
+      // organization, not broadcast). Matches already under way without sides
+      // are not interrupted (they can still set them at a safe moment).
+      if (!m.xSidePlayerId && m._count.points === 0) {
+        throw new Rollback({ ok: false, status: 409, error: "Defina os lados dos jogadores (quem começa no B Side) antes da primeira batalha.", code: "SIDES_MISSING" });
+      }
       const lock = await lockTriosTx(tx, matchId);
       if (lock && !lock.ok) throw new Rollback({ ok: false, status: lock.status, error: lock.error, code: lock.code });
       const gate = await deckOrderGateTx(tx, matchId);
@@ -90,9 +96,10 @@ export async function startBattleGate(matchId: string): Promise<{ ok: true; mode
   }
 }
 
-/** Telão-only operations (PRONTOS, countdown, videos, on-air heartbeat,
- *  stadium sides) are refused for a "Somente placar do juiz" event: nothing
- *  of it may reach a telão, even from an old page or a stale request. */
+/** Telão-only operations (PRONTOS, countdown, videos, on-air heartbeat) are
+ *  refused for a "Somente placar do juiz" event: nothing of it may reach a
+ *  telão, even from an old page or a stale request. (Choosing the players'
+ *  sides is physical organization, allowed in both modes.) */
 export async function telaoOnlyGate(matchId: string): Promise<null | GateError> {
   const m = await prisma.match.findUnique({ where: { id: matchId }, select: { tournament: { select: { displayMode: true } } } }).catch(() => null);
   if (m && effectiveDisplayMode(m.tournament.displayMode) === "JUDGE_ONLY") {

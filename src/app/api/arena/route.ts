@@ -10,7 +10,7 @@ import { usesBattleDeck } from "@/lib/deckFormat";
 import { matchPhaseLabel } from "@/lib/matchLabel";
 import { latestVersions } from "@/lib/layoutStore";
 import { beyPiecesOf, mainBladeName, type BeyLike, type PiecesData } from "@/lib/beyArt";
-import { scoreboardSideOf } from "@/lib/matchSides";
+import { scoreboardSideOf, sideOfPlayer } from "@/lib/matchSides";
 
 // The telão polls this several times a minute per display, but between points
 // (and while an arena sits idle) the payload is byte-for-byte identical. Tag
@@ -498,7 +498,9 @@ async function getHandler(req: NextRequest) {
 
   const leftId = leftIsP1 ? match.player1Id : match.player2Id;
   // Stadium side shown on each half (null until the judge picks sides).
-  const sideOf = (id: string): "B" | "X" | null => (xId ? (id === xId ? "X" : "B") : null);
+  // B / X of each player IN THIS SET (lib/matchSides): the left half is the
+  // B side, the right half the X side, whoever stands there after a swap.
+  const sideOf = (id: string): "B" | "X" | null => sideOfPlayer({ player1Id: match.player1Id, player2Id: match.player2Id, xSidePlayerId: xId, maxSets }, id, currentSetNum);
   const winnerSide: "p1" | "p2" | null =
     phase === "finished" ? (match.winnerId === leftId ? "p1" : "p2") : null;
   // Side the WINNER was shown on in the last set played (by player id and the

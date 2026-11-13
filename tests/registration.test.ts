@@ -6,7 +6,8 @@ import { registrationState, myRegistrationState, wallTimeToInstant } from "../sr
 // Deadline typed as 11/11/2026 23:59 (Brasília) → stored as 23:59Z.
 const deadline = new Date("2026-11-11T23:59:00Z");
 const at = (iso: string) => Date.parse(iso);
-const base = { status: "REGISTRATION", registrationDeadline: deadline, maxParticipants: 4, participantCount: 1 };
+// Fixed clock (before the deadline) so the test never depends on today's date.
+const base = { status: "REGISTRATION", registrationDeadline: deadline, maxParticipants: 4, participantCount: 1, now: at("2026-11-10T12:00:00Z") };
 
 test("before, at and after the deadline (Brasília time)", () => {
   // 23:30 in Brasília = 02:30Z next day: still open.

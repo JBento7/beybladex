@@ -40,15 +40,30 @@ Ao abrir "Arbitrar":
 
 - **Na tela:** jogadores, pontos, sets e botões de finalização.
 - **Início:** o botão principal é **"Iniciar batalha"**, um toque por batalha (nada começa sozinho). Depois dele, os botões de pontuação ficam liberados.
-- **Nada é exigido antes:** escolher ou ordenar Beyblades, cadastrar a ordem ou definir os lados do estádio.
+- **Antes da primeira batalha:** só a escolha dos **lados dos jogadores** (ver abaixo). Não é exigido escolher ou ordenar Beyblades nem cadastrar a ordem.
 - **Nada vai para o telão:**
   - sem conexão local (WebRTC) com o telão;
   - sem heartbeat "no ar": a conexão é medida por `GET /api/matches/[id]/version`, que só lê a versão do placar;
   - sem PRONTOS, contagem, recontagem ou vídeos;
   - sem indicador ou alerta de telão.
 - **No servidor:** pontos, sets, vencedores e resultados continuam salvos como sempre.
-- **Rotas exclusivas do telão:** `/ready`, `/countdown`, `/launch-video`, `/onair` e `/sides` respondem 409 (`BROADCAST_DISABLED`) para esses torneios, mesmo vindo de uma página antiga.
+- **Rotas exclusivas do telão:** `/ready`, `/countdown`, `/launch-video` e `/onair` respondem 409 (`BROADCAST_DISABLED`) para esses torneios, mesmo vindo de uma página antiga.
 - **Vídeo de finalização:** o ponto não marca o sinal de vídeo para o telão.
+
+### Lados dos jogadores (os dois modos)
+
+Os lados são organização física da mesa, não transmissão. Por isso valem nos dois modos, e `/api/matches/[id]/sides` não tem a trava do telão (continua exigindo login, permissão de arbitragem e a liga).
+
+- **Quando:** antes da primeira batalha de uma partida nova, nos dois modos. Sem lados, "Iniciar batalha" (e o "Iniciar" do telão) fica bloqueado, também no servidor (`SIDES_MISSING`).
+- **Como:** em "Lados dos jogadores", o juiz toca em quem começa no **B Side**; o outro fica no **X Side**. Uma prévia mostra como o painel vai ficar e só depois o juiz confirma. Toques repetidos são ignorados enquanto salva; se a conexão falhar, aparece o erro e "Tentar novamente".
+- **Visão do juiz:** de frente para os jogadores, o B Side fica à direita e o X Side à esquerda. No modo com telão, o telão mostra o B Side à esquerda (espelho).
+- **No painel:** nomes, rótulos B/X, cores e botões de pontuação seguem os lados. O ponto é sempre creditado ao jogador (pelo id), nunca à posição.
+- **Troca de lados:** em partidas de mais de um set, os jogadores trocam a cada set. O aviso "Troca de lados no set N" aparece antes da primeira batalha do set. A regra está em `lib/matchSides` e é a mesma do telão.
+- **Correção:** antes da primeira batalha, "Corrigir lados" permite escolher de novo. Depois da primeira batalha os lados ficam fixos.
+- **Partidas antigas em andamento sem lados:** não são interrompidas. Quando não há lançamento pendente, aparece "Definir lados". A escolha vale a partir do set atual e pode ser feita uma vez. Pontos, sets e vencedores já lançados não mudam.
+- **Partida encerrada:** os lados não podem ser alterados.
+- **Registro:** cada mudança grava antes/depois no log de auditoria da partida (`op: "sides"`). O salvamento é feito numa transação com trava da linha.
+- **O que não muda:** configuração de transmissão, ordem de deck, pontos, sets e ranking.
 
 ## 4. Decks
 

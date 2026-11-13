@@ -96,7 +96,7 @@ A migração `20261101000000_match_score_version` só acrescenta `Match.scoreVer
 
 ## 8. Torneios sem telão
 
-Tudo o que está acima vale para torneios **"Com telão Arena"**. Torneios **"Somente placar do juiz"** não usam telão, conexão local nem comandos: ver `docs/MODO-ARBITRAGEM.md`.
+Tudo o que está acima vale para torneios **"Com telão Arena"**. Torneios **"Somente placar do juiz"** não usam telão, conexão local nem comandos: ver `docs/MODO-ARBITRAGEM.md`. A escolha dos **lados dos jogadores** vale nos dois modos (`docs/MODO-ARBITRAGEM.md` §3, "Lados dos jogadores").
 
 ## 9. Limitações conhecidas
 
