@@ -16,6 +16,10 @@ import DeckOrderPicker, { type BeybladeInfo, comboParts } from "./DeckOrderPicke
 import TrioPicker from "@/components/deck/TrioPicker";
 import { hasMatchTrio, usesBattleDeck, type DeckBey } from "@/lib/deckFormat";
 import { DISPLAY_MODE_LABEL, effectiveDisplayMode } from "@/lib/displayMode";
+import { useSession } from "next-auth/react";
+import { useReplayRecorder } from "@/lib/client/useReplayRecorder";
+import type { ClipMeta } from "@/lib/replayCore";
+import { CameraStartPrompt, MatchEndRecordings, MatchRecordings, ReplayBar, ReplayPlayer } from "./ReplayUI";
 
 // Finish buttons in the Beyblade X scoreboard order.
 const FINISH_BTNS: { type: FinishType; label: string }[] = [
@@ -186,6 +190,14 @@ export default function ScoreModal({
 
   const router = useRouter();
   const isDeck = usesBattleDeck(deckType);
+  // Local replay (docs/REPLAY-LOCAL.md): optional camera, one clip per battle,
+  // stored only on this device and only listed for this account.
+  const { data: authSession } = useSession();
+  const replay = useReplayRecorder({ ownerId: authSession?.user?.id ?? null, tournamentId, matchId, active: open });
+  const [replayClip, setReplayClip] = useState<ClipMeta | null>(null);
+  const [recsOpen, setRecsOpen] = useState(false);
+  const [camPrompt, setCamPrompt] = useState<{ message: string; kind: "judge" | "countdown" } | null>(null);
+  const [camSkipped, setCamSkipped] = useState(false);
   // "Somente placar do juiz": no link to the telão, no on-air heartbeat, no
   // PRONTOS/countdown/videos, no stadium sides, no deck order (docs/MODO-ARBITRAGEM.md).
   const [modeFromState, setModeFromState] = useState<string | null>(null);
@@ -473,6 +485,9 @@ export default function ScoreModal({
   const confirmed = (p: PendingLaunch, data: { state?: MatchState; matchFinished?: boolean; winnerId?: string | null; replay?: boolean }) => {
     applyState(data.state);
     finishLaunch(p);
+    // The battle's clip ends only on a CONFIRMED launch (never on a refused or
+    // still-unconfirmed one). Battle number = battles already scored + 1.
+    void replay.commitBattle(p.setNumber, p.battle + 1);
     setOptBey({}); // next battle: identify again (optional)
     setPhase("confirmed");
     setLastResult("saved");
@@ -584,6 +599,19 @@ export default function ScoreModal({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [pending]);
+  // Replay: a recording in progress is a reason to confirm before leaving
+  // (support only — not every mobile browser shows this prompt).
+  const replayRecording = replay.status === "recording";
+  useEffect(() => {
+    if (!replayRecording) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [replayRecording]);
+  // Match over (closing launch, W.O., organizer): close the clip normally.
+  const matchOver = !!state?.matchFinished;
+  const stopReplay = replay.stopRecording;
+  useEffect(() => { if (matchOver && replayRecording) void stopReplay(); }, [matchOver, replayRecording, stopReplay]);
   useEffect(() => () => {
     if (verifyTimer.current) clearTimeout(verifyTimer.current);
     if (confirmTimer.current) clearTimeout(confirmTimer.current);
@@ -673,11 +701,29 @@ export default function ScoreModal({
   // server. A recount is a NEW press. The battle only starts (scoring board)
   // when the server accepted the countdown.
   const [readyKey, setReadyKey] = useState<string | null>(null);
+  // Camera before the battle is released: start (or keep, on a recount) the
+  // battle's clip. Camera off/declined → nothing to do. A camera failure
+  // stops here with a warning offering "Iniciar sem gravação".
+  async function cameraBeforeStart(kind: "judge" | "countdown", skip: boolean): Promise<{ go: boolean; clipId?: string; reused?: boolean }> {
+    if (skip || camSkipped || !replay.armed) return { go: true };
+    const r = await replay.beginClip(currentSetNum, currentSetBattleCount + 1);
+    if (r.ok) { setCamPrompt(null); return { go: true, clipId: r.clipId, reused: r.reused }; }
+    setCamPrompt({ message: r.error, kind });
+    return { go: false };
+  }
   const routeOf: Record<CmdKind, string> = { ready: "ready", countdown: "countdown", launch: "launch-video" };
-  async function sendCommand(kind: CmdKind, retryOf?: CmdState) {
+  async function sendCommand(kind: CmdKind, retryOf?: CmdState, skipCamera = false) {
     const keyAtPress = startKey;
     if (!retryOf && cmdBusyRef.current[kind] === keyAtPress) return;
     cmdBusyRef.current[kind] = keyAtPress;
+    let cam: { go: boolean; clipId?: string; reused?: boolean } = { go: true };
+    if (kind === "countdown") {
+      cam = await cameraBeforeStart("countdown", skipCamera);
+      if (!cam.go) { cmdBusyRef.current[kind] = null; return; }
+    }
+    // Start not accepted: the clip opened by THIS press is dropped (a recount
+    // keeps the clip already recording its battle).
+    const dropClip = () => { if (cam.clipId && !cam.reused) void replay.discardClip(cam.clipId); };
     const commandId = retryOf?.commandId ?? newId();
     setCmd({ kind, commandId, phase: "sending", telao: retryOf?.telao === "played" ? "played" : "pending" });
     linkSend({ type: "cmd", kind, commandId, matchId });
@@ -698,12 +744,14 @@ export default function ScoreModal({
         }
       } else if (res.status >= 400 && res.status < 500) {
         setCmd((c) => (c?.commandId === commandId ? { ...c, phase: "refused", error: d.error || "Comando recusado." } : c));
-        if (kind === "countdown") fetchState();
+        if (kind === "countdown") { fetchState(); dropClip(); }
       } else {
         setCmd((c) => (c?.commandId === commandId ? { ...c, phase: "failed", error: "Falha de comunicação com o servidor." } : c));
+        if (kind === "countdown") dropClip();
       }
     } catch {
       setCmd((c) => (c?.commandId === commandId ? { ...c, phase: "failed", error: "Falha de comunicação com o servidor." } : c));
+      if (kind === "countdown") dropClip();
     } finally {
       if (kind === "countdown") setStarting(false);
       // Brief cooldown so a double-tap can't fire two presses.
@@ -714,12 +762,15 @@ export default function ScoreModal({
   // declared, judge assignment) — nothing is sent to a telão. The battle is
   // never started automatically: one press per battle, like "Iniciar".
   const [startErr, setStartErr] = useState<string | null>(null);
-  async function startJudgeOnly() {
+  async function startJudgeOnly(skipCamera = false) {
     const keyAtPress = startKey;
     if (cmdBusyRef.current.countdown === keyAtPress) return;
     cmdBusyRef.current.countdown = keyAtPress;
     setStarting(true);
     setStartErr(null);
+    const cam = await cameraBeforeStart("judge", skipCamera);
+    if (!cam.go) { setStarting(false); cmdBusyRef.current.countdown = null; return; }
+    const dropClip = () => { if (cam.clipId && !cam.reused) void replay.discardClip(cam.clipId); };
     try {
       const res = await timedFetch(`/api/matches/${matchId}/battle-start`, { method: "POST" }, 8000);
       const d = await res.json().catch(() => ({}));
@@ -727,10 +778,12 @@ export default function ScoreModal({
         setStartedKey(keyAtPress);
         if (plusOne && !trio?.locked) fetchState(); // declared trios were just locked
       } else {
+        dropClip();
         setStartErr(d.error || "Não foi possível iniciar a batalha.");
         fetchState();
       }
     } catch {
+      dropClip();
       setStartErr("Sem conexão com o servidor. Toque de novo em “Iniciar batalha”.");
     } finally {
       setStarting(false);
@@ -772,6 +825,7 @@ export default function ScoreModal({
   }
 
   function handleClose(): boolean {
+    if (replay.isRecording() && !window.confirm("Uma gravação de replay está em andamento. Sair do placar encerra o trecho (o que já foi gravado fica salvo neste aparelho, marcado como interrompido). Sair mesmo assim?")) return false;
     if (pendingRef.current && !window.confirm("Há um ponto aguardando confirmação do servidor. Ele continua salvo neste aparelho e será verificado quando você abrir este placar de novo. Fechar mesmo assim?")) return false;
     setOpen(false);
     router.refresh();
@@ -989,6 +1043,19 @@ export default function ScoreModal({
               <div className="mb-3 text-base px-4 py-3 rounded-lg bg-red-900/30 border border-red-700 text-red-400">{err}</div>
             )}
 
+            {/* Local replay camera (optional; never covers names, points or buttons) */}
+            {state && !state.matchFinished && !camSkipped && (
+              <ReplayBar r={replay} onReviewLast={() => { const c = replay.clips.find((x) => x.id === replay.lastClipId); if (c) setReplayClip(c); }} />
+            )}
+            {camPrompt && state && !state.matchFinished && (
+              <CameraStartPrompt
+                message={camPrompt.message}
+                onWithout={() => { const k = camPrompt.kind; setCamPrompt(null); if (k === "judge") void startJudgeOnly(true); else void sendCommand("countdown", undefined, true); }}
+                onRetry={() => { const k = camPrompt.kind; setCamPrompt(null); if (k === "judge") void startJudgeOnly(); else void sendCommand("countdown"); }}
+                onCancel={() => { setCamPrompt(null); setCamSkipped(true); void replay.disableCamera(); }}
+              />
+            )}
+
             {!state ? (
               <div className="py-10 text-center">
                 <div className="text-base text-gray-500 animate-pulse mb-6">Carregando partida...</div>
@@ -1014,6 +1081,7 @@ export default function ScoreModal({
                   <button onClick={handleClose} className="w-full text-base font-bold text-gray-300 bg-card border border-line rounded-xl px-6 py-3.5">Fechar</button>
                 </div>
                 <p className="mt-3 text-xs text-gray-500">Para corrigir uma partida finalizada, solicite à organização.</p>
+                <MatchEndRecordings r={replay} onReviewAll={() => setRecsOpen(true)} />
               </div>
             ) : (
               <>
@@ -1297,7 +1365,7 @@ export default function ScoreModal({
                 {showStart && judgeOnly && (
                   <>
                     <button
-                      onClick={startJudgeOnly}
+                      onClick={() => startJudgeOnly()}
                       disabled={starting}
                       className="w-full mb-2 bg-[#22c55e] hover:bg-[#1ea34d] disabled:opacity-60 text-black font-black text-2xl py-6 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
                     >
@@ -1392,9 +1460,15 @@ export default function ScoreModal({
                 )}
               </>
             )}
+            {state && (replay.clips.length > 0 || recsOpen) && (
+              <MatchRecordings r={replay} open={recsOpen} onToggle={setRecsOpen} onReview={setReplayClip} />
+            )}
             </div>
             {footer}
           </div>
+          {replayClip && (
+            <ReplayPlayer clip={replayClip} r={replay} matchTitle={`${p1Name} × ${p2Name}`} onClose={() => setReplayClip(null)} />
+          )}
         </div>
       )}
     </>
