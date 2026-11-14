@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   battleId, cameraErrorMessage, cleanupPreselect, clipLabel, estimatedClipBytes, formatBytes, formatDuration, formatLabel,
-  nextTake, ownClips, parseQuality, pickRecorderMime, recoverAction, speedLabel, storageAdvice, totalBytes,
+  nextTake, ownClips, visibleTo, parseQuality, pickRecorderMime, recoverAction, speedLabel, storageAdvice, totalBytes,
 } from "../src/lib/replayCore.ts";
 
 test("format: first supported candidate, never a fixed format", () => {
@@ -46,6 +46,11 @@ test("account isolation and recovery after a closed page", () => {
   const clips = [{ ownerId: "a" }, { ownerId: "b" }, { ownerId: "a" }];
   assert.equal(ownClips(clips, "a").length, 2);
   assert.deepEqual(ownClips(clips, null), [], "no account → nothing listed");
+  // Tied to the account AND the device that recorded it.
+  assert.equal(visibleTo({ ownerId: "a", deviceId: "d1" }, "a", "d1"), true);
+  assert.equal(visibleTo({ ownerId: "a", deviceId: "d1" }, "a", "d2"), false, "same account, other device");
+  assert.equal(visibleTo({ ownerId: "a", deviceId: "d1" }, "b", "d1"), false, "other account, same device");
+  assert.equal(visibleTo({ ownerId: "a" }, "a", "d1"), true, "older clip without device id");
   assert.equal(recoverAction({ status: "RECORDING", chunks: 3 }), "interrupt");
   assert.equal(recoverAction({ status: "RECORDING", chunks: 0 }), "delete");
   assert.equal(recoverAction({ status: "KEPT", chunks: 3 }), "keep");

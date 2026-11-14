@@ -1031,7 +1031,7 @@ export default function ScoreModal({
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="Placar do juiz"
+            aria-label="Placar da partida"
             className="relative flex-1 min-h-0 w-full max-w-2xl mx-auto flex flex-col"
           >
             {/* Three regions: fixed header, scrolling middle, fixed footer — the

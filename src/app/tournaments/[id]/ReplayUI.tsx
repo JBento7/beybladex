@@ -1,6 +1,7 @@
 "use client";
 
-// Local replay UI for the judge (docs/REPLAY-LOCAL.md): camera bar with a
+// Local replay UI inside the match scoreboard (docs/REPLAY-LOCAL.md), for
+// whoever may operate it: camera bar with a
 // collapsible preview, replay player, the match's recordings list, cleanup
 // and the end-of-match summary. Everything plays from THIS device's storage
 // (works offline) and nothing here changes points, undoes launches or starts
@@ -33,7 +34,7 @@ export function ReplayBar({ r, onReviewLast }: { r: ReplayRecorder; onReviewLast
   const [showPreview, setShowPreview] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   // The preview folds away when a battle starts recording, so the scoring
-  // board stays where the judge expects it (it can be reopened anytime).
+  // board stays where the user expects it (it can be reopened anytime).
   const [prevStatus, setPrevStatus] = useState(r.status);
   if (prevStatus !== r.status) {
     setPrevStatus(r.status);

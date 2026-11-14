@@ -6,7 +6,7 @@ import { signOut } from "next-auth/react";
 // cache (public/sw.js) and per-tab state. Quick tournaments (localStorage,
 // played offline on purpose) and the news popup preferences are kept.
 export async function logout(callbackUrl: string) {
-  // Releases the judge's replay camera (videos stay on the device, listed only for their account).
+  // Releases the scoreboard's replay camera (videos stay on this device, listed only for the account that recorded them).
   try { window.dispatchEvent(new Event("lbl:logout")); } catch { /* best-effort */ }
   try {
     navigator.serviceWorker?.controller?.postMessage({ type: "lbl:logout" });

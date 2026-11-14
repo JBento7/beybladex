@@ -1,6 +1,8 @@
 "use client";
 
-// Camera + per-battle recording for the judge's local replay
+// Camera + per-battle recording for the scoreboard's local replay (available
+// to whoever may operate the scoreboard — no extra permission, no camera
+// until the user turns it on)
 // (docs/REPLAY-LOCAL.md). getUserMedia (video only, never the microphone) →
 // MediaRecorder in ~1 s blocks → IndexedDB (lib/client/replayStore). Nothing
 // is uploaded. The camera is optional: every failure here leaves the
@@ -17,7 +19,7 @@ import {
   pickRecorderMime, recoverAction, storageAdvice, type ClipMeta, type QualityKey,
 } from "@/lib/replayCore";
 import {
-  addChunk, deleteClips, getClipBlob, listClips, putClip, replayStorageSupported, requestPersistence, storageEstimate, updateClip,
+  addChunk, deleteClips, getClipBlob, listClips, localDeviceId, putClip, replayStorageSupported, requestPersistence, storageEstimate, updateClip,
 } from "./replayStore";
 
 export type CamStatus = "off" | "starting" | "ready" | "recording" | "finalizing" | "saved" | "error";
@@ -234,7 +236,7 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
         return { ok: false, error: cameraErrorMessage(e) };
       }
       const meta: ClipMeta = {
-        id: newClipId(), ownerId: owner, tournamentId, matchId, setNumber, battle, take, createdAt: Date.now(),
+        id: newClipId(), ownerId: owner, deviceId: localDeviceId(), tournamentId, matchId, setNumber, battle, take, createdAt: Date.now(),
         durationMs: 0, sizeBytes: 0, mimeType: recorder.mimeType || mimeType || "video/webm", status: "RECORDING", endReason: null, chunks: 0,
       };
       try { await putClip(meta); } catch (e) { return { ok: false, error: cameraErrorMessage(e) }; }

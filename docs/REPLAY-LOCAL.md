@@ -1,6 +1,12 @@
-# Replay local do juiz
+# Replay local do placar
 
-Gravação e replay de lances **somente no aparelho do juiz**, para conferir um lance e descartar o vídeo depois. Funciona nos modos "Com telão Arena" e "Somente placar do juiz". A câmera é opcional e nunca bloqueia a arbitragem.
+Gravação e replay de lances **somente neste dispositivo**, para conferir um lance e descartar o vídeo depois. Funciona nos modos "Com telão Arena" e "Somente placar do juiz". A câmera é opcional e nunca bloqueia a arbitragem.
+
+## 0. Quem pode usar
+
+- **Quem pode abrir e operar o placar da partida**, por qualquer tipo de conta: juízes, administradores, organizadores e jogadores autorizados (por exemplo, arbitragem aberta aos participantes). Não exige conta técnica de Juiz.
+- **Sem permissão nova:** os controles ficam dentro do próprio placar, que só aparece para quem passa na regra atual (`canScore` em `tournaments/[id]/page.tsx`; no servidor, `lib/matchPolicy` decide os lançamentos). A câmera e o replay não fazem nenhuma verificação própria de tipo de conta.
+- **Câmera desligada até o usuário ativar:** abrir o placar não liga a câmera. Depois de "Ativar câmera para replay" e da permissão do navegador, cada "Iniciar batalha" pode iniciar uma gravação, conforme o fluxo abaixo.
 
 ## 1. Onde ficam os vídeos
 
@@ -10,13 +16,17 @@ Gravação e replay de lances **somente no aparelho do juiz**, para conferir um 
 - **Nunca vão para a rede:** nada é enviado para Vercel, Supabase ou outro serviço, e nenhuma rota do servidor recebe vídeo. O teste e2e confere isso: nenhuma requisição leva corpo de vídeo.
 - **Nunca no `localStorage`.** Ele guarda só a preferência de qualidade (`lbl:replay:qualidade`).
 - **Dados de cada trecho** (`lib/replayCore.ClipMeta`):
-  - conta do juiz, torneio, partida, set, batalha e tomada;
+  - conta que realizou a gravação, este dispositivo (id aleatório local, `lbl:replay:dispositivo`, que não é credencial), torneio, partida, set, batalha e tomada;
   - id único da gravação, data/hora, duração, tamanho e formato;
   - situação: `AVAILABLE` (disponível), `KEPT` (mantido para revisão), `INTERRUPTED` (interrompido) ou `RECORDING` (gravando);
   - motivo do fim antecipado, quando houver.
   - **Nunca** guarda credenciais, tokens ou cookies.
-- **Isolamento por conta:** a interface só lista os trechos da conta logada. Num aparelho compartilhado, outro juiz não vê nem apaga os vídeos de outra conta. Os vídeos continuam no armazenamento do navegador.
-- **Duração:** os vídeos ficam até o juiz apagar, ou até o navegador limpar os dados do site. O painel avisa: "Os vídeos ficam no armazenamento deste navegador. Limpar os dados do site ou ações do navegador podem removê-los." Ao ativar a câmera, o site pede ao navegador armazenamento persistente (`navigator.storage.persist()`), sem garantia.
+- **Isolamento por conta e dispositivo** (`replayCore.visibleTo`):
+  - a interface só lista os trechos da conta que realizou a gravação, neste dispositivo;
+  - num aparelho compartilhado, outra conta não vê nem apaga esses vídeos;
+  - outro usuário (ou a mesma conta) que abrir o mesmo placar em outro aparelho não recebe esses vídeos;
+  - os vídeos continuam no armazenamento do navegador.
+- **Duração:** os vídeos ficam até o usuário apagar, ou até o navegador limpar os dados do site. O painel avisa: "Os vídeos ficam no armazenamento deste navegador. Limpar os dados do site ou ações do navegador podem removê-los." Ao ativar a câmera, o site pede ao navegador armazenamento persistente (`navigator.storage.persist()`), sem garantia.
 
 ## 2. Fluxo no painel
 
@@ -29,7 +39,7 @@ Gravação e replay de lances **somente no aparelho do juiz**, para conferir um 
    - se o servidor recusar ou a conexão falhar, o trecho dessa tentativa é apagado;
    - se a câmera falhar, aparece "Não foi possível iniciar a gravação", com "Iniciar sem gravação", "Tentar de novo" e "Continuar sem câmera nesta partida".
 3. **Lançamento confirmado pelo servidor:** encerra o trecho daquela batalha. Um lançamento recusado ou ainda pendente não encerra nada.
-4. **Recontagem e "Reenviar comando":** continuam usando o trecho da batalha em curso, sem criar arquivo novo. Se o juiz tinha parado a gravação, a recontagem abre uma nova **tomada** da mesma batalha ("Set 1 · Batalha 2 (tomada 2)"), nunca um duplicado sem identificação.
+4. **Recontagem e "Reenviar comando":** continuam usando o trecho da batalha em curso, sem criar arquivo novo. Se o usuário tinha parado a gravação, a recontagem abre uma nova **tomada** da mesma batalha ("Set 1 · Batalha 2 (tomada 2)"), nunca um duplicado sem identificação.
 5. **Outras saídas:**
    - "Parar gravação";
    - limite de 3 min por trecho (salva e avisa);
@@ -53,7 +63,7 @@ Gravação e replay de lances **somente no aparelho do juiz**, para conferir um 
   - partida, set e batalha;
   - "Voltar ao placar".
 - **Câmera lenta** reproduz os mesmos quadros gravados (≈30 por segundo), sem criar detalhes.
-- **O replay não mexe na partida:** não altera pontos, não desfaz lançamentos e não inicia batalha. Para corrigir, o juiz usa o fluxo de sempre ("Desfazer último lançamento").
+- **O replay não mexe na partida:** não altera pontos, não desfaz lançamentos e não inicia batalha. Para corrigir, quem opera o placar usa o fluxo de sempre ("Desfazer último lançamento").
 - **Sem internet:** o replay funciona, porque toca do armazenamento local.
 - **URL temporária:** a `blob:` é criada ao abrir o player e liberada ao fechar ou descartar.
 
@@ -78,7 +88,7 @@ Gravação e replay de lances **somente no aparelho do juiz**, para conferir um 
 - **Aba em segundo plano, troca de aplicativo ou bloqueio do aparelho** (`visibilitychange` → hidden): o trecho é encerrado e marcado como **interrompido**, com o que já foi gravado.
 - **Ao voltar:** o painel confere se a câmera ainda está ativa. Se não estiver, mostra a falha e não continua dizendo "Gravando".
 - **Câmera desconectada, tomada por outro app ou permissão revogada** (`track.onended`): encerra o trecho como interrompido e mostra a falha. A arbitragem continua.
-- **Fechar o placar ou "Minhas partidas" durante a gravação:** pede confirmação. Se o juiz confirmar, o trecho é salvo como interrompido.
+- **Fechar o placar ou "Minhas partidas" durante a gravação:** pede confirmação. Se o usuário confirmar, o trecho é salvo como interrompido.
 - **Fechar a aba ou o navegador:** o aviso `beforeunload` é só apoio, pois nem todo celular mostra. Os blocos já gravados ficam no aparelho. Na próxima abertura, o trecho que ficou "gravando" vira **interrompido**, ou é removido se não tiver nenhum bloco. Não há garantia de que um trecho interrompido assim toque: depende do formato e do navegador.
 - **Sair da conta:** `lib/client/logout` dispara `lbl:logout`, que libera a câmera.
 
@@ -94,6 +104,7 @@ Gravação e replay de lances **somente no aparelho do juiz**, para conferir um 
 
 ## 7. Validação feita
 
+- **Quem pode usar:** organizador, administrador e jogador autorizado (torneio com arbitragem aberta aos participantes) usam a câmera no placar. Um participante sem permissão não vê o placar.
 - **Automática:** testes unitários de `replayCore`; tsc; lint; build.
 - **E2E no Chromium com câmera simulada:**
   - ativar câmera;
@@ -112,7 +123,7 @@ Gravação e replay de lances **somente no aparelho do juiz**, para conferir um 
   - espaço insuficiente → "Iniciar sem gravação";
   - modo com telão com duas recontagens → um único trecho;
   - nenhuma requisição com vídeo.
-- **Ainda não validado em celular real dos juízes.** O ambiente de desenvolvimento não tem um aparelho físico. Antes de usar num evento, faça o roteiro da seção 9 num dos celulares dos juízes.
+- **Ainda não validado num celular real usado para arbitrar.** O ambiente de desenvolvimento não tem um aparelho físico. Antes de usar num evento, faça o roteiro da seção 9 num dos celulares usados no placar.
 
 ## 8. Limitações conhecidas por navegador
 
@@ -128,9 +139,9 @@ Gravação e replay de lances **somente no aparelho do juiz**, para conferir um 
   - a escolha da câmera traseira usa `facingMode`. Em aparelhos com várias lentes traseiras, a escolhida pode não ser a ideal; troque em ⚙.
 - **Firefox:** grava em WebM. O tamanho dos blocos varia.
 - **Câmera lenta:** limitada aos quadros que a câmera entrega, normalmente 30 por segundo, e a lente pode reduzir esse número com pouca luz. Lances muito rápidos podem aparecer borrados em qualquer velocidade.
-- **Duas abas do mesmo juiz gravando ao mesmo tempo:** ao abrir, uma aba pode marcar como interrompido o trecho em andamento da outra. Use uma aba por aparelho.
+- **Duas abas da mesma conta gravando ao mesmo tempo:** ao abrir, uma aba pode marcar como interrompido o trecho em andamento da outra. Use uma aba por aparelho.
 
-## 9. Roteiro de teste no celular do juiz
+## 9. Roteiro de teste no celular de quem opera o placar
 
 1. Abrir o placar pelo site em HTTPS, com o aparelho num suporte.
 2. Tocar em "Ativar câmera para replay", aceitar e conferir a câmera traseira e o enquadramento da arena inteira.

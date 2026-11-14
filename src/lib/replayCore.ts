@@ -1,4 +1,5 @@
-// Local replay for the judge (docs/REPLAY-LOCAL.md): the pure rules — which
+// Local replay of the match scoreboard (docs/REPLAY-LOCAL.md), for whoever
+// may operate that scoreboard (same authorization as scoring): the pure rules — which
 // recording format, quality presets, limits, storage advice, clip labels,
 // cleanup selection and camera error messages. No imports, no browser APIs:
 // unit-tested directly by Node (tests/replayCore.test.ts). The videos never
@@ -17,7 +18,10 @@ export const CLIP_STATUS_LABEL: Record<ClipStatus, string> = {
 /** Everything stored about a clip besides the video data. Never credentials. */
 export type ClipMeta = {
   id: string;
+  /** Account that made the recording. */
   ownerId: string;
+  /** This device/browser (random id kept locally); absent on older clips. */
+  deviceId?: string;
   tournamentId: string;
   matchId: string;
   setNumber: number;
@@ -128,6 +132,12 @@ export function ownClips<T extends Pick<ClipMeta, "ownerId">>(clips: T[], ownerI
   return clips.filter((c) => c.ownerId === ownerId);
 }
 
+/** Listed only for the account that recorded it, on the device that recorded it. */
+export function visibleTo(c: Pick<ClipMeta, "ownerId" | "deviceId">, ownerId: string | null | undefined, deviceId: string | null | undefined): boolean {
+  if (!ownerId || c.ownerId !== ownerId) return false;
+  return !c.deviceId || !deviceId || c.deviceId === deviceId;
+}
+
 /**
  * A clip left as RECORDING by a page that was closed: it can't be finished.
  * With data it becomes INTERRUPTED (what was stored may play, or may not);
@@ -140,7 +150,7 @@ export function recoverAction(c: Pick<ClipMeta, "status" | "chunks">): "keep" | 
 
 /**
  * Pre-selection for "Limpar gravações antigas": clips older than `days`,
- * oldest first. Clips kept for review are never pre-selected (the judge has
+ * oldest first. Clips kept for review are never pre-selected (the user has
  * to tick them explicitly) and are never removed silently.
  */
 export function cleanupPreselect(clips: Pick<ClipMeta, "id" | "createdAt" | "status">[], now: number, days = 1): string[] {
@@ -153,7 +163,7 @@ export function cleanupPreselect(clips: Pick<ClipMeta, "id" | "createdAt" | "sta
 
 export const totalBytes = (clips: Pick<ClipMeta, "sizeBytes">[]) => clips.reduce((n, c) => n + (c.sizeBytes || 0), 0);
 
-/** getUserMedia / MediaRecorder error → what the judge reads. Arbitration
+/** getUserMedia / MediaRecorder error → what the user reads. Arbitration
  *  always continues (the camera is optional). */
 export function cameraErrorMessage(e: unknown): string {
   const name = (e && typeof e === "object" && "name" in e ? String((e as { name: unknown }).name) : "") || "";

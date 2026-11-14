@@ -1,13 +1,16 @@
 "use client";
 
 // Local replay storage (docs/REPLAY-LOCAL.md): IndexedDB on THIS device only.
+// Each clip is tied to the account that recorded it, the match and this
+// device (a random local id); another user opening the same scoreboard on
+// another device never receives these videos.
 // Videos are never sent anywhere and never go to localStorage. A clip is
 // stored as its metadata (lib/replayCore.ClipMeta — no credentials, no
 // tokens) plus its video in blocks of ~1 s, written as they are recorded,
 // so a long clip is never held whole in memory and a page that dies keeps
 // what was already written.
 
-import type { ClipMeta } from "@/lib/replayCore";
+import { visibleTo, type ClipMeta } from "@/lib/replayCore";
 
 const DB_NAME = "lbl-replays";
 const DB_VERSION = 1;
@@ -19,6 +22,19 @@ export class StorageFullError extends Error {
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+
+// Random id of this browser on this device — identification only, never a credential.
+const DEVICE_KEY = "lbl:replay:dispositivo";
+let deviceIdMem: string | null = null;
+export function localDeviceId(): string {
+  if (deviceIdMem) return deviceIdMem;
+  const fresh = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  try {
+    deviceIdMem = localStorage.getItem(DEVICE_KEY) || fresh();
+    localStorage.setItem(DEVICE_KEY, deviceIdMem);
+  } catch { deviceIdMem = deviceIdMem ?? fresh(); }
+  return deviceIdMem;
+}
 
 export function replayStorageSupported(): boolean {
   return typeof indexedDB !== "undefined";
@@ -97,7 +113,7 @@ export async function addChunk(clipId: string, seq: number, data: Blob): Promise
   await txDone(tx);
 }
 
-/** The whole clip as one Blob (only when the judge opens the replay). */
+/** The whole clip as one Blob (only when the user opens the replay). */
 export async function getClipBlob(meta: ClipMeta): Promise<Blob> {
   const db = await openDb();
   const rows = (await reqP(db.transaction(CHUNKS).objectStore(CHUNKS).getAll(chunkRange(meta.id)))) as { seq: number; data: Blob }[];
@@ -105,7 +121,7 @@ export async function getClipBlob(meta: ClipMeta): Promise<Blob> {
   return new Blob(rows.map((r) => r.data), { type: meta.mimeType || rows[0]?.data.type || "video/webm" });
 }
 
-/** Clips of this account (optionally of one match), newest first. */
+/** Clips of this account on this device (optionally of one match), newest first. */
 export async function listClips(ownerId: string, matchId?: string): Promise<ClipMeta[]> {
   if (!ownerId) return [];
   const db = await openDb();
@@ -113,7 +129,8 @@ export async function listClips(ownerId: string, matchId?: string): Promise<Clip
   const rows = (matchId
     ? await reqP(store.index("owner_match").getAll([ownerId, matchId]))
     : await reqP(store.index("owner").getAll(ownerId))) as ClipMeta[];
-  return rows.filter((c) => c.ownerId === ownerId).sort((a, b) => b.createdAt - a.createdAt);
+  const device = localDeviceId();
+  return rows.filter((c) => visibleTo(c, ownerId, device)).sort((a, b) => b.createdAt - a.createdAt);
 }
 
 /** Deletes clips and their video blocks for good. */
