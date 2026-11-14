@@ -10,6 +10,7 @@ import { isMatchStaff } from "./matchAccess";
 import { matchPhaseLabel } from "./matchLabel";
 import { effectiveDisplayMode, requiresDeckOrder } from "./displayMode";
 import { deckOrderGateTx } from "./matchGate";
+import { reduelView } from "./matchReduel";
 
 export type LastLaunch = {
   pointId: string;
@@ -67,6 +68,12 @@ export async function loadMatchState(matchId: string, session: Session | null) {
   const orderRequired = requiresDeckOrder(displayMode, match.tournament.deckType);
   const orderPending = orderRequired && match.status !== "FINISHED" ? (await deckOrderGateTx(prisma, matchId))?.missing ?? [] : [];
 
+  // Reduels of the battle about to be (re)launched + recent history (docs/REDUEL.md).
+  const reduel = await reduelView(matchId, {
+    setNumber: currentSet ? currentSet.setNumber : sets.filter((x) => x.status === "FINISHED").length + 1,
+    battle: currentSetBattleCount,
+  });
+
   const lastLaunch: LastLaunch | null = last
     ? { pointId: last.id, userId: last.userId, finishType: last.finishType, points: last.points, setNumber: last.set?.setNumber ?? null, actionId: last.actionId, at: last.createdAt.toISOString() }
     : null;
@@ -104,6 +111,8 @@ export async function loadMatchState(matchId: string, session: Session | null) {
     player1Id: match.player1Id,
     player2Id: match.player2Id,
     lastLaunch,
+    /** Reduels of the current battle (count = attempts annulled) and recent history. */
+    reduel,
   };
 }
 

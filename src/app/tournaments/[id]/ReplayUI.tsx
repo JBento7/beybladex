@@ -30,7 +30,16 @@ function Preview({ stream }: { stream: MediaStream | null }) {
   return <video ref={ref} muted playsInline autoPlay aria-label="Prévia da câmera" className="w-full max-h-44 rounded-lg bg-black object-contain" />;
 }
 
-export function ReplayBar({ r, onReviewLast }: { r: ReplayRecorder; onReviewLast: () => void }) {
+export function ReplayBar({ r, onReviewLast, onReviewSegment, onReduel }: {
+  r: ReplayRecorder;
+  onReviewLast: () => void;
+  /** Paused: close the local file, then play it (never an unfinished file). */
+  onReviewSegment?: () => void;
+  /** Paused during a battle: offer "Reduel — repetir lançamento". */
+  onReduel?: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const act = async (fn: () => Promise<unknown>) => { if (busy) return; setBusy(true); try { await fn(); } finally { setBusy(false); } };
   const [showPreview, setShowPreview] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   // The preview folds away when a battle starts recording, so the scoring
@@ -41,7 +50,8 @@ export function ReplayBar({ r, onReviewLast }: { r: ReplayRecorder; onReviewLast
     if (r.status === "recording") setShowPreview(false);
   }
   const space = storageAdvice(r.storage, estimatedClipBytes(r.quality));
-  const lastInterrupted = r.clips.find((c) => c.id === r.lastClipId)?.status === "INTERRUPTED";
+  const lastClip = r.clips.find((c) => c.id === r.lastClipId);
+  const lastInterrupted = lastClip?.status === "INTERRUPTED";
 
   if (r.status === "off") {
     return (
@@ -75,8 +85,14 @@ export function ReplayBar({ r, onReviewLast }: { r: ReplayRecorder; onReviewLast
       <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/60 bg-red-900/30 px-2.5 py-1 text-sm font-bold text-red-200" role="status">
         <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />Gravando {formatDuration(r.elapsed)}
       </span>
+    ) : r.status === "paused" ? (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/60 bg-amber-900/20 px-2.5 py-1 text-sm font-bold text-amber-200" role="status">
+        ❚❚ Gravação pausada{r.pauseKind === "closed" ? " (trecho salvo)" : ""}
+      </span>
     ) : r.status === "finalizing" ? (
       <span className="rounded-full border border-amber-500/50 px-2.5 py-1 text-sm font-bold text-amber-200" role="status">◐ Finalizando vídeo…</span>
+    ) : r.status === "saved" && lastClip?.voided ? (
+      <span className="rounded-full border border-[#00aaff]/50 px-2.5 py-1 text-sm font-bold text-[#7fd4ff]" role="status">↺ Tentativa anulada — Reduel (salva neste aparelho)</span>
     ) : r.status === "saved" && lastInterrupted ? (
       <span className="rounded-full border border-amber-500/50 px-2.5 py-1 text-sm font-bold text-amber-200" role="status">⚠ Trecho interrompido (salvo neste aparelho)</span>
     ) : r.status === "saved" ? (
@@ -90,7 +106,19 @@ export function ReplayBar({ r, onReviewLast }: { r: ReplayRecorder; onReviewLast
       <div className="flex flex-wrap items-center gap-2">
         {chip}
         {r.status === "recording" && (
-          <button type="button" onClick={() => void r.stopRecording()} className="min-h-[40px] px-3 rounded-lg border border-red-500/50 text-sm font-bold text-red-100">■ Parar gravação</button>
+          <>
+            <button type="button" disabled={busy} onClick={() => act(() => r.pause())} className="min-h-[40px] px-3 rounded-lg border border-amber-500/50 text-sm font-bold text-amber-100">❚❚ Pausar gravação</button>
+            <button type="button" disabled={busy} onClick={() => act(() => r.stopRecording())} className="min-h-[40px] px-3 rounded-lg border border-red-500/50 text-sm font-bold text-red-100">■ Parar gravação</button>
+          </>
+        )}
+        {r.status === "paused" && (
+          <>
+            <button type="button" disabled={busy} onClick={() => act(() => r.resume())} className="min-h-[40px] px-3 rounded-lg bg-red-600 text-white text-sm font-bold">
+              ● {r.pauseKind === "closed" ? "Retomar gravação (novo trecho)" : "Retomar gravação"}
+            </button>
+            {onReviewSegment && <button type="button" disabled={busy} onClick={onReviewSegment} className="min-h-[40px] px-3 rounded-lg bg-brand-yellow text-black text-sm font-black">▶ Rever trecho</button>}
+            {onReduel && <button type="button" disabled={busy} onClick={onReduel} className="min-h-[40px] px-3 rounded-lg border border-[#00aaff]/60 text-sm font-bold text-[#7fd4ff]">↺ Reduel</button>}
+          </>
         )}
         {r.status === "saved" && r.lastClipId && (
           <button type="button" onClick={onReviewLast} className="min-h-[40px] px-3 rounded-lg bg-brand-yellow text-black text-sm font-black">▶ Rever último lance</button>

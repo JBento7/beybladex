@@ -16,6 +16,9 @@ export type PendingLaunch = {
   /** Context the judge saw: the server refuses the launch elsewhere. */
   setNumber: number;
   battle: number;
+  /** Attempt of the battle the operator saw (Reduels so far): a point of an
+   *  attempt annulled since is refused by the server (docs/REDUEL.md). */
+  attempt?: number;
   createdAt: number;
 };
 
@@ -30,6 +33,7 @@ export function savePending(store: Store | null | undefined, p: PendingLaunch): 
     actionId: String(p.actionId), matchId: String(p.matchId), scorerId: String(p.scorerId), scorerName: String(p.scorerName),
     finishType: String(p.finishType), points: Number(p.points), beybladeId: p.beybladeId ? String(p.beybladeId) : null,
     setNumber: Number(p.setNumber), battle: Number(p.battle), createdAt: Number(p.createdAt),
+    ...(Number.isInteger(p.attempt) ? { attempt: Number(p.attempt) } : {}),
   };
   try { store.setItem(pendingKey(p.matchId), JSON.stringify(clean)); return true; } catch { return false; }
 }

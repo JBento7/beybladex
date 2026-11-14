@@ -16,7 +16,7 @@
 // No judge assigned no longer means "anyone logged in may score".
 
 export type MatchOp =
-  | "score" | "walkover" | "undo" | "countdown" | "ready" | "launch" | "onair" | "sides"
+  | "score" | "walkover" | "undo" | "countdown" | "ready" | "launch" | "onair" | "sides" | "reduel"
   | "deckOrder"; // for someone else's deck order (own order is "deckOrderOwn")
 export type MatchOpOwn = MatchOp | "deckOrderOwn";
 

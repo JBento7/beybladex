@@ -15,18 +15,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  CHUNK_MS, MAX_CLIP_MS, QUALITY, battleId, cameraErrorMessage, estimatedClipBytes, nextTake, parseQuality,
+  CHUNK_MS, MAX_CLIP_MS, QUALITY, activeMs, battleId, canPauseRecorder, cameraErrorMessage, estimatedClipBytes, nextTake, parseQuality,
   pickRecorderMime, recoverAction, storageAdvice, type ClipMeta, type QualityKey,
 } from "@/lib/replayCore";
 import {
-  addChunk, deleteClips, getClipBlob, listClips, localDeviceId, putClip, replayStorageSupported, requestPersistence, storageEstimate, updateClip,
+  addChunk, deleteClips, getClip, getClipBlob, listClips, localDeviceId, putClip, replayStorageSupported, requestPersistence, storageEstimate, updateClip,
 } from "./replayStore";
 
-export type CamStatus = "off" | "starting" | "ready" | "recording" | "finalizing" | "saved" | "error";
+export type CamStatus = "off" | "starting" | "ready" | "recording" | "paused" | "finalizing" | "saved" | "error";
 
 type ActiveRec = {
   clipId: string;
   battle: string;
+  setNumber: number;
+  battleNo: number;
+  attempt: number;
+  pausedAt: number | null;
+  pausedTotal: number;
   recorder: MediaRecorder;
   seq: number;
   writes: Promise<void>;
@@ -60,6 +65,9 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
   const [lastClipId, setLastClipId] = useState<string | null>(null);
   const [storage, setStorage] = useState<{ usage?: number; quota?: number } | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  // How the current pause works: "native" (recorder paused) or "closed" (clip
+  // closed; resuming records a continuation).
+  const [pauseKind, setPauseKind] = useState<"native" | "closed" | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
   const recRef = useRef<ActiveRec | null>(null);
@@ -95,7 +103,11 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
   // is kept as AVAILABLE, or INTERRUPTED when it ended because of the camera,
   // the storage, the app going to the background or the panel being left.
   // "Saved" is only shown after the last block AND the metadata are stored.
-  const stopClip = useCallback((opts: { discard?: boolean; reason?: ClipMeta["endReason"] } = {}): Promise<ClipMeta | null> => {
+  // A battle attempt whose clip was closed by "Pausar" (no native pause) or
+  // by "Rever trecho": "Retomar" records a continuation of it.
+  const pausedSegRef = useRef<{ setNumber: number; battle: number; attempt: number } | null>(null);
+
+  const stopClip = useCallback((opts: { discard?: boolean; reason?: ClipMeta["endReason"]; voided?: boolean; holdPaused?: boolean } = {}): Promise<ClipMeta | null> => {
     const rec = recRef.current;
     if (!rec) return Promise.resolve(null);
     if (rec.stopping) return rec.stopping;
@@ -115,8 +127,10 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
           } else {
             const interrupted = rec.storageFailed || (rec.endReason != null && rec.endReason !== "limit");
             saved = await updateClip(rec.clipId, {
-              status: interrupted ? "INTERRUPTED" : "AVAILABLE",
-              durationMs: Date.now() - rec.startedAt,
+              // A Reduel's annulled attempt is kept for review until discarded.
+              status: opts.voided ? "KEPT" : interrupted ? "INTERRUPTED" : "AVAILABLE",
+              ...(opts.voided ? { voided: true } : {}),
+              durationMs: activeMs(rec, Date.now()),
               endReason: rec.storageFailed ? "storage" : rec.endReason ?? null,
             });
             if (saved && saved.chunks === 0) { await deleteClips([rec.clipId]); saved = null; }
@@ -127,7 +141,7 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
         if (recRef.current === rec) recRef.current = null;
         safe(() => {
           if (opts.discard) setStatus(streamLive() ? "ready" : "off");
-          else if (saved) { setLastClipId(saved.id); setStatus((st) => (streamLive() ? "saved" : st === "error" ? "error" : "off")); }
+          else if (saved) { setLastClipId(saved.id); setStatus((st) => (streamLive() ? (opts.holdPaused ? "paused" : "saved") : st === "error" ? "error" : "off")); }
           else { setMessage((m) => m ?? "Falha de gravação: o trecho não pôde ser salvo neste aparelho."); setStatus(streamLive() ? "error" : "off"); }
           setElapsed(0);
         });
@@ -203,12 +217,12 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
   }, [enableCamera]);
 
   /** Is the camera on and able to record the next battle? */
-  const armed = status === "ready" || status === "saved" || status === "recording" || status === "finalizing";
+  const armed = status === "ready" || status === "saved" || status === "recording" || status === "paused" || status === "finalizing";
 
   // ── Start the clip of a battle (before the battle is released) ──
   // Same battle already recording (recount, resend) → that clip is kept.
-  const beginClip = useCallback((setNumber: number, battle: number): Promise<BeginResult> => {
-    const id = battleId(setNumber, battle);
+  const beginClip = useCallback((setNumber: number, battle: number, attempt = 1): Promise<BeginResult> => {
+    const id = `${battleId(setNumber, battle)}#${attempt}`;
     const cur = recRef.current;
     if (cur && cur.battle === id && !cur.stopping) return Promise.resolve({ ok: true, clipId: cur.clipId, reused: true });
     if (startingRef.current) return startingRef.current;
@@ -236,11 +250,11 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
         return { ok: false, error: cameraErrorMessage(e) };
       }
       const meta: ClipMeta = {
-        id: newClipId(), ownerId: owner, deviceId: localDeviceId(), tournamentId, matchId, setNumber, battle, take, createdAt: Date.now(),
+        id: newClipId(), ownerId: owner, deviceId: localDeviceId(), tournamentId, matchId, setNumber, battle, take, attempt, createdAt: Date.now(),
         durationMs: 0, sizeBytes: 0, mimeType: recorder.mimeType || mimeType || "video/webm", status: "RECORDING", endReason: null, chunks: 0,
       };
       try { await putClip(meta); } catch (e) { return { ok: false, error: cameraErrorMessage(e) }; }
-      const rec: ActiveRec = { clipId: meta.id, battle: id, recorder, seq: 0, writes: Promise.resolve(), startedAt: Date.now(), stopping: null, endReason: null, storageFailed: false, limitTimer: null };
+      const rec: ActiveRec = { clipId: meta.id, battle: id, setNumber, battleNo: battle, attempt, pausedAt: null, pausedTotal: 0, recorder, seq: 0, writes: Promise.resolve(), startedAt: Date.now(), stopping: null, endReason: null, storageFailed: false, limitTimer: null };
       recorder.ondataavailable = (ev) => {
         if (!ev.data || ev.data.size === 0) return;
         const seq = rec.seq++;
@@ -264,6 +278,7 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
         safe(() => setNotice(`Limite de ${Math.round(MAX_CLIP_MS / 60000)} min por trecho atingido: a gravação foi encerrada e salva.`));
       }, MAX_CLIP_MS);
       recRef.current = rec;
+      pausedSegRef.current = null;
       safe(() => { setStatus("recording"); setMessage(null); setNotice(null); setElapsed(0); });
       return { ok: true, clipId: meta.id, reused: false };
     })();
@@ -279,17 +294,99 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
 
   /** A launch of this battle was CONFIRMED by the server: close its clip. */
   const commitBattle = useCallback(async (setNumber: number, battle: number) => {
-    if (recRef.current && recRef.current.battle === battleId(setNumber, battle)) await stopClip();
+    const ps = pausedSegRef.current;
+    if (ps && ps.setNumber === setNumber && ps.battle === battle) { pausedSegRef.current = null; setStatus((s) => (s === "paused" ? (streamLive() ? "saved" : "off") : s)); }
+    const r = recRef.current;
+    if (r && r.setNumber === setNumber && r.battleNo === battle) await stopClip();
   }, [stopClip]);
+
+  // ── "Pausar gravação" ── Nothing about the match changes (no point, no set).
+  // Native pause when the browser has it; otherwise the clip is closed and
+  // "Retomar" records a continuation (next take) of the same battle attempt.
+  const pause = useCallback(async (): Promise<"paused" | "finalized" | "none"> => {
+    const r = recRef.current;
+    if (!r || r.stopping || r.pausedAt != null) return "none";
+    if (canPauseRecorder(r.recorder) && r.recorder.state === "recording") {
+      try {
+        r.recorder.pause();
+        r.pausedAt = Date.now();
+        if (r.limitTimer) { clearTimeout(r.limitTimer); r.limitTimer = null; }
+        setPauseKind("native");
+        setStatus("paused");
+        return "paused";
+      } catch { /* fall back to closing the clip */ }
+    }
+    pausedSegRef.current = { setNumber: r.setNumber, battle: r.battleNo, attempt: r.attempt };
+    setPauseKind("closed");
+    await stopClip({ holdPaused: true });
+    return "finalized";
+  }, [stopClip]);
+
+  const resume = useCallback(async (): Promise<BeginResult | { ok: true; clipId: string; reused: true }> => {
+    const r = recRef.current;
+    if (r && r.pausedAt != null && !r.stopping) {
+      try {
+        r.recorder.resume();
+        r.pausedTotal += Date.now() - r.pausedAt;
+        r.pausedAt = null;
+        const left = Math.max(1000, MAX_CLIP_MS - activeMs(r, Date.now()));
+        r.limitTimer = setTimeout(() => {
+          if (recRef.current !== r) return;
+          void stopClip({ reason: "limit" });
+          safe(() => setNotice(`Limite de ${Math.round(MAX_CLIP_MS / 60000)} min por trecho atingido: a gravação foi encerrada e salva.`));
+        }, left);
+        setStatus("recording");
+        return { ok: true, clipId: r.clipId, reused: true };
+      } catch {
+        pausedSegRef.current = { setNumber: r.setNumber, battle: r.battleNo, attempt: r.attempt };
+        await stopClip({ holdPaused: true });
+      }
+    }
+    const ps = pausedSegRef.current;
+    if (!ps) return { ok: false, error: "Nada para retomar." };
+    const res = await beginClip(ps.setNumber, ps.battle, ps.attempt);
+    if (!res.ok) safe(() => { setMessage(res.error); setStatus(streamLive() ? "paused" : "error"); });
+    return res;
+  }, [beginClip, safe, stopClip]);
+
+  /** "Rever trecho": close the local file first (never play an unfinished one). */
+  const reviewSegment = useCallback(async (): Promise<ClipMeta | null> => {
+    const r = recRef.current;
+    if (r) {
+      pausedSegRef.current = { setNumber: r.setNumber, battle: r.battleNo, attempt: r.attempt };
+      setPauseKind("closed");
+      return stopClip({ holdPaused: true });
+    }
+    const id = lastClipId;
+    return id ? (await getClip(id)) : null;
+  }, [lastClipId, stopClip]);
+
+  /** Reduel confirmed by the server: keep what was recorded of the annulled
+   *  attempt as "Tentativa anulada — Reduel" (for review or discard). */
+  const annulAttempt = useCallback(async (setNumber: number, battle: number, attempt: number) => {
+    const r = recRef.current;
+    if (r && r.setNumber === setNumber && r.battleNo === battle) await stopClip({ voided: true });
+    pausedSegRef.current = null;
+    const owner = ownerRef.current;
+    if (owner) {
+      try {
+        const same = (await listClips(owner, matchId)).filter((c) => c.setNumber === setNumber && c.battle === battle && (c.attempt ?? 1) === attempt && !c.voided && c.status !== "RECORDING");
+        for (const c of same) await updateClip(c.id, { voided: true, status: "KEPT" });
+      } catch { /* storage unavailable: the clips stay as they were */ }
+    }
+    setStatus((s) => (s === "paused" || s === "finalizing" ? (streamLive() ? "saved" : "off") : s));
+    await refresh();
+  }, [matchId, refresh, stopClip]);
 
   /** "Parar gravação" / match over: close whatever is recording. */
   const stopRecording = useCallback(() => stopClip(), [stopClip]);
   const isRecording = () => !!recRef.current && !recRef.current.stopping;
+  const canNativePause = () => canPauseRecorder(recRef.current?.recorder);
 
   // Recording timer.
   useEffect(() => {
     if (status !== "recording") return;
-    const t = setInterval(() => { const r = recRef.current; if (r) setElapsed(Date.now() - r.startedAt); }, 500);
+    const t = setInterval(() => { const r = recRef.current; if (r) setElapsed(activeMs(r, Date.now())); }, 500);
     return () => clearInterval(t);
   }, [status]);
 
@@ -365,8 +462,9 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
   const blobOf = useCallback((c: ClipMeta) => getClipBlob(c), []);
 
   return {
-    status, message, notice, devices, deviceId, quality, clips, elapsed, lastClipId, storage, stream, armed,
+    status, message, notice, pauseKind, devices, deviceId, quality, clips, elapsed, lastClipId, storage, stream, armed,
     enableCamera, disableCamera, selectDevice, setQuality, beginClip, discardClip, commitBattle, stopRecording, isRecording,
+    pause, resume, reviewSegment, annulAttempt, canNativePause,
     markKept, deleteMany, listAllOwn, blobOf, refresh,
     dismissMessage: () => { setMessage(null); if (status === "error") setStatus(streamLive() ? "ready" : "off"); },
     dismissNotice: () => setNotice(null),

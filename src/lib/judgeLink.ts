@@ -8,6 +8,8 @@
 //   finish    a confirmed finish (animation) at a version
 //   matchEnd  the server closed the match (winner)
 //   cmd       PRONTOS / Iniciar (countdown) / vídeo de lançamento, with commandId
+//   reduel    a confirmed Reduel: drop the annulled attempt's cues (voids) and
+//             show "Reduel — novo lançamento" (docs/REDUEL.md)
 //   ping      liveness
 // Telão → judge:
 //   ack       a command was received ("played" / "duplicate" / "other_match")
@@ -19,6 +21,7 @@ export type JudgeMsg =
   | { type: "finish"; matchId: string; version: number; finishType: string }
   | { type: "matchEnd"; matchId: string; version: number; winnerId: string }
   | { type: "cmd"; kind: CmdKind; commandId: string; matchId: string }
+  | { type: "reduel"; commandId: string; matchId: string; voids: string[] }
   | { type: "ping"; id: string; matchId: string };
 export type ArenaMsg =
   | { type: "ack"; commandId: string; matchId: string; status: "played" | "duplicate" | "other_match" }
@@ -46,6 +49,15 @@ export function createCommandGate(limit = 200) {
       order.push(cmd.commandId);
       if (order.length > limit) seen.delete(order.shift()!);
       return "run";
+    },
+    /** Commands of an annulled attempt (Reduel): a late copy is never run. */
+    voidIds(ids: (string | null | undefined)[]) {
+      for (const id of ids) {
+        if (!id || seen.has(id)) continue;
+        seen.add(id);
+        order.push(id);
+        if (order.length > limit) seen.delete(order.shift()!);
+      }
     },
   };
 }

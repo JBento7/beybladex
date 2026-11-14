@@ -40,18 +40,23 @@ Gravação e replay de lances **somente neste dispositivo**, para conferir um la
    - se a câmera falhar, aparece "Não foi possível iniciar a gravação", com "Iniciar sem gravação", "Tentar de novo" e "Continuar sem câmera nesta partida".
 3. **Lançamento confirmado pelo servidor:** encerra o trecho daquela batalha. Um lançamento recusado ou ainda pendente não encerra nada.
 4. **Recontagem e "Reenviar comando":** continuam usando o trecho da batalha em curso, sem criar arquivo novo. Se o usuário tinha parado a gravação, a recontagem abre uma nova **tomada** da mesma batalha ("Set 1 · Batalha 2 (tomada 2)"), nunca um duplicado sem identificação.
-5. **Outras saídas:**
+5. **Pausa e Reduel** (`docs/REDUEL.md`):
+   - "Pausar gravação" pausa a captura ou, sem suporte, fecha o trecho e continua numa nova tomada;
+   - "Rever trecho" finaliza o arquivo antes de tocar;
+   - o Reduel salva a tentativa como "Tentativa anulada — Reduel", mantida para revisão. O novo lançamento grava como tentativa 2, 3…
+6. **Outras saídas:**
    - "Parar gravação";
    - limite de 3 min por trecho (salva e avisa);
    - fim da partida (salva).
-6. **Situação mostrada na barra:**
+7. **Situação mostrada na barra:**
    - câmera desativada; câmera pronta;
    - gravando, com ponto vermelho e duração;
+   - gravação pausada;
    - finalizando vídeo;
    - vídeo salvo neste aparelho, ou trecho interrompido;
    - falha.
    - "Salvo" só aparece depois que o último bloco e os dados do trecho foram gravados no armazenamento.
-7. **A prévia:** fica no fluxo da página e se recolhe quando a gravação começa, então nunca cobre nomes, pontos ou botões.
+8. **A prévia:** fica no fluxo da página e se recolhe quando a gravação começa, então nunca cobre nomes, pontos ou botões.
 
 ## 3. Replay
 

@@ -31,7 +31,7 @@ async function postHandler(req: NextRequest, props: { params: Promise<{ id: stri
     // The set/battle the judge saw when tapping (lib/match-scoring PointContext).
     const context: PointContext | null =
       rawContext && Number.isInteger(rawContext.setNumber) && Number.isInteger(rawContext.battle)
-        ? { setNumber: rawContext.setNumber, battle: rawContext.battle }
+        ? { setNumber: rawContext.setNumber, battle: rawContext.battle, attempt: Number.isInteger(rawContext.attempt) ? rawContext.attempt : null }
         : null;
 
     const match = await prisma.match.findUnique({

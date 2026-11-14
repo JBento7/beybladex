@@ -20,6 +20,7 @@ import { useSession } from "next-auth/react";
 import { useReplayRecorder } from "@/lib/client/useReplayRecorder";
 import type { ClipMeta } from "@/lib/replayCore";
 import { CameraStartPrompt, MatchEndRecordings, MatchRecordings, ReplayBar, ReplayPlayer } from "./ReplayUI";
+import { REDUEL_CONFIRM_TEXT, attemptKey } from "@/lib/reduelRules";
 
 // Finish buttons in the Beyblade X scoreboard order.
 const FINISH_BTNS: { type: FinishType; label: string }[] = [
@@ -56,6 +57,8 @@ type LastLaunch = { pointId: string; userId: string; finishType: string; points:
 
 type MatchState = {
   matchId?: string;
+  /** Reduels of the current battle + recent history (docs/REDUEL.md). */
+  reduel?: { count: number; recent: { setNumber: number; battle: number; attempt: number; at: number }[] };
   status?: string;
   /** Bumped by every point/undo/W.O. on the server: older states are dropped. */
   scoreVersion?: number;
@@ -417,8 +420,10 @@ export default function ScoreModal({
   // Every battle (point) gets its own countdown — in 3-on-3 the active beyblade
   // switches each battle, and in solo the countdown must also play before each
   // point. A battle is identified by set + points already scored in it.
-  const battleKey = `${currentSetNum}:${currentSetBattleCount}`;
-  const startKey = battleKey;
+  // A Reduel makes the same battle a NEW start (attempt), so the start button
+  // comes back and old commands of the annulled attempt never match.
+  const reduelCount = state?.reduel?.count ?? 0;
+  const startKey = attemptKey(currentSetNum, currentSetBattleCount, reduelCount);
   // "Lados dos jogadores" (both modes — physical organization, never a
   // broadcast). Required before the first battle of a new match; an older
   // match under way without sides can set them at a safe moment (from the
@@ -550,7 +555,7 @@ export default function ScoreModal({
       res = await timedFetch(`/api/matches/${matchId}/point`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scorerId: p.scorerId, finishType: p.finishType, beybladeId: p.beybladeId || undefined, actionId: p.actionId, context: { setNumber: p.setNumber, battle: p.battle } }),
+        body: JSON.stringify({ scorerId: p.scorerId, finishType: p.finishType, beybladeId: p.beybladeId || undefined, actionId: p.actionId, context: { setNumber: p.setNumber, battle: p.battle, attempt: p.attempt } }),
       });
     } catch {
       await verify(p, attempt);
@@ -618,7 +623,7 @@ export default function ScoreModal({
   }, []);
 
   function addPoint(scorerId: string, finishType: FinishType) {
-    if (pointBusyRef.current || pendingRef.current || undoBusyRef.current) {
+    if (pointBusyRef.current || pendingRef.current || undoBusyRef.current || reduelBusyRef.current) {
       try { navigator.vibrate?.([10, 40, 10]); } catch { /* unsupported */ }
       return; // one launch at a time — the status line says what is happening
     }
@@ -643,7 +648,7 @@ export default function ScoreModal({
     }
     const p: PendingLaunch = {
       actionId: newId(), matchId, scorerId, scorerName: nameOf(scorerId), finishType, points: FINISH_TYPE_POINTS[finishType] ?? 0,
-      beybladeId, setNumber: currentSetNum, battle: currentSetBattleCount, createdAt: Date.now(),
+      beybladeId, setNumber: currentSetNum, battle: currentSetBattleCount, attempt: reduelCount, createdAt: Date.now(),
     };
     // Stored BEFORE sending: a lost response or a reload can't lose it.
     savePending(ls(), p);
@@ -706,7 +711,7 @@ export default function ScoreModal({
   // stops here with a warning offering "Iniciar sem gravação".
   async function cameraBeforeStart(kind: "judge" | "countdown", skip: boolean): Promise<{ go: boolean; clipId?: string; reused?: boolean }> {
     if (skip || camSkipped || !replay.armed) return { go: true };
-    const r = await replay.beginClip(currentSetNum, currentSetBattleCount + 1);
+    const r = await replay.beginClip(currentSetNum, currentSetBattleCount + 1, reduelCount + 1);
     if (r.ok) { setCamPrompt(null); return { go: true, clipId: r.clipId, reused: r.reused }; }
     setCamPrompt({ message: r.error, kind });
     return { go: false };
@@ -718,6 +723,7 @@ export default function ScoreModal({
     cmdBusyRef.current[kind] = keyAtPress;
     let cam: { go: boolean; clipId?: string; reused?: boolean } = { go: true };
     if (kind === "countdown") {
+      setReduelMsg(null);
       cam = await cameraBeforeStart("countdown", skipCamera);
       if (!cam.go) { cmdBusyRef.current[kind] = null; return; }
     }
@@ -725,6 +731,7 @@ export default function ScoreModal({
     // keeps the clip already recording its battle).
     const dropClip = () => { if (cam.clipId && !cam.reused) void replay.discardClip(cam.clipId); };
     const commandId = retryOf?.commandId ?? newId();
+    attemptCmdIdsRef.current.push(commandId); // voided on the telão by a Reduel
     setCmd({ kind, commandId, phase: "sending", telao: retryOf?.telao === "played" ? "played" : "pending" });
     linkSend({ type: "cmd", kind, commandId, matchId });
     if (kind === "countdown") setStarting(true);
@@ -768,6 +775,7 @@ export default function ScoreModal({
     cmdBusyRef.current.countdown = keyAtPress;
     setStarting(true);
     setStartErr(null);
+    setReduelMsg(null);
     const cam = await cameraBeforeStart("judge", skipCamera);
     if (!cam.go) { setStarting(false); cmdBusyRef.current.countdown = null; return; }
     const dropClip = () => { if (cam.clipId && !cam.reused) void replay.discardClip(cam.clipId); };
@@ -790,6 +798,66 @@ export default function ScoreModal({
       setTimeout(() => { if (cmdBusyRef.current.countdown === keyAtPress) cmdBusyRef.current.countdown = null; }, 1200);
     }
   }
+  // ── Reduel — repetir lançamento (docs/REDUEL.md) ──
+  // Only for the battle under way with NO confirmed point. Never changes
+  // points, sets, sides, deck order/cycle or reserves: the same battle is
+  // launched again. Registered on the server (one opId per request: taps and
+  // resends never duplicate it) and shown as confirmed only after it answered.
+  const reduelBusyRef = useRef(false);
+  const attemptCmdIdsRef = useRef<string[]>([]);
+  const reduelOpRef = useRef<{ key: string; opId: string } | null>(null);
+  const [reduelUi, setReduelUi] = useState<null | { phase: "confirm" } | { phase: "sending" } | { phase: "error"; error: string; retry: boolean }>(null);
+  const [reduelMsg, setReduelMsg] = useState<string | null>(null);
+  const pendingMsg = "Há um ponto aguardando confirmação do servidor. Resolva-o primeiro (aguarde ou toque em “Verificar agora”); se ele for confirmado, o lançamento já tem ponto.";
+  function askReduel() {
+    if (reduelBusyRef.current) return;
+    if (pendingRef.current || pointBusyRef.current) { setReduelUi({ phase: "error", error: pendingMsg, retry: false }); return; }
+    setReduelUi({ phase: "confirm" });
+  }
+  async function sendReduel() {
+    if (reduelBusyRef.current) return;
+    if (pendingRef.current || pointBusyRef.current || undoBusyRef.current) { setReduelUi({ phase: "error", error: pendingMsg, retry: false }); return; }
+    const key = startKey;
+    if (!reduelOpRef.current || reduelOpRef.current.key !== key) reduelOpRef.current = { key, opId: newId() };
+    const { opId } = reduelOpRef.current;
+    const at = { setNumber: currentSetNum, battle: currentSetBattleCount, attempt: reduelCount };
+    reduelBusyRef.current = true;
+    setReduelUi({ phase: "sending" });
+    try {
+      const res = await timedFetch(`/api/matches/${matchId}/reduel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ opId, ...at }),
+      }, 8000);
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        applyState(d.state);
+        reduelOpRef.current = null;
+        const annulled = d.reduel?.attempt ?? at.attempt + 1;
+        const nowCount = d.reduel?.reduelsNow ?? at.attempt + 1;
+        setReduelUi(null);
+        setCmd(null); // late acks of the annulled attempt match nothing now
+        setStartErr(null);
+        const voids = attemptCmdIdsRef.current;
+        attemptCmdIdsRef.current = [];
+        if (!judgeOnly) {
+          linkSend({ type: "reduel", commandId: `reduel:${opId}`, matchId, voids });
+          setReadyKey(attemptKey(at.setNumber, at.battle, nowCount)); // straight to "Iniciar novo lançamento"
+        }
+        void replay.annulAttempt(at.setNumber, at.battle + 1, annulled);
+        setReduelMsg(`Reduel registrado — tentativa ${annulled} anulada. Pontos e sets mantidos.`);
+      } else {
+        if (d.state) applyState(d.state); else fetchState();
+        reduelOpRef.current = null;
+        setReduelUi({ phase: "error", error: d.error || "Reduel recusado pelo servidor.", retry: false });
+      }
+    } catch {
+      setReduelUi({ phase: "error", error: "Sem conexão com o servidor: o Reduel NÃO foi confirmado. A batalha continua como estava.", retry: true });
+    } finally {
+      reduelBusyRef.current = false;
+    }
+  }
+
   const sendReady = () => sendCommand("ready");
   const startBattle = () => sendCommand("countdown");
   const playLaunchVideo = () => sendCommand("launch");
@@ -993,6 +1061,14 @@ export default function ScoreModal({
       <p className="text-xs sm:text-sm text-gray-300 mb-1.5 break-words min-h-[1.25rem]">
         {lastLaunch ? <>Último lançamento: <b className="text-white">{launchText({ playerName: nameOf(lastLaunch.userId), finishType: lastLaunch.finishType, points: lastLaunch.points, setNumber: lastLaunch.setNumber })}</b></> : "Nenhum lançamento nesta partida ainda."}
       </p>
+      <button
+        type="button"
+        onClick={askReduel}
+        disabled={starting || !!reduelUi}
+        className="w-full mb-1.5 min-h-[44px] text-sm font-bold text-[#7fd4ff] bg-card border border-[#00aaff]/40 rounded-xl disabled:opacity-40"
+      >
+        ↺ Reduel — repetir lançamento
+      </button>
       <div className="flex items-stretch gap-2">
         {!judgeOnly && <button
           onClick={startBattle}
@@ -1045,7 +1121,12 @@ export default function ScoreModal({
 
             {/* Local replay camera (optional; never covers names, points or buttons) */}
             {state && !state.matchFinished && !camSkipped && (
-              <ReplayBar r={replay} onReviewLast={() => { const c = replay.clips.find((x) => x.id === replay.lastClipId); if (c) setReplayClip(c); }} />
+              <ReplayBar
+                r={replay}
+                onReviewLast={() => { const c = replay.clips.find((x) => x.id === replay.lastClipId); if (c) setReplayClip(c); }}
+                onReviewSegment={async () => { const c = await replay.reviewSegment(); if (c) setReplayClip(c); }}
+                onReduel={revealScoring && !starting ? askReduel : undefined}
+              />
             )}
             {camPrompt && state && !state.matchFinished && (
               <CameraStartPrompt
@@ -1054,6 +1135,38 @@ export default function ScoreModal({
                 onRetry={() => { const k = camPrompt.kind; setCamPrompt(null); if (k === "judge") void startJudgeOnly(); else void sendCommand("countdown"); }}
                 onCancel={() => { setCamPrompt(null); setCamSkipped(true); void replay.disableCamera(); }}
               />
+            )}
+
+            {/* Reduel: confirmation, sending, refusal/connection failure */}
+            {reduelUi && state && !state.matchFinished && (
+              <div role={reduelUi.phase === "error" ? "alert" : "dialog"} aria-label="Reduel" className="mb-3 rounded-xl border border-[#00aaff]/60 bg-[#00aaff]/10 px-3 py-3 text-sm text-gray-100">
+                <div className="font-black text-[#7fd4ff]">↺ Reduel — repetir lançamento</div>
+                {reduelUi.phase === "confirm" && (
+                  <>
+                    <p className="mt-1">{REDUEL_CONFIRM_TEXT}</p>
+                    <p className="mt-1 text-xs text-gray-400">Set {currentSetNum} · batalha {currentSetBattleCount + 1}{reduelCount ? ` · tentativa ${reduelCount + 1}` : ""}. Mesmos Beyblades, mesmos lados, mesma posição na ordem.</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => setReduelUi(null)} className="min-h-[48px] rounded-lg border border-line font-bold text-gray-200">Cancelar</button>
+                      <button type="button" onClick={sendReduel} className="min-h-[48px] rounded-lg bg-[#00aaff] text-black font-black">Confirmar Reduel</button>
+                    </div>
+                  </>
+                )}
+                {reduelUi.phase === "sending" && <p className="mt-1 text-amber-200" role="status">Registrando Reduel no servidor… (ainda não confirmado)</p>}
+                {reduelUi.phase === "error" && (
+                  <>
+                    <p className="mt-1 text-red-200">{reduelUi.error}</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => setReduelUi(null)} className="min-h-[44px] rounded-lg border border-line font-bold text-gray-200">Fechar</button>
+                      {reduelUi.retry && <button type="button" onClick={sendReduel} className="min-h-[44px] rounded-lg bg-[#00aaff] text-black font-black">Tentar de novo</button>}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {reduelMsg && state && !state.matchFinished && !revealScoring && (
+              <div role="status" className="mb-3 rounded-xl border border-[#00aaff]/50 bg-[#00aaff]/10 px-3 py-2 text-center text-sm text-gray-100">
+                ↺ <b>{reduelMsg}</b>{!judgeOnly ? " Telão: “Reduel — novo lançamento”." : ""} Toque em <b>“Iniciar novo lançamento”</b>.
+              </div>
             )}
 
             {!state ? (
@@ -1369,7 +1482,7 @@ export default function ScoreModal({
                       disabled={starting}
                       className="w-full mb-2 bg-[#22c55e] hover:bg-[#1ea34d] disabled:opacity-60 text-black font-black text-2xl py-6 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
                     >
-                      {starting ? "Iniciando…" : "▶ Iniciar batalha"}
+                      {starting ? "Iniciando…" : reduelCount > 0 ? "▶ Iniciar novo lançamento" : "▶ Iniciar batalha"}
                     </button>
                     <div className="text-center text-sm text-gray-500 mb-3">
                       {currentSetBattleCount === 0 && currentSetNum === 1 ? "Partida sem telão: nada é exibido nas telas das arenas." : `Set ${currentSetNum} · batalha ${currentSetBattleCount + 1}`}
@@ -1398,7 +1511,7 @@ export default function ScoreModal({
                       disabled={starting}
                       className="w-full mb-2 bg-[#22c55e] hover:bg-[#1ea34d] disabled:opacity-60 text-black font-black text-2xl py-6 rounded-xl transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
                     >
-                      ▶ Iniciar {currentSetBattleCount === 0 ? "partida" : `batalha ${currentSetBattleCount + 1}`}
+                      {reduelCount > 0 ? "▶ Iniciar novo lançamento" : <>▶ Iniciar {currentSetBattleCount === 0 ? "partida" : `batalha ${currentSetBattleCount + 1}`}</>}
                     </button>
                     <button
                       onClick={sendReady}

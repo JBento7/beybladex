@@ -130,8 +130,24 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
 
   // `sentAt` is when the judge pressed PRONTOS: a copy arriving after the
   // countdown already started must not bring the frozen PRONTOS screen back.
+  // Reduel (docs/REDUEL.md): the annulled attempt's cues are dropped and a
+  // short "Reduel — novo lançamento" card is shown until the new start.
+  const [reduelOn, setReduelOn] = useState(false);
+  const reduelAtRef = useRef(0);
+  const reduelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const playReduel = () => {
+    reduelAtRef.current = Date.now();
+    clearBattleOverlays();
+    setCountdownOn(false);
+    setReadyOn(false);
+    setReduelOn(true);
+    if (reduelTimerRef.current) clearTimeout(reduelTimerRef.current);
+    reduelTimerRef.current = setTimeout(() => setReduelOn(false), 6000);
+  };
+  useEffect(() => () => { if (reduelTimerRef.current) clearTimeout(reduelTimerRef.current); }, []);
   const playReady = (sentAt: number = Date.now(), force = false) => {
     if (sentAt <= lastCdRef.current) return;
+    if (sentAt <= reduelAtRef.current) return; // PRONTOS of an annulled attempt
     if (!force && (Date.now() - lastCdRef.current < 15000 || Date.now() - lastReadyRef.current < 3000)) return;
     lastReadyRef.current = Date.now();
     clearBattleOverlays();
@@ -144,6 +160,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
     lastCdRef.current = Date.now();
     clearBattleOverlays();
     setReadyOn(false);
+    setReduelOn(false);
     setCountdownOn(true);
   };
   // A scored finish may have just ended the match: look again promptly so the
@@ -185,6 +202,8 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
     // the server-path copy of the same command needs no ack.
     if (viaLink && commandId && matchId) linkRef.current?.send({ type: "ack", commandId, matchId, status: decision === "run" ? "played" : decision });
     if (decision !== "run") return;
+    // A countdown sent before the last Reduel belongs to the annulled attempt.
+    if (kind === "countdown" && sentAt != null && sentAt < reduelAtRef.current) return;
     const force = !!commandId;
     if (kind === "ready") playReady(sentAt ?? Date.now(), force);
     else if (kind === "countdown") playCountdown(force);
@@ -381,7 +400,7 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
       if (d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
         playedKeyRef.current = d.countdown.key;
         const c = d.countdown as { commandId?: string | null; matchId?: string | null };
-        runCommand("countdown", c.commandId, c.matchId ?? d.matchId);
+        runCommand("countdown", c.commandId, c.matchId ?? d.matchId, Date.now() - d.countdown.elapsedMs);
       }
     } catch {
       const t = lastOkRef.current;
@@ -460,13 +479,18 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
             finish?: (Sig & { type: string; version?: number }) | null;
             launch?: Sig | null;
             ready?: Sig | null;
+            reduel?: Sig | null;
           } = await res.json();
           // Each signal goes through the same gate as the local link: a command
           // already run from there is not repeated; another match's is ignored.
           if (active && d.countdown && d.countdown.key !== playedKeyRef.current && d.countdown.elapsedMs < 6000) {
             playedKeyRef.current = d.countdown.key;
             statsRef.current.signalsViaServer++;
-            runCommand("countdown", d.countdown.commandId, d.countdown.matchId);
+            runCommand("countdown", d.countdown.commandId, d.countdown.matchId, Date.now() - d.countdown.elapsedMs);
+          }
+          if (active && d.reduel && d.reduel.elapsedMs < 6000) {
+            const r = d.reduel;
+            if (gateRef.current.decide({ commandId: r.commandId, matchId: r.matchId }, onScreenRef.current.matchId) === "run") playReduel();
           }
           if (active && d.finish && d.finish.key !== playedFinishKeyRef.current && d.finish.elapsedMs < 5000) {
             playedFinishKeyRef.current = d.finish.key;
@@ -512,6 +536,11 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
         if (m.type === "ping") { link.send({ type: "pong", id: m.id, matchId: onScreenRef.current.matchId } satisfies ArenaMsg); return; }
         if (asleepRef.current && m.type !== "state") wake();
         if (m.type === "cmd") { runCommand(m.kind, m.commandId, m.matchId, undefined, true); return; }
+        if (m.type === "reduel") {
+          gateRef.current.voidIds(m.voids ?? []);
+          if (gateRef.current.decide({ commandId: m.commandId, matchId: m.matchId }, onScreenRef.current.matchId) === "run") playReduel();
+          return;
+        }
         // Confirmed results only (the panel sends them after the server answered),
         // for the match on screen, never older than what is shown.
         if (m.type === "state") {
@@ -754,6 +783,16 @@ export default function ArenaDisplay({ arena, community = "lbl", previewParam }:
           pointerEvents: "none",
         }}
       />
+
+      {/* Reduel — the annulled attempt's cues are gone; a new launch follows. */}
+      {reduelOn && (
+        <div role="status" style={{ position: "absolute", inset: 0, zIndex: 78, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.78)", pointerEvents: "none" }}>
+          <div style={{ textAlign: "center", color: "#fff", fontWeight: 900, fontSize: "clamp(32px, 7vw, 110px)", lineHeight: 1.05, textShadow: "0 4px 24px rgba(0,0,0,.8)" }}>
+            REDUEL
+            <div style={{ fontSize: "clamp(18px, 3vw, 48px)", fontWeight: 800, color: "#f0a500", marginTop: "0.3em" }}>novo lançamento</div>
+          </div>
+        </div>
+      )}
 
       {/* PRONTOS — plays once then holds on its last frame until the countdown. */}
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}

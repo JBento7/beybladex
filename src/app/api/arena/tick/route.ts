@@ -32,18 +32,24 @@ async function getHandler(req: NextRequest) {
   type Sig = { key: string; elapsedMs: number; matchId: string | null; commandId?: string | null };
   let countdown: Sig | null = null;
   let finish: (Sig & { type: string; version: number }) | null = null;
+  // Reduel (docs/REDUEL.md): the telão drops the annulled attempt's cues.
+  let reduel: Sig | null = null;
   try {
     // Single query: the arena's match with a fresh countdown OR finish signal.
     const row = await prisma.match.findFirst({
-      where: { ...arenaWhere, OR: [{ countdownAt: { gte: since } }, { finishVideoAt: { gte: since } }] },
+      where: { ...arenaWhere, OR: [{ countdownAt: { gte: since } }, { finishVideoAt: { gte: since } }, { reduelAt: { gte: since } }] },
       orderBy: { updatedAt: "desc" },
-      select: { id: true, status: true, countdownAt: true, countdownKey: true, finishVideoAt: true, finishVideoType: true, scoreVersion: true },
+      select: { id: true, status: true, countdownAt: true, countdownKey: true, finishVideoAt: true, finishVideoType: true, scoreVersion: true, reduelAt: true, reduelKey: true },
     });
     if (row) {
       const now = Date.now();
       if (row.countdownAt && (row.status === "IN_PROGRESS" || row.status === "PENDING")) {
         const ts = new Date(row.countdownAt).getTime();
         if (now - ts < WINDOW_MS) countdown = { key: row.countdownKey ? `${row.id}:${row.countdownKey}` : `${row.id}:${ts}`, elapsedMs: now - ts, matchId: row.id, commandId: row.countdownKey };
+      }
+      if (row.reduelAt && row.reduelKey) {
+        const ts = new Date(row.reduelAt).getTime();
+        if (now - ts < WINDOW_MS) reduel = { key: `${row.id}:r:${row.reduelKey}`, elapsedMs: now - ts, matchId: row.id, commandId: `reduel:${row.reduelKey}` };
       }
       if (row.finishVideoAt && row.finishVideoType) {
         const ts = new Date(row.finishVideoAt).getTime();
@@ -70,7 +76,7 @@ async function getHandler(req: NextRequest) {
     if (sig && Date.now() - sig.at < 30000) ready = { key: sig.commandId ?? `${arenaNum}:${sig.at}`, elapsedMs: Date.now() - sig.at, matchId: sig.matchId, commandId: sig.commandId };
   } catch { /* table missing — ignore */ }
 
-  return NextResponse.json({ countdown, finish, launch, ready });
+  return NextResponse.json({ countdown, finish, launch, ready, reduel });
 }
 
 export const GET = withObservability("/api/arena/tick", getHandler, { logSuccess: "slow" });

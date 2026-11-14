@@ -29,6 +29,10 @@ export type ClipMeta = {
   /** 1 for the battle's first clip; a later start of the SAME battle (e.g. a
    *  recount after "Parar gravação") is take 2, 3… — never a silent duplicate. */
   take: number;
+  /** Attempt of the battle (1 = first launch; +1 after each Reduel). */
+  attempt?: number;
+  /** "Tentativa anulada — Reduel": the launch was repeated (kept for review). */
+  voided?: boolean;
   createdAt: number;
   durationMs: number;
   sizeBytes: number;
@@ -113,8 +117,20 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-export function clipLabel(c: Pick<ClipMeta, "setNumber" | "battle" | "take">): string {
-  return `Set ${c.setNumber} · Batalha ${c.battle}${c.take > 1 ? ` (tomada ${c.take})` : ""}`;
+export function clipLabel(c: Pick<ClipMeta, "setNumber" | "battle" | "take"> & Partial<Pick<ClipMeta, "attempt" | "voided">>): string {
+  const attempt = c.attempt && c.attempt > 1 ? ` · tentativa ${c.attempt}` : "";
+  return `Set ${c.setNumber} · Batalha ${c.battle}${attempt}${c.take > 1 ? ` (tomada ${c.take})` : ""}${c.voided ? " · Tentativa anulada — Reduel" : ""}`;
+}
+
+/** Can the recorder pause/resume? Otherwise "pause" closes the clip and
+ *  "resume" starts a continuation (next take) of the same battle attempt. */
+export function canPauseRecorder(r: { pause?: unknown; resume?: unknown } | null | undefined): boolean {
+  return !!r && typeof r.pause === "function" && typeof r.resume === "function";
+}
+
+/** Recorded (not paused) time of a clip. */
+export function activeMs(r: { startedAt: number; pausedTotal: number; pausedAt: number | null }, now: number): number {
+  return Math.max(0, now - r.startedAt - r.pausedTotal - (r.pausedAt != null ? now - r.pausedAt : 0));
 }
 
 /** Battle identity used to tie a clip to the battle being started. */

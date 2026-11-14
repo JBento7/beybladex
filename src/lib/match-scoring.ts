@@ -4,6 +4,7 @@ import { prisma } from "./prisma";
 import { applyPoint } from "./swiss";
 import { checkPointBeyTx } from "./matchTrio";
 import { deckOrderGateTx } from "./matchGate";
+import { pointAttemptOk } from "./reduelRules";
 
 export type PointOutcome =
   | { kind: "error"; status: number; error: string; code?: string }
@@ -12,7 +13,7 @@ export type PointOutcome =
 
 /** What the judge saw when tapping: the set and how many battles of it were
  *  already scored. A retry of an old tap can't land in another set/battle. */
-export type PointContext = { setNumber: number; battle: number };
+export type PointContext = { setNumber: number; battle: number; attempt?: number | null };
 
 /**
  * Records one point. Everything that decides the outcome happens in ONE
@@ -62,6 +63,14 @@ export async function recordPoint(
           kind: "error", status: 409, code: "CONTEXT_CHANGED",
           error: `O placar mudou desde o toque (agora: set ${decision.setNumber}, batalha ${battle + 1}). O lançamento não foi aplicado — confira o placar.`,
         } as const;
+      }
+      // Reduel (docs/REDUEL.md): a point from an attempt annulled since the tap
+      // is refused — it never counts for the new launch.
+      if (p.context.attempt != null) {
+        const reduels = await tx.matchReduel.count({ where: { matchId, setNumber: decision.setNumber, battle } }).catch(() => 0);
+        if (!pointAttemptOk(p.context.attempt, reduels)) {
+          return { kind: "error", status: 409, code: "REDUEL_VOIDED", error: "Este lançamento foi anulado por um Reduel. O ponto não foi aplicado — inicie o novo lançamento." } as const;
+        }
       }
     }
     // "Com telão Arena" + ordered deck: this battle's order must exist for both

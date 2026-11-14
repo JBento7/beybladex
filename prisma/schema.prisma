@@ -329,6 +329,9 @@ model Match {
   finishVideoAt   DateTime? // signals the telão to play a finish-type video
   finishVideoType String?
   onAirAt         DateTime?
+  // Last Reduel (docs/REDUEL.md): tells the telão to drop the annulled attempt.
+  reduelAt        DateTime?
+  reduelKey       String?
   xSidePlayerId   String? // which player chose the X side of the stadium (other = B side)
   setsToWin       Int? // per-match override (e.g. 2-day: knockout uses different rules)
   pointsToWinSet  Int? // per-match override
@@ -350,12 +353,34 @@ model Match {
   deckOrders      MatchDeckOrder[]
   trioSelections  MatchTrioSelection[]
   participations  RoundParticipation[]
+  reduels         MatchReduel[]
 
   @@index([tournamentId, round])
   @@index([tournamentId, status, arena])
   @@index([player1Id])
   @@index([player2Id])
   @@index([judgeId])
+}
+
+// Reduel — a launch repeated before any point was confirmed for it
+// (docs/REDUEL.md). History only: never changes points, sets, sides, deck
+// order or reserves. `battle` = points already scored in the set (0-based,
+// same as MatchPoint context); `attempt` = the annulled attempt (1, 2, …).
+model MatchReduel {
+  id           String   @id @default(cuid())
+  matchId      String
+  tournamentId String
+  opId         String   @unique
+  setNumber    Int
+  battle       Int
+  attempt      Int
+  actorId      String
+  actorRole    String
+  createdAt    DateTime @default(now())
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, setNumber, battle])
 }
 
 model MatchSet {
