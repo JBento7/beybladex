@@ -19,7 +19,9 @@ import { DISPLAY_MODE_LABEL, effectiveDisplayMode } from "@/lib/displayMode";
 import { useSession } from "next-auth/react";
 import { useReplayRecorder } from "@/lib/client/useReplayRecorder";
 import type { ClipMeta } from "@/lib/replayCore";
-import { CameraLive, CameraMenu, PlayerColumn } from "./CameraModeLayout";
+import { CameraLive, CameraMenu, LayoutChoice, PlayerColumn, ScreenDiagnostics } from "./CameraModeLayout";
+import { useScreen } from "@/lib/client/useScreen";
+import { LAYOUT_PREF_KEY, ROTATE_HINT, chooseLayout, parseLayoutPref, type LayoutPref } from "@/lib/screenLayout";
 import { CameraStartPrompt, FramingCheckPrompt, MatchEndRecordings, MatchRecordings, ReplayBar, ReplayPlayer } from "./ReplayUI";
 import dynamic from "next/dynamic";
 import { useCameraControls } from "@/lib/client/useCameraControls";
@@ -215,13 +217,33 @@ export default function ScoreModal({
   // "Modo câmera" (docs/MODO-CAMERA.md): a LAYOUT preference only (kept on
   // this device). The recorder, the stream and every rule stay up here, so
   // switching layout or rotating never recreates them.
-  const [cameraMode, setCameraModeState] = useState(false);
-  useEffect(() => { try { setCameraModeState(localStorage.getItem("lbl:placar:layout") === "camera"); } catch { /* preference only */ } }, []);
-  const setCameraMode = (v: boolean) => { setCameraModeState(v); try { localStorage.setItem("lbl:placar:layout", v ? "camera" : "padrao"); } catch { /* preference only */ } };
+  // Layout = the operator's preference + the AREA the browser gives the page
+  // (lib/screenLayout). "auto" (default): lying the phone down — when the
+  // browser actually provides a horizontal area — shows the camera layout,
+  // with or without full screen / orientation lock.
+  const scr = useScreen();
+  const [layoutPref, setLayoutPrefState] = useState<LayoutPref>("auto");
+  useEffect(() => { try { setLayoutPrefState(parseLayoutPref(localStorage.getItem(LAYOUT_PREF_KEY))); } catch { /* preference only */ } }, []);
+  const setLayoutPref = (p: LayoutPref) => { setLayoutPrefState(p); try { localStorage.setItem(LAYOUT_PREF_KEY, p); } catch { /* preference only */ } };
+  const cameraMode = chooseLayout(layoutPref, scr.landscape) === "camera";
+  const setCameraMode = (v: boolean) => setLayoutPref(v ? "camera" : "padrao");
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [stdMenu, setStdMenu] = useState(false);
+  // A newer deploy is live: offer a reload — only at a safe moment.
+  const [newVersion, setNewVersion] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const mine = process.env.NEXT_PUBLIC_APP_VERSION ?? "local";
+    const check = () => { if (document.visibilityState !== "visible") return; fetch("/api/app-version", { cache: "no-store" }).then((r) => r.json()).then((d: { version?: string }) => { if (d.version && mine !== "local" && d.version !== mine) setNewVersion(true); }).catch(() => undefined); };
+    check();
+    const t = setInterval(check, 5 * 60 * 1000);
+    document.addEventListener("visibilitychange", check);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", check); };
+  }, [open]);
   const [camMenu, setCamMenu] = useState(false);
   const [guides, setGuides] = useState(false);
   const [panelManual, setPanelManual] = useState(false);
-  const [fsMsg, setFsMsg] = useState<string | null>(null);
+
   // "Somente placar do juiz": no link to the telão, no on-air heartbeat, no
   // PRONTOS/countdown/videos, no stadium sides, no deck order (docs/MODO-ARBITRAGEM.md).
   const [modeFromState, setModeFromState] = useState<string | null>(null);
@@ -1007,6 +1029,22 @@ export default function ScoreModal({
     );
   }
 
+  // Straight from the tap; result checked by fullscreenchange (lib/client/useScreen).
+  const goFullscreen = () => { void scr.enterFullscreen(fsRef.current); };
+  const fsButton = (
+    <button type="button" onClick={() => (scr.isFullscreen ? void scr.exitFullscreen() : goFullscreen())} aria-pressed={scr.isFullscreen}
+      className="min-h-[44px] min-w-[44px] px-2 rounded-lg border border-line text-gray-100 text-sm font-bold whitespace-nowrap">
+      {scr.isFullscreen ? "⤡ Sair da tela cheia" : "⛶ Tela cheia"}
+    </button>
+  );
+  const safeToReload = !replayBusy && !pending;
+  const updateBanner = newVersion ? (
+    <div role="status" className="rounded-lg border border-[#38BDF8]/60 bg-[#38BDF8]/10 px-2 py-1 text-[12px] text-gray-100 flex flex-wrap items-center gap-2">
+      <span className="flex-1 min-w-0">Nova versão do site disponível.{safeToReload ? "" : " Recarregue depois da gravação/confirmação do ponto."}</span>
+      <button type="button" disabled={!safeToReload} onClick={() => window.location.reload()} className="min-h-[44px] px-3 rounded-lg border border-[#38BDF8]/70 font-bold disabled:opacity-40">Recarregar</button>
+      <button type="button" onClick={() => setNewVersion(false)} className="min-h-[44px] px-2 text-gray-300">Depois</button>
+    </div>
+  ) : null;
   // ── Persistent header: identification + connection + last action ──
   const srv = serverStatus(srvOkAt, srvFailAt, now);
   const tel = linkStatus(lastPongAt, now);
@@ -1025,6 +1063,16 @@ export default function ScoreModal({
     <div className="shrink-0 px-3 sm:px-5 pt-2 pb-2 border-b border-line bg-app">
       <div className="flex items-center gap-2">
         <p className="flex-1 min-w-0 text-sm sm:text-base font-bold text-white leading-tight break-words">{headerLine}</p>
+        <div className="relative shrink-0">
+          <button type="button" onClick={() => setStdMenu((v) => !v)} aria-expanded={stdMenu} aria-label="Menu do placar" className="h-11 min-w-[44px] px-3 rounded-full bg-card border border-line text-gray-200 text-sm font-bold">⋯</button>
+          {stdMenu && (
+            <div role="dialog" aria-label="Menu do placar" className="absolute right-0 top-12 z-40 w-[min(300px,calc(100vw-16px))] rounded-xl border border-line bg-[#151B23] p-3 grid gap-2 shadow-xl">
+              <LayoutChoice pref={layoutPref} onPref={(p) => { setLayoutPref(p); setStdMenu(false); }} />
+              {fsButton}
+              <button type="button" onClick={() => { setDiagOpen(true); setStdMenu(false); }} className="min-h-[44px] rounded-lg border border-line text-left px-3 text-sm text-gray-200">🛈 Diagnóstico de tela</button>
+            </div>
+          )}
+        </div>
         {state && (
           <button
             type="button"
@@ -1140,6 +1188,13 @@ export default function ScoreModal({
               <div className="mb-3 text-base px-4 py-3 rounded-lg bg-red-900/30 border border-red-700 text-red-400">{err}</div>
             )}
 
+            {!cameraMode && updateBanner && <div className="mb-2">{updateBanner}</div>}
+            {!cameraMode && scr.message && (
+              <p role="status" className="mb-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-[12px] text-amber-100">{scr.message} <button type="button" className="underline min-h-[44px] px-1" onClick={scr.dismissMessage}>ok</button></p>
+            )}
+            {!cameraMode && replay.stream && layoutPref === "auto" && state && !state.matchFinished && (
+              <p className="mb-1 text-[12px] text-gray-400">Deite o aparelho para o modo câmera. {ROTATE_HINT}</p>
+            )}
             {/* Local replay camera (optional; never covers names, points or buttons) */}
             {state && !state.matchFinished && !camSkipped && !cameraMode && (
               <ReplayBar
@@ -1631,14 +1686,6 @@ export default function ScoreModal({
   const blockedNote = replayClip ? "Replay aberto: toque em “Voltar ao vivo” para pontuar."
     : pending ? "Aguardando confirmação do servidor."
     : state && !state.matchFinished && !revealScoring ? "Toque em “Iniciar batalha” para liberar a pontuação." : null;
-  const goFullscreen = async () => {
-    setFsMsg(null);
-    try { if (!document.fullscreenElement) await fsRef.current?.requestFullscreen?.(); } catch { /* not allowed */ }
-    try {
-      const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
-      if (o?.lock) await o.lock("landscape"); else setFsMsg("Gire o aparelho para paisagem.");
-    } catch { setFsMsg("Gire o aparelho para paisagem."); }
-  };
   const btn = "min-h-[44px] px-3 rounded-lg text-sm font-bold whitespace-nowrap disabled:opacity-40";
   const startLabel = reduelCount > 0 ? "▶ Iniciar novo lançamento" : judgeOnly ? "▶ Iniciar batalha" : `▶ Iniciar ${currentSetBattleCount === 0 ? "partida" : `batalha ${currentSetBattleCount + 1}`}`;
   const cameraView = (
@@ -1652,17 +1699,18 @@ export default function ScoreModal({
         {pending && <span className="rounded-full border border-amber-500/50 px-2 py-0.5 text-[12px] text-amber-200">◐ Pendente</span>}
         {!judgeOnly && arena && <span className={`hidden md:inline-flex rounded-full border px-2 py-0.5 text-[12px] ${tel === "connected" ? tone.ok : tone.wait}`}>📺 {tel === "connected" ? "Telão" : "Telão sem confirmação"}</span>}
         <span className="hidden sm:inline text-[12px] text-gray-300">{replay.stream ? (recNow ? "● REC" : pausedNow ? "❚❚ Pausada" : "📷 Câmera") : "📷 Desativada"}</span>
+        <span className="hidden sm:inline">{fsButton}</span>
         <button type="button" onClick={() => setCamMenu((v) => !v)} aria-expanded={camMenu} className="min-h-[44px] min-w-[44px] px-2 rounded-lg border border-line text-gray-100 text-sm font-bold">⋯ Menu</button>
         <button type="button" onClick={handleClose} aria-label="Fechar placar" className="min-h-[44px] min-w-[44px] rounded-lg border border-line text-gray-200 text-lg">✕</button>
         {camMenu && (
           <CameraMenu
             r={replay} cam={cam} guides={guides} onGuides={setGuides} onFullscreen={goFullscreen}
-            onPanel={() => setPanelManual(true)} onExit={() => setCameraMode(false)} onClose={() => setCamMenu(false)}
+            onPanel={() => setPanelManual(true)} pref={layoutPref} onPref={setLayoutPref} onDiagnostics={() => setDiagOpen(true)} onClose={() => setCamMenu(false)}
             extra={<button type="button" onClick={() => { if (handleClose()) router.push(myMatchesHref); }} className="min-h-[44px] rounded-lg border border-line text-left px-3">⌂ Minhas partidas</button>}
           />
         )}
       </header>
-      <p className="lbl-cam-portrait-hint text-center text-[12px] text-amber-200">Gire o aparelho para uma visão mais ampla (opcional).</p>
+      <p className="lbl-cam-portrait-hint text-center text-[12px] text-amber-200">Gire o aparelho para uma visão mais ampla (opcional). {ROTATE_HINT}</p>
 
       {state && (
         <>
@@ -1691,7 +1739,8 @@ export default function ScoreModal({
               {cam.notice && <p role="status" className="pointer-events-auto rounded-md bg-black/75 px-2 py-1 text-[12px] text-amber-200">{cam.notice} <button type="button" className="underline" onClick={cam.dismissNotice}>ok</button></p>}
               {replay.notice && <p role="status" className="pointer-events-auto rounded-md bg-black/75 px-2 py-1 text-[12px] text-amber-200">{replay.notice} <button type="button" className="underline" onClick={replay.dismissNotice}>ok</button></p>}
               {cam.status === "needs_check" && !recNow && <p role="status" className="pointer-events-auto rounded-md bg-black/75 px-2 py-1 text-[12px] text-amber-200">⚠ Confira o enquadramento{cam.checkReason ? `: ${cam.checkReason}` : ""}</p>}
-              {fsMsg && <p role="status" className="pointer-events-auto rounded-md bg-black/75 px-2 py-1 text-[12px] text-amber-200">{fsMsg}</p>}
+              {scr.message && <p role="status" className="pointer-events-auto rounded-md bg-black/75 px-2 py-1 text-[12px] text-amber-200">{scr.message} <button type="button" className="underline" onClick={scr.dismissMessage}>ok</button></p>}
+              {updateBanner && <div className="pointer-events-auto">{updateBanner}</div>}
             </div>
           )}
           {panelOpen && !replayClip && (
@@ -1806,6 +1855,7 @@ export default function ScoreModal({
             {footer}
           </div>
           )}
+          {diagOpen && <ScreenDiagnostics screen={scr} layout={cameraMode ? "câmera (paisagem)" : "padrão"} pref={layoutPref} onClose={() => setDiagOpen(false)} />}
           {setupOpen && !replayBusy && (
             <CameraSetup r={replay} cam={cam} ownerId={authSession?.user?.id ?? null} onClose={() => setSetupOpen(false)} />
           )}

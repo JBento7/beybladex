@@ -14,6 +14,8 @@ import { LIGHT_MESSAGE, containRect, toElement } from "@/lib/cameraFraming";
 import type { ReplayRecorder } from "@/lib/client/useReplayRecorder";
 import type { CameraControls } from "@/lib/client/useCameraControls";
 import type { FinishType } from "@prisma/client";
+import { diagnosticsText, type LayoutPref } from "@/lib/screenLayout";
+import type { ScreenState } from "@/lib/client/useScreen";
 
 export const FINISHES: { type: FinishType; label: string }[] = [
   { type: "SPIN_FINISH", label: "Spin" },
@@ -152,8 +154,9 @@ export function CameraLive({ r, cam, guides, hidden, onEnable, children }: {
 }
 
 /** Less-used options: camera, quality, light, storage, full screen. */
-export function CameraMenu({ r, cam, guides, onGuides, onFullscreen, onPanel, onExit, onClose, extra }: {
-  r: ReplayRecorder; cam: CameraControls; guides: boolean; onGuides: (v: boolean) => void; onFullscreen: () => void; onPanel: () => void; onExit: () => void; onClose: () => void; extra?: ReactNode;
+export function CameraMenu({ r, cam, guides, onGuides, onFullscreen, onPanel, pref, onPref, onDiagnostics, onClose, extra }: {
+  r: ReplayRecorder; cam: CameraControls; guides: boolean; onGuides: (v: boolean) => void; onFullscreen: () => void; onPanel: () => void;
+  pref: LayoutPref; onPref: (p: LayoutPref) => void; onDiagnostics: () => void; onClose: () => void; extra?: ReactNode;
 }) {
   const busy = r.status === "recording" || r.status === "paused" || r.status === "finalizing";
   return (
@@ -187,7 +190,45 @@ export function CameraMenu({ r, cam, guides, onGuides, onFullscreen, onPanel, on
       <p className="text-xs text-gray-400">Armazenamento: {r.storage?.usage != null ? `${formatBytes(r.storage.usage)} usados${r.storage.quota ? ` de ${formatBytes(r.storage.quota)}` : ""}` : "estimativa indisponível"} · vídeos só neste aparelho.</p>
       {extra}
       {r.stream && <button type="button" disabled={busy} onClick={() => { void r.disableCamera(); onClose(); }} className="min-h-[44px] rounded-lg border border-line text-left px-3 disabled:opacity-40">Desativar câmera</button>}
-      <button type="button" onClick={() => { onExit(); onClose(); }} className="min-h-[44px] rounded-lg border border-line text-left px-3">Sair do modo câmera (layout padrão)</button>
+      <LayoutChoice pref={pref} onPref={(p) => { onPref(p); onClose(); }} />
+      <button type="button" onClick={() => { onDiagnostics(); onClose(); }} className="min-h-[44px] rounded-lg border border-line text-left px-3">🛈 Diagnóstico de tela</button>
+    </div>
+  );
+}
+
+/** Layout preference: automatic (lying down = camera mode), always camera, always standard. */
+export function LayoutChoice({ pref, onPref }: { pref: LayoutPref; onPref: (p: LayoutPref) => void }) {
+  const opts: [LayoutPref, string][] = [["auto", "Automático (deitado = modo câmera)"], ["camera", "Sempre modo câmera"], ["padrao", "Sempre layout padrão"]];
+  return (
+    <div role="radiogroup" aria-label="Layout do placar" className="grid gap-1">
+      <span className="text-xs text-gray-400">Layout do placar</span>
+      {opts.map(([k, label]) => (
+        <button key={k} type="button" role="radio" aria-checked={pref === k} onClick={() => onPref(k)}
+          className={`min-h-[44px] rounded-lg border text-left px-3 text-sm ${pref === k ? "border-brand-yellow text-brand-yellow" : "border-line text-gray-200"}`}>
+          {pref === k ? "● " : "○ "}{label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** "Diagnóstico de tela": technical facts to find which step failed; copyable, no personal data. */
+export function ScreenDiagnostics({ screen: sc, layout, pref, onClose }: { screen: ScreenState; layout: string; pref: LayoutPref; onClose: () => void }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const text = sc.info ? diagnosticsText(sc.info, { layout, pref, version: process.env.NEXT_PUBLIC_APP_VERSION ?? "local", lastError: sc.lastError, userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "" }) : "Lendo…";
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); setCopied("Copiado."); }
+    catch { setCopied("Não foi possível copiar automaticamente: selecione o texto e copie."); }
+  };
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-2" role="dialog" aria-modal="true" aria-label="Diagnóstico de tela">
+      <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-xl border border-line bg-[#151B23] p-3 grid gap-2">
+        <div className="flex items-center gap-2"><b className="flex-1 text-white">Diagnóstico de tela</b><button type="button" onClick={onClose} className="min-h-[44px] min-w-[44px] text-gray-300" aria-label="Fechar diagnóstico">✕</button></div>
+        <p className="text-xs text-gray-400">Atualiza ao girar, redimensionar, entrar/sair da tela cheia e voltar ao app. Não inclui senhas, tokens nem dados pessoais.</p>
+        <pre className="whitespace-pre-wrap break-words text-[12px] text-gray-100 bg-black/40 rounded-lg p-2 select-text" aria-live="polite">{text}</pre>
+        <button type="button" onClick={copy} className="min-h-[44px] rounded-lg bg-brand-yellow text-black font-bold">Copiar diagnóstico</button>
+        {copied && <p role="status" className="text-xs text-gray-300">{copied}</p>}
+      </div>
     </div>
   );
 }

@@ -2,11 +2,54 @@
 
 Layout de arbitragem em paisagem com a câmera no centro e os jogadores nas laterais. Para qualquer conta que já pode operar o placar, nos modos "Com telão Arena" e "Somente placar do juiz". Não muda permissões e não liga transmissão no modo sem telão.
 
+## 0. Por que o placar não entrava em paisagem (corrigido)
+
+Diagnóstico separado em quatro camadas:
+
+1. **Aplicativo instalado:** `src/app/manifest.ts` tinha `orientation: "portrait"`. No app instalado (atalho na tela inicial), o sistema mantinha a página em retrato mesmo com o celular deitado. Agora é `"any"`. Quem já instalou o app pode precisar fechá-lo e abrir de novo; alguns Androids só leem o manifesto atualizado depois de um tempo.
+2. **Área do navegador × layout:** o layout paisagem só aparecia com o toque em "Modo câmera". Deitar o aparelho deixava o placar padrão, uma coluna estreita (`max-w-2xl`). Agora a preferência padrão é **Automático**: quando o navegador entrega uma área mais larga que alta (`innerWidth > innerHeight`, não `window.screen` nem sensores), o placar usa o layout câmera, em qualquer largura de celular.
+3. **Tela cheia:** existia só no Menu, sem conferir o resultado. Agora há "⛶ Tela cheia" / "⤡ Sair da tela cheia" no cabeçalho do modo câmera e no menu "⋯" do placar padrão. O estado vem de `fullscreenchange`, com `webkit*` como alternativa, e os erros ficam no diagnóstico.
+4. **Bloqueio de orientação:** só é tentado depois da tela cheia e quando `screen.orientation.lock` existe. Uma recusa, ou um "aceito" em que a área continua vertical, fica registrada e mostra "Não foi possível girar automaticamente. Ative a rotação automática e deite o aparelho.". O layout nunca depende desse bloqueio. Ao sair, só o bloqueio pedido por esta função é liberado.
+
+A detecção da área atualiza em `resize`, na media query de orientação, em `screen.orientation` "change", em `visualViewport` resize, ao voltar ao primeiro plano e em `fullscreenchange` (`lib/client/useScreen.ts`). Não há `transform: rotate`.
+
+**Diagnóstico de tela** (menu "⋯" do placar padrão ou Menu do modo câmera):
+
+- janela e área visual;
+- `matchMedia(orientation)`;
+- `screen.orientation` (tipo e ângulo);
+- elemento em tela cheia;
+- se existem `requestFullscreen` e `lock`;
+- se é app instalado;
+- layout e preferência;
+- versão do app (commit do deploy);
+- último erro.
+
+O botão "Copiar diagnóstico" copia esse texto, que não inclui senhas, tokens nem dados pessoais.
+
+**Versão e cache:**
+
+- o CI do último commit passou;
+- o service worker nunca guarda páginas com login, e os arquivos de build têm nome versionado;
+- o placar compara a própria versão com `/api/app-version` (ao voltar ao app e a cada 5 min) e oferece "Recarregar". O botão fica desativado durante gravação ou ponto pendente e não recarrega sozinho;
+- não é preciso apagar os dados do site, o que apagaria os vídeos locais.
+
+**Câmera e gravação ao girar:** o gravador e a câmera ficam no `ScoreModal`, que é estável. Trocar de layout só troca o `<video>` de exibição. No e2e, girar no meio da gravação manteve `getUserMedia` chamado uma única vez, o REC contínuo e nenhum trecho extra. Componentes do painel com seleção em andamento (por exemplo, a ordem de deck sendo montada) podem perder essa seleção não salva ao girar.
+
+### Limitações por navegador
+
+- **iPhone/iPad (Safari e todos os navegadores iOS):** não há `screen.orientation.lock` nem tela cheia de elemento no iPhone. A paisagem depende só da rotação automática do aparelho, que não pode ser ligada pelo site. No iPad há tela cheia, mas não bloqueio.
+- **Android Chrome:** o bloqueio só funciona em tela cheia (ou no app instalado). Com a rotação automática desligada no sistema, a página continua em retrato até o usuário ligá-la ou usar o bloqueio em tela cheia.
+- **Samsung Internet e Firefox Android:** o suporte ao bloqueio varia. O diagnóstico mostra se a função existe e o erro devolvido.
+
 ## 1. Entrada e saída
 
-- **Entrar:** botão "📷 Modo câmera" no cabeçalho do placar.
-- **Sair:** "Sair do modo câmera" no Menu.
-- **Preferência:** a escolha é só de layout e fica neste aparelho (`localStorage`: `lbl:placar:layout`).
+- **Layout do placar** (menu "⋯" ou Menu):
+  - **Automático** (padrão): deitado, o placar usa o modo câmera; em retrato, o layout padrão;
+  - **Sempre modo câmera**, que tem versão retrato;
+  - **Sempre layout padrão**.
+- **Atalho:** o botão "📷 Modo câmera" no cabeçalho escolhe "Sempre modo câmera".
+- **Onde fica a preferência:** neste aparelho (`localStorage`: `lbl:placar:layout2`).
 - **Sem câmera:**
   - o layout funciona sem permissão de câmera;
   - o centro mostra "Câmera desativada", uma explicação ("opcional, fica só neste aparelho") e "Ativar câmera";

@@ -10,7 +10,9 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     scope: "/",
     display: "standalone",
-    orientation: "portrait",
+    // "any": the scoreboard/camera mode and the telão need landscape. "portrait"
+    // made the INSTALLED app stay upright even with the phone lying down.
+    orientation: "any",
     background_color: "#0d0d0d",
     theme_color: "#0d0d0d",
     icons: [
