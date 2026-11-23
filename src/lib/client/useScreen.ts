@@ -1,116 +1,116 @@
 "use client";
 
-// What the page really has on screen, kept up to date on: resize, the
-// orientation media query, screen.orientation "change", visualViewport resize
-// and the tab coming back to the foreground; plus full screen state. Also the
-// full-screen + orientation-lock requests, whose results are VERIFIED (by
-// fullscreenchange / the area) and whose errors are kept for the diagnostics.
-// Changing layout never touches the camera or the recorder (they live above).
+// What the page really has on screen (docs/MODO-CAMERA.md §0). Events
+// (resize, orientation media query, screen.orientation, visualViewport,
+// back to the foreground, full screen) are coalesced into ONE read per
+// animation frame, and state only changes when a value really changed.
+// `landscape` (used to pick the layout) only flips after the size has been
+// stable for a moment, so the intermediate sizes of a rotation never make
+// the layout flip back and forth. Full screen / lock go through the single
+// controller (lib/client/fullscreen) — never in response to size changes.
 
-import { useCallback, useEffect, useState } from "react";
-import { LOCK_FAILED, describeError, isLandscapeArea, type ScreenInfo } from "@/lib/screenLayout";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { LOCK_FAILED, isLandscapeArea, type ScreenInfo } from "@/lib/screenLayout";
+import { exitFullscreen as fsExit, fsElement, fsLastError, lockLandscape, requestFullscreen } from "./fullscreen";
+import { diag } from "./diagLog";
 
-type FsDoc = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> | void };
-type FsEl = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
-type Orient = ScreenOrientation & { lock?: (o: string) => Promise<void>; unlock?: () => void };
+type FsEl = HTMLElement & { webkitRequestFullscreen?: () => unknown };
+type Orient = ScreenOrientation & { lock?: (o: string) => Promise<void> };
+const SETTLE_MS = 300;
 
 function read(): ScreenInfo {
-  const d = document as FsDoc;
   const o = (typeof screen !== "undefined" ? screen.orientation : undefined) as Orient | undefined;
-  const fsEl = d.fullscreenElement ?? d.webkitFullscreenElement ?? null;
+  const fsEl = fsElement();
   const el = document.documentElement as FsEl;
   return {
     innerWidth: window.innerWidth,
     innerHeight: window.innerHeight,
-    visualWidth: window.visualViewport?.width ?? null,
-    visualHeight: window.visualViewport?.height ?? null,
+    visualWidth: window.visualViewport ? Math.round(window.visualViewport.width) : null,
+    visualHeight: window.visualViewport ? Math.round(window.visualViewport.height) : null,
     mqLandscape: typeof window.matchMedia === "function" ? window.matchMedia("(orientation: landscape)").matches : null,
     orientationType: o?.type ?? null,
     orientationAngle: typeof o?.angle === "number" ? o.angle : null,
     fullscreenElement: fsEl ? `${fsEl.tagName.toLowerCase()}${fsEl.id ? `#${fsEl.id}` : ""}` : null,
     canFullscreen: typeof el.requestFullscreen === "function" || typeof el.webkitRequestFullscreen === "function",
     canLock: typeof o?.lock === "function",
-    // installed app (not "full screen": that also matches display-mode fullscreen)
     standalone: (typeof window.matchMedia === "function" && window.matchMedia("(display-mode: standalone)").matches) || (navigator as Navigator & { standalone?: boolean }).standalone === true,
   };
 }
+const same = (a: ScreenInfo | null, b: ScreenInfo) => !!a && (Object.keys(b) as (keyof ScreenInfo)[]).every((k) => a[k] === b[k]);
 
 export function useScreen() {
   const [info, setInfo] = useState<ScreenInfo | null>(null);
-  const [lastError, setLastError] = useState<string | null>(null);
+  const [landscape, setLandscape] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [lockedByUs, setLockedByUs] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
+  const infoRef = useRef<ScreenInfo | null>(null);
 
   useEffect(() => {
-    const update = () => setInfo(read());
-    update();
+    let raf = 0;
+    let settle: ReturnType<typeof setTimeout> | null = null;
+    let lastLand: boolean | null = null;
+    const apply = () => {
+      raf = 0;
+      const next = read();
+      if (same(infoRef.current, next)) return;
+      const prev = infoRef.current;
+      infoRef.current = next;
+      setInfo(next);
+      if (!prev || prev.fullscreenElement !== next.fullscreenElement) setLastError(fsLastError());
+      const land = isLandscapeArea(next.innerWidth, next.innerHeight);
+      if (lastLand === null) { lastLand = land; setLandscape(land); return; }
+      if (settle) clearTimeout(settle);
+      settle = setTimeout(() => {
+        settle = null;
+        const cur = infoRef.current;
+        const l = cur ? isLandscapeArea(cur.innerWidth, cur.innerHeight) : land;
+        if (l !== lastLand) { lastLand = l; setLandscape(l); diag("tela", `área ${cur?.innerWidth}×${cur?.innerHeight} → ${l ? "horizontal" : "vertical"}`); }
+      }, SETTLE_MS);
+    };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    const onVis = () => { if (document.visibilityState === "visible") { diag("app", "voltou ao primeiro plano"); schedule(); } else diag("app", "foi para segundo plano"); };
+    const onOrient = () => { diag("orientação", `mudou (${(screen.orientation as Orient | undefined)?.type ?? "?"})`); schedule(); };
+    apply();
     const mq = window.matchMedia?.("(orientation: landscape)");
     const o = screen.orientation as Orient | undefined;
-    const onVis = () => { if (document.visibilityState === "visible") update(); };
-    window.addEventListener("resize", update);
-    window.addEventListener("orientationchange", update);
-    mq?.addEventListener?.("change", update);
-    o?.addEventListener?.("change", update);
-    window.visualViewport?.addEventListener("resize", update);
+    window.addEventListener("resize", schedule);
+    window.addEventListener("orientationchange", onOrient);
+    mq?.addEventListener?.("change", schedule);
+    o?.addEventListener?.("change", onOrient);
+    window.visualViewport?.addEventListener("resize", schedule);
     document.addEventListener("visibilitychange", onVis);
-    document.addEventListener("fullscreenchange", update);
-    document.addEventListener("webkitfullscreenchange", update);
+    document.addEventListener("fullscreenchange", schedule);
+    document.addEventListener("webkitfullscreenchange", schedule);
     return () => {
-      window.removeEventListener("resize", update);
-      window.removeEventListener("orientationchange", update);
-      mq?.removeEventListener?.("change", update);
-      o?.removeEventListener?.("change", update);
-      window.visualViewport?.removeEventListener("resize", update);
+      if (raf) cancelAnimationFrame(raf);
+      if (settle) clearTimeout(settle);
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("orientationchange", onOrient);
+      mq?.removeEventListener?.("change", schedule);
+      o?.removeEventListener?.("change", onOrient);
+      window.visualViewport?.removeEventListener("resize", schedule);
       document.removeEventListener("visibilitychange", onVis);
-      document.removeEventListener("fullscreenchange", update);
-      document.removeEventListener("webkitfullscreenchange", update);
+      document.removeEventListener("fullscreenchange", schedule);
+      document.removeEventListener("webkitfullscreenchange", schedule);
     };
   }, []);
 
-  /** Called straight from the tap: full screen first, then (if it exists) the landscape lock. */
-  const enterFullscreen = useCallback(async (target: HTMLElement | null) => {
+  /** From a tap: full screen (single controller), then the landscape lock if it exists. */
+  const enterFullscreen = useCallback(async () => {
     setMessage(null);
-    const el = (target ?? document.documentElement) as FsEl;
-    try {
-      if (typeof el.requestFullscreen === "function") await el.requestFullscreen();
-      else if (typeof el.webkitRequestFullscreen === "function") await el.webkitRequestFullscreen();
-      else { setLastError("requestFullscreen indisponível neste navegador"); }
-    } catch (e) {
-      setLastError(`Tela cheia recusada — ${describeError(e)}`);
-    }
-    const o = screen.orientation as Orient | undefined;
-    if (typeof o?.lock !== "function") {
-      setLastError((x) => x ?? "screen.orientation.lock indisponível neste navegador");
-      if (!isLandscapeArea(window.innerWidth, window.innerHeight)) setMessage(LOCK_FAILED);
-      return;
-    }
-    try {
-      await o.lock("landscape");
-      setLockedByUs(true);
-      // Only trust the AREA: the lock promise alone doesn't prove the page rotated.
-      setTimeout(() => {
-        if (!isLandscapeArea(window.innerWidth, window.innerHeight)) {
-          setLastError("Bloqueio de orientação aceito, mas a área da página continua vertical");
-          setMessage(LOCK_FAILED);
-        }
-      }, 800);
-    } catch (e) {
-      setLastError(`Bloqueio de orientação recusado — ${describeError(e)}`);
-      if (!isLandscapeArea(window.innerWidth, window.innerHeight)) setMessage(LOCK_FAILED);
-    }
+    await requestFullscreen("usuario");
+    const r = await lockLandscape();
+    setLastError(fsLastError());
+    setTimeout(() => {
+      if (!isLandscapeArea(window.innerWidth, window.innerHeight)) {
+        if (r.ok) diag("orientação", "bloqueio aceito, mas a área continua vertical");
+        setLastError(r.ok ? "Bloqueio de orientação aceito, mas a área da página continua vertical" : fsLastError());
+        setMessage(LOCK_FAILED);
+      }
+    }, 800);
   }, []);
+  const exitFullscreen = useCallback(async () => { await fsExit("usuario"); setLastError(fsLastError()); }, []);
 
-  const exitFullscreen = useCallback(async () => {
-    const o = screen.orientation as Orient | undefined;
-    if (lockedByUs) { try { o?.unlock?.(); } catch { /* nothing to release */ } setLockedByUs(false); }
-    const d = document as FsDoc;
-    try {
-      if (d.fullscreenElement) await d.exitFullscreen();
-      else if (d.webkitFullscreenElement) await d.webkitExitFullscreen?.();
-    } catch (e) { setLastError(`Sair da tela cheia falhou — ${describeError(e)}`); }
-  }, [lockedByUs]);
-
-  const landscape = info ? isLandscapeArea(info.innerWidth, info.innerHeight) : false;
   return { info, landscape, lastError, message, dismissMessage: () => setMessage(null), enterFullscreen, exitFullscreen, isFullscreen: !!info?.fullscreenElement };
 }
 export type ScreenState = ReturnType<typeof useScreen>;

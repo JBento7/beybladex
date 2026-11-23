@@ -2,6 +2,54 @@
 
 Layout de arbitragem em paisagem com a câmera no centro e os jogadores nas laterais. Para qualquer conta que já pode operar o placar, nos modos "Com telão Arena" e "Somente placar do juiz". Não muda permissões e não liga transmissão no modo sem telão.
 
+## 0a. Travamento ao girar: placar some e a página não responde (corrigido)
+
+**O que foi encontrado no código:**
+
+1. **Placar preso ao card da partida:** o `ScoreModal` (inclusive o overlay `fixed` do placar aberto) era renderizado **dentro do card**. Com arenas definidas, a página monta cada partida **duas vezes**: na grade de celular (`lg:hidden`) e na grade de arenas (`hidden lg:block`), e o CSS troca qual aparece conforme a largura.
+   - Ao girar, se a largura cruzava o breakpoint, o container do placar aberto recebia `display:none`: o placar sumia e a página do torneio aparecia.
+   - Abrindo pelo "Arbitrar" (`?placar=`), as duas cópias podiam abrir juntas, com polling, câmera e pedidos de tela cheia duplicados.
+2. **Tela cheia pedida por três lugares ao mesmo tempo:**
+   - o quiosque do juiz, a cada toque (em fase de captura);
+   - um efeito do placar ao abrir, sem gesto do usuário, no **elemento do placar**;
+   - o botão "Tela cheia".
+   - Com o elemento em tela cheia dentro de um container escondido, o navegador pode ficar preso numa camada de tela cheia invisível, sem receber toques. Isso bate com o "precisa forçar o encerramento".
+3. **Rajada de eventos na rotação:** cada evento de tamanho re-renderizava o placar inteiro, e nos tamanhos intermediários o layout podia alternar.
+
+**Correção:**
+
+- **Portal estável:** o placar aberto é desenhado num portal estável (`#lbl-placar-root` no `<body>`, dentro do `<html>` que fica em tela cheia), fora dos cards. Esconder uma grade, ancestrais com `transform`/`overflow` ou a atualização da lista de partidas não afetam mais o placar.
+- **Uma instância por partida:** só **uma** cópia é dona do placar aberto (`lib/client/scoreOwner`). A rotação não muda `open`, e não há `key` por orientação.
+- **Controlador único de tela cheia** (`lib/client/fullscreen`):
+  - sempre no `<html>`;
+  - um pedido por vez;
+  - só a partir de toques ("Placar", "Tela cheia" ou o quiosque);
+  - nunca por resize ou orientação;
+  - o quiosque não pede de novo a cada toque enquanto o placar está aberto;
+  - sair libera só o bloqueio de orientação pedido pelo próprio controlador;
+  - fechar o placar sai da tela cheia só se foi o placar que entrou.
+- **Eventos de tela agrupados** (`useScreen`): um por quadro (`requestAnimationFrame`), com comparação antes de atualizar o estado. A troca de layout só acontece depois de 300 ms de tamanho estável.
+- **Proteção de erro no modo câmera:** se a renderização falhar, aparece "Não foi possível abrir o modo câmera", com "Usar placar padrão" e "Sair da tela cheia". A partida e os dados continuam.
+- **Diagnóstico:**
+  - **Histórico limitado (80 eventos):** placar aberto/fechado, montagem/desmontagem, área/orientação, tela cheia, câmera/gravação, layout, erros de JavaScript e promessas rejeitadas. Sem vídeo, e-mails, tokens nem parâmetros de URL.
+  - **"Restaurar visualização padrão":** placar padrão nesta sessão, fecha menus, configuração e replay, sai da tela cheia e mantém a partida aberta, sem recarregar.
+
+**Testes no Chromium com câmera simulada:**
+
+- **Cenários:** admin no tablet (cruzando `lg`, abrindo pelo toque) e juiz no celular em quiosque (abrindo por `?placar=`).
+- **Com gravação em andamento:**
+  - 6 rotações rápidas, incluindo um tamanho intermediário;
+  - rotação com replay aberto;
+  - entrada na tela cheia;
+  - um ponto marcado.
+- **Resultado em todos os casos:**
+  - um único placar, no portal, recebendo o toque no centro da tela;
+  - `getUserMedia` chamado uma vez;
+  - REC contínuo e vídeos salvos;
+  - zero erros de JavaScript;
+  - "Restaurar visualização padrão" funcionando.
+- **Limite:** o travamento original **não foi reproduzido** no Chromium sem interface. A confirmação final precisa ser feita no aparelho em que ocorreu, usando "Copiar diagnóstico" se algo ainda falhar.
+
 ## 0. Por que o placar não entrava em paisagem (corrigido)
 
 Diagnóstico separado em quatro camadas:

@@ -1,6 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useId, Component, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { claimScore, releaseScore, scoreOwner, useScoreOwner } from "@/lib/client/scoreOwner";
+import { exitFullscreen as fsExit, requestFullscreen as fsRequest, setPlacarSession } from "@/lib/client/fullscreen";
+import { diag, installDiagErrorHandlers } from "@/lib/client/diagLog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FINISH_TYPE_POINTS } from "@/lib/scoring";
@@ -180,7 +184,40 @@ export default function ScoreModal({
   /** Open right away (judge navigation: /tournaments/[id]?placar=<matchId>). */
   autoOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(autoOpen);
+  // ── Open state (docs/MODO-CAMERA.md §0) ──
+  // The page may render this match's card twice (mobile grid / arena grid,
+  // swapped by CSS breakpoints when the device rotates). Only ONE instance
+  // owns the open scoreboard, and it is drawn in a portal on <body> — never
+  // inside the card, so hiding a grid, a transformed/clipped ancestor or a
+  // page refresh of the card list can't hide it. Rotation never changes open.
+  const instanceId = useId();
+  const owner = useScoreOwner(matchId);
+  const [openLocal, setOpenLocal] = useState(false);
+  const open = openLocal && owner === instanceId;
+  const setOpen = useCallback((v: boolean) => {
+    if (v) claimScore(matchId, instanceId); else releaseScore(matchId, instanceId);
+    setOpenLocal(v);
+    diag("placar", v ? "aberto" : "fechado");
+  }, [matchId, instanceId]);
+  useEffect(() => {
+    installDiagErrorHandlers();
+    diag("placar", "componente montado");
+    // /juiz "Arbitrar" (?placar=): only the first copy of this match opens it.
+    if (autoOpen && !scoreOwner(matchId)) setOpen(true);
+    return () => { releaseScore(matchId, instanceId); diag("placar", "componente desmontado"); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Another copy took the scoreboard (e.g. tapped "Placar" there): this one closes.
+  useEffect(() => { if (openLocal && owner && owner !== instanceId) setOpenLocal(false); }, [openLocal, owner, instanceId]);
+  // Portal host: a stable element on <body>, inside the full-screen tree (<html>).
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    let el = document.getElementById("lbl-placar-root");
+    if (!el) { el = document.createElement("div"); el.id = "lbl-placar-root"; document.body.appendChild(el); }
+    setHost(el);
+  }, []);
+  // While open, the scoreboard controls full screen (the kiosk doesn't re-request on taps).
+  useEffect(() => { if (!open) return; setPlacarSession(true); return () => setPlacarSession(false); }, [open]);
   const [state, setState] = useState<MatchState | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -210,6 +247,9 @@ export default function ScoreModal({
   const [camSkipped, setCamSkipped] = useState(false);
   // Camera setup for the arena (docs/CAMERA-ARENA.md) — same stream, local only.
   const replayBusy = replay.status === "recording" || replay.status === "paused" || replay.status === "finalizing";
+  useEffect(() => { diag("câmera", `estado: ${replay.status}`); }, [replay.status]);
+  const hasStream = !!replay.stream;
+  useEffect(() => { diag("câmera", hasStream ? "captura ativa" : "captura liberada"); }, [hasStream]);
   const cam = useCameraControls({ stream: replay.stream, ownerId: authSession?.user?.id ?? null, recording: replayBusy });
   const [setupOpen, setSetupOpen] = useState(false);
   const [framingPrompt, setFramingPrompt] = useState<{ reason: string; kind: "judge" | "countdown" } | null>(null);
@@ -225,7 +265,11 @@ export default function ScoreModal({
   const [layoutPref, setLayoutPrefState] = useState<LayoutPref>("auto");
   useEffect(() => { try { setLayoutPrefState(parseLayoutPref(localStorage.getItem(LAYOUT_PREF_KEY))); } catch { /* preference only */ } }, []);
   const setLayoutPref = (p: LayoutPref) => { setLayoutPrefState(p); try { localStorage.setItem(LAYOUT_PREF_KEY, p); } catch { /* preference only */ } };
-  const cameraMode = chooseLayout(layoutPref, scr.landscape) === "camera";
+  // "Restaurar visualização padrão" (diagnostics) / camera-mode error: standard
+  // layout for this session, whatever the orientation.
+  const [forceStandard, setForceStandard] = useState(false);
+  const cameraMode = !forceStandard && chooseLayout(layoutPref, scr.landscape) === "camera";
+  useEffect(() => { if (open) diag("layout", cameraMode ? "câmera" : "padrão"); }, [open, cameraMode]);
   const setCameraMode = (v: boolean) => setLayoutPref(v ? "camera" : "padrao");
   const [diagOpen, setDiagOpen] = useState(false);
   const [stdMenu, setStdMenu] = useState(false);
@@ -307,32 +351,18 @@ export default function ScoreModal({
   const fsRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const wakeRef = useRef<any>(null);
+  // Screen awake while judging. Full screen is NOT requested here any more:
+  // it comes from the "Placar" tap / "Tela cheia" through the single
+  // controller (lib/client/fullscreen) — a request from an effect has no user
+  // gesture and competed with the kiosk's own request.
   useEffect(() => {
     if (!open) return;
-    // Already fullscreen (judge kiosk mode): leave it alone, and don't exit
-    // fullscreen on close — that would kick the judge out of kiosk mode.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const keepFs = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
-    const el = (keepFs ? null : fsRef.current) as unknown as {
-      requestFullscreen?: () => Promise<void>;
-      webkitRequestFullscreen?: () => void;
-    } | null;
-    try {
-      if (el?.requestFullscreen) el.requestFullscreen().catch(() => {});
-      else el?.webkitRequestFullscreen?.(); // iPadOS Safari
-    } catch { /* iPhone Safari has no element fullscreen — the CSS layout covers it */ }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nav = navigator as any;
     nav.wakeLock?.request?.("screen").then((s: unknown) => { wakeRef.current = s; }).catch(() => {});
     return () => {
       try { wakeRef.current?.release?.(); } catch { /* ignore */ }
       wakeRef.current = null;
-      if (!keepFs) try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const d = document as any;
-        if (document.fullscreenElement) document.exitFullscreen?.();
-        else if (d.webkitFullscreenElement) d.webkitExitFullscreen?.();
-      } catch { /* ignore */ }
     };
   }, [open]);
 
@@ -948,6 +978,7 @@ export default function ScoreModal({
     if (replay.isRecording() && !window.confirm("Uma gravação de replay está em andamento. Sair do placar encerra o trecho (o que já foi gravado fica salvo neste aparelho, marcado como interrompido). Sair mesmo assim?")) return false;
     if (pendingRef.current && !window.confirm("Há um ponto aguardando confirmação do servidor. Ele continua salvo neste aparelho e será verificado quando você abrir este placar de novo. Fechar mesmo assim?")) return false;
     setOpen(false);
+    void fsExit("placar"); // only if the scoreboard itself entered full screen
     router.refresh();
     return true;
   }
@@ -1030,7 +1061,14 @@ export default function ScoreModal({
   }
 
   // Straight from the tap; result checked by fullscreenchange (lib/client/useScreen).
-  const goFullscreen = () => { void scr.enterFullscreen(fsRef.current); };
+  const goFullscreen = () => { void scr.enterFullscreen(); };
+  /** Back to a safe, usable state without closing the match or reloading. */
+  const restoreStandardView = () => {
+    setForceStandard(true);
+    setCamMenu(false); setStdMenu(false); setSetupOpen(false); setReplayClip(null); setPanelManual(false); setDiagOpen(false);
+    void fsExit("usuario");
+    diag("placar", "visualização padrão restaurada");
+  };
   const fsButton = (
     <button type="button" onClick={() => (scr.isFullscreen ? void scr.exitFullscreen() : goFullscreen())} aria-pressed={scr.isFullscreen}
       className="min-h-[44px] min-w-[44px] px-2 rounded-lg border border-line text-gray-100 text-sm font-bold whitespace-nowrap">
@@ -1826,20 +1864,22 @@ export default function ScoreModal({
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); void fsRequest("placar"); /* explicit tap; single controller */ }}
         className="text-sm bg-brand-red hover:bg-brand-red-hover text-white font-bold px-4 py-2.5 rounded-lg transition-colors"
       >
         Placar
       </button>
 
 
-      {open && (
+      {open && host && createPortal((
         // Full-bleed on a phone: no backdrop, no card, no rounded corners — the
         // scoring panel IS the screen. On bigger screens the content stays
         // centred at a comfortable width. Tapping outside no longer closes it
         // (a stray tap used to drop the judge out mid-match); use the ✕.
         <div ref={fsRef} className={`fixed inset-0 z-50 flex flex-col overscroll-contain ${cameraMode ? "bg-[#0B0F14] overflow-y-auto" : "bg-app"}`}>
-          {cameraMode ? cameraView : (
+          {cameraMode ? (
+            <CameraModeBoundary onStandard={restoreStandardView} onExitFs={() => void fsExit("usuario")}>{cameraView}</CameraModeBoundary>
+          ) : (
           <div
             role="dialog"
             aria-modal="true"
@@ -1855,7 +1895,7 @@ export default function ScoreModal({
             {footer}
           </div>
           )}
-          {diagOpen && <ScreenDiagnostics screen={scr} layout={cameraMode ? "câmera (paisagem)" : "padrão"} pref={layoutPref} onClose={() => setDiagOpen(false)} />}
+          {diagOpen && <ScreenDiagnostics screen={scr} layout={cameraMode ? "câmera (paisagem)" : forceStandard ? "padrão (restaurado)" : "padrão"} pref={layoutPref} onClose={() => setDiagOpen(false)} onRestore={restoreStandardView} />}
           {setupOpen && !replayBusy && (
             <CameraSetup r={replay} cam={cam} ownerId={authSession?.user?.id ?? null} onClose={() => setSetupOpen(false)} />
           )}
@@ -1863,7 +1903,7 @@ export default function ScoreModal({
             <ReplayPlayer clip={replayClip} r={replay} matchTitle={`${p1Name} × ${p2Name}`} onClose={() => setReplayClip(null)} />
           )}
         </div>
-      )}
+      ), host)}
     </>
   );
 }
@@ -1896,4 +1936,23 @@ function SoloSelector({
       ))}
     </select>
   );
+}
+
+/** Camera mode failed to render: never leave the judge stuck — offer the
+ *  standard scoreboard (same match, same state) and leaving full screen. */
+class CameraModeBoundary extends Component<{ children: ReactNode; onStandard: () => void; onExitFs: () => void }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(e: unknown) { diag("erro modo câmera", e instanceof Error ? `${e.name}: ${e.message}` : String(e)); }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div role="alert" className="m-auto max-w-sm p-4 text-center grid gap-3">
+        <p className="text-lg font-bold text-white">Não foi possível abrir o modo câmera</p>
+        <p className="text-sm text-gray-300">A partida, os pontos e as gravações deste aparelho continuam preservados.</p>
+        <button type="button" onClick={() => { this.setState({ failed: false }); this.props.onStandard(); }} className="min-h-[48px] rounded-lg bg-brand-yellow text-black font-black">Usar placar padrão</button>
+        <button type="button" onClick={this.props.onExitFs} className="min-h-[44px] rounded-lg border border-line text-gray-200 font-bold">Sair da tela cheia</button>
+      </div>
+    );
+  }
 }

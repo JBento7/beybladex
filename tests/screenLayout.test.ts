@@ -28,3 +28,11 @@ test("diagnostics: technical facts only, errors named", () => {
   assert.doesNotMatch(t, /token|senha|@/i);
   assert.equal(describeError({ name: "NotAllowedError", message: "denied" }), "NotAllowedError: denied");
 });
+
+test("diagnostic history never keeps e-mails, tokens or query strings", async () => {
+  const { sanitizeDiag } = await import("../src/lib/client/diagLog.ts");
+  const s = sanitizeDiag("falha em https://lbl.app/api/x?token=abc#y de juiz1@lbl.juiz senha=123");
+  assert.doesNotMatch(s, /abc|juiz1@|123|\?token/);
+  assert.match(s, /https:\/\/lbl\.app\/api\/x/);
+  assert.ok(sanitizeDiag("x".repeat(500)).length <= 160);
+});

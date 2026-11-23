@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { startKeepAwake } from "@/lib/keepAwake";
+import { placarControlsFullscreen, requestFullscreen } from "@/lib/client/fullscreen";
 
 // Kiosk mode for judge accounts: the whole app runs fullscreen on the judge's
 // phone/tablet and the screen stays awake. Browsers only allow fullscreen from
@@ -28,12 +29,12 @@ export default function JudgeKiosk() {
       (navigator as unknown as { standalone?: boolean }).standalone === true;
     if (!canFs && !standalone) setIosHint(true);
 
+    // Through the single controller (lib/client/fullscreen): one request at a
+    // time, and none while the scoreboard is open — it controls the session
+    // there (no competing request on every tap, e.g. during a rotation).
     const enter = () => {
-      if (!canFs || standalone || isFullscreen()) return;
-      try {
-        if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
-        else el.webkitRequestFullscreen?.();
-      } catch { /* unsupported */ }
+      if (!canFs || standalone || isFullscreen() || placarControlsFullscreen()) return;
+      void requestFullscreen("kiosk");
     };
     document.addEventListener("click", enter, true);
     document.addEventListener("touchend", enter, true);

@@ -16,6 +16,8 @@ import type { CameraControls } from "@/lib/client/useCameraControls";
 import type { FinishType } from "@prisma/client";
 import { diagnosticsText, type LayoutPref } from "@/lib/screenLayout";
 import type { ScreenState } from "@/lib/client/useScreen";
+import { diagEntries, diagText, subscribeDiag } from "@/lib/client/diagLog";
+import { useSyncExternalStore } from "react";
 
 export const FINISHES: { type: FinishType; label: string }[] = [
   { type: "SPIN_FINISH", label: "Spin" },
@@ -213,9 +215,11 @@ export function LayoutChoice({ pref, onPref }: { pref: LayoutPref; onPref: (p: L
 }
 
 /** "Diagnóstico de tela": technical facts to find which step failed; copyable, no personal data. */
-export function ScreenDiagnostics({ screen: sc, layout, pref, onClose }: { screen: ScreenState; layout: string; pref: LayoutPref; onClose: () => void }) {
+export function ScreenDiagnostics({ screen: sc, layout, pref, onClose, onRestore }: { screen: ScreenState; layout: string; pref: LayoutPref; onClose: () => void; onRestore?: () => void }) {
   const [copied, setCopied] = useState<string | null>(null);
-  const text = sc.info ? diagnosticsText(sc.info, { layout, pref, version: process.env.NEXT_PUBLIC_APP_VERSION ?? "local", lastError: sc.lastError, userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "" }) : "Lendo…";
+  const entries = useSyncExternalStore(subscribeDiag, diagEntries, diagEntries);
+  const summary = sc.info ? diagnosticsText(sc.info, { layout, pref, version: process.env.NEXT_PUBLIC_APP_VERSION ?? "local", lastError: sc.lastError, userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "" }) : "Lendo…";
+  const text = `${summary}\n\nHistórico (${entries.length} eventos):\n${diagText()}`;
   const copy = async () => {
     try { await navigator.clipboard.writeText(text); setCopied("Copiado."); }
     catch { setCopied("Não foi possível copiar automaticamente: selecione o texto e copie."); }
@@ -225,8 +229,14 @@ export function ScreenDiagnostics({ screen: sc, layout, pref, onClose }: { scree
       <div className="w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-xl border border-line bg-[#151B23] p-3 grid gap-2">
         <div className="flex items-center gap-2"><b className="flex-1 text-white">Diagnóstico de tela</b><button type="button" onClick={onClose} className="min-h-[44px] min-w-[44px] text-gray-300" aria-label="Fechar diagnóstico">✕</button></div>
         <p className="text-xs text-gray-400">Atualiza ao girar, redimensionar, entrar/sair da tela cheia e voltar ao app. Não inclui senhas, tokens nem dados pessoais.</p>
-        <pre className="whitespace-pre-wrap break-words text-[12px] text-gray-100 bg-black/40 rounded-lg p-2 select-text" aria-live="polite">{text}</pre>
+        <pre className="whitespace-pre-wrap break-words text-[12px] text-gray-100 bg-black/40 rounded-lg p-2 select-text max-h-[45dvh] overflow-y-auto">{text}</pre>
         <button type="button" onClick={copy} className="min-h-[44px] rounded-lg bg-brand-yellow text-black font-bold">Copiar diagnóstico</button>
+        {onRestore && (
+          <button type="button" onClick={onRestore} className="min-h-[44px] rounded-lg border border-line text-gray-100 font-bold">
+            Restaurar visualização padrão
+          </button>
+        )}
+        {onRestore && <p className="text-[11px] text-gray-400">Volta ao placar padrão nesta sessão, fecha menus/camadas, sai da tela cheia e mantém a partida aberta (nada é recarregado nem apagado).</p>}
         {copied && <p role="status" className="text-xs text-gray-300">{copied}</p>}
       </div>
     </div>
