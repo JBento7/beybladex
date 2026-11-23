@@ -33,6 +33,9 @@ export type ClipMeta = {
   attempt?: number;
   /** "Tentativa anulada — Reduel": the launch was repeated (kept for review). */
   voided?: boolean;
+  /** What the camera REPORTED when the clip started (docs/CAMERA-ARENA.md):
+   *  effective size, frame rate, zoom, torch, and the framing setup id. */
+  capture?: { width: number | null; height: number | null; frameRate: number | null; zoom: number | null; torch: boolean | null; configId: string | null } | null;
   createdAt: number;
   durationMs: number;
   sizeBytes: number;

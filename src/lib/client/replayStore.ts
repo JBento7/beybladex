@@ -13,7 +13,9 @@
 import { visibleTo, type ClipMeta } from "@/lib/replayCore";
 
 const DB_NAME = "lbl-replays";
-const DB_VERSION = 1;
+const DB_VERSION = 2; // v2: camera setup per account+camera, arena reference photo
+const CAMCFG = "camConfig";
+const REFS = "arenaRefs";
 const CLIPS = "clips";
 const CHUNKS = "chunks";
 
@@ -53,6 +55,8 @@ function openDb(): Promise<IDBDatabase> {
         s.createIndex("owner_match", ["ownerId", "matchId"]);
       }
       if (!db.objectStoreNames.contains(CHUNKS)) db.createObjectStore(CHUNKS, { keyPath: ["clipId", "seq"] });
+      if (!db.objectStoreNames.contains(CAMCFG)) db.createObjectStore(CAMCFG, { keyPath: "key" });
+      if (!db.objectStoreNames.contains(REFS)) db.createObjectStore(REFS, { keyPath: "key" });
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -156,4 +160,73 @@ export async function storageEstimate(): Promise<{ usage?: number; quota?: numbe
 /** Asks the browser to keep this site's data under storage pressure (best effort, no prompt on most browsers). */
 export async function requestPersistence(): Promise<boolean> {
   try { return (await navigator.storage?.persist?.()) ?? false; } catch { return false; }
+}
+
+// ── Camera setup (docs/CAMERA-ARENA.md): per account, this device and camera ──
+// Preferences only — never credentials. Restoring them never turns on the
+// camera or the torch; the framing always needs a new visual confirmation.
+export type CamConfig = {
+  key: string;
+  ownerId: string;
+  cameraId: string;
+  /** Camera name: browsers may renew deviceIds, the label helps find it again. */
+  cameraLabel?: string;
+  quality?: string;
+  torchPref?: "off" | "on" | "auto";
+  /** Selection (with margin) in normalized coordinates of the frame, at `zoom`. */
+  box?: { x0: number; y0: number; x1: number; y1: number } | null;
+  /** The selection as drawn (without margin). */
+  raw?: { x0: number; y0: number; x1: number; y1: number } | null;
+  margin?: number;
+  zoom?: number | null;
+  focusMode?: string | null;
+  focusDistance?: number | null;
+  exposureCompensation?: number | null;
+  /** Frame size and orientation when the framing was confirmed. */
+  frame?: { width: number; height: number; landscape: boolean } | null;
+  configId?: string;
+  savedAt: number;
+};
+export const camConfigKey = (ownerId: string, cameraId: string) => `${ownerId}|${localDeviceId()}|${cameraId || "default"}`;
+
+/** Saved setup of this account on this device: same camera id, else same
+ *  camera name, else the most recent one (always re-confirmed on screen). */
+export async function loadCamConfig(ownerId: string, cameraId: string, cameraLabel?: string): Promise<CamConfig | null> {
+  if (!ownerId) return null;
+  const db = await openDb();
+  const prefix = `${ownerId}|${localDeviceId()}|`;
+  const rows = ((await reqP(db.transaction(CAMCFG).objectStore(CAMCFG).getAll())) as CamConfig[]).filter((c) => c.ownerId === ownerId && c.key.startsWith(prefix));
+  return rows.find((c) => c.key === camConfigKey(ownerId, cameraId))
+    ?? (cameraLabel ? rows.find((c) => c.cameraLabel === cameraLabel) : undefined)
+    ?? rows.sort((a, b) => b.savedAt - a.savedAt)[0]
+    ?? null;
+}
+export async function saveCamConfig(c: Omit<CamConfig, "key" | "savedAt">): Promise<void> {
+  if (!c.ownerId) return;
+  const db = await openDb();
+  const tx = db.transaction(CAMCFG, "readwrite");
+  tx.objectStore(CAMCFG).put({ ...c, key: camConfigKey(c.ownerId, c.cameraId), savedAt: Date.now() });
+  await txDone(tx);
+}
+
+/** Reference photo of the arena (cropped), per account and device. */
+export type ArenaRef = { key: string; ownerId: string; image: Blob; crop: { x0: number; y0: number; x1: number; y1: number }; signature: number[]; source: "user" | "example"; savedAt: number };
+const refKey = (ownerId: string) => `${ownerId}|${localDeviceId()}`;
+export async function loadArenaRef(ownerId: string): Promise<ArenaRef | null> {
+  if (!ownerId) return null;
+  const db = await openDb();
+  const row = (await reqP(db.transaction(REFS).objectStore(REFS).get(refKey(ownerId)))) as ArenaRef | undefined;
+  return row && row.ownerId === ownerId ? row : null;
+}
+export async function saveArenaRef(r: Omit<ArenaRef, "key" | "savedAt">): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(REFS, "readwrite");
+  tx.objectStore(REFS).put({ ...r, key: refKey(r.ownerId), savedAt: Date.now() });
+  await txDone(tx);
+}
+export async function deleteArenaRef(ownerId: string): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(REFS, "readwrite");
+  tx.objectStore(REFS).delete(refKey(ownerId));
+  await txDone(tx);
 }

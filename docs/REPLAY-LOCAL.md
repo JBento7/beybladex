@@ -56,7 +56,8 @@ Gravação e replay de lances **somente neste dispositivo**, para conferir um la
    - vídeo salvo neste aparelho, ou trecho interrompido;
    - falha.
    - "Salvo" só aparece depois que o último bloco e os dados do trecho foram gravados no armazenamento.
-8. **A prévia:** fica no fluxo da página e se recolhe quando a gravação começa, então nunca cobre nomes, pontos ou botões.
+8. **Ajustar câmera para a arena** (`docs/CAMERA-ARENA.md`): identificação assistida ou marcação manual, zoom, foco, exposição e lanterna conforme o aparelho, e conferência obrigatória depois de girar ou mover o aparelho. Cada trecho guarda a resolução, os quadros por segundo, o zoom, a lanterna e o id do enquadramento informados pela câmera.
+9. **A prévia:** fica no fluxo da página e se recolhe quando a gravação começa, então nunca cobre nomes, pontos ou botões.
 
 ## 3. Replay
 

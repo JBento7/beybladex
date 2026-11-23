@@ -19,7 +19,11 @@ import { DISPLAY_MODE_LABEL, effectiveDisplayMode } from "@/lib/displayMode";
 import { useSession } from "next-auth/react";
 import { useReplayRecorder } from "@/lib/client/useReplayRecorder";
 import type { ClipMeta } from "@/lib/replayCore";
-import { CameraStartPrompt, MatchEndRecordings, MatchRecordings, ReplayBar, ReplayPlayer } from "./ReplayUI";
+import { CameraStartPrompt, FramingCheckPrompt, MatchEndRecordings, MatchRecordings, ReplayBar, ReplayPlayer } from "./ReplayUI";
+import dynamic from "next/dynamic";
+import { useCameraControls } from "@/lib/client/useCameraControls";
+// Camera setup for the arena: its code (and the detection Worker) loads only when opened.
+const CameraSetup = dynamic(() => import("./CameraSetup"), { ssr: false, loading: () => null });
 import { REDUEL_CONFIRM_TEXT, attemptKey } from "@/lib/reduelRules";
 
 // Finish buttons in the Beyblade X scoreboard order.
@@ -201,6 +205,12 @@ export default function ScoreModal({
   const [recsOpen, setRecsOpen] = useState(false);
   const [camPrompt, setCamPrompt] = useState<{ message: string; kind: "judge" | "countdown" } | null>(null);
   const [camSkipped, setCamSkipped] = useState(false);
+  // Camera setup for the arena (docs/CAMERA-ARENA.md) — same stream, local only.
+  const replayBusy = replay.status === "recording" || replay.status === "paused" || replay.status === "finalizing";
+  const cam = useCameraControls({ stream: replay.stream, ownerId: authSession?.user?.id ?? null, recording: replayBusy });
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [framingPrompt, setFramingPrompt] = useState<{ reason: string; kind: "judge" | "countdown" } | null>(null);
+  const framingAcceptedRef = useRef(false);
   // "Somente placar do juiz": no link to the telão, no on-air heartbeat, no
   // PRONTOS/countdown/videos, no stadium sides, no deck order (docs/MODO-ARBITRAGEM.md).
   const [modeFromState, setModeFromState] = useState<string | null>(null);
@@ -711,7 +721,15 @@ export default function ScoreModal({
   // stops here with a warning offering "Iniciar sem gravação".
   async function cameraBeforeStart(kind: "judge" | "countdown", skip: boolean): Promise<{ go: boolean; clipId?: string; reused?: boolean }> {
     if (skip || camSkipped || !replay.armed) return { go: true };
-    const r = await replay.beginClip(currentSetNum, currentSetBattleCount + 1, reduelCount + 1);
+    // The framing was confirmed but the device moved/rotated or the camera
+    // changed: ask for a new check before the NEXT recording (never blocks
+    // the battle: "Gravar assim mesmo" / "Iniciar sem gravação").
+    if (cam.status === "needs_check" && !framingAcceptedRef.current && !replay.isRecording()) {
+      setFramingPrompt({ reason: cam.checkReason ?? "O enquadramento precisa ser conferido.", kind });
+      return { go: false };
+    }
+    framingAcceptedRef.current = false;
+    const r = await replay.beginClip(currentSetNum, currentSetBattleCount + 1, reduelCount + 1, cam.captureInfo());
     if (r.ok) { setCamPrompt(null); return { go: true, clipId: r.clipId, reused: r.reused }; }
     setCamPrompt({ message: r.error, kind });
     return { go: false };
@@ -1123,9 +1141,19 @@ export default function ScoreModal({
             {state && !state.matchFinished && !camSkipped && (
               <ReplayBar
                 r={replay}
+                cam={cam}
+                onSetup={() => setSetupOpen(true)}
                 onReviewLast={() => { const c = replay.clips.find((x) => x.id === replay.lastClipId); if (c) setReplayClip(c); }}
                 onReviewSegment={async () => { const c = await replay.reviewSegment(); if (c) setReplayClip(c); }}
                 onReduel={revealScoring && !starting ? askReduel : undefined}
+              />
+            )}
+            {framingPrompt && state && !state.matchFinished && (
+              <FramingCheckPrompt
+                reason={framingPrompt.reason}
+                onCheck={() => { setFramingPrompt(null); setSetupOpen(true); }}
+                onAnyway={() => { const k = framingPrompt.kind; setFramingPrompt(null); framingAcceptedRef.current = true; if (k === "judge") void startJudgeOnly(); else void sendCommand("countdown"); }}
+                onWithout={() => { const k = framingPrompt.kind; setFramingPrompt(null); if (k === "judge") void startJudgeOnly(true); else void sendCommand("countdown", undefined, true); }}
               />
             )}
             {camPrompt && state && !state.matchFinished && (
@@ -1579,6 +1607,9 @@ export default function ScoreModal({
             </div>
             {footer}
           </div>
+          {setupOpen && !replayBusy && (
+            <CameraSetup r={replay} cam={cam} ownerId={authSession?.user?.id ?? null} onClose={() => setSetupOpen(false)} />
+          )}
           {replayClip && (
             <ReplayPlayer clip={replayClip} r={replay} matchTitle={`${p1Name} × ${p2Name}`} onClose={() => setReplayClip(null)} />
           )}

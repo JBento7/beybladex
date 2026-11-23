@@ -93,7 +93,12 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
   const streamLive = () => !!streamRef.current && streamRef.current.getVideoTracks().some((t) => t.readyState === "live");
 
   const releaseStream = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => { t.onended = null; try { t.stop(); } catch { /* already stopped */ } });
+    streamRef.current?.getTracks().forEach((t) => {
+      t.onended = null;
+      // torch off first when the camera offers it (best effort), then release
+      try { if ((t.getSettings?.() as { torch?: boolean } | undefined)?.torch) void t.applyConstraints({ advanced: [{ torch: false } as MediaTrackConstraintSet] }).catch(() => undefined); } catch { /* not supported */ }
+      try { t.stop(); } catch { /* already stopped */ }
+    });
     streamRef.current = null;
     safe(() => setStream(null));
   }, [safe]);
@@ -106,6 +111,7 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
   // A battle attempt whose clip was closed by "Pausar" (no native pause) or
   // by "Rever trecho": "Retomar" records a continuation of it.
   const pausedSegRef = useRef<{ setNumber: number; battle: number; attempt: number } | null>(null);
+  const lastCaptureRef = useRef<ClipMeta["capture"]>(null); // a continuation keeps the same capture info
 
   const stopClip = useCallback((opts: { discard?: boolean; reason?: ClipMeta["endReason"]; voided?: boolean; holdPaused?: boolean } = {}): Promise<ClipMeta | null> => {
     const rec = recRef.current;
@@ -221,8 +227,9 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
 
   // ── Start the clip of a battle (before the battle is released) ──
   // Same battle already recording (recount, resend) → that clip is kept.
-  const beginClip = useCallback((setNumber: number, battle: number, attempt = 1): Promise<BeginResult> => {
+  const beginClip = useCallback((setNumber: number, battle: number, attempt = 1, capture: ClipMeta["capture"] = null): Promise<BeginResult> => {
     const id = `${battleId(setNumber, battle)}#${attempt}`;
+    if (capture) lastCaptureRef.current = capture;
     const cur = recRef.current;
     if (cur && cur.battle === id && !cur.stopping) return Promise.resolve({ ok: true, clipId: cur.clipId, reused: true });
     if (startingRef.current) return startingRef.current;
@@ -250,7 +257,7 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
         return { ok: false, error: cameraErrorMessage(e) };
       }
       const meta: ClipMeta = {
-        id: newClipId(), ownerId: owner, deviceId: localDeviceId(), tournamentId, matchId, setNumber, battle, take, attempt, createdAt: Date.now(),
+        id: newClipId(), ownerId: owner, deviceId: localDeviceId(), tournamentId, matchId, setNumber, battle, take, attempt, capture, createdAt: Date.now(),
         durationMs: 0, sizeBytes: 0, mimeType: recorder.mimeType || mimeType || "video/webm", status: "RECORDING", endReason: null, chunks: 0,
       };
       try { await putClip(meta); } catch (e) { return { ok: false, error: cameraErrorMessage(e) }; }
@@ -344,7 +351,7 @@ export function useReplayRecorder({ ownerId, tournamentId, matchId, active }: { 
     }
     const ps = pausedSegRef.current;
     if (!ps) return { ok: false, error: "Nada para retomar." };
-    const res = await beginClip(ps.setNumber, ps.battle, ps.attempt);
+    const res = await beginClip(ps.setNumber, ps.battle, ps.attempt, lastCaptureRef.current);
     if (!res.ok) safe(() => { setMessage(res.error); setStatus(streamLive() ? "paused" : "error"); });
     return res;
   }, [beginClip, safe, stopClip]);

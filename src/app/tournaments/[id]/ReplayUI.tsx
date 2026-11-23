@@ -13,6 +13,7 @@ import {
   formatLabel, speedLabel, storageAdvice, totalBytes, type ClipMeta, type QualityKey,
 } from "@/lib/replayCore";
 import type { ReplayRecorder } from "@/lib/client/useReplayRecorder";
+import type { CameraControls } from "@/lib/client/useCameraControls";
 
 const FRAMING_MSG = "Gravações ficam somente neste aparelho. Posicione a câmera em um suporte com toda a arena visível.";
 const recs = (n: number) => (n === 1 ? "a gravação" : `as ${n} gravações`);
@@ -30,8 +31,11 @@ function Preview({ stream }: { stream: MediaStream | null }) {
   return <video ref={ref} muted playsInline autoPlay aria-label="Prévia da câmera" className="w-full max-h-44 rounded-lg bg-black object-contain" />;
 }
 
-export function ReplayBar({ r, onReviewLast, onReviewSegment, onReduel }: {
+export function ReplayBar({ r, cam, onSetup, onReviewLast, onReviewSegment, onReduel }: {
   r: ReplayRecorder;
+  /** Camera setup for the arena (docs/CAMERA-ARENA.md). */
+  cam?: CameraControls;
+  onSetup?: () => void;
   onReviewLast: () => void;
   /** Paused: close the local file, then play it (never an unfinished file). */
   onReviewSegment?: () => void;
@@ -129,6 +133,30 @@ export function ReplayBar({ r, onReviewLast, onReviewSegment, onReduel }: {
         </button>
         <button type="button" onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings} aria-label="Ajustes da câmera" className="min-h-[40px] w-10 rounded-lg border border-line text-gray-200">⚙</button>
       </div>
+      {cam && onSetup && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          {cam.status === "confirmed" && <span className="rounded-full border border-green-500/40 px-2 py-0.5 text-green-300">✓ Enquadramento confirmado</span>}
+          {cam.status === "needs_check" && <span className="rounded-full border border-amber-500/60 px-2 py-0.5 text-amber-200" role="status">⚠ Enquadramento: precisa conferir{cam.checkReason ? ` — ${cam.checkReason}` : ""}</span>}
+          {r.status === "recording" || r.status === "paused" || r.status === "finalizing" ? (
+            <span className="text-gray-500">Ajustes da câmera bloqueados durante a batalha (o site não muda zoom nem enquadramento).</span>
+          ) : (
+            <button type="button" onClick={onSetup} className="min-h-[40px] px-3 rounded-lg border border-brand-yellow/50 font-bold text-brand-yellow">
+              🎯 {cam.status === "none" ? "Ajustar câmera para a arena" : "Refazer enquadramento"}
+            </button>
+          )}
+          {cam.caps?.torch && (
+            <button type="button" onClick={() => cam.setTorchMode(cam.torchOn ? "off" : "on")} aria-pressed={!!cam.torchOn} className="min-h-[40px] px-3 rounded-lg border border-line text-gray-200">
+              🔦 Lanterna: {cam.torchMode === "auto" ? `automática (${cam.torchOn ? "ligada" : "desligada"})` : cam.torchOn ? "ligada" : "desligada"}
+            </button>
+          )}
+        </div>
+      )}
+      {cam?.notice && (
+        <div className="mt-2 flex items-start gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-100" role="status">
+          <span className="flex-1">{cam.notice}</span>
+          <button type="button" onClick={cam.dismissNotice} aria-label="Fechar aviso" className="px-1">✕</button>
+        </div>
+      )}
       {r.notice && (
         <div className="mt-2 flex items-start gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-100" role="status">
           <span className="flex-1">{r.notice}</span>
@@ -168,6 +196,23 @@ export function ReplayBar({ r, onReviewLast, onReviewSegment, onReduel }: {
           <button type="button" onClick={() => void r.disableCamera()} className="min-h-[40px] rounded-lg border border-line font-bold text-gray-200">Desativar câmera</button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Framing needs a new check before the next recording (device moved/rotated, other camera). */
+export function FramingCheckPrompt({ reason, onCheck, onAnyway, onWithout }: { reason: string; onCheck: () => void; onAnyway: () => void; onWithout: () => void }) {
+  return (
+    <div role="alert" className="mb-3 rounded-xl border border-amber-500/50 bg-amber-500/10 px-3 py-3 text-sm text-amber-100">
+      <div className="font-bold">Confira o enquadramento antes de gravar</div>
+      <div className="mt-0.5">{reason} As gravações anteriores continuam salvas.</div>
+      <div className="mt-2 grid gap-2">
+        <button type="button" onClick={onCheck} className="min-h-[48px] rounded-lg bg-brand-yellow text-black font-black">Conferir enquadramento</button>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={onAnyway} className="min-h-[44px] rounded-lg border border-amber-400/60 font-bold">Gravar assim mesmo</button>
+          <button type="button" onClick={onWithout} className="min-h-[44px] rounded-lg border border-line font-bold text-gray-200">Iniciar sem gravação</button>
+        </div>
+      </div>
     </div>
   );
 }
