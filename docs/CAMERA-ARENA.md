@@ -10,7 +10,11 @@ Configuração assistida da câmera de replay, dentro do placar da partida. Reap
   - A única busca de rede do recurso é o arquivo estático `/scoreboard-bg.png` do próprio site, quando o operador escolhe "Exemplo da organização".
 - **Carregamento sob demanda:** o assistente (`CameraSetup.tsx`) e o Worker de detecção só carregam quando a tela é aberta. Ao fechar, a detecção para e o Worker é encerrado.
 
-## 2. Fluxo (7 etapas, com Voltar)
+## 2. Fluxo
+
+> Atualização: o assistente agora tem **4 etapas** (Posicionar, Marcar arena, Ajustar imagem, Confirmar). As 7 etapas abaixo foram agrupadas assim: 1–2 → Posicionar, 3–4 → Marcar arena, 5 → Ajustar imagem, 6–7 → Confirmar. Ver `docs/MODO-CAMERA.md` §7.
+
+### Fluxo original (7 etapas, com Voltar)
 
 O botão "🎯 Ajustar câmera para a arena" fica na barra da câmera. Depois do primeiro uso, vira "Refazer enquadramento". Fica indisponível durante a batalha.
 

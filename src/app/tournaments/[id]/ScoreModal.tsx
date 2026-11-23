@@ -19,6 +19,7 @@ import { DISPLAY_MODE_LABEL, effectiveDisplayMode } from "@/lib/displayMode";
 import { useSession } from "next-auth/react";
 import { useReplayRecorder } from "@/lib/client/useReplayRecorder";
 import type { ClipMeta } from "@/lib/replayCore";
+import { CameraLive, CameraMenu, PlayerColumn } from "./CameraModeLayout";
 import { CameraStartPrompt, FramingCheckPrompt, MatchEndRecordings, MatchRecordings, ReplayBar, ReplayPlayer } from "./ReplayUI";
 import dynamic from "next/dynamic";
 import { useCameraControls } from "@/lib/client/useCameraControls";
@@ -211,6 +212,16 @@ export default function ScoreModal({
   const [setupOpen, setSetupOpen] = useState(false);
   const [framingPrompt, setFramingPrompt] = useState<{ reason: string; kind: "judge" | "countdown" } | null>(null);
   const framingAcceptedRef = useRef(false);
+  // "Modo câmera" (docs/MODO-CAMERA.md): a LAYOUT preference only (kept on
+  // this device). The recorder, the stream and every rule stay up here, so
+  // switching layout or rotating never recreates them.
+  const [cameraMode, setCameraModeState] = useState(false);
+  useEffect(() => { try { setCameraModeState(localStorage.getItem("lbl:placar:layout") === "camera"); } catch { /* preference only */ } }, []);
+  const setCameraMode = (v: boolean) => { setCameraModeState(v); try { localStorage.setItem("lbl:placar:layout", v ? "camera" : "padrao"); } catch { /* preference only */ } };
+  const [camMenu, setCamMenu] = useState(false);
+  const [guides, setGuides] = useState(false);
+  const [panelManual, setPanelManual] = useState(false);
+  const [fsMsg, setFsMsg] = useState<string | null>(null);
   // "Somente placar do juiz": no link to the telão, no on-air heartbeat, no
   // PRONTOS/countdown/videos, no stadium sides, no deck order (docs/MODO-ARBITRAGEM.md).
   const [modeFromState, setModeFromState] = useState<string | null>(null);
@@ -638,6 +649,7 @@ export default function ScoreModal({
       return; // one launch at a time — the status line says what is happening
     }
     if (state?.matchFinished || !revealScoring) return;
+    if (cameraMode && replayClip) return; // replay open in the centre: back to live first
     pointBusyRef.current = true;
     setErr(null);
     // Instant feedback: haptic buzz + a visual pulse on the scored side.
@@ -1013,6 +1025,17 @@ export default function ScoreModal({
     <div className="shrink-0 px-3 sm:px-5 pt-2 pb-2 border-b border-line bg-app">
       <div className="flex items-center gap-2">
         <p className="flex-1 min-w-0 text-sm sm:text-base font-bold text-white leading-tight break-words">{headerLine}</p>
+        {state && (
+          <button
+            type="button"
+            onClick={() => setCameraMode(true)}
+            aria-label="Modo câmera"
+            title="Modo câmera: câmera no centro e jogadores nas laterais"
+            className="shrink-0 h-11 min-w-[44px] px-3 flex items-center justify-center rounded-full bg-card border border-line text-gray-200 hover:text-white text-sm font-bold"
+          >
+            📷 <span className="hidden sm:inline ml-1">Modo câmera</span>
+          </button>
+        )}
         <button
           onClick={() => { if (handleClose()) router.push(myMatchesHref); }}
           aria-label="Voltar às minhas partidas"
@@ -1106,39 +1129,19 @@ export default function ScoreModal({
     </div>
   ) : null;
 
-  return (
+  // Everything between the header and the footer of the standard layout.
+  // The "Modo câmera" shows the SAME content in its "Painel da partida"
+  // (minus what the camera layout shows elsewhere: names/points, start and
+  // scoring buttons, the camera bar).
+  const middle = (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="text-sm bg-brand-red hover:bg-brand-red-hover text-white font-bold px-4 py-2.5 rounded-lg transition-colors"
-      >
-        Placar
-      </button>
-
-
-      {open && (
-        // Full-bleed on a phone: no backdrop, no card, no rounded corners — the
-        // scoring panel IS the screen. On bigger screens the content stays
-        // centred at a comfortable width. Tapping outside no longer closes it
-        // (a stray tap used to drop the judge out mid-match); use the ✕.
-        <div ref={fsRef} className="fixed inset-0 z-50 bg-app flex flex-col overscroll-contain">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Placar da partida"
-            className="relative flex-1 min-h-0 w-full max-w-2xl mx-auto flex flex-col"
-          >
-            {/* Three regions: fixed header, scrolling middle, fixed footer — the
-                bars never cover a scoring button or a message. */}
-            {header}
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 sm:px-5 pt-2 pb-3 flex flex-col">
 
             {err && (
               <div className="mb-3 text-base px-4 py-3 rounded-lg bg-red-900/30 border border-red-700 text-red-400">{err}</div>
             )}
 
             {/* Local replay camera (optional; never covers names, points or buttons) */}
-            {state && !state.matchFinished && !camSkipped && (
+            {state && !state.matchFinished && !camSkipped && !cameraMode && (
               <ReplayBar
                 r={replay}
                 cam={cam}
@@ -1226,6 +1229,7 @@ export default function ScoreModal({
               </div>
             ) : (
               <>
+                {!cameraMode && (<>
                 {/* Scoreboard header: name tags + round */}
                 <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-2 items-start mb-2">
                   <div
@@ -1296,6 +1300,7 @@ export default function ScoreModal({
 
                 {/* Launch messages: reserved space, so nothing below jumps. */}
                 {statusLine}
+                </>)}
 
                 {/* Preview: play the launch/countdown video on this arena's telão */}
                 {!revealScoring && !judgeOnly && (
@@ -1499,6 +1504,9 @@ export default function ScoreModal({
                   </div>
                 )}
 
+                {cameraMode && startErr && <div role="alert" className="mb-3 rounded-lg border border-red-700 bg-red-900/30 px-3 py-2 text-sm text-red-300">{startErr}</div>}
+                {cameraMode && cmd && cmd.phase !== "ok" && cmdStatus}
+                {!cameraMode && (<>
                 {/* Start button: fires the countdown on the arena display */}
                 {/* Two steps: PRONTOS holds the players on the ready screen,
                     then Iniciar fires the countdown and the battle begins. */}
@@ -1554,6 +1562,7 @@ export default function ScoreModal({
                   </>
                 )}
 
+                </>)}
                 {/* Scoring buttons (video layout) */}
                 {revealScoring && (
                   <>
@@ -1589,10 +1598,12 @@ export default function ScoreModal({
                       </div>
                     )}
 
+                    {!cameraMode && (
                     <div className="grid grid-cols-2 gap-3 flex-1">
                       <ScoreColumn player={L.player} color={L.color} side="left" />
                       <ScoreColumn player={R.player} color={R.color} side="right" />
                     </div>
+                    )}
 
                     {/* Command feedback (recount) */}
                     {cmd?.kind === "countdown" && cmd.phase !== "ok" && <div className="mt-3">{cmdStatus}</div>}
@@ -1604,13 +1615,201 @@ export default function ScoreModal({
             {state && (replay.clips.length > 0 || recsOpen) && (
               <MatchRecordings r={replay} open={recsOpen} onToggle={setRecsOpen} onReview={setReplayClip} />
             )}
+    </>
+  );
+
+  // ── "Modo câmera": header / player | camera-replay | player / status | actions | undo ──
+  const recNow = replay.status === "recording";
+  const pausedNow = replay.status === "paused";
+  const sideOfId = (id: string): "B" | "X" | null => (bSideId ? (id === bSideId ? "B" : "X") : null);
+  const sideText = (id: string) => { const sd = sideOfId(id); return sd === "B" ? "B SIDE" : sd === "X" ? "X SIDE" : "Lado a definir"; };
+  const panelForced = !state || state.matchFinished || !!err || !!framingPrompt || !!camPrompt || !!reduelUi || sidesChooser
+    || (!revealScoring && (waitingOrders || waitingTrio || (plusOne && !!trio && !trio.locked)))
+    || !!startErr || (!!cmd && (cmd.phase === "failed" || cmd.phase === "refused"));
+  const panelOpen = panelForced || panelManual || recsOpen;
+  const scoringBlocked = !state || state.matchFinished || !revealScoring || !!pending || undoBusy || !!replayClip || !!reduelUi;
+  const blockedNote = replayClip ? "Replay aberto: toque em “Voltar ao vivo” para pontuar."
+    : pending ? "Aguardando confirmação do servidor."
+    : state && !state.matchFinished && !revealScoring ? "Toque em “Iniciar batalha” para liberar a pontuação." : null;
+  const goFullscreen = async () => {
+    setFsMsg(null);
+    try { if (!document.fullscreenElement) await fsRef.current?.requestFullscreen?.(); } catch { /* not allowed */ }
+    try {
+      const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+      if (o?.lock) await o.lock("landscape"); else setFsMsg("Gire o aparelho para paisagem.");
+    } catch { setFsMsg("Gire o aparelho para paisagem."); }
+  };
+  const btn = "min-h-[44px] px-3 rounded-lg text-sm font-bold whitespace-nowrap disabled:opacity-40";
+  const startLabel = reduelCount > 0 ? "▶ Iniciar novo lançamento" : judgeOnly ? "▶ Iniciar batalha" : `▶ Iniciar ${currentSetBattleCount === 0 ? "partida" : `batalha ${currentSetBattleCount + 1}`}`;
+  const cameraView = (
+    <div className="lbl-cam" role="dialog" aria-modal="true" aria-label="Placar da partida — modo câmera">
+      <header className="lbl-cam-head relative flex items-center gap-1.5 min-h-[44px] rounded-xl bg-[#151B23] border border-line px-2">
+        <p className="flex-1 min-w-0 truncate text-[12px] sm:text-sm font-bold text-white" title={headerLine}>{headerLine}</p>
+        <span className={`hidden sm:inline-flex rounded-full border px-2 py-0.5 text-[12px] ${tone[srv === "connected" ? "ok" : srv === "reconnecting" ? "wait" : "bad"]}`}>
+          {icon[srv === "connected" ? "ok" : srv === "reconnecting" ? "wait" : "bad"]} {srv === "connected" ? "Servidor" : srv === "reconnecting" ? "Reconectando" : "Sem conexão"}
+        </span>
+        <span className={`sm:hidden text-[12px] ${tone[srv === "connected" ? "ok" : srv === "reconnecting" ? "wait" : "bad"]}`} aria-label={srv === "connected" ? "Servidor conectado" : srv === "reconnecting" ? "Reconectando" : "Sem conexão"}>{icon[srv === "connected" ? "ok" : srv === "reconnecting" ? "wait" : "bad"]}</span>
+        {pending && <span className="rounded-full border border-amber-500/50 px-2 py-0.5 text-[12px] text-amber-200">◐ Pendente</span>}
+        {!judgeOnly && arena && <span className={`hidden md:inline-flex rounded-full border px-2 py-0.5 text-[12px] ${tel === "connected" ? tone.ok : tone.wait}`}>📺 {tel === "connected" ? "Telão" : "Telão sem confirmação"}</span>}
+        <span className="hidden sm:inline text-[12px] text-gray-300">{replay.stream ? (recNow ? "● REC" : pausedNow ? "❚❚ Pausada" : "📷 Câmera") : "📷 Desativada"}</span>
+        <button type="button" onClick={() => setCamMenu((v) => !v)} aria-expanded={camMenu} className="min-h-[44px] min-w-[44px] px-2 rounded-lg border border-line text-gray-100 text-sm font-bold">⋯ Menu</button>
+        <button type="button" onClick={handleClose} aria-label="Fechar placar" className="min-h-[44px] min-w-[44px] rounded-lg border border-line text-gray-200 text-lg">✕</button>
+        {camMenu && (
+          <CameraMenu
+            r={replay} cam={cam} guides={guides} onGuides={setGuides} onFullscreen={goFullscreen}
+            onPanel={() => setPanelManual(true)} onExit={() => setCameraMode(false)} onClose={() => setCamMenu(false)}
+            extra={<button type="button" onClick={() => { if (handleClose()) router.push(myMatchesHref); }} className="min-h-[44px] rounded-lg border border-line text-left px-3">⌂ Minhas partidas</button>}
+          />
+        )}
+      </header>
+      <p className="lbl-cam-portrait-hint text-center text-[12px] text-amber-200">Gire o aparelho para uma visão mais ampla (opcional).</p>
+
+      {state && (
+        <>
+          <div className="lbl-cam-left">
+            <PlayerColumn playerId={L.player.id} name={L.name} color={L.color} side={sideOfId(L.player.id)} sideLabel={sideText(L.player.id)} points={L.pts}
+              setsWon={leftIsP1 ? p1Sets : p2Sets} setsToWin={setsToWin} goal={`Primeiro a ${pointsToWinSet} pontos`} onScore={addPoint}
+              disabled={scoringBlocked} blockedNote={blockedNote} flash={flash === "left"} align="left" />
+          </div>
+          <div className="lbl-cam-right">
+            <PlayerColumn playerId={R.player.id} name={R.name} color={R.color} side={sideOfId(R.player.id)} sideLabel={sideText(R.player.id)} points={R.pts}
+              setsWon={leftIsP1 ? p2Sets : p1Sets} setsToWin={setsToWin} goal={`Primeiro a ${pointsToWinSet} pontos`} onScore={addPoint}
+              disabled={scoringBlocked} blockedNote={blockedNote} flash={flash === "right"} align="right" />
+          </div>
+        </>
+      )}
+
+      <div className="lbl-cam-center">
+        <CameraLive r={replay} cam={cam} guides={guides} hidden={!!replayClip} onEnable={() => void replay.enableCamera()}>
+          {replayClip && (
+            <ReplayPlayer inline clip={replayClip} r={replay} matchTitle={`${p1Name} × ${p2Name}`} onClose={() => setReplayClip(null)} />
+          )}
+          {!replayClip && (
+            <div className="absolute top-9 inset-x-2 grid gap-1 pointer-events-none">
+              {swappedNow && bSideId && !revealScoring && <p role="status" className="pointer-events-auto rounded-md bg-black/75 px-2 py-1 text-[12px] text-white">🔄 Troca de lados no set {currentSetNum}: {bSideId === player1.id ? p1Name : p2Name} no B Side.</p>}
+              {reduelMsg && !revealScoring && <p role="status" className="pointer-events-auto rounded-md bg-black/75 px-2 py-1 text-[12px] text-[#38BDF8]">↺ {reduelMsg} Toque em “Iniciar novo lançamento”.</p>}
+              {cam.notice && <p role="status" className="pointer-events-auto rounded-md bg-black/75 px-2 py-1 text-[12px] text-amber-200">{cam.notice} <button type="button" className="underline" onClick={cam.dismissNotice}>ok</button></p>}
+              {replay.notice && <p role="status" className="pointer-events-auto rounded-md bg-black/75 px-2 py-1 text-[12px] text-amber-200">{replay.notice} <button type="button" className="underline" onClick={replay.dismissNotice}>ok</button></p>}
+              {cam.status === "needs_check" && !recNow && <p role="status" className="pointer-events-auto rounded-md bg-black/75 px-2 py-1 text-[12px] text-amber-200">⚠ Confira o enquadramento{cam.checkReason ? `: ${cam.checkReason}` : ""}</p>}
+              {fsMsg && <p role="status" className="pointer-events-auto rounded-md bg-black/75 px-2 py-1 text-[12px] text-amber-200">{fsMsg}</p>}
+            </div>
+          )}
+          {panelOpen && !replayClip && (
+            <section aria-label="Painel da partida" className="absolute inset-x-0 bottom-0 max-h-[78%] overflow-y-auto overscroll-contain rounded-t-xl border-t border-line bg-[#0B0F14]/95 px-3 pb-3 pt-2 z-10">
+              <div className="sticky top-0 -mx-3 px-3 py-1 bg-[#0B0F14]/95 flex items-center gap-2 z-10">
+                <b className="flex-1 text-sm text-white">Painel da partida</b>
+                {!panelForced && <button type="button" onClick={() => { setPanelManual(false); setRecsOpen(false); }} className="min-h-[44px] px-3 rounded-lg border border-line text-sm text-gray-200">Ocultar</button>}
+              </div>
+              {middle}
+            </section>
+          )}
+        </CameraLive>
+      </div>
+
+      <div className="lbl-cam-status" aria-live="polite" role="status">
+        <div className="h-full min-h-[44px] rounded-xl bg-[#151B23] border border-line px-2 py-1 text-[12px] sm:text-sm text-gray-200 flex items-center gap-2">
+          <span className={`flex-1 min-w-0 line-clamp-2 ${statusMsg ? statusTone : ""}`}>
+            {statusMsg || (lastLaunch ? <>Último: <b className="text-white">{launchText({ playerName: nameOf(lastLaunch.userId), finishType: lastLaunch.finishType, points: lastLaunch.points, setNumber: lastLaunch.setNumber })}</b></> : "Nenhum lançamento ainda.")}
+          </span>
+          {phase === "verifying" && pending && (
+            <button type="button" onClick={() => { if (verifyTimer.current) clearTimeout(verifyTimer.current); void verify(pending); }} className="shrink-0 min-h-[44px] px-2 rounded-lg border border-amber-500/50 text-amber-100 text-xs font-bold">Verificar agora</button>
+          )}
+        </div>
+      </div>
+
+      <nav className="lbl-cam-actions" aria-label="Ações da batalha">
+        <div className="h-full min-h-[44px] rounded-xl bg-[#151B23] border border-line px-1.5 py-1 flex flex-wrap items-center justify-center gap-1.5">
+          {state && !state.matchFinished && !revealScoring && (
+            showStart ? (
+              judgeOnly ? (
+                <button type="button" onClick={() => startJudgeOnly()} disabled={starting} className={`${btn} bg-brand-yellow text-black font-black px-4`}>{starting ? "Iniciando…" : startLabel}</button>
+              ) : readyKey !== startKey ? (
+                <button type="button" onClick={sendReady} className={`${btn} bg-brand-yellow text-black font-black px-4`}>🙌 PRONTOS?</button>
+              ) : (
+                <>
+                  <button type="button" onClick={startBattle} disabled={starting} className={`${btn} bg-brand-yellow text-black font-black px-4`}>{starting ? "Enviando…" : startLabel}</button>
+                  <button type="button" onClick={sendReady} className={`${btn} border border-line text-gray-200`}>Repetir PRONTOS</button>
+                </>
+              )
+            ) : (
+              <button type="button" onClick={() => setPanelManual(true)} className={`${btn} border border-brand-yellow/60 text-brand-yellow`}>Iniciar batalha — ver pendências</button>
+            )
+          )}
+          {state && !state.matchFinished && revealScoring && recNow && (
+            <>
+              <button type="button" onClick={() => void replay.pause()} className={`${btn} bg-[#F59E0B] text-black`}>❚❚ Pausar</button>
+              <button type="button" onClick={() => void replay.stopRecording()} className={`${btn} border border-[#EF4444]/70 text-red-200`}>■ Parar</button>
+            </>
+          )}
+          {state && !state.matchFinished && revealScoring && pausedNow && (
+            <>
+              <button type="button" onClick={() => void replay.resume()} className={`${btn} border border-[#EF4444]/70 text-red-100`}>● Retomar</button>
+              <button type="button" onClick={async () => { const c = await replay.reviewSegment(); if (c) setReplayClip(c); }} className={`${btn} border border-line text-gray-100`}>▶ Rever trecho</button>
+            </>
+          )}
+          {state && !state.matchFinished && revealScoring && (
+            <button type="button" onClick={askReduel} disabled={starting || !!reduelUi} className={`${btn} border border-[#38BDF8]/70 text-[#38BDF8]`}>↺ Reduel</button>
+          )}
+          {replay.status === "saved" && replay.lastClipId && !replayClip && (
+            <button type="button" onClick={() => { const c = replay.clips.find((x) => x.id === replay.lastClipId); if (c) setReplayClip(c); }} className={`${btn} border border-line text-gray-100`}>▶ Rever último lance</button>
+          )}
+          {replay.stream && !replayBusy && state && !state.matchFinished && (
+            <button type="button" onClick={() => setSetupOpen(true)} className={`${btn} border border-line text-gray-200`}>🎯 Ajustar câmera</button>
+          )}
+          {!replay.stream && replay.status !== "starting" && (
+            <button type="button" onClick={() => void replay.enableCamera()} className={`${btn} border border-line text-gray-200`}>📷 Ativar câmera</button>
+          )}
+          <button type="button" onClick={() => setRecsOpen(true)} className={`${btn} border border-line text-gray-200`}>🎞 Gravações{replay.clips.length ? ` (${replay.clips.length})` : ""}</button>
+        </div>
+      </nav>
+
+      <div className="lbl-cam-undo">
+        <div className="h-full min-h-[44px] rounded-xl bg-[#151B23] border border-line px-1.5 py-1 flex flex-wrap items-center justify-center gap-1.5">
+          {!judgeOnly && revealScoring && state && !state.matchFinished && (
+            <button type="button" onClick={startBattle} disabled={starting || !!pending} className={`${btn} border border-blue-500/50 text-blue-200`}>{starting ? "Enviando…" : "🔄 Recontagem"}</button>
+          )}
+          <button type="button" onClick={undoPoint} disabled={!lastLaunch || !!pending || undoBusy || !!state?.matchFinished} className={`${btn} border border-line text-gray-100`}>{undoBusy ? "Desfazendo…" : "↩ Desfazer"}</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="text-sm bg-brand-red hover:bg-brand-red-hover text-white font-bold px-4 py-2.5 rounded-lg transition-colors"
+      >
+        Placar
+      </button>
+
+
+      {open && (
+        // Full-bleed on a phone: no backdrop, no card, no rounded corners — the
+        // scoring panel IS the screen. On bigger screens the content stays
+        // centred at a comfortable width. Tapping outside no longer closes it
+        // (a stray tap used to drop the judge out mid-match); use the ✕.
+        <div ref={fsRef} className={`fixed inset-0 z-50 flex flex-col overscroll-contain ${cameraMode ? "bg-[#0B0F14] overflow-y-auto" : "bg-app"}`}>
+          {cameraMode ? cameraView : (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Placar da partida"
+            className="relative flex-1 min-h-0 w-full max-w-2xl mx-auto flex flex-col"
+          >
+            {/* Three regions: fixed header, scrolling middle, fixed footer — the
+                bars never cover a scoring button or a message. */}
+            {header}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 sm:px-5 pt-2 pb-3 flex flex-col">
+            {middle}
             </div>
             {footer}
           </div>
+          )}
           {setupOpen && !replayBusy && (
             <CameraSetup r={replay} cam={cam} ownerId={authSession?.user?.id ?? null} onClose={() => setSetupOpen(false)} />
           )}
-          {replayClip && (
+          {replayClip && !cameraMode && (
             <ReplayPlayer clip={replayClip} r={replay} matchTitle={`${p1Name} × ${p2Name}`} onClose={() => setReplayClip(null)} />
           )}
         </div>

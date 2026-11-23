@@ -103,3 +103,60 @@ button:disabled, [aria-disabled="true"] { cursor: not-allowed; }
   /* The bottom bar must never cover the last row of a page. */
   body:has([data-app-shell]) { padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom) + 16px); }
 }
+
+/* ── "Modo câmera" do placar (docs/MODO-CAMERA.md) ──
+   Landscape: header / player | camera | player / status | actions | undo.
+   Grid with flexible tracks (no rigid %), safe areas, 100dvh with fallback. */
+.lbl-cam {
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  display: grid;
+  gap: 8px;
+  padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  grid-template-columns: minmax(150px, 1fr) minmax(0, 3fr) minmax(150px, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "head head head" "left center right" "status actions undo";
+  background: #0B0F14;
+}
+.lbl-cam-head { grid-area: head; }
+.lbl-cam-left { grid-area: left; min-height: 0; }
+.lbl-cam-right { grid-area: right; min-height: 0; }
+.lbl-cam-center { grid-area: center; min-height: 0; position: relative; }
+.lbl-cam-status { grid-area: status; min-width: 0; }
+.lbl-cam-actions { grid-area: actions; min-width: 0; }
+.lbl-cam-undo { grid-area: undo; min-width: 0; }
+.lbl-cam-portrait-hint { display: none; }
+/* Landscape: each player column fills its cell and scrolls inside (last resort). */
+.lbl-cam-left > .lbl-cam-col, .lbl-cam-right > .lbl-cam-col { height: 100%; }
+/* Short landscape (phone lying down): tighter, finishes in a 2×2 grid. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .lbl-cam { gap: 6px; padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left)); }
+  .lbl-cam-btns { grid-template-columns: 1fr 1fr; }
+  .lbl-cam-btns > button { flex-direction: column; justify-content: center; text-align: center; gap: 0; padding: 3px 2px; }
+  .lbl-cam-btns > button > span { line-height: 1.05; }
+  .lbl-cam-btns > button > span:first-child { font-size: 20px !important; }
+  .lbl-cam-btns > button > span:last-child { font-size: 13px !important; }
+  .lbl-cam-name { -webkit-line-clamp: 1 !important; }
+  .lbl-cam-pts { font-size: clamp(30px, 10vh, 44px) !important; }
+  .lbl-cam-miss { grid-column: 1 / -1; margin-top: 0; }
+}
+/* Portrait, or too narrow for three usable columns: camera on top, players below. */
+@media (orientation: portrait), (max-width: 560px) {
+  .lbl-cam {
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto auto;
+    grid-template-areas: "head head" "hint hint" "center center" "actions actions" "left right" "status undo";
+  }
+  .lbl-cam-center { width: 100%; height: min(56.25vw, 45vh); height: min(56.25vw, 45dvh); }
+  /* the page scrolls; columns take their natural height (never under the bars) */
+  .lbl-cam-left, .lbl-cam-right { min-height: auto; }
+  .lbl-cam-left > .lbl-cam-col, .lbl-cam-right > .lbl-cam-col { height: auto; }
+  .lbl-cam-portrait-hint { display: block; grid-area: hint; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lbl-cam *, .lbl-cam *::before, .lbl-cam *::after { animation: none !important; transition: none !important; }
+}

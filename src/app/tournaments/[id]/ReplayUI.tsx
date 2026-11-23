@@ -232,7 +232,11 @@ export function CameraStartPrompt({ message, onWithout, onRetry, onCancel }: { m
   );
 }
 
-export function ReplayPlayer({ clip, r, matchTitle, onClose }: { clip: ClipMeta; r: ReplayRecorder; matchTitle: string; onClose: () => void }) {
+export function ReplayPlayer({ clip, r, matchTitle, onClose, inline = false }: {
+  clip: ClipMeta; r: ReplayRecorder; matchTitle: string; onClose: () => void;
+  /** "Modo câmera": play in the central area (instead of the live image) rather than full screen. */
+  inline?: boolean;
+}) {
   const boxRef = useRef<HTMLDivElement>(null);
   const vRef = useRef<HTMLVideoElement>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -284,6 +288,49 @@ export function ReplayPlayer({ clip, r, matchTitle, onClose }: { clip: ClipMeta;
   const close = () => { v()?.pause(); if (document.fullscreenElement) void document.exitFullscreen?.(); onClose(); };
   const discard = async () => { setBusy(true); v()?.pause(); try { await r.deleteMany([clip.id]); } finally { setBusy(false); onClose(); } };
   const keep = async () => { setBusy(true); try { await r.markKept(clip.id, clip.status !== "KEPT"); } finally { setBusy(false); onClose(); } };
+
+  if (inline) {
+    const sb = "min-h-[44px] min-w-[44px] px-2 rounded-lg border border-line text-xs font-bold text-white disabled:opacity-40";
+    return (
+      <div className="absolute inset-0 z-20 bg-black flex flex-col" role="region" aria-label="Replay do lance">
+        <div className="shrink-0 flex items-center gap-2 px-2 py-1 bg-[#38BDF8] text-black">
+          <b className="text-sm font-black tracking-widest">REPLAY</b>
+          <span className="flex-1 min-w-0 truncate text-[12px] font-bold">{clipLabel(clip)}{clip.status === "INTERRUPTED" ? " · interrompido" : ""}</span>
+          <button type="button" onClick={close} className="min-h-[44px] px-3 rounded-lg bg-black text-white text-sm font-black">● Voltar ao vivo</button>
+        </div>
+        <div ref={boxRef} className="flex-1 min-h-0 flex items-center justify-center bg-black">
+          {loadErr ? <p className="text-red-300 text-sm px-4 text-center">{loadErr}</p> : url ? (
+            <video
+              ref={vRef} src={url} playsInline muted preload="auto" className="max-h-full max-w-full object-contain"
+              onLoadedMetadata={onMeta} onTimeUpdate={(e) => setT(e.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
+              onError={() => setLoadErr(clip.status === "INTERRUPTED" ? "Este trecho foi interrompido e o vídeo ficou incompleto: este navegador não consegue reproduzi-lo." : "Este navegador não consegue reproduzir este vídeo.")}
+            />
+          ) : <p className="text-gray-400 text-sm">Carregando vídeo…</p>}
+        </div>
+        <div className="shrink-0 max-h-[55%] overflow-y-auto px-2 py-1.5 bg-[#0B0F14]/95 border-t border-line">
+          <div className="flex items-center gap-2 text-[12px] text-gray-300">
+            <span className="tabular-nums">{formatDuration(t * 1000)}</span>
+            <input type="range" min={0} max={dur || 0} step={0.05} value={Math.min(t, dur || 0)} onChange={(e) => seek(Number(e.target.value))} aria-label="Linha do tempo" className="flex-1 accent-brand-yellow min-h-[32px]" disabled={!url} />
+            <span className="tabular-nums">{formatDuration((dur || 0) * 1000)}</span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            <button type="button" onClick={() => seek(0)} disabled={!url} aria-label="Voltar ao início" className={sb}>⏮</button>
+            {SEEK_STEPS.slice(0, 2).map((x) => <button key={x} type="button" onClick={() => seek(t + x)} disabled={!url} aria-label={`Voltar ${String(-x).replace(".", ",")} segundo`} className={sb}>{String(x).replace(".", ",")}s</button>)}
+            <button type="button" onClick={toggle} disabled={!url} aria-label={playing ? "Pausar" : "Reproduzir"} className="min-h-[44px] min-w-[52px] rounded-lg bg-brand-yellow text-black font-black">{playing ? "❚❚" : "▶"}</button>
+            {SEEK_STEPS.slice(2).map((x) => <button key={x} type="button" onClick={() => seek(t + x)} disabled={!url} aria-label={`Avançar ${String(x).replace(".", ",")} segundo`} className={sb}>+{String(x).replace(".", ",")}s</button>)}
+            <span className="mx-1 h-6 w-px bg-line" aria-hidden="true" />
+            {SPEEDS.map((x) => <button key={x} type="button" onClick={() => setRate(x)} aria-pressed={speed === x} className={`${sb} ${speed === x ? "border-brand-yellow text-brand-yellow" : ""}`}>{speedLabel(x)}</button>)}
+            {fsSupported && <button type="button" onClick={fullscreen} className={sb}>⛶ Ampliar</button>}
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            <button type="button" onClick={discard} disabled={busy} className="min-h-[44px] px-3 rounded-lg border border-green-500/50 text-xs font-bold text-green-200">Tudo certo — descartar</button>
+            <button type="button" onClick={keep} disabled={busy} className="min-h-[44px] px-3 rounded-lg border border-line text-xs font-bold text-gray-200">{clip.status === "KEPT" ? "Deixar de manter" : "Manter para conferir"}</button>
+          </div>
+          <p className="mt-1 text-[11px] text-gray-500">Câmera lenta repete os quadros gravados; passos de tempo aproximados (não é quadro a quadro). O replay não altera o placar.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[60] bg-black flex flex-col" role="dialog" aria-modal="true" aria-label="Replay do lance">

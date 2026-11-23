@@ -13,11 +13,12 @@ import {
   type Box,
 } from "@/lib/cameraFraming";
 import { createDetector } from "@/lib/client/arenaDetector";
+import { QUALITY } from "@/lib/replayCore";
 import { deleteArenaRef, loadArenaRef, saveArenaRef, type ArenaRef } from "@/lib/client/replayStore";
 import type { ReplayRecorder } from "@/lib/client/useReplayRecorder";
 import type { CameraControls, TorchMode } from "@/lib/client/useCameraControls";
 
-const STEPS = ["Câmera", "Posição", "Arena", "Confirmar área", "Ajustes", "Prévia", "Usar"] as const;
+const STEPS = ["Posicionar", "Marcar arena", "Ajustar imagem", "Confirmar"] as const;
 type Rect = { x: number; y: number; w: number; h: number };
 const fmtZ = (z: number | null | undefined) => (typeof z === "number" ? `${z.toFixed(1).replace(".", ",")}×` : "—");
 /** Arena area of the organization's scoreboard art (illustration only — not the whole scoreboard). */
@@ -50,7 +51,9 @@ function Stage({ stream, children }: { stream: MediaStream | null; children: (re
 }
 
 // ── rectangle editor: draw, move, resize by edges/corners ──
-function BoxEditor({ box, onChange, rect, margin, editable = true, label }: { box: Box | null; onChange: (b: Box) => void; rect: Rect; margin?: number; editable?: boolean; label?: string }) {
+// Selection colours (always with a text label too): blue = being adjusted,
+// green = confirmed, amber = check the framing.
+function BoxEditor({ box, onChange, rect, margin, editable = true, label, color = "#38BDF8", caption }: { box: Box | null; onChange: (b: Box) => void; rect: Rect; margin?: number; editable?: boolean; label?: string; color?: string; caption?: string }) {
   const layer = useRef<HTMLDivElement>(null);
   const drag = useRef<{ mode: string; sx: number; sy: number; orig: Box } | null>(null);
   const handles = box ? (() => {
@@ -101,9 +104,13 @@ function BoxEditor({ box, onChange, rect, margin, editable = true, label }: { bo
   return (
     <div ref={layer} className={`absolute inset-0 ${editable ? "cursor-crosshair" : ""}`} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
       {outer && <div className="absolute border-2 border-dashed border-brand-yellow/80 pointer-events-none" style={outer} aria-hidden="true" />}
-      {inner && <div className="absolute border-2 border-[#00e676] bg-[#00e676]/10 pointer-events-none" style={inner} aria-label={label ?? "Área selecionada"} />}
+      {inner && (
+        <div className="absolute border-2 pointer-events-none" style={{ ...inner, borderColor: color, background: `${color}1a` }} aria-label={label ?? "Área selecionada"}>
+          {caption && <span className="absolute -top-5 left-0 whitespace-nowrap rounded px-1 text-[11px] font-bold text-black" style={{ background: color }}>{caption}</span>}
+        </div>
+      )}
       {editable && handles.map(([k, x, y]) => (
-        <span key={k} aria-hidden="true" className="absolute w-5 h-5 -ml-2.5 -mt-2.5 rounded-full bg-white border-2 border-[#00e676] pointer-events-none" style={{ left: x, top: y }} />
+        <span key={k} aria-hidden="true" className="absolute w-5 h-5 -ml-2.5 -mt-2.5 rounded-full bg-white border-2 pointer-events-none" style={{ left: x, top: y, borderColor: color }} />
       ))}
     </div>
   );
@@ -116,7 +123,7 @@ function Contours({ cands, rect, strong, onPick }: { cands: Candidate[]; rect: R
         <g key={i} onClick={onPick ? () => onPick(c) : undefined} style={{ cursor: onPick ? "pointer" : undefined, pointerEvents: onPick ? "auto" : "none" }}>
           <polygon
             points={c.contour.map(([x, y]) => `${rect.x + x * rect.w},${rect.y + y * rect.h}`).join(" ")}
-            fill={onPick ? "rgba(0,170,255,0.12)" : "none"} stroke={strong ? "#00e676" : "#ffd54f"} strokeWidth={strong ? 3 : 1.5} strokeDasharray={strong ? undefined : "4 3"}
+            fill={onPick ? "rgba(0,170,255,0.12)" : "none"} stroke={strong ? "#38BDF8" : "#F59E0B"} strokeWidth={strong ? 3 : 1.5} strokeDasharray={strong ? undefined : "4 3"}
           />
           {onPick && <text x={rect.x + c.cx * rect.w} y={rect.y + c.cy * rect.h} fill="#fff" fontSize="18" fontWeight="900" textAnchor="middle">{i + 1}</text>}
         </g>
@@ -142,6 +149,7 @@ export default function CameraSetup({ r, cam, ownerId, onClose }: { r: ReplayRec
   const [draft, setDraft] = useState<{ blob: Blob; url: string; crop: Box; source: "user" | "example" } | null>(null);
   const [zoomMsg, setZoomMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(!!cam.framing);
   const recording = r.status === "recording" || r.status === "paused" || r.status === "finalizing";
   const live1 = r.status === "ready" || r.status === "saved";
 
@@ -217,7 +225,8 @@ export default function CameraSetup({ r, cam, ownerId, onClose }: { r: ReplayRec
     if (typeof s.zoom === "number" && z != null && Math.abs(s.zoom - z) > 0.01) b = normBox(boxAfterZoom(b, s.zoom, z));
     setRaw(b);
     setMargin(s.margin ?? DEFAULT_MARGIN);
-    setStep(3); // always a new visual confirmation
+    setEditing(true);
+    setStep(1); // always a new visual confirmation
   };
 
   const saveRef = async () => {
@@ -243,8 +252,9 @@ export default function CameraSetup({ r, cam, ownerId, onClose }: { r: ReplayRec
     try { await cam.confirmFraming({ box: withMargin(raw, margin), raw, margin }); onClose(); } finally { setBusy(false); }
   };
 
-  const canNext = [live1 || recording, true, !!raw, !!raw, true, !!raw, false][step];
-  const statusText = det.kind === "searching" ? "Procurando arena…" : det.kind === "found" ? "Arena encontrada. Confirme o enquadramento." : det.kind === "multiple" ? "Existem áreas semelhantes; selecione a correta." : "Não foi possível identificar.";
+  const canNext = [live1 || recording, !!raw && editing, true, false][step];
+  const statusText = det.kind === "searching" ? "Procurando arena…" : det.kind === "found" ? "Arena encontrada. Confirme o enquadramento." : det.kind === "multiple" ? "Existem áreas semelhantes; selecione a correta." : "Não foi possível identificar a arena. Marque a área manualmente.";
+  const camLabel = r.devices.find((d) => d.id === r.deviceId)?.label ?? "Câmera ativa";
 
   return (
     <div className="fixed inset-0 z-[60] bg-app flex flex-col" role="dialog" aria-modal="true" aria-label="Ajustar câmera para a arena">
@@ -272,10 +282,10 @@ export default function CameraSetup({ r, cam, ownerId, onClose }: { r: ReplayRec
           <Stage stream={r.stream}>
             {(rect) => (
               <>
-                {step === 2 && detecting && <Contours cands={det.kind === "multiple" ? det.candidates : live} rect={rect} strong={det.kind !== "searching"} onPick={det.kind === "multiple" ? (c) => { setRaw(c.box); go(3); } : undefined} />}
-                {step === 2 && det.kind === "found" && detecting && <Contours cands={[det.candidate]} rect={rect} strong />}
-                {(step === 3 || step === 4) && <BoxEditor box={raw} onChange={setRaw} rect={rect} margin={margin} editable={step === 3 && !recording} />}
-                {step >= 5 && raw && <BoxEditor box={raw} onChange={() => undefined} rect={rect} margin={margin} editable={false} />}
+                {step === 1 && !editing && detecting && <Contours cands={det.kind === "multiple" ? det.candidates : live} rect={rect} strong={det.kind !== "searching"} onPick={det.kind === "multiple" ? (c) => { setRaw(c.box); setDetecting(false); setEditing(true); } : undefined} />}
+                {step === 1 && !editing && det.kind === "found" && detecting && <Contours cands={[det.candidate]} rect={rect} strong />}
+                {((step === 1 && editing) || step === 2) && <BoxEditor box={raw} onChange={setRaw} rect={rect} margin={margin} editable={step === 1 && !recording} caption={step === 1 ? "Ajustando a área" : "Área selecionada"} />}
+                {step === 3 && raw && <BoxEditor box={raw} onChange={() => undefined} rect={rect} margin={margin} editable={false} caption="Área a confirmar (margem tracejada)" />}
               </>
             )}
           </Stage>
@@ -289,7 +299,7 @@ export default function CameraSetup({ r, cam, ownerId, onClose }: { r: ReplayRec
           <section className="grid gap-2 text-sm text-gray-200">
             {!(live1 || recording) ? (
               <>
-                <p>1. Ative a câmera. Gravações e imagens ficam somente neste aparelho.</p>
+                <p>Deixe o aparelho em um suporte, com toda a arena visível. Primeiro, ative a câmera — imagens e gravações ficam somente neste aparelho.</p>
                 <button type="button" onClick={() => void r.enableCamera()} className="min-h-[48px] rounded-lg bg-brand-yellow text-black font-black">Ativar câmera</button>
                 {r.status === "error" && <p className="text-red-300 text-xs">{r.message}</p>}
               </>
@@ -318,27 +328,27 @@ export default function CameraSetup({ r, cam, ownerId, onClose }: { r: ReplayRec
           </section>
         )}
 
-        {step === 1 && (
+        {step === 0 && (live1 || recording) && (
           <section className="text-sm text-gray-200 grid gap-1">
-            <p>2. Coloque o aparelho em <b>paisagem</b>, de preferência num suporte, com toda a arena visível.</p>
+            <p>Deixe o aparelho em um suporte, de preferência em <b>paisagem</b>, com toda a arena visível.</p>
             <p className={landscape ? "text-green-300" : "text-amber-200"}>{landscape ? "✓ Imagem em paisagem." : "A imagem está em retrato: gire o aparelho (recomendado)."}</p>
           </section>
         )}
 
-        {step === 2 && (
+        {step === 1 && !editing && (
           <section className="grid gap-2 text-sm text-gray-200">
-            <p>3. Identifique a arena automaticamente ou marque-a com o dedo.</p>
+            <p>Marque a arena: use a identificação automática (você confirma) ou marque com o dedo.</p>
             <div className="grid grid-cols-2 gap-2">
               <button type="button" disabled={recording} onClick={() => { setDet({ kind: "searching" }); setLive([]); setDetecting((v) => !v); }} className="min-h-[48px] rounded-lg bg-[#00aaff] text-black font-black disabled:opacity-40">
                 {detecting ? "Parar busca" : "Identificar arena"}
               </button>
-              <button type="button" onClick={() => { setRaw(raw ?? { x0: 0.2, y0: 0.15, x1: 0.8, y1: 0.85 }); go(3); }} className="min-h-[48px] rounded-lg border border-line font-bold">Marcar manualmente</button>
+              <button type="button" onClick={() => { setRaw(raw ?? { x0: 0.2, y0: 0.15, x1: 0.8, y1: 0.85 }); setDetecting(false); setEditing(true); }} className="min-h-[48px] rounded-lg border border-line font-bold">Marcar manualmente</button>
             </div>
             {detecting && (
               <div role="status" className="rounded-lg border border-line px-3 py-2">
                 <b>{statusText}</b>
-                {det.kind === "found" && <button type="button" onClick={() => { setRaw(det.candidate.box); go(3); }} className="mt-2 w-full min-h-[44px] rounded-lg bg-[#00e676] text-black font-black">Usar esta área (conferir a seguir)</button>}
-                {det.kind === "not_found" && <p className="text-xs text-gray-400 mt-1">Melhore o ângulo/iluminação ou use “Marcar manualmente”.</p>}
+                {det.kind === "found" && <button type="button" onClick={() => { setRaw(det.candidate.box); setDetecting(false); setEditing(true); }} className="mt-2 w-full min-h-[44px] rounded-lg bg-[#38BDF8] text-black font-black">Usar esta área (ajustar a seguir)</button>}
+                {det.kind === "not_found" && <p className="text-xs text-gray-400 mt-1">Dica: melhore o ângulo ou a iluminação, ou use “Marcar manualmente”.</p>}
                 {perf && <p className="text-[11px] text-gray-500 mt-1">Análise local {perf.worker ? "em segundo plano" : "na página"} · {perf.ms} ms por quadro reduzido · nada é enviado.</p>}
               </div>
             )}
@@ -375,19 +385,23 @@ export default function CameraSetup({ r, cam, ownerId, onClose }: { r: ReplayRec
           </section>
         )}
 
-        {step === 3 && (
+        {step === 1 && editing && (
           <section className="grid gap-2 text-sm text-gray-200">
-            <p>4. Ajuste a área: arraste para mover, puxe as bordas/cantos para redimensionar ou desenhe de novo fora dela. Inclua a região de batalha, as bordas, os bolsões e as zonas de saída (Over/Xtreme).</p>
+            <p>Ajuste a área azul: arraste para mover, puxe bordas/cantos ou desenhe de novo. Inclua a região de batalha, as bordas, os bolsões e as zonas de saída (Over/Xtreme).</p>
             <label className="grid gap-1 text-xs">Margem de segurança: {Math.round(margin * 100)}% (linha tracejada)
               <input type="range" min={0} max={0.3} step={0.02} value={margin} onChange={(e) => setMargin(Number(e.target.value))} className="accent-brand-yellow" />
             </label>
-            <button type="button" onClick={() => setRaw(null)} className="min-h-[40px] rounded-lg border border-line text-xs">Refazer marcação (desenhe sobre a imagem)</button>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setRaw(null)} className="min-h-[44px] rounded-lg border border-line text-xs">Refazer marcação (desenhe sobre a imagem)</button>
+              <button type="button" onClick={() => { setEditing(false); setDet({ kind: "searching" }); setLive([]); }} className="min-h-[44px] rounded-lg border border-line text-xs">Identificar de novo / foto de referência</button>
+            </div>
             {sel && !boxInside(sel) && <p className="text-amber-200 text-xs">A margem encosta na borda da imagem: afaste o aparelho ou reduza o zoom para não cortar a arena.</p>}
           </section>
         )}
 
-        {step === 4 && (
+        {step === 2 && (
           <section className="grid gap-3 text-sm text-gray-200">
+            <p>Ajuste a imagem com os recursos que este aparelho oferece. Depois de mudar o zoom, confira de novo a área.</p>
             <div className="rounded-lg border border-line p-3 grid gap-2">
               <b>Zoom da câmera</b>
               {cam.caps?.zoom && z != null ? (
@@ -402,13 +416,13 @@ export default function CameraSetup({ r, cam, ownerId, onClose }: { r: ReplayRec
                     onPointerUp={(e) => zoomTo(Number((e.target as HTMLInputElement).value))} onKeyUp={(e) => zoomTo(Number((e.target as HTMLInputElement).value))} className="accent-brand-yellow" />
                   {zoomMsg && <p className="text-xs text-amber-100" role="status">{zoomMsg}</p>}
                 </>
-              ) : <Unavailable what="Zoom" hint="A captura completa é preservada; aproxime ou afaste o aparelho para enquadrar." />}
+              ) : <p className="text-xs text-gray-400">Este aparelho não disponibiliza controle de zoom. A captura completa é preservada; aproxime ou afaste o aparelho para enquadrar.</p>}
             </div>
             <div className="rounded-lg border border-line p-3 grid gap-2">
               <b>Foco</b>
               {autoFocusMode(cam.caps?.focusModes ?? []) ? (
                 <button type="button" disabled={recording} onClick={() => void cam.setFocusAuto()} className="min-h-[44px] rounded-lg border border-line">Foco automático ({autoFocusMode(cam.caps!.focusModes) === "continuous" ? "contínuo" : "único"})</button>
-              ) : <Unavailable what="Foco automático" hint="A câmera mantém o comportamento padrão; ajuste distância e posição." />}
+              ) : <p className="text-xs text-gray-400">Foco controlado pelo aparelho. Confira a nitidez da arena.</p>}
               {cam.caps?.focusDistance && cam.caps.focusModes.includes("manual") && (
                 <label className="grid gap-1 text-xs">Distância de foco (manual)
                   <input type="range" min={cam.caps.focusDistance.min} max={cam.caps.focusDistance.max} step={cam.caps.focusDistance.step} defaultValue={cam.settings?.focusDistance ?? cam.caps.focusDistance.min} disabled={recording} onPointerUp={(e) => void cam.setFocusDistance(Number((e.target as HTMLInputElement).value))} className="accent-brand-yellow" />
@@ -437,7 +451,7 @@ export default function CameraSetup({ r, cam, ownerId, onClose }: { r: ReplayRec
                       </button>
                     ))}
                   </div>
-                  <p className="text-[11px] text-amber-100">A luz pode causar reflexos na cobertura da arena. Confira a imagem antes de iniciar. A automática nunca muda durante uma batalha gravada.</p>
+                  <p className="text-[11px] text-amber-100">A luz pode refletir na cobertura. Confira antes de iniciar. A automática só liga se escolhida e nunca muda durante uma batalha gravada.</p>
                 </>
               ) : <Unavailable what="Lanterna" hint="Melhore a iluminação do local (luz sobre a arena, sem reflexo direto)." />}
               <p className="text-[11px] text-gray-500">A análise é uma estimativa e não garante a qualidade do vídeo.</p>
@@ -445,17 +459,20 @@ export default function CameraSetup({ r, cam, ownerId, onClose }: { r: ReplayRec
           </section>
         )}
 
-        {step === 5 && (
-          <section className="text-sm text-gray-200 grid gap-1">
-            <p>6. Confira: a linha verde é a arena; a tracejada, a margem. Os contornos aparecem só na tela — o vídeo gravado é a imagem completa da câmera, sem recorte e sem espelhamento.</p>
-            <p className={cam.light.verdict === "ok" ? "text-green-300" : "text-amber-200"}>{LIGHT_MESSAGE[cam.light.verdict]}</p>
-          </section>
-        )}
-
-        {step === 6 && (
+        {step === 3 && (
           <section className="text-sm text-gray-200 grid gap-2">
-            <p>7. Pronto. Entre as batalhas você pode tocar em “Refazer enquadramento”. Se o aparelho for girado ou movido, o placar pede uma nova conferência antes da próxima gravação.</p>
-            <button type="button" disabled={!raw || busy || recording} onClick={done} className="min-h-[52px] rounded-xl bg-[#22c55e] text-black text-lg font-black disabled:opacity-40">Usar este enquadramento</button>
+            <p>Confira a captura inteira: a área azul é a arena; a tracejada, a margem. Os contornos aparecem só na tela — o vídeo gravado é a imagem completa da câmera, sem recorte e sem espelhamento.</p>
+            <dl className="rounded-lg border border-line p-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+              <dt className="text-gray-400">Câmera</dt><dd>{camLabel}{cam.settings?.width ? ` · ${cam.settings.width}×${cam.settings.height}` : ""}</dd>
+              <dt className="text-gray-400">Qualidade</dt><dd>{QUALITY[r.quality].label}</dd>
+              <dt className="text-gray-400">Iluminação</dt><dd className={cam.light.verdict === "ok" ? "text-green-300" : "text-amber-200"}>{LIGHT_MESSAGE[cam.light.verdict]}</dd>
+              {z != null && <><dt className="text-gray-400">Zoom</dt><dd>{fmtZ(z)}</dd></>}
+            </dl>
+            <p className="text-xs text-gray-400">Depois de confirmar, a guia some da visão normal (pode ser mostrada pelo menu). Se o aparelho for girado ou movido, o placar pede uma nova conferência antes da próxima gravação.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => go(2)} className="min-h-[48px] rounded-xl border border-line font-bold">Voltar aos ajustes</button>
+              <button type="button" disabled={!raw || busy || recording} onClick={done} className="min-h-[48px] rounded-xl bg-[#22c55e] text-black font-black disabled:opacity-40">Usar este enquadramento</button>
+            </div>
           </section>
         )}
       </div>
@@ -464,7 +481,7 @@ export default function CameraSetup({ r, cam, ownerId, onClose }: { r: ReplayRec
       <div className="shrink-0 px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-line grid gap-2">
         <div className="grid grid-cols-2 gap-2">
           <button type="button" disabled={step === 0} onClick={() => go(step - 1)} className="min-h-[48px] rounded-lg border border-line font-bold disabled:opacity-30">Voltar</button>
-          {step < 6 && <button type="button" disabled={!canNext} onClick={() => go(step + 1)} className="min-h-[48px] rounded-lg bg-brand-yellow text-black font-black disabled:opacity-40">Avançar</button>}
+          {step < 3 && <button type="button" disabled={!canNext} onClick={() => go(step + 1)} className="min-h-[48px] rounded-lg bg-brand-yellow text-black font-black disabled:opacity-40">Avançar</button>}
         </div>
         <button type="button" onClick={() => { cam.clearFraming(); onClose(); }} className="min-h-[40px] text-xs text-gray-400 underline">Usar câmera sem ajuste automático</button>
       </div>
