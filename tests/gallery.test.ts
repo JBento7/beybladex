@@ -53,3 +53,12 @@ test("cover for cards uses the optimized version; carousel puts the cover first,
   assert.equal(wrapIndex(5, 5), 0, "after the last, the first");
   assert.equal(wrapIndex(-1, 5), 4);
 });
+
+test("image cache: a year in the browser, one day on the Vercel CDN", async () => {
+  const { imageCacheHeaders, IMAGE_CDN_TTL_S } = await import("../src/lib/gallery.ts");
+  const h = imageCacheHeaders();
+  assert.match(h["Cache-Control"], /max-age=31536000/);
+  assert.match(h["Cache-Control"], /immutable/);
+  assert.equal(h["Vercel-CDN-Cache-Control"], `public, max-age=${IMAGE_CDN_TTL_S}`);
+  assert.equal(IMAGE_CDN_TTL_S, 86400, "removed images stop being served by the CDN within a day");
+});

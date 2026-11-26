@@ -66,7 +66,10 @@ O projeto não usa Supabase Storage. Os envios existentes guardavam a imagem no 
     - `card`: WebP com 960 px de largura;
     - `thumb`: WebP com 320 px de largura.
 - **`TournamentImage`:** torneio, imagem, ordem (`position`), capa (`isCover`) e descrição (`alt`). `url` guarda a capa antiga de um torneio anterior à galeria.
-- **Servidas por** `GET /api/images/<id>` (`?v=card|thumb`), com cache de um ano. O endereço nunca muda de conteúdo.
+- **Servidas por** `GET /api/images/<id>` (`?v=card|thumb`). O endereço nunca muda de conteúdo.
+  - **Navegador:** cache de 1 ano (`Cache-Control: public, max-age=31536000, immutable`).
+  - **CDN da Vercel:** cache de 1 dia (`Vercel-CDN-Cache-Control: public, max-age=86400`). Só o primeiro visitante de cada região por dia passa pela função e pelo banco, o que economiza execuções, CPU e a transferência de origem (o item mais perto do limite do plano Hobby). Uma imagem removida da galeria (apagada do banco) deixa de ser servida pela CDN em até 1 dia.
+  - **Imagem não encontrada:** não é cacheada.
 - **Capa nos cards:** a capa é gravada também em `Tournament.bannerUrl`, apontando para a versão `card`. Assim, todos os cards usam a capa escolhida sem consulta extra. Sem capa, os cards mostram a imagem padrão da liga.
 - **Exclusão:**
   - uma imagem retirada da galeria só é apagada se nenhuma outra galeria ou capa a usar (`deleteIfUnused`);

@@ -86,3 +86,18 @@ export function carouselOrder<T extends { isCover: boolean; position: number }>(
 
 /** Next/previous slide with wrap-around. */
 export const wrapIndex = (i: number, n: number) => (n <= 0 ? 0 : ((i % n) + n) % n);
+
+/**
+ * Cache headers of GET /api/images/<id> (docs/GALERIA.md). Ids are content
+ * hashes, so the BROWSER keeps an image for a year. The Vercel CDN keeps it
+ * for 1 day: every visitor after the first is served by the CDN (no function
+ * run, no database read, no origin transfer), and an image removed from the
+ * gallery (deleted from the database) stops being served within a day.
+ */
+export const IMAGE_CDN_TTL_S = 24 * 60 * 60;
+export function imageCacheHeaders(): Record<string, string> {
+  return {
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "Vercel-CDN-Cache-Control": `public, max-age=${IMAGE_CDN_TTL_S}`,
+  };
+}
